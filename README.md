@@ -1,6 +1,6 @@
 # LiteCP - By Hostingtom
 
-LiteCP is a small, purpose-built control panel for a self-hosted WHMCS server. It supports Ubuntu and AlmaLinux and intentionally manages only the stack WHMCS needs: Nginx, PHP-FPM, MariaDB, cron, certificates, local backups, and logs.
+LiteCP is a small, purpose-built control panel for self-hosted WHMCS and WordPress websites. It supports Ubuntu and AlmaLinux and intentionally manages only the stack these applications need: Nginx, parallel PHP-FPM runtimes, MariaDB, cron, certificates, local backups, and logs.
 
 The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript interface. It does not run a Node.js process, Redis, a message queue, or a second database.
 
@@ -10,27 +10,36 @@ The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript int
 
 - Responsive, session-protected administrator dashboard
 - CPU, memory, disk, load, uptime, and essential service health
-- Safe start/restart actions for Nginx, PHP-FPM, MariaDB, and cron
-- WHMCS-oriented Nginx virtual hosts with sensitive-file rules
+- Safe start/restart actions for Nginx, every installed PHP-FPM runtime, MariaDB, and cron
+- WHMCS or WordPress virtual hosts with application-specific sensitive-file rules
+- Per-website PHP selection and safe runtime switching
 - Optional MariaDB database and one-time generated credentials
 - Let's Encrypt certificates through Certbot
-- Five-minute WHMCS automation cron management
+- Five-minute WHMCS or WordPress cron management using each website's PHP version
 - On-demand website and database backups
 - Allowlisted Nginx, PHP, MariaDB, and cron log views
-- PHP 8.3, ionCube Loader, OPcache, and low-idle-memory FPM defaults
+- Parallel PHP 7.3, 7.4, 8.1, 8.2, 8.3, and 8.4 where native packages are available
+- ionCube Loader, OPcache, and low-idle-memory FPM defaults for every runtime
 - HTTPS panel proxy on port `8443`
 - Loopback-only MariaDB and a minimal host firewall enabled during installation
 
-LiteCP does not download WHMCS itself. Upload the release obtained through your licensed WHMCS account to the provisioned document root.
+LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS release or the official WordPress release to the provisioned document root.
 
 ## Supported systems
 
 - Ubuntu 22.04 or 24.04 (x86_64 or aarch64)
-- AlmaLinux 8 or 9 (x86_64 or aarch64)
+- AlmaLinux 8, 9, or 10 (x86_64 or aarch64)
 - A fresh VPS is strongly recommended
 - At least 1 GB RAM; 2 GB or more is more comfortable for MariaDB and PHP traffic
 
-The installer targets PHP 8.3 and installs a compatible ionCube loader. Current WHMCS requirements should still be checked before every WHMCS upgrade: [WHMCS system requirements](https://docs.whmcs.com/9-0/installation-guide/system-requirements/).
+Ubuntu 22.04 and 24.04 receive all requested PHP versions through the co-installable Ondřej Surý PHP PPA. AlmaLinux uses native parallel Remi Software Collection packages. Remi does not publish PHP 7.3 for AlmaLinux 10, so LiteCP reports that runtime as unavailable there instead of mixing incompatible packages from an older Enterprise Linux release. PHP 7.3, 7.4, and 8.1 are end-of-life and should only be used temporarily for legacy application upgrades.
+
+Application compatibility is enforced by the panel:
+
+- WHMCS: PHP 7.3, 7.4, 8.1, 8.2, or 8.3. PHP 8.3 requires WHMCS 8.13 or newer.
+- WordPress: PHP 7.4, 8.1, 8.2, 8.3, or 8.4. PHP 8.3 or newer is recommended.
+
+Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13/installation-guide/system-requirements/) and [WordPress requirements](https://wordpress.org/about/requirements/) before upgrading an application or changing its PHP version.
 
 > WHMCS officially validates Apache environments and notes that support for Nginx environments is limited. LiteCP uses Nginx deliberately for a smaller, focused runtime. See the same WHMCS requirements page before choosing this stack for a support-sensitive deployment.
 
@@ -61,13 +70,13 @@ The included panel certificate is self-signed so the first browser visit will sh
 ## First website
 
 1. Point the billing domain's A/AAAA records to the server.
-2. In LiteCP, choose **Add website** and enter a name such as `billing.example.com`.
+2. In LiteCP, choose **Add website**, select WHMCS or WordPress, select a compatible installed PHP version, and enter a name such as `billing.example.com`.
 3. Save the generated database credentials immediately; the password is shown once.
-4. Upload the licensed WHMCS files to `/var/www/litecp/billing.example.com/public` and remove the placeholder `index.html`.
-5. Complete the WHMCS web installer using the generated database values.
+4. Upload the licensed WHMCS files or official WordPress files to `/var/www/litecp/billing.example.com/public` and remove the placeholder `index.html`.
+5. Complete the application web installer using the generated database values.
 6. Enable SSL after DNS resolves to the server.
-7. Confirm WHMCS sees the five-minute system cron in its Automation Settings.
-8. Apply WHMCS's recommended post-install file permissions and move the cron directory outside the public document root if your security policy requires it.
+7. Confirm the application sees its five-minute system cron. For WordPress, define `DISABLE_WP_CRON` as `true` after the system cron is enabled.
+8. Apply the application's recommended post-install file permissions. For WHMCS, move the cron directory outside the public document root if your security policy requires it.
 
 ## Developer run
 
@@ -94,7 +103,7 @@ go test ./...
 - Panel configuration: `/var/lib/litecp/config.json` (`0600`)
 - Website roots: `/var/www/litecp/<domain>/public`
 - Nginx configs: `/etc/nginx/sites-available/litecp-*.conf` on Ubuntu or `/etc/nginx/conf.d/litecp-*.conf` on AlmaLinux
-- WHMCS cron files: `/etc/cron.d/litecp-*`
+- Application cron files: `/etc/cron.d/litecp-*`
 - Backups: `/var/backups/litecp/*.tar.gz`
 
 Detaching a website removes its LiteCP-managed Nginx and cron configuration, but it intentionally keeps website files and the database. Backups are never silently deleted; the retention setting is a policy reminder so an operator can coordinate off-server retention.

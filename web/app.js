@@ -20,18 +20,18 @@
 
   const serviceMeta = {
     nginx: { symbol: "NX", description: "Handles secure web traffic and static assets." },
-    php: { symbol: "PHP", description: "Runs the WHMCS application through FastCGI." },
+    php: { symbol: "PHP", description: "Runs per-site PHP versions through isolated FastCGI pools." },
     database: { symbol: "DB", description: "Stores clients, invoices and application data." },
-    cron: { symbol: "CR", description: "Executes scheduled billing and automation tasks." }
+    cron: { symbol: "CR", description: "Executes scheduled WHMCS and WordPress automation tasks." }
   };
 
   const demoState = {
-    version: "0.1.0",
+    version: "0.2.0",
     username: "admin",
     settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14 },
     sites: [
-      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", phpVersion: "8.3", ssl: true, cron: true, database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
-      { id: "site_demo_2", domain: "clients.northstar.test", root: "/var/www/litecp/clients.northstar.test/public", phpVersion: "8.3", ssl: false, cron: true, database: "cp_clients", dbUser: "cp_clients", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
+      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", appType: "whmcs", phpVersion: "8.3", ssl: true, cron: true, database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
+      { id: "site_demo_2", domain: "blog.northstar.test", root: "/var/www/litecp/blog.northstar.test/public", appType: "wordpress", phpVersion: "8.4", ssl: false, cron: true, database: "cp_blog", dbUser: "cp_blog", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
     ],
     backups: [
       { id: "backup_1", siteId: "site_demo_1", domain: "billing.hostingtom.com", path: "/var/backups/litecp/billing.hostingtom.com-20260831-020000.tar.gz", size: 193715264, status: "complete", createdAt: new Date(Date.now() - 7 * 3600000).toISOString() },
@@ -40,18 +40,19 @@
     activities: [
       { id: "a1", title: "Backup completed", detail: "billing.hostingtom.com files and database saved", kind: "success", createdAt: new Date(Date.now() - 7 * 3600000).toISOString() },
       { id: "a2", title: "SSL enabled", detail: "billing.hostingtom.com now redirects to HTTPS", kind: "success", createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-      { id: "a3", title: "Website added", detail: "clients.northstar.test is ready for WHMCS files", kind: "success", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
+      { id: "a3", title: "Website added", detail: "blog.northstar.test is ready for WordPress", kind: "success", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
     ],
     system: {
-      os: "Ubuntu 24.04 LTS", osId: "ubuntu", hostname: "whmcs-prod-01", ipAddress: "203.0.113.42", uptimeSeconds: 1240920, cpuPercent: 12.4, loadAverage: 0.18, demo: true,
+      os: "Ubuntu 24.04 LTS", osId: "ubuntu", hostname: "app-prod-01", ipAddress: "203.0.113.42", uptimeSeconds: 1240920, cpuPercent: 12.4, loadAverage: 0.18, demo: true,
       memory: { used: 887095296, total: 2147483648, percent: 41.3 },
       disk: { used: 19327352832, total: 85899345920, percent: 22.5 },
       services: [
         { key: "nginx", label: "Nginx", unit: "nginx", state: "running" },
-        { key: "php", label: "PHP 8.3 FPM", unit: "php8.3-fpm", state: "running" },
+        { key: "php", label: "Multi-PHP FPM", unit: "php7.3-fpm … php8.4-fpm", state: "running" },
         { key: "database", label: "MariaDB", unit: "mariadb", state: "running" },
-        { key: "cron", label: "WHMCS Scheduler", unit: "cron", state: "running" }
-      ]
+        { key: "cron", label: "App Scheduler", unit: "cron", state: "running" }
+      ],
+      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"]
     }
   };
 
@@ -85,9 +86,9 @@
     ] };
     if (path === "/api/sites" && options.method === "POST") {
       const input = options.body;
-      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, phpVersion: "8.3", ssl: false, cron: !!input.enableCron, database: input.createDatabase ? "cp_new_whmcs" : "", dbUser: input.createDatabase ? "cp_new_whmcs" : "", createdAt: new Date().toISOString() };
+      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, appType: input.appType, phpVersion: input.phpVersion, ssl: false, cron: !!input.enableCron, database: input.createDatabase ? "cp_new_app" : "", dbUser: input.createDatabase ? "cp_new_app" : "", createdAt: new Date().toISOString() };
       demoState.sites.push(site);
-      return { site, database: input.createDatabase ? { name: "cp_new_whmcs", username: "cp_new_whmcs", password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
+      return { site, database: input.createDatabase ? { name: "cp_new_app", username: "cp_new_app", password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
     }
     if (path === "/api/backups" && options.method === "POST") {
       const site = demoState.sites.find(item => item.id === options.body.siteId);
@@ -103,6 +104,11 @@
     if (path === "/api/sites/cron") {
       const site = demoState.sites.find(item => item.id === options.body.id);
       if (site) site.cron = options.body.enabled;
+      return { ok: true };
+    }
+    if (path === "/api/sites/php") {
+      const site = demoState.sites.find(item => item.id === options.body.id);
+      if (site) site.phpVersion = options.body.version;
       return { ok: true };
     }
     if (path.startsWith("/api/sites/") && options.method === "DELETE") {
@@ -147,9 +153,11 @@
     $$(".modal-close").forEach(button => button.addEventListener("click", closeSiteModal));
     $("#siteModal").addEventListener("click", event => { if (event.target.id === "siteModal") closeSiteModal(); });
     $("#siteForm").addEventListener("submit", createSite);
+    $("#siteAppType").addEventListener("change", configureSiteForm);
     $("#closeCredentials").addEventListener("click", closeCredentials);
     $("#copyCredentials").addEventListener("click", copyCredentials);
     $("#sitesTable").addEventListener("click", handleSiteAction);
+    $("#sitesTable").addEventListener("change", handlePHPChange);
     $("#siteSearch").addEventListener("input", renderSites);
     $("#servicesGrid").addEventListener("click", handleServiceAction);
     $("#restartAll").addEventListener("click", restartAll);
@@ -228,6 +236,7 @@
     $("#sideVersion").textContent = `v${version}`;
     $("#settingsVersion").textContent = `v${version}`;
     $("#settingsOS").textContent = system.os;
+    $("#settingsPHP").textContent = (system.phpVersions || []).map(item => `PHP ${item}`).join(", ") || "No runtime detected";
     $("#detailOS").textContent = system.os;
     $("#detailIP").textContent = system.ipAddress;
     $("#modalServerIP").textContent = system.ipAddress;
@@ -239,7 +248,7 @@
     renderBackups();
     fillSettings(settings);
     const healthy = system.services.every(service => service.state === "running");
-    $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your WHMCS stack is healthy" : "One or more services need attention";
+    $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your hosting stack is healthy" : "One or more services need attention";
     $("#noticeBanner").querySelector("small").textContent = healthy ? "All required services are online and responding normally." : "Open Services to review and restart the affected component.";
   }
 
@@ -274,7 +283,8 @@
     $("#servicesGrid").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
-      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(service.unit)}.service</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><button class="button button-secondary" data-service="${escapeHTML(service.key)}" data-action="${stopped ? "start" : "restart"}">${stopped ? "Start" : "Restart"}</button></div></article>`;
+      const unitLabel = service.key === "php" ? service.unit : `${service.unit}.service`;
+      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><button class="button button-secondary" data-service="${escapeHTML(service.key)}" data-action="${stopped ? "start" : "restart"}">${stopped ? "Start" : "Restart"}</button></div></article>`;
     }).join("");
   }
 
@@ -294,20 +304,28 @@
     $("#sslCount").textContent = currentState.sites.filter(site => site.ssl).length;
     $("#cronCount").textContent = currentState.sites.filter(site => site.cron).length;
     if (!sites.length) {
-      const copy = currentState.sites.length ? "No domains match your search." : "Provision your WHMCS domain, database and automation schedule in one short step.";
+      const copy = currentState.sites.length ? "No domains match your search." : "Provision a WHMCS or WordPress domain, database, PHP runtime and automation schedule in one short step.";
       $("#sitesTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.globe}</span><h3>${currentState.sites.length ? "Nothing found" : "No websites yet"}</h3><p>${copy}</p>${currentState.sites.length ? "" : '<button class="button button-primary" data-empty-add>Add your first website</button>'}</div>`;
       const emptyButton = $("[data-empty-add]", $("#sitesTable"));
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>PHP</th><th>SSL</th><th>WHMCS CRON</th><th>CREATED</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell"><span class="domain-favicon">${escapeHTML(site.domain[0])}</span><span class="domain-copy"><strong>${escapeHTML(site.domain)}</strong><small>${escapeHTML(site.root)}</small></span></span></td><td><span class="badge">PHP ${escapeHTML(site.phpVersion)}</span></td><td><span class="badge ${site.ssl ? "success" : ""}">${site.ssl ? '<span class="pulse-dot"></span>Protected' : "Not enabled"}</span></td><td><span class="badge ${site.cron ? "success" : ""}">${site.cron ? '<span class="pulse-dot"></span>Every 5 min' : "Disabled"}</span></td><td>${formatDate(site.createdAt)}</td><td><span class="row-actions">${site.ssl ? "" : `<button title="Enable SSL" data-site-action="ssl" data-id="${site.id}">${icons.shield}</button>`}<button title="${site.cron ? "Disable" : "Enable"} WHMCS cron" data-site-action="cron" data-id="${site.id}">${icons.clock}</button><button class="danger" title="Detach website" data-site-action="delete" data-id="${site.id}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>PHP</th><th>SSL</th><th>APP CRON</th><th>CREATED</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell"><span class="domain-favicon">${escapeHTML(site.domain[0])}</span><span class="domain-copy"><strong>${escapeHTML(site.domain)}</strong><small>${escapeHTML(site.root)}</small></span></span></td><td><span class="badge">${escapeHTML(applicationLabel(site.appType))}</span></td><td>${renderPHPSelect(site)}</td><td><span class="badge ${site.ssl ? "success" : ""}">${site.ssl ? '<span class="pulse-dot"></span>Protected' : "Not enabled"}</span></td><td><span class="badge ${site.cron ? "success" : ""}">${site.cron ? '<span class="pulse-dot"></span>Every 5 min' : "Disabled"}</span></td><td>${formatDate(site.createdAt)}</td><td><span class="row-actions">${site.ssl ? "" : `<button title="Enable SSL" data-site-action="ssl" data-id="${site.id}">${icons.shield}</button>`}<button title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${site.id}">${icons.clock}</button><button class="danger" title="Detach website" data-site-action="delete" data-id="${site.id}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
+  }
+
+  function renderPHPSelect(site) {
+    const installed = currentState.system.phpVersions || [];
+    const compatible = compatiblePHPVersions(site.appType || "whmcs").filter(version => installed.includes(version));
+    if (!compatible.includes(site.phpVersion)) compatible.unshift(site.phpVersion);
+    const options = [...new Set(compatible)].map(version => `<option value="${escapeHTML(version)}" ${version === site.phpVersion ? "selected" : ""}>PHP ${escapeHTML(version)}</option>`).join("");
+    return `<select class="inline-php-select" data-php-version data-id="${escapeHTML(site.id)}" aria-label="PHP version for ${escapeHTML(site.domain)}">${options}</select>`;
   }
 
   function renderBackups() {
     $("#retentionChip").textContent = `${currentState.settings.backupRetention}-day policy`;
     const backups = currentState.backups || [];
     if (!backups.length) {
-      $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first WHMCS website is provisioned.</p></div>`;
+      $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
     }
     $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>STORAGE PATH</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge success"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td></tr>`).join("")}</tbody></table>`;
@@ -335,18 +353,45 @@
   }
 
   function openSiteModal() {
+	configureSiteForm();
     $("#siteModal").classList.remove("hidden");
     setTimeout(() => $('#siteForm input[name="domain"]').focus(), 50);
   }
 
   function closeSiteModal() { $("#siteModal").classList.add("hidden"); }
 
+  function configureSiteForm() {
+    const appType = $("#siteAppType").value || "whmcs";
+    const installed = currentState?.system?.phpVersions || [];
+    const compatible = compatiblePHPVersions(appType);
+    const preferred = appType === "wordpress" ? "8.4" : "8.3";
+    $("#sitePHPVersion").innerHTML = ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"].map(version => {
+      const available = installed.includes(version);
+      const allowed = compatible.includes(version);
+      const note = !available ? " — unavailable on this server" : !allowed ? ` — not supported by ${applicationLabel(appType)}` : "";
+      return `<option value="${version}" ${version === preferred ? "selected" : ""} ${available && allowed ? "" : "disabled"}>PHP ${version}${note}</option>`;
+    }).join("");
+    if (!installed.includes(preferred)) {
+      const fallback = compatible.find(version => installed.includes(version));
+      if (fallback) $("#sitePHPVersion").value = fallback;
+    }
+    if (appType === "wordpress") {
+      $("#phpCompatibilityNote").textContent = "WordPress recommends PHP 8.3 or newer and requires PHP 7.4 or newer.";
+      $("#cronOptionTitle").textContent = "Enable WordPress system cron";
+      $("#cronOptionHelp").innerHTML = "Runs <code>wp-cron.php</code> every five minutes with the selected PHP version.";
+    } else {
+      $("#phpCompatibilityNote").textContent = "WHMCS supports PHP 7.3 through 8.3; PHP 8.3 requires WHMCS 8.13 or newer.";
+      $("#cronOptionTitle").textContent = "Enable WHMCS automation cron";
+      $("#cronOptionHelp").innerHTML = "Runs <code>crons/cron.php</code> every five minutes with the selected PHP version.";
+    }
+  }
+
   async function createSite(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const submit = $('button[type="submit"]', form);
     const data = new FormData(form);
-    const body = { domain: String(data.get("domain")).trim().toLowerCase(), createDatabase: data.get("createDatabase") === "on", enableCron: data.get("enableCron") === "on" };
+    const body = { domain: String(data.get("domain")).trim().toLowerCase(), appType: String(data.get("appType")), phpVersion: String(data.get("phpVersion")), createDatabase: data.get("createDatabase") === "on", enableCron: data.get("enableCron") === "on" };
     submit.disabled = true;
     submit.textContent = "Provisioning…";
     try {
@@ -356,7 +401,7 @@
       currentState = await api("/api/state");
       renderAll();
       if (result.database) showCredentials(result.database, result.site);
-      else showToast("Website provisioned", `${result.site.domain} is ready for WHMCS files.`);
+      else showToast("Website provisioned", `${result.site.domain} is ready for ${applicationLabel(result.site.appType)} files.`);
     } catch (error) { handleError(error); }
     finally { submit.disabled = false; submit.innerHTML = 'Provision website <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>'; }
   }
@@ -389,7 +434,7 @@
         showToast("SSL enabled", `${site.domain} now redirects to HTTPS.`);
       } else if (button.dataset.siteAction === "cron") {
         await api("/api/sites/cron", { method: "POST", body: { id: site.id, enabled: !site.cron } });
-        showToast("Schedule updated", `WHMCS cron ${site.cron ? "disabled" : "enabled"} for ${site.domain}.`);
+        showToast("Schedule updated", `${applicationLabel(site.appType)} cron ${site.cron ? "disabled" : "enabled"} for ${site.domain}.`);
       } else if (button.dataset.siteAction === "delete") {
         const accepted = confirm(`Detach ${site.domain} from LiteCP?\n\nIts files and database will be preserved.`);
         if (!accepted) return;
@@ -400,6 +445,24 @@
       renderAll();
     } catch (error) { handleError(error); }
     finally { button.disabled = false; }
+  }
+
+  async function handlePHPChange(event) {
+    const select = event.target.closest("[data-php-version]");
+    if (!select) return;
+    const site = currentState.sites.find(item => item.id === select.dataset.id);
+    if (!site || site.phpVersion === select.value) return;
+    const version = select.value;
+    select.disabled = true;
+    try {
+      await api("/api/sites/php", { method: "POST", body: { id: site.id, version } });
+      showToast("PHP version changed", `${site.domain} now uses PHP ${version}.`);
+      currentState = await api("/api/state");
+      renderAll();
+    } catch (error) {
+      renderSites();
+      handleError(error);
+    }
   }
 
   async function handleServiceAction(event) {
@@ -432,7 +495,7 @@
   }
 
   async function runBackup() {
-    if (!currentState.sites.length) { showToast("No website available", "Add a WHMCS website before creating a backup.", "error"); return; }
+    if (!currentState.sites.length) { showToast("No website available", "Add a website before creating a backup.", "error"); return; }
     let site = currentState.sites[0];
     if (currentState.sites.length > 1) {
       const choices = currentState.sites.map((item, index) => `${index + 1}. ${item.domain}`).join("\n");
@@ -508,6 +571,12 @@
     if (error.status === 401) { showLogin(); return; }
     showToast("Action failed", error.message || "The server could not complete that action.", "error");
   }
+
+  function compatiblePHPVersions(appType) {
+    return appType === "wordpress" ? ["7.4", "8.1", "8.2", "8.3", "8.4"] : ["7.3", "7.4", "8.1", "8.2", "8.3"];
+  }
+
+  function applicationLabel(appType) { return appType === "wordpress" ? "WordPress" : "WHMCS"; }
 
   function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
   function titleCase(value) { return String(value || "admin").replace(/(^|[-_\s])\w/g, match => match.toUpperCase()).replace(/[-_]/g, " "); }

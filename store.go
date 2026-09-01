@@ -15,6 +15,7 @@ type Site struct {
 	ID         string    `json:"id"`
 	Domain     string    `json:"domain"`
 	Root       string    `json:"root"`
+	AppType    string    `json:"appType"`
 	PHPVersion string    `json:"phpVersion"`
 	SSL        bool      `json:"ssl"`
 	Cron       bool      `json:"cron"`
@@ -91,6 +92,22 @@ func OpenStore(dataDir string) (*Store, error) {
 	if err := json.Unmarshal(content, &store.cfg); err != nil {
 		return nil, fmt.Errorf("parse configuration: %w", err)
 	}
+	changed := false
+	for i := range store.cfg.Sites {
+		if store.cfg.Sites[i].AppType == "" {
+			store.cfg.Sites[i].AppType = "whmcs"
+			changed = true
+		}
+		if store.cfg.Sites[i].PHPVersion == "" {
+			store.cfg.Sites[i].PHPVersion = "8.3"
+			changed = true
+		}
+	}
+	if changed {
+		if err := store.saveLocked(); err != nil {
+			return nil, fmt.Errorf("migrate configuration: %w", err)
+		}
+	}
 	return store, nil
 }
 
@@ -166,8 +183,8 @@ func (s *Store) PublicState() PublicState {
 	defer s.mu.RUnlock()
 	return PublicState{
 		Username: s.cfg.Admin.Username, Settings: s.cfg.Settings,
-		Sites: append([]Site{}, s.cfg.Sites...),
-		Backups: append([]Backup{}, s.cfg.Backups...),
+		Sites:      append([]Site{}, s.cfg.Sites...),
+		Backups:    append([]Backup{}, s.cfg.Backups...),
 		Activities: append([]Activity{}, s.cfg.Activities...),
 	}
 }

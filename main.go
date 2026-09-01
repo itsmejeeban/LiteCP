@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var version = "0.1.0"
+var version = "0.2.0"
 
 //go:embed web/*
 var webAssets embed.FS
@@ -121,6 +121,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites", only(http.MethodPost, a.withAuth(a.createSite)))
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
+	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
@@ -318,6 +319,19 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	appType := strings.ToLower(strings.TrimSpace(input.AppType))
+	if appType == "" {
+		appType = "whmcs"
+	}
+	phpVersion := strings.TrimSpace(input.PHPVersion)
+	if phpVersion == "" {
+		phpVersion = defaultPHPVersion(appType)
+	}
+	if err := validateSiteOptions(appType, phpVersion); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	input.AppType, input.PHPVersion = appType, phpVersion
 	if a.store.SiteByDomain(input.Domain) != nil {
 		writeError(w, http.StatusConflict, "That domain is already managed by LiteCP.")
 		return
@@ -331,13 +345,13 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 	warning := ""
 	if input.EnableCron {
 		if err := a.system.SetCron(site, true); err != nil {
-			warning = "Website created, but the WHMCS cron could not be enabled: " + err.Error()
+			warning = "Website created, but the application cron could not be enabled: " + err.Error()
 		} else {
 			site.Cron = true
 			a.store.UpdateSite(site.ID, func(stored *Site) { stored.Cron = true })
 		}
 	}
-	a.store.AddActivity("Website added", site.Domain+" is ready for WHMCS files", "success")
+	a.store.AddActivity("Website added", site.Domain+" is ready for "+applicationName(site.AppType), "success")
 	writeJSON(w, http.StatusCreated, map[string]any{"site": site, "database": credentials, "warning": warning})
 }
 
@@ -387,7 +401,34 @@ func (a *App) toggleCron(w http.ResponseWriter, r *http.Request) {
 	if input.Enabled {
 		label = "enabled"
 	}
-	a.store.AddActivity("WHMCS cron "+label, site.Domain+" automation schedule updated", "success")
+	a.store.AddActivity(applicationName(site.AppType)+" cron "+label, site.Domain+" automation schedule updated", "success")
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID      string `json:"id"`
+		Version string `json:"version"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	site := a.store.SiteByID(input.ID)
+	if site == nil {
+		writeError(w, http.StatusNotFound, "Website not found.")
+		return
+	}
+	if err := validateSiteOptions(site.AppType, strings.TrimSpace(input.Version)); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := a.system.SetPHPVersion(r.Context(), *site, input.Version); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	a.store.UpdateSite(input.ID, func(site *Site) { site.PHPVersion = strings.TrimSpace(input.Version) })
+	a.store.AddActivity("PHP version changed", site.Domain+" now uses PHP "+strings.TrimSpace(input.Version), "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

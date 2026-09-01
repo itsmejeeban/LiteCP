@@ -22,6 +22,8 @@ import (
 
 type CreateSiteInput struct {
 	Domain         string `json:"domain"`
+	AppType        string `json:"appType"`
+	PHPVersion     string `json:"phpVersion"`
 	CreateDatabase bool   `json:"createDatabase"`
 	EnableCron     bool   `json:"enableCron"`
 }
@@ -57,6 +59,7 @@ type SystemSnapshot struct {
 	Memory        ResourceUsage   `json:"memory"`
 	Disk          ResourceUsage   `json:"disk"`
 	Services      []ServiceStatus `json:"services"`
+	PHPVersions   []string        `json:"phpVersions"`
 	Demo          bool            `json:"demo"`
 }
 
@@ -77,6 +80,8 @@ type System struct {
 
 var domainPattern = regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$`)
 var safeDatabasePart = regexp.MustCompile(`[^a-z0-9]+`)
+var fastCGIPassPattern = regexp.MustCompile(`(?m)^(\s*fastcgi_pass\s+unix:)[^;]+(;\s*)$`)
+var supportedPHPVersions = []string{"7.3", "7.4", "8.1", "8.2", "8.3", "8.4"}
 
 func NewSystem(dataDir string) *System {
 	info := detectOS()
@@ -95,7 +100,7 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 	hostname, _ := os.Hostname()
 	snapshot := SystemSnapshot{
 		OS: s.os.Name, OSID: s.os.ID, Hostname: hostname, IPAddress: primaryIP(), Demo: s.demo,
-		Memory: memoryUsage(), Disk: diskUsage(ctx),
+		Memory: memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
 	}
 	snapshot.UptimeSeconds, snapshot.LoadAverage = uptimeAndLoad()
 	snapshot.CPUPercent = s.cpuUsage()
@@ -107,7 +112,11 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 		wait.Add(1)
 		go func(index int, item ServiceStatus) {
 			defer wait.Done()
-			item.State = s.serviceState(ctx, item.Unit)
+			if item.Key == "php" {
+				item.State = s.phpStackState(ctx)
+			} else {
+				item.State = s.serviceState(ctx, item.Unit)
+			}
 			snapshot.Services[index] = item
 		}(i, service)
 	}
@@ -116,17 +125,20 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 }
 
 func (s *System) serviceUnits() []ServiceStatus {
-	phpUnit := "php-fpm"
 	cronUnit := "crond"
 	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
-		phpUnit = "php8.3-fpm"
 		cronUnit = "cron"
+	}
+	phpUnits := s.phpUnits()
+	phpUnitLabel := strings.Join(phpUnits, ", ")
+	if phpUnitLabel == "" {
+		phpUnitLabel = "PHP-FPM"
 	}
 	return []ServiceStatus{
 		{Key: "nginx", Label: "Nginx", Unit: "nginx"},
-		{Key: "php", Label: "PHP 8.3 FPM", Unit: phpUnit},
+		{Key: "php", Label: "Multi-PHP FPM", Unit: phpUnitLabel},
 		{Key: "database", Label: "MariaDB", Unit: "mariadb"},
-		{Key: "cron", Label: "WHMCS Scheduler", Unit: cronUnit},
+		{Key: "cron", Label: "App Scheduler", Unit: cronUnit},
 	}
 }
 
@@ -151,6 +163,21 @@ func (s *System) ServiceAction(ctx context.Context, key, action string) error {
 	if action != "start" && action != "restart" {
 		return errors.New("only start and restart actions are allowed")
 	}
+	if key == "php" {
+		units := s.phpUnits()
+		if len(units) == 0 {
+			return errors.New("no PHP-FPM runtime is installed")
+		}
+		if s.demo {
+			return nil
+		}
+		for _, unit := range units {
+			if _, err := runCommand(ctx, 30*time.Second, "systemctl", action, unit); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	var unit string
 	for _, service := range s.serviceUnits() {
 		if service.Key == key {
@@ -173,13 +200,27 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	if len(domain) > 253 || !domainPattern.MatchString(domain) {
 		return Site{}, nil, errors.New("enter a valid domain such as billing.example.com")
 	}
+	appType := strings.ToLower(strings.TrimSpace(input.AppType))
+	if appType == "" {
+		appType = "whmcs"
+	}
+	phpVersion := strings.TrimSpace(input.PHPVersion)
+	if phpVersion == "" {
+		phpVersion = defaultPHPVersion(appType)
+	}
+	if err := validateSiteOptions(appType, phpVersion); err != nil {
+		return Site{}, nil, err
+	}
+	if !s.phpRuntimeAvailable(phpVersion) {
+		return Site{}, nil, fmt.Errorf("PHP %s is not installed on this server", phpVersion)
+	}
 	id, err := randomToken(8)
 	if err != nil {
 		return Site{}, nil, err
 	}
 	site := Site{
 		ID: id, Domain: domain, Root: filepath.Join("/var/www/litecp", domain, "public"),
-		PHPVersion: "8.3", CreatedAt: time.Now().UTC(),
+		AppType: appType, PHPVersion: phpVersion, CreatedAt: time.Now().UTC(),
 	}
 	if s.demo {
 		if input.CreateDatabase {
@@ -201,7 +242,12 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	}
 	placeholder := filepath.Join(site.Root, "index.html")
 	if _, err := os.Stat(placeholder); errors.Is(err, os.ErrNotExist) {
-		content := []byte("<!doctype html><meta charset=utf-8><title>LiteCP</title><style>body{font:16px system-ui;max-width:680px;margin:12vh auto;padding:32px;color:#173b46}code{background:#edf6f4;padding:3px 6px;border-radius:5px}</style><h1>Ready for WHMCS</h1><p>Upload your licensed WHMCS files to <code>" + site.Root + "</code>, then remove this file.</p>")
+		appName := applicationName(site.AppType)
+		guidance := "Upload your licensed WHMCS files"
+		if site.AppType == "wordpress" {
+			guidance = "Upload WordPress files"
+		}
+		content := []byte("<!doctype html><meta charset=utf-8><title>LiteCP</title><style>body{font:16px system-ui;max-width:680px;margin:12vh auto;padding:32px;color:#173b46}code{background:#edf6f4;padding:3px 6px;border-radius:5px}</style><h1>Ready for " + appName + "</h1><p>" + guidance + " to <code>" + site.Root + "</code>, then remove this file.</p>")
 		if err := os.WriteFile(placeholder, content, 0640); err != nil {
 			return Site{}, nil, fmt.Errorf("write placeholder: %w", err)
 		}
@@ -265,10 +311,11 @@ func (s *System) createDatabase(ctx context.Context, domain string) (DBCredentia
 	if len(name) > 32 {
 		name = name[:32]
 	}
-	username := name
-	if len(username) > 16 {
-		username = username[:16]
+	userPart := part
+	if len(userPart) > 7 {
+		userPart = userPart[:7]
 	}
+	username := "cp_" + userPart + "_" + suffix
 	password, err := randomToken(24)
 	if err != nil {
 		return DBCredentials{}, err
@@ -314,13 +361,74 @@ func (s *System) SetCron(site Site, enabled bool) error {
 	cronPath := filepath.Join("/etc/cron.d", "litecp-"+site.ID)
 	if !enabled {
 		if err := os.Remove(cronPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("disable WHMCS cron: %w", err)
+			return fmt.Errorf("disable application cron: %w", err)
 		}
 		return nil
 	}
 	cronScript := filepath.Join(site.Root, "crons", "cron.php")
-	content := fmt.Sprintf("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nMAILTO=\"\"\n*/5 * * * * %s /usr/bin/php -q %s >/dev/null 2>&1\n", s.webUser(), cronScript)
+	if site.AppType == "wordpress" {
+		cronScript = filepath.Join(site.Root, "wp-cron.php")
+	}
+	phpBinary := s.phpBinary(site.PHPVersion)
+	if !s.demo {
+		if _, err := os.Stat(phpBinary); err != nil {
+			return fmt.Errorf("PHP %s CLI is unavailable: %w", site.PHPVersion, err)
+		}
+	}
+	content := fmt.Sprintf("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nMAILTO=\"\"\n*/5 * * * * %s %s -q %s >/dev/null 2>&1\n", s.webUser(), phpBinary, cronScript)
 	return writeAtomic(cronPath, []byte(content), 0644)
+}
+
+func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
+	phpVersion = strings.TrimSpace(phpVersion)
+	if err := validateSiteOptions(site.AppType, phpVersion); err != nil {
+		return err
+	}
+	if !s.phpRuntimeAvailable(phpVersion) {
+		return fmt.Errorf("PHP %s is not installed on this server", phpVersion)
+	}
+	if s.demo {
+		return nil
+	}
+	configPath, _ := s.nginxPaths(site.Domain)
+	original, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read nginx configuration: %w", err)
+	}
+	updated, err := replaceFastCGISocket(string(original), s.phpSocket(phpVersion))
+	if err != nil {
+		return err
+	}
+	rollback := func() {
+		_ = writeAtomic(configPath, original, 0644)
+		_, _ = runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
+	}
+	if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
+		return fmt.Errorf("update nginx configuration: %w", err)
+	}
+	if _, err := runCommand(ctx, 10*time.Second, "nginx", "-t"); err != nil {
+		rollback()
+		return err
+	}
+	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
+		rollback()
+		return err
+	}
+	if site.Cron {
+		site.PHPVersion = phpVersion
+		if err := s.SetCron(site, true); err != nil {
+			rollback()
+			return fmt.Errorf("update application cron: %w", err)
+		}
+	}
+	return nil
+}
+
+func replaceFastCGISocket(config, socket string) (string, error) {
+	if !fastCGIPassPattern.MatchString(config) {
+		return "", errors.New("managed nginx configuration has no FastCGI socket")
+	}
+	return fastCGIPassPattern.ReplaceAllString(config, "${1}"+socket+"${2}"), nil
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
@@ -405,7 +513,13 @@ func (s *System) Logs(ctx context.Context, target string) ([]string, error) {
 	case "nginx-error", "":
 		command = []string{"tail", "-n", "100", "/var/log/nginx/error.log"}
 	case "php":
-		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", s.phpUnit()}
+		command = []string{"journalctl", "--no-pager", "-n", "100"}
+		for _, unit := range s.phpUnits() {
+			command = append(command, "-u", unit)
+		}
+		if len(command) == 4 {
+			return nil, errors.New("no PHP-FPM runtime is installed")
+		}
 	case "database":
 		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", "mariadb"}
 	case "cron":
@@ -433,9 +547,11 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) string {
-	socket := "/run/php-fpm/www.sock"
-	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
-		socket = "/run/php/php8.3-fpm.sock"
+	applicationRules := `    location = /configuration.php { deny all; }
+    location ^~ /crons/ { deny all; }`
+	if site.AppType == "wordpress" {
+		applicationRules = `    location = /wp-config.php { deny all; }
+    location ~* ^/wp-content/uploads/.*\.php$ { deny all; }`
 	}
 	return fmt.Sprintf(`# Managed by LiteCP - By Hostingtom
 server {
@@ -452,6 +568,8 @@ server {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
+%s
+
     location ~ \.php$ {
         try_files $uri =404;
         include fastcgi_params;
@@ -461,8 +579,6 @@ server {
         fastcgi_read_timeout 120s;
     }
 
-    location = /configuration.php { deny all; }
-    location ^~ /crons/ { deny all; }
     location ~ /\.(?!well-known) { deny all; }
 
     location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|webp|woff2?)$ {
@@ -472,7 +588,7 @@ server {
         access_log off;
     }
 }
-`, site.Domain, site.Root, socket)
+`, site.Domain, site.Root, applicationRules, s.phpSocket(site.PHPVersion))
 }
 
 func (s *System) webUser() string {
@@ -482,11 +598,137 @@ func (s *System) webUser() string {
 	return "nginx"
 }
 
-func (s *System) phpUnit() string {
-	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
-		return "php8.3-fpm"
+func (s *System) installedPHPVersions() []string {
+	versions := make([]string, 0, len(supportedPHPVersions))
+	for _, version := range supportedPHPVersions {
+		if s.phpRuntimeAvailable(version) {
+			versions = append(versions, version)
+		}
 	}
-	return "php-fpm"
+	return versions
+}
+
+func (s *System) phpRuntimeAvailable(version string) bool {
+	if s.demo {
+		return containsString(supportedPHPVersions, version)
+	}
+	if _, err := os.Stat(s.phpBinary(version)); err != nil {
+		return false
+	}
+	return unitFileExists(s.phpUnitForVersion(version))
+}
+
+func (s *System) phpUnits() []string {
+	units := []string{}
+	seen := map[string]bool{}
+	for _, version := range supportedPHPVersions {
+		if !s.phpRuntimeAvailable(version) {
+			continue
+		}
+		unit := s.phpUnitForVersion(version)
+		if !seen[unit] {
+			seen[unit] = true
+			units = append(units, unit)
+		}
+	}
+	return units
+}
+
+func (s *System) phpStackState(ctx context.Context) string {
+	units := s.phpUnits()
+	if len(units) == 0 {
+		return "stopped"
+	}
+	for _, unit := range units {
+		if s.serviceState(ctx, unit) != "running" {
+			return "degraded"
+		}
+	}
+	return "running"
+}
+
+func (s *System) phpUnitForVersion(version string) string {
+	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
+		return "php" + version + "-fpm"
+	}
+	unit := "php" + strings.ReplaceAll(version, ".", "") + "-php-fpm"
+	if version == "8.3" && !unitFileExists(unit) && unitFileExists("php-fpm") {
+		return "php-fpm"
+	}
+	return unit
+}
+
+func (s *System) phpSocket(version string) string {
+	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
+		return "/run/php/php" + version + "-fpm.sock"
+	}
+	compact := strings.ReplaceAll(version, ".", "")
+	if version == "8.3" && !unitFileExists("php83-php-fpm") && unitFileExists("php-fpm") {
+		return "/run/php-fpm/www.sock"
+	}
+	return "/var/opt/remi/php" + compact + "/run/php-fpm/www.sock"
+}
+
+func (s *System) phpBinary(version string) string {
+	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
+		return "/usr/bin/php" + version
+	}
+	compact := strings.ReplaceAll(version, ".", "")
+	path := "/opt/remi/php" + compact + "/root/usr/bin/php"
+	if version == "8.3" {
+		if _, err := os.Stat(path); err != nil {
+			return "/usr/bin/php"
+		}
+	}
+	return path
+}
+
+func unitFileExists(unit string) bool {
+	for _, directory := range []string{"/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system"} {
+		if _, err := os.Stat(filepath.Join(directory, unit+".service")); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func validateSiteOptions(appType, phpVersion string) error {
+	if appType != "whmcs" && appType != "wordpress" {
+		return errors.New("application must be WHMCS or WordPress")
+	}
+	if !containsString(supportedPHPVersions, phpVersion) {
+		return errors.New("choose PHP 7.3, 7.4, 8.1, 8.2, 8.3 or 8.4")
+	}
+	if appType == "whmcs" && phpVersion == "8.4" {
+		return errors.New("WHMCS does not currently support PHP 8.4; choose PHP 7.3 through 8.3")
+	}
+	if appType == "wordpress" && phpVersion == "7.3" {
+		return errors.New("current WordPress requires PHP 7.4 or newer")
+	}
+	return nil
+}
+
+func defaultPHPVersion(appType string) string {
+	if appType == "wordpress" {
+		return "8.4"
+	}
+	return "8.3"
+}
+
+func applicationName(appType string) string {
+	if appType == "wordpress" {
+		return "WordPress"
+	}
+	return "WHMCS"
+}
+
+func containsString(values []string, candidate string) bool {
+	for _, value := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *System) cronUnit() string {

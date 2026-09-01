@@ -239,6 +239,9 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th { height: 38px; padding: 0 18px; background: #f8faf9; color: #84979a; font-size: 8px; letter-spacing: 1px; text-align: left; }
 .data-table td { height: 67px; padding: 8px 18px; border-top: 1px solid #edf1f0; font-size: 10px; }
+.inline-php-select { height: 30px; min-width: 82px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; background: white; color: var(--ink); font-size: 10px; font-weight: 700; outline: none; }
+.inline-php-select:focus { border-color: rgba(15,138,131,.65); box-shadow: 0 0 0 3px rgba(15,138,131,.09); }
+.inline-php-select:disabled { opacity: .65; cursor: wait; }
 .domain-cell { display: flex; align-items: center; gap: 11px; }
 .domain-favicon { width: 32px; height: 32px; border-radius: 8px; background: #eaf7f4; color: var(--teal); display: grid; place-items: center; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .domain-copy { display: flex; flex-direction: column; }
@@ -387,7 +390,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
   .notice-meta { display: none; }
   .table-panel { overflow-x: auto; }
   .table-panel .panel-head { min-width: 690px; }
-  .data-table { min-width: 690px; }
+  .data-table { min-width: 880px; }
   .backup-note { align-items: flex-start; }
   .retention-chip { display: none; }
 }

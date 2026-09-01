@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="0.1.0"
+LITECP_VERSION="0.2.0"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -17,18 +17,27 @@ OS_ID="${ID,,}"
 [[ "${OS_ID}" == "ubuntu" || "${OS_ID}" == "almalinux" ]] || fail "LiteCP supports Ubuntu and AlmaLinux. Detected: ${PRETTY_NAME:-$OS_ID}."
 [[ -f "${SOURCE_DIR}/go.mod" && -f "${SOURCE_DIR}/deploy/litecp.service" ]] || fail "Run this script from a complete LiteCP source checkout."
 
-info "Installing the lean WHMCS runtime for ${PRETTY_NAME}"
+info "Installing the lean WHMCS and WordPress runtime for ${PRETTY_NAME}"
+
+REQUESTED_PHP_VERSIONS=("7.3" "7.4" "8.1" "8.2" "8.3" "8.4")
+PHP_VERSIONS=()
+PHP_UNITS=()
 
 if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx mariadb-server certbot python3-certbot-nginx cron golang-go ufw
-  if ! apt-cache show php8.3-fpm >/dev/null 2>&1; then
-    add-apt-repository -y ppa:ondrej/php
-    apt-get update
-  fi
-  apt-get install -y php8.3-fpm php8.3-cli php8.3-common php8.3-mysql php8.3-curl php8.3-gd php8.3-imap php8.3-mbstring php8.3-xml php8.3-intl php8.3-bcmath php8.3-gmp php8.3-soap php8.3-zip php8.3-opcache
-  PHP_UNIT="php8.3-fpm"
+  add-apt-repository -y ppa:ondrej/php
+  apt-get update
+  PHP_PACKAGES=()
+  for PHP_VERSION in "${REQUESTED_PHP_VERSIONS[@]}"; do
+    PHP_VERSIONS+=("${PHP_VERSION}")
+    PHP_UNITS+=("php${PHP_VERSION}-fpm")
+    for PHP_PACKAGE in fpm cli common mysql curl gd imap mbstring xml intl bcmath gmp soap zip opcache; do
+      PHP_PACKAGES+=("php${PHP_VERSION}-${PHP_PACKAGE}")
+    done
+  done
+  apt-get install -y "${PHP_PACKAGES[@]}"
   CRON_UNIT="cron"
 else
   EL_MAJOR="$(rpm -E '%{rhel}')"
@@ -37,14 +46,31 @@ else
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi
-  dnf module reset -y php
-  dnf module enable -y php:remi-8.3
-  dnf install -y php php-fpm php-cli php-common php-mysqlnd php-curl php-gd php-imap php-mbstring php-xml php-intl php-bcmath php-gmp php-soap php-zip php-opcache
-  PHP_UNIT="php-fpm"
+  PHP_PACKAGES=()
+  for PHP_VERSION in "${REQUESTED_PHP_VERSIONS[@]}"; do
+    PHP_COMPACT="${PHP_VERSION/.}"
+    if ! dnf repoquery --available "php${PHP_COMPACT}-php-fpm" 2>/dev/null | grep -q .; then
+      info "PHP ${PHP_VERSION} is unavailable as a native package on ${PRETTY_NAME}; skipping it."
+      continue
+    fi
+    PHP_VERSIONS+=("${PHP_VERSION}")
+    PHP_UNITS+=("php${PHP_COMPACT}-php-fpm")
+    for PHP_PACKAGE in fpm cli common mysqlnd gd mbstring xml intl bcmath gmp soap opcache process; do
+      PHP_PACKAGES+=("php${PHP_COMPACT}-php-${PHP_PACKAGE}")
+    done
+    PHP_PACKAGES+=("php${PHP_COMPACT}-php-pecl-zip")
+    if dnf repoquery --available "php${PHP_COMPACT}-php-imap" 2>/dev/null | grep -q .; then
+      PHP_PACKAGES+=("php${PHP_COMPACT}-php-imap")
+    else
+      PHP_PACKAGES+=("php${PHP_COMPACT}-php-pecl-imap")
+    fi
+  done
+  ((${#PHP_VERSIONS[@]} > 0)) || fail "No supported parallel PHP-FPM packages are available."
+  dnf install -y "${PHP_PACKAGES[@]}"
   CRON_UNIT="crond"
 fi
 
-info "Installing ionCube Loader for PHP 8.3"
+info "Installing ionCube Loader and low-memory pools for each PHP runtime"
 MACHINE_ARCH="$(uname -m)"
 case "${MACHINE_ARCH}" in
   x86_64|amd64) IONCUBE_ARCH="x86-64" ;;
@@ -55,20 +81,32 @@ IONCUBE_TMP="$(mktemp -d)"
 trap 'rm -rf -- "${IONCUBE_TMP}"' EXIT
 curl --fail --location --proto '=https' --tlsv1.2 --retry 3 "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_${IONCUBE_ARCH}.tar.gz" --output "${IONCUBE_TMP}/ioncube.tar.gz"
 tar -xzf "${IONCUBE_TMP}/ioncube.tar.gz" -C "${IONCUBE_TMP}"
-PHP_EXTENSION_DIR="$(php -r 'echo ini_get("extension_dir");')"
-install -m 0644 "${IONCUBE_TMP}/ioncube/ioncube_loader_lin_8.3.so" "${PHP_EXTENSION_DIR}/ioncube_loader_lin_8.3.so"
-if [[ "${OS_ID}" == "ubuntu" ]]; then
-  printf 'zend_extension=%s/ioncube_loader_lin_8.3.so\n' "${PHP_EXTENSION_DIR}" > /etc/php/8.3/mods-available/ioncube.ini
-  phpenmod -v 8.3 ioncube
-  install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" /etc/php/8.3/mods-available/litecp.ini
-  phpenmod -v 8.3 litecp
-  install -m 0644 "${SOURCE_DIR}/deploy/fpm-ubuntu.conf" /etc/php/8.3/fpm/pool.d/zz-litecp.conf
-else
-  printf 'zend_extension=%s/ioncube_loader_lin_8.3.so\n' "${PHP_EXTENSION_DIR}" > /etc/php.d/00-ioncube.ini
-  install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" /etc/php.d/99-litecp.ini
-  install -m 0644 "${SOURCE_DIR}/deploy/fpm-almalinux.conf" /etc/php-fpm.d/zz-litecp.conf
-fi
-php -v | grep -qi ioncube || fail "ionCube Loader did not activate for the PHP CLI."
+for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
+  PHP_COMPACT="${PHP_VERSION/.}"
+  IONCUBE_LOADER="${IONCUBE_TMP}/ioncube/ioncube_loader_lin_${PHP_VERSION}.so"
+  [[ -f "${IONCUBE_LOADER}" ]] || fail "ionCube Loader does not include PHP ${PHP_VERSION} support for ${MACHINE_ARCH}."
+  if [[ "${OS_ID}" == "ubuntu" ]]; then
+    PHP_BINARY="/usr/bin/php${PHP_VERSION}"
+    PHP_EXTENSION_DIR="$(${PHP_BINARY} -r 'echo ini_get("extension_dir");')"
+    install -m 0644 "${IONCUBE_LOADER}" "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
+    printf 'zend_extension=%s/ioncube_loader_lin_%s.so\n' "${PHP_EXTENSION_DIR}" "${PHP_VERSION}" > "/etc/php/${PHP_VERSION}/mods-available/ioncube.ini"
+    phpenmod -v "${PHP_VERSION}" ioncube
+    install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" "/etc/php/${PHP_VERSION}/mods-available/litecp.ini"
+    phpenmod -v "${PHP_VERSION}" litecp
+    PHP_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
+    sed "s#@PHP_SOCKET@#${PHP_SOCKET}#g" "${SOURCE_DIR}/deploy/fpm-ubuntu.conf" > "/etc/php/${PHP_VERSION}/fpm/pool.d/zz-litecp.conf"
+  else
+    PHP_BINARY="/opt/remi/php${PHP_COMPACT}/root/usr/bin/php"
+    PHP_EXTENSION_DIR="$(${PHP_BINARY} -r 'echo ini_get("extension_dir");')"
+    install -m 0644 "${IONCUBE_LOADER}" "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
+    printf 'zend_extension=%s/ioncube_loader_lin_%s.so\n' "${PHP_EXTENSION_DIR}" "${PHP_VERSION}" > "/etc/opt/remi/php${PHP_COMPACT}/php.d/00-ioncube.ini"
+    install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" "/etc/opt/remi/php${PHP_COMPACT}/php.d/99-litecp.ini"
+    PHP_SOCKET="/var/opt/remi/php${PHP_COMPACT}/run/php-fpm/www.sock"
+    sed "s#@PHP_SOCKET@#${PHP_SOCKET}#g" "${SOURCE_DIR}/deploy/fpm-almalinux.conf" > "/etc/opt/remi/php${PHP_COMPACT}/php-fpm.d/zz-litecp.conf"
+  fi
+  chmod 0644 "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
+  "${PHP_BINARY}" -v | grep -qi ioncube || fail "ionCube Loader did not activate for PHP ${PHP_VERSION}."
+done
 
 info "Building the LiteCP single-binary service"
 install -d -m 0700 /var/lib/litecp /var/backups/litecp
@@ -94,25 +132,25 @@ command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || tru
 
 ADMIN_USERNAME="${LITECP_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${LITECP_ADMIN_PASSWORD:-}"
-if [[ -z "${ADMIN_PASSWORD}" ]]; then
-  [[ -t 0 ]] || fail "Set LITECP_ADMIN_PASSWORD (12+ characters) for a non-interactive install."
-  read -r -p "LiteCP administrator username [admin]: " INPUT_USERNAME
-  ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
-  while true; do
-    read -r -s -p "LiteCP administrator password (12+ characters): " ADMIN_PASSWORD
-    printf '\n'
-    [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { info "The password must contain at least 12 characters."; continue; }
-    read -r -s -p "Confirm administrator password: " ADMIN_PASSWORD_CONFIRM
-    printf '\n'
-    [[ "${ADMIN_PASSWORD}" == "${ADMIN_PASSWORD_CONFIRM}" ]] && break
-    info "Passwords did not match; try again."
-  done
-fi
-[[ ${#ADMIN_PASSWORD} -ge 12 ]] || fail "The administrator password must contain at least 12 characters."
-
 if [[ ! -f /var/lib/litecp/config.json ]]; then
+  if [[ -z "${ADMIN_PASSWORD}" ]]; then
+    [[ -t 0 ]] || fail "Set LITECP_ADMIN_PASSWORD (12+ characters) for a non-interactive install."
+    read -r -p "LiteCP administrator username [admin]: " INPUT_USERNAME
+    ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
+    while true; do
+      read -r -s -p "LiteCP administrator password (12+ characters): " ADMIN_PASSWORD
+      printf '\n'
+      [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { info "The password must contain at least 12 characters."; continue; }
+      read -r -s -p "Confirm administrator password: " ADMIN_PASSWORD_CONFIRM
+      printf '\n'
+      [[ "${ADMIN_PASSWORD}" == "${ADMIN_PASSWORD_CONFIRM}" ]] && break
+      info "Passwords did not match; try again."
+    done
+  fi
+  [[ ${#ADMIN_PASSWORD} -ge 12 ]] || fail "The administrator password must contain at least 12 characters."
   LITECP_DATA_DIR=/var/lib/litecp LITECP_ADMIN_PASSWORD="${ADMIN_PASSWORD}" /usr/local/bin/litecp init --username "${ADMIN_USERNAME}"
 else
+  ADMIN_USERNAME="existing administrator"
   info "Existing LiteCP configuration found; administrator credentials were preserved."
 fi
 unset ADMIN_PASSWORD LITECP_ADMIN_PASSWORD
@@ -156,10 +194,16 @@ EOF
 )
 
 if [[ "${OS_ID}" == "ubuntu" ]]; then
-  printf '%s\n' "${PANEL_NGINX}" > /etc/nginx/sites-available/litecp-panel.conf
+  PANEL_CONFIG=/etc/nginx/sites-available/litecp-panel.conf
+  if [[ ! -f "${PANEL_CONFIG}" ]]; then
+    printf '%s\n' "${PANEL_NGINX}" > "${PANEL_CONFIG}"
+  fi
   ln -sfn /etc/nginx/sites-available/litecp-panel.conf /etc/nginx/sites-enabled/litecp-panel.conf
 else
-  printf '%s\n' "${PANEL_NGINX}" > /etc/nginx/conf.d/litecp-panel.conf
+  PANEL_CONFIG=/etc/nginx/conf.d/litecp-panel.conf
+  if [[ ! -f "${PANEL_CONFIG}" ]]; then
+    printf '%s\n' "${PANEL_NGINX}" > "${PANEL_CONFIG}"
+  fi
   setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true
   semanage port -a -t http_port_t -p tcp 8443 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 8443 >/dev/null 2>&1 || true
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
@@ -169,7 +213,9 @@ fi
 
 nginx -t
 systemctl daemon-reload
-systemctl enable --now nginx mariadb "${PHP_UNIT}" "${CRON_UNIT}" litecp
+systemctl enable --now nginx mariadb "${PHP_UNITS[@]}" "${CRON_UNIT}" litecp
+systemctl restart "${PHP_UNITS[@]}" litecp
+systemctl reload nginx
 for CERTBOT_TIMER in certbot.timer certbot-renew.timer; do
   if systemctl list-unit-files "${CERTBOT_TIMER}" --no-legend 2>/dev/null | grep -q "^${CERTBOT_TIMER}"; then
     systemctl enable --now "${CERTBOT_TIMER}"
