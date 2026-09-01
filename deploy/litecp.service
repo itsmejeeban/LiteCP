@@ -1,0 +1,38 @@
+[Unit]
+Description=LiteCP - By Hostingtom
+Documentation=https://github.com/hostingtom/litecp
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/lib/litecp
+EnvironmentFile=-/etc/litecp/litecp.env
+Environment=GOGC=80
+ExecStart=/usr/local/bin/litecp
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=15s
+UMask=0027
+
+# The panel must update Nginx, cron and website files, but it does not need
+# general write access to the operating system.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/litecp /var/backups/litecp /var/www/litecp /etc/nginx /etc/cron.d
+ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
+
+[Install]
+WantedBy=multi-user.target

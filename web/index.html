@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0e3b43">
+  <title>LiteCP - By Hostingtom</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <section class="login-shell hidden" id="loginView" aria-labelledby="loginTitle">
+    <div class="login-brand-panel">
+      <a class="brand brand-light" href="#" aria-label="LiteCP home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40"><path d="M8 7.5h10.2v17H31V33H8V7.5Z"/><path d="M21.5 7.5H32v10.2H21.5V7.5Z"/></svg>
+        </span>
+        <span><strong>LiteCP</strong><small>By Hostingtom</small></span>
+      </a>
+      <div class="login-promise">
+        <span class="eyebrow light">PURPOSE-BUILT FOR WHMCS</span>
+        <h1>Less server overhead.<br>More room to grow.</h1>
+        <p>A focused hosting panel for the services your billing platform depends on—nothing more.</p>
+        <div class="promise-grid">
+          <div><span class="promise-icon">01</span><p><strong>Lean by design</strong><small>One compact service, no heavy control-panel stack.</small></p></div>
+          <div><span class="promise-icon">02</span><p><strong>Safe operations</strong><small>Allowlisted actions and protected configuration.</small></p></div>
+          <div><span class="promise-icon">03</span><p><strong>WHMCS ready</strong><small>PHP 8.3, cron, SSL, backups and MariaDB.</small></p></div>
+        </div>
+      </div>
+      <p class="login-os"><span></span> Ready for Ubuntu &amp; AlmaLinux</p>
+    </div>
+    <div class="login-form-panel">
+      <form class="login-card" id="loginForm">
+        <span class="mobile-login-logo brand">
+          <span class="brand-mark"><svg viewBox="0 0 40 40"><path d="M8 7.5h10.2v17H31V33H8V7.5Z"/><path d="M21.5 7.5H32v10.2H21.5V7.5Z"/></svg></span>
+          <span><strong>LiteCP</strong><small>By Hostingtom</small></span>
+        </span>
+        <div class="login-heading">
+          <span class="eyebrow">SECURE SERVER ACCESS</span>
+          <h2 id="loginTitle">Welcome back</h2>
+          <p>Sign in to manage your WHMCS server.</p>
+        </div>
+        <label class="field">
+          <span>Username</span>
+          <span class="input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/></svg>
+            <input name="username" autocomplete="username" value="admin" required>
+          </span>
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <span class="input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+            <button class="icon-button password-toggle" type="button" aria-label="Show password" data-password-toggle="loginPassword">
+              <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+            </button>
+          </span>
+        </label>
+        <p class="form-error hidden" id="loginError" role="alert"></p>
+        <button class="button button-primary button-large" type="submit">
+          <span>Sign in to LiteCP</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <p class="security-note"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg>Protected by encrypted transport and secure sessions</p>
+      </form>
+    </div>
+  </section>
+
+  <div class="app-shell hidden" id="appView">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand brand-light sidebar-brand" href="#dashboard">
+        <span class="brand-mark"><svg viewBox="0 0 40 40"><path d="M8 7.5h10.2v17H31V33H8V7.5Z"/><path d="M21.5 7.5H32v10.2H21.5V7.5Z"/></svg></span>
+        <span><strong>LiteCP</strong><small>By Hostingtom</small></span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <p class="nav-label">MANAGEMENT</p>
+        <a class="nav-item active" href="#dashboard" data-page="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Overview</span></a>
+        <a class="nav-item" href="#websites" data-page="websites"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg><span>Websites</span><span class="nav-count" id="siteNavCount">0</span></a>
+        <a class="nav-item" href="#services" data-page="services"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></svg><span>Services</span></a>
+        <a class="nav-item" href="#backups" data-page="backups"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg><span>Backups</span></a>
+        <a class="nav-item" href="#logs" data-page="logs"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg><span>Logs</span></a>
+        <p class="nav-label nav-label-second">SYSTEM</p>
+        <a class="nav-item" href="#settings" data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>Settings</span></a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="server-chip"><span class="pulse-dot"></span><span><small>SERVER STATUS</small><strong>All systems normal</strong></span></div>
+        <span class="version-label">LiteCP <span id="sideVersion">v0.1.0</span></span>
+      </div>
+    </aside>
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="mobileMenu" aria-label="Open navigation"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <div class="server-identity"><span class="server-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span><small id="topOS">SERVER</small><strong id="topHostname">Loading…</strong></span></div>
+        <div class="topbar-actions">
+          <span class="top-status"><span class="pulse-dot"></span>System healthy</span>
+          <button class="icon-button refresh-button" id="refreshButton" aria-label="Refresh server data"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></button>
+          <span class="topbar-divider"></span>
+          <button class="profile-button" id="profileButton"><span class="avatar" id="avatar">A</span><span class="profile-copy"><strong id="profileName">Admin</strong><small>Administrator</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
+          <div class="profile-menu hidden" id="profileMenu"><button data-page-target="settings">Account settings</button><button id="logoutButton">Sign out</button></div>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <section class="page active" data-page-view="dashboard">
+          <div class="page-heading dashboard-heading">
+            <div><span class="eyebrow">SERVER OVERVIEW</span><h1>Good <span id="greetingTime">morning</span>, <span id="greetingName">Admin</span>.</h1><p>Here’s how your WHMCS server is performing right now.</p></div>
+            <button class="button button-primary" data-open-site-modal><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add website</button>
+          </div>
+
+          <div class="notice-banner" id="noticeBanner">
+            <span class="notice-icon"><svg viewBox="0 0 24 24"><path d="m12 3 9 4.8v5.5c0 4.2-3.8 7.2-9 8.7-5.2-1.5-9-4.5-9-8.7V7.8L12 3Z"/><path d="m8.5 12.5 2.2 2.1 4.8-5"/></svg></span>
+            <span><strong>Your WHMCS stack is healthy</strong><small>All required services are online and responding normally.</small></span>
+            <span class="notice-meta"><span class="pulse-dot"></span>Checked just now</span>
+          </div>
+
+          <div class="metrics-grid">
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon cpu"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3M10 10h4v4h-4z"/></svg></span><span class="metric-trend good">Low load</span></div><small>CPU USAGE</small><div class="metric-value"><strong id="cpuValue">—</strong><span>%</span></div><div class="progress"><span id="cpuBar"></span></div><p id="loadValue">Load average —</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon memory"><svg viewBox="0 0 24 24"><path d="M6 5h12v14H6zM9 2v3M15 2v3M9 19v3M15 19v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg></span><span class="metric-trend" id="memoryTrend">Available</span></div><small>MEMORY</small><div class="metric-value"><strong id="memoryValue">—</strong><span>%</span></div><div class="progress"><span id="memoryBar"></span></div><p id="memoryDetail">— of — used</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon disk"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 14h16M16 17h1M8 9h8"/></svg></span><span class="metric-trend good">Healthy</span></div><small>DISK STORAGE</small><div class="metric-value"><strong id="diskValue">—</strong><span>%</span></div><div class="progress"><span id="diskBar"></span></div><p id="diskDetail">— of — used</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">—</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="panel services-panel"><div class="panel-head"><div><h2>Essential services</h2><p>The core stack powering your WHMCS installation.</p></div><button class="text-button" data-page-target="services">Manage all <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div><div class="service-list" id="dashboardServices"></div></article>
+            <article class="panel quick-panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Common tasks, one click away.</p></div></div><div class="quick-grid"><button data-open-site-modal><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span><strong>Add website</strong><small>Provision a WHMCS vhost</small></span></button><button data-quick-backup><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></span><span><strong>Run backup</strong><small>Files and database</small></span></button><button data-page-target="logs"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span><strong>View logs</strong><small>Inspect recent activity</small></span></button><button data-page-target="settings"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/></svg></span><span><strong>Panel settings</strong><small>Security and defaults</small></span></button></div></article>
+            <article class="panel activity-panel"><div class="panel-head"><div><h2>Recent activity</h2><p>Important changes made through LiteCP.</p></div></div><div class="activity-list" id="activityList"></div></article>
+            <article class="panel server-panel"><div class="panel-head"><div><h2>Server details</h2><p>At-a-glance environment information.</p></div></div><dl class="server-details"><div><dt>Operating system</dt><dd id="detailOS">—</dd></div><div><dt>Primary address</dt><dd id="detailIP">—</dd></div><div><dt>PHP runtime</dt><dd>8.3 · OPcache</dd></div><div><dt>Panel footprint</dt><dd class="positive">Single service</dd></div></dl></article>
+          </div>
+        </section>
+
+        <section class="page" data-page-view="websites">
+          <div class="page-heading"><div><span class="eyebrow">WHMCS HOSTING</span><h1>Websites</h1><p>Manage domains, SSL and automation schedules.</p></div><button class="button button-primary" data-open-site-modal><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add website</button></div>
+          <div class="summary-row"><div class="mini-stat"><span class="mini-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span><span><small>Managed websites</small><strong id="siteCount">0</strong></span></div><div class="mini-stat"><span class="mini-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></span><span><small>Protected by SSL</small><strong id="sslCount">0</strong></span></div><div class="mini-stat"><span class="mini-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><small>Active WHMCS crons</small><strong id="cronCount">0</strong></span></div></div>
+          <article class="panel table-panel"><div class="panel-head"><div><h2>Managed websites</h2><p>Nginx sites configured through this server.</p></div><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="siteSearch" placeholder="Search domains"></label></div><div id="sitesTable"></div></article>
+        </section>
+
+        <section class="page" data-page-view="services">
+          <div class="page-heading"><div><span class="eyebrow">SERVER STACK</span><h1>Services</h1><p>Monitor and safely restart the essential WHMCS services.</p></div><button class="button button-secondary" id="restartAll"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg>Restart stack</button></div>
+          <div class="services-page-grid" id="servicesGrid"></div>
+          <div class="info-callout"><span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span><div><strong>LiteCP keeps service control intentionally simple.</strong><p>Start and restart are available here. Services cannot be stopped from the panel, preventing an accidental loss of access or downtime.</p></div></div>
+        </section>
+
+        <section class="page" data-page-view="backups">
+          <div class="page-heading"><div><span class="eyebrow">RECOVERY</span><h1>Backups</h1><p>Create local snapshots of WHMCS files and MariaDB data.</p></div><button class="button button-primary" id="backupButton"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Create backup</button></div>
+          <div class="backup-note"><span class="backup-note-icon"><svg viewBox="0 0 24 24"><path d="M12 2 3 6.5V12c0 5 3.8 8.4 9 10 5.2-1.6 9-5 9-10V6.5L12 2Z"/><path d="M8 12h8M12 8v8"/></svg></span><div><strong>Local recovery points</strong><p>Backups are stored under <code>/var/backups/litecp</code>. Copy them to separate storage for disaster recovery.</p></div><span class="retention-chip" id="retentionChip">14-day policy</span></div>
+          <article class="panel table-panel"><div class="panel-head"><div><h2>Backup history</h2><p>The latest file and database archives.</p></div></div><div id="backupsTable"></div></article>
+        </section>
+
+        <section class="page" data-page-view="logs">
+          <div class="page-heading"><div><span class="eyebrow">DIAGNOSTICS</span><h1>Logs</h1><p>Read recent output without opening an SSH session.</p></div><button class="button button-secondary" id="reloadLogs"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg>Refresh</button></div>
+          <article class="panel log-panel"><div class="log-toolbar"><label><span>Log source</span><select id="logTarget"><option value="nginx-error">Nginx error log</option><option value="nginx-access">Nginx access log</option><option value="php">PHP-FPM journal</option><option value="database">MariaDB journal</option><option value="cron">Cron journal</option></select></label><span class="log-live"><span class="pulse-dot"></span>Last 100 entries</span></div><pre class="log-viewer" id="logViewer"><code>Select a source to load logs.</code></pre></article>
+        </section>
+
+        <section class="page" data-page-view="settings">
+          <div class="page-heading"><div><span class="eyebrow">PREFERENCES</span><h1>Settings</h1><p>Configure safe defaults for LiteCP.</p></div></div>
+          <div class="settings-grid">
+            <form class="panel settings-card" id="settingsForm"><div class="panel-head"><div><h2>Panel preferences</h2><p>Used for certificates, dates and backup guidance.</p></div></div><div class="settings-body"><label class="field"><span>Administrator email</span><span class="input-wrap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg><input id="settingsEmail" name="email" type="email" placeholder="admin@example.com"></span><small>Pre-filled for Let's Encrypt certificate requests.</small></label><label class="field"><span>Display timezone</span><select id="settingsTimezone" name="timezone"><option value="UTC">UTC</option><option value="Asia/Kolkata">Asia/Kolkata</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option></select></label><label class="field"><span>Backup retention</span><span class="suffix-input"><input id="settingsRetention" name="backupRetention" type="number" min="1" max="90"><span>days</span></span><small>Policy reminder; LiteCP never deletes backups silently.</small></label><button class="button button-primary" type="submit">Save preferences</button></div></form>
+            <form class="panel settings-card" id="passwordForm"><div class="panel-head"><div><h2>Administrator password</h2><p>Use at least 12 characters and a unique passphrase.</p></div></div><div class="settings-body"><label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label><label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label><button class="button button-secondary" type="submit">Update password</button></div></form>
+            <article class="panel settings-card environment-card"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">—</dd></div><div><dt>Operating system</dt><dd id="settingsOS">—</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd>MariaDB</dd></div><div><dt>PHP</dt><dd>8.3 FPM</dd></div></dl></article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-layer hidden" id="siteModal" role="dialog" aria-modal="true" aria-labelledby="siteModalTitle">
+    <div class="modal-card">
+      <div class="modal-head"><div><span class="eyebrow">NEW WHMCS HOST</span><h2 id="siteModalTitle">Add a website</h2><p>LiteCP will create the document root and Nginx configuration.</p></div><button class="icon-button modal-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <form id="siteForm"><div class="modal-body"><label class="field"><span>Domain name</span><span class="input-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg><input name="domain" placeholder="billing.example.com" autocomplete="off" required></span><small>Point this domain’s A record to <span id="modalServerIP">your server IP</span>.</small></label><div class="option-card selected"><label><input type="checkbox" name="createDatabase" checked><span class="custom-check"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></span><span><strong>Create a MariaDB database</strong><small>Generates secure credentials shown once after provisioning.</small></span></label></div><div class="option-card selected"><label><input type="checkbox" name="enableCron" checked><span class="custom-check"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></span><span><strong>Enable WHMCS automation cron</strong><small>Runs <code>crons/cron.php</code> every five minutes.</small></span></label></div><div class="provision-summary"><span><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg></span><p><strong>Safe provisioning</strong><small>Existing files are never overwritten. SSL can be enabled after DNS is pointing to this server.</small></p></div></div><div class="modal-actions"><button class="button button-ghost modal-close" type="button">Cancel</button><button class="button button-primary" type="submit">Provision website <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div></form>
+    </div>
+  </div>
+
+  <div class="modal-layer hidden" id="credentialsModal" role="dialog" aria-modal="true" aria-labelledby="credentialsTitle">
+    <div class="modal-card compact-modal"><div class="modal-head"><div><span class="success-seal"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><h2 id="credentialsTitle">Website provisioned</h2><p>Save these database credentials now. The password is not stored by LiteCP.</p></div></div><div class="modal-body"><dl class="credential-list" id="credentialList"></dl><div class="warning-callout"><strong>Shown once</strong><span>Copy these values into the WHMCS installer before closing.</span></div></div><div class="modal-actions"><button class="button button-secondary" id="copyCredentials">Copy credentials</button><button class="button button-primary" id="closeCredentials">I’ve saved them</button></div></div>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
