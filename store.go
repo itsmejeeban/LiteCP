@@ -115,8 +115,10 @@ func (s *Store) Initialize(username, password string) error {
 		return errors.New("LiteCP is already initialized")
 	}
 	s.cfg = Config{
-		Admin: Admin{Username: username, PasswordHash: hash},
+		Admin:    Admin{Username: username, PasswordHash: hash},
 		Settings: Settings{Timezone: "UTC", BackupRetention: 14},
+		Sites:    []Site{},
+		Backups:  []Backup{},
 		Activities: []Activity{{
 			ID: "initial", Title: "LiteCP is ready", Detail: "Server management initialized", Kind: "success", CreatedAt: time.Now().UTC(),
 		}},
@@ -164,9 +166,9 @@ func (s *Store) PublicState() PublicState {
 	defer s.mu.RUnlock()
 	return PublicState{
 		Username: s.cfg.Admin.Username, Settings: s.cfg.Settings,
-		Sites: append([]Site(nil), s.cfg.Sites...),
-		Backups: append([]Backup(nil), s.cfg.Backups...),
-		Activities: append([]Activity(nil), s.cfg.Activities...),
+		Sites: append([]Site{}, s.cfg.Sites...),
+		Backups: append([]Backup{}, s.cfg.Backups...),
+		Activities: append([]Activity{}, s.cfg.Activities...),
 	}
 }
 

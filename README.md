@@ -19,6 +19,7 @@ The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript int
 - Allowlisted Nginx, PHP, MariaDB, and cron log views
 - PHP 8.3, ionCube Loader, OPcache, and low-idle-memory FPM defaults
 - HTTPS panel proxy on port `8443`
+- Loopback-only MariaDB and a minimal host firewall enabled during installation
 
 LiteCP does not download WHMCS itself. Upload the release obtained through your licensed WHMCS account to the provisioned document root.
 

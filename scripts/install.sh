@@ -22,7 +22,7 @@ info "Installing the lean WHMCS runtime for ${PRETTY_NAME}"
 if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx mariadb-server certbot python3-certbot-nginx cron golang-go
+  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx mariadb-server certbot python3-certbot-nginx cron golang-go ufw
   if ! apt-cache show php8.3-fpm >/dev/null 2>&1; then
     add-apt-repository -y ppa:ondrej/php
     apt-get update
@@ -33,7 +33,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
 else
   EL_MAJOR="$(rpm -E '%{rhel}')"
   dnf install -y epel-release
-  dnf install -y ca-certificates curl unzip openssl nginx mariadb-server certbot python3-certbot-nginx cronie golang policycoreutils-python-utils
+  dnf install -y ca-certificates curl unzip openssl nginx mariadb-server certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi
@@ -74,9 +74,23 @@ info "Building the LiteCP single-binary service"
 install -d -m 0700 /var/lib/litecp /var/backups/litecp
 install -d -m 0755 /var/www/litecp
 install -d -m 0750 /etc/litecp /etc/litecp/tls
+
+if [[ "${OS_ID}" == "ubuntu" ]]; then
+  MARIADB_CONFIG=/etc/mysql/mariadb.conf.d/99-litecp.cnf
+else
+  MARIADB_CONFIG=/etc/my.cnf.d/litecp.cnf
+fi
+cat > "${MARIADB_CONFIG}" <<'EOF'
+# LiteCP only connects to MariaDB locally. Never expose WHMCS data publicly.
+[mariadb]
+bind-address=127.0.0.1
+skip-name-resolve
+EOF
+chmod 0644 "${MARIADB_CONFIG}"
 cd "${SOURCE_DIR}"
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
 chmod 0755 /usr/local/bin/litecp
+command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || true
 
 ADMIN_USERNAME="${LITECP_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${LITECP_ADMIN_PASSWORD:-}"
@@ -148,21 +162,40 @@ else
   printf '%s\n' "${PANEL_NGINX}" > /etc/nginx/conf.d/litecp-panel.conf
   setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true
   semanage port -a -t http_port_t -p tcp 8443 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 8443 >/dev/null 2>&1 || true
+  semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
+  semanage fcontext -a -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1
+  restorecon -R /var/www/litecp /etc/litecp/tls
 fi
 
 nginx -t
 systemctl daemon-reload
 systemctl enable --now nginx mariadb "${PHP_UNIT}" "${CRON_UNIT}" litecp
+for CERTBOT_TIMER in certbot.timer certbot-renew.timer; do
+  if systemctl list-unit-files "${CERTBOT_TIMER}" --no-legend 2>/dev/null | grep -q "^${CERTBOT_TIMER}"; then
+    systemctl enable --now "${CERTBOT_TIMER}"
+  fi
+done
 
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
+if [[ "${OS_ID}" == "ubuntu" ]]; then
+  ufw allow 22/tcp >/dev/null
   ufw allow 80/tcp >/dev/null
   ufw allow 443/tcp >/dev/null
   ufw allow 8443/tcp >/dev/null
-elif systemctl is-active --quiet firewalld 2>/dev/null; then
-  firewall-cmd --permanent --add-service=http >/dev/null
-  firewall-cmd --permanent --add-service=https >/dev/null
-  firewall-cmd --permanent --add-port=8443/tcp >/dev/null
+  ufw --force enable >/dev/null
+elif systemctl is-active --quiet firewalld; then
+  firewall-cmd --permanent --zone=public --remove-service=cockpit >/dev/null 2>&1 || true
+  firewall-cmd --permanent --zone=public --add-service=ssh >/dev/null
+  firewall-cmd --permanent --zone=public --add-service=http >/dev/null
+  firewall-cmd --permanent --zone=public --add-service=https >/dev/null
+  firewall-cmd --permanent --zone=public --add-port=8443/tcp >/dev/null
   firewall-cmd --reload >/dev/null
+else
+  firewall-offline-cmd --zone=public --remove-service=cockpit >/dev/null 2>&1 || true
+  firewall-offline-cmd --zone=public --add-service=ssh >/dev/null
+  firewall-offline-cmd --zone=public --add-service=http >/dev/null
+  firewall-offline-cmd --zone=public --add-service=https >/dev/null
+  firewall-offline-cmd --zone=public --add-port=8443/tcp >/dev/null
+  systemctl enable --now firewalld
 fi
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"

@@ -51,6 +51,20 @@ func TestStorePersistsConfiguration(t *testing.T) {
 	}
 }
 
+func TestFreshPublicStateUsesEmptyArrays(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Initialize("admin", "a-correct-horse-battery-staple"); err != nil {
+		t.Fatal(err)
+	}
+	state := store.PublicState()
+	if state.Sites == nil || state.Backups == nil || state.Activities == nil {
+		t.Fatal("fresh public state must use JSON arrays instead of null collections")
+	}
+}
+
 func TestNginxConfigProtectsWHMCSFiles(t *testing.T) {
 	system := &System{os: OSInfo{ID: "ubuntu"}}
 	config := system.nginxConfig(Site{Domain: "billing.example.com", Root: "/var/www/litecp/billing.example.com/public"})
