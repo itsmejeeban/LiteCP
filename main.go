@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var version = "0.2.0"
+var version = "0.3.0"
 
 //go:embed web/*
 var webAssets embed.FS
@@ -91,8 +91,8 @@ func main() {
 		Addr:              bind,
 		Handler:           app.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      45 * time.Second,
+		ReadTimeout:       20 * time.Minute,
+		WriteTimeout:      20 * time.Minute,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
@@ -124,6 +124,29 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
+	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
+	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
+	mux.HandleFunc("/api/files", a.withAuth(a.files))
+	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
+	mux.HandleFunc("/api/files/upload", only(http.MethodPost, a.withAuth(a.uploadFiles)))
+	mux.HandleFunc("/api/files/directory", only(http.MethodPost, a.withAuth(a.createDirectory)))
+	mux.HandleFunc("/api/files/rename", only(http.MethodPost, a.withAuth(a.renameFile)))
+	mux.HandleFunc("/api/files/permissions", only(http.MethodPut, a.withAuth(a.changeFilePermissions)))
+	mux.HandleFunc("/api/files/archive", only(http.MethodPost, a.withAuth(a.archiveFiles)))
+	mux.HandleFunc("/api/files/extract", only(http.MethodPost, a.withAuth(a.extractArchive)))
+	mux.HandleFunc("/api/files/download", only(http.MethodGet, a.withAuth(a.downloadFile)))
+	mux.HandleFunc("/api/databases", only(http.MethodPost, a.withAuth(a.createManagedDatabase)))
+	mux.HandleFunc("/api/databases/password", only(http.MethodPut, a.withAuth(a.resetManagedDatabasePassword)))
+	mux.HandleFunc("/api/databases/", only(http.MethodDelete, a.withAuth(a.deleteManagedDatabase)))
+	mux.HandleFunc("/api/firewall", only(http.MethodPost, a.withAuth(a.createFirewallRule)))
+	mux.HandleFunc("/api/firewall/", only(http.MethodDelete, a.withAuth(a.deleteFirewallRule)))
+	mux.HandleFunc("/api/mail/domains", only(http.MethodPost, a.withAuth(a.createMailDomain)))
+	mux.HandleFunc("/api/mail/domains/", only(http.MethodDelete, a.withAuth(a.deleteMailDomain)))
+	mux.HandleFunc("/api/mail/mailboxes", only(http.MethodPost, a.withAuth(a.createMailbox)))
+	mux.HandleFunc("/api/mail/mailboxes/password", only(http.MethodPut, a.withAuth(a.resetMailboxPassword)))
+	mux.HandleFunc("/api/mail/mailboxes/", only(http.MethodDelete, a.withAuth(a.deleteMailbox)))
+	mux.HandleFunc("/api/mail/aliases", only(http.MethodPost, a.withAuth(a.createMailAlias)))
+	mux.HandleFunc("/api/mail/aliases/", only(http.MethodDelete, a.withAuth(a.deleteMailAlias)))
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
@@ -342,6 +365,13 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.store.AddSite(site)
+	if credentials != nil {
+		databaseID, _ := randomToken(8)
+		_ = a.store.AddDatabase(ManagedDatabase{
+			ID: databaseID, Name: credentials.Name, Username: credentials.Username,
+			SiteID: site.ID, Domain: site.Domain, CreatedAt: site.CreatedAt,
+		})
+	}
 	warning := ""
 	if input.EnableCron {
 		if err := a.system.SetCron(site, true); err != nil {
@@ -454,7 +484,8 @@ func (a *App) deleteSite(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		SiteID string `json:"siteId"`
+		SiteID        string `json:"siteId"`
+		DestinationID string `json:"destinationId"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -465,10 +496,33 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
+	var destination *BackupDestination
+	if input.DestinationID != "" {
+		destination = a.store.BackupDestinationByID(input.DestinationID)
+		if destination == nil {
+			writeError(w, http.StatusNotFound, "Backup destination not found.")
+			return
+		}
+	}
 	backup, err := a.system.CreateBackup(r.Context(), *site)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
+	}
+	if destination != nil {
+		remotePath, err := a.system.UploadBackup(r.Context(), *destination, backup.Path)
+		if err != nil {
+			backup.DestinationID = destination.ID
+			backup.DestinationName = destination.Name
+			backup.Status = "remote failed"
+			a.store.AddBackup(backup)
+			a.store.AddActivity("Remote backup failed", site.Domain+" was saved locally but could not upload to "+destination.Name, "warning")
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		backup.DestinationID = destination.ID
+		backup.DestinationName = destination.Name
+		backup.RemotePath = remotePath
 	}
 	a.store.AddBackup(backup)
 	a.store.AddActivity("Backup completed", site.Domain+" files and database saved", "success")
@@ -538,7 +592,11 @@ func validOrigin(r *http.Request) bool {
 }
 
 func decodeJSON(r *http.Request, dst any) error {
-	decoder := json.NewDecoder(io.LimitReader(r.Body, (1<<20)+1))
+	return decodeJSONWithLimit(r, dst, 1<<20)
+}
+
+func decodeJSONWithLimit(r *http.Request, dst any, limit int64) error {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, limit+1))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		return fmt.Errorf("invalid request: %w", err)

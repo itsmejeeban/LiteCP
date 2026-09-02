@@ -25,13 +25,70 @@ type Site struct {
 }
 
 type Backup struct {
+	ID              string    `json:"id"`
+	SiteID          string    `json:"siteId"`
+	Domain          string    `json:"domain"`
+	Path            string    `json:"path"`
+	DestinationID   string    `json:"destinationId,omitempty"`
+	DestinationName string    `json:"destinationName,omitempty"`
+	RemotePath      string    `json:"remotePath,omitempty"`
+	Size            int64     `json:"size"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+type BackupDestination struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Protocol       string    `json:"protocol"`
+	Host           string    `json:"host"`
+	Port           int       `json:"port"`
+	Username       string    `json:"username"`
+	RemotePath     string    `json:"remotePath"`
+	HostKeySHA256  string    `json:"hostKeySha256,omitempty"`
+	PasswordCipher string    `json:"passwordCipher,omitempty"`
+	HasPassword    bool      `json:"hasPassword"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type ManagedDatabase struct {
 	ID        string    `json:"id"`
-	SiteID    string    `json:"siteId"`
-	Domain    string    `json:"domain"`
-	Path      string    `json:"path"`
-	Size      int64     `json:"size"`
-	Status    string    `json:"status"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	SiteID    string    `json:"siteId,omitempty"`
+	Domain    string    `json:"domain,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type FirewallRule struct {
+	ID        string    `json:"id"`
+	Port      int       `json:"port"`
+	Protocol  string    `json:"protocol"`
+	Source    string    `json:"source"`
+	Label     string    `json:"label"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type MailDomain struct {
+	ID        string    `json:"id"`
+	Domain    string    `json:"domain"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type Mailbox struct {
+	ID           string    `json:"id"`
+	Domain       string    `json:"domain"`
+	Address      string    `json:"address"`
+	QuotaMB      int       `json:"quotaMb"`
+	PasswordHash string    `json:"passwordHash,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type MailAlias struct {
+	ID          string    `json:"id"`
+	Source      string    `json:"source"`
+	Destination string    `json:"destination"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type Activity struct {
@@ -54,21 +111,33 @@ type Admin struct {
 }
 
 type Config struct {
-	Admin      Admin      `json:"admin"`
-	Settings   Settings   `json:"settings"`
-	Sites      []Site     `json:"sites"`
-	Backups    []Backup   `json:"backups"`
-	Activities []Activity `json:"activities"`
+	Admin              Admin               `json:"admin"`
+	Settings           Settings            `json:"settings"`
+	Sites              []Site              `json:"sites"`
+	Backups            []Backup            `json:"backups"`
+	BackupDestinations []BackupDestination `json:"backupDestinations,omitempty"`
+	Databases          []ManagedDatabase   `json:"databases,omitempty"`
+	FirewallRules      []FirewallRule      `json:"firewallRules,omitempty"`
+	MailDomains        []MailDomain        `json:"mailDomains,omitempty"`
+	Mailboxes          []Mailbox           `json:"mailboxes,omitempty"`
+	MailAliases        []MailAlias         `json:"mailAliases,omitempty"`
+	Activities         []Activity          `json:"activities"`
 }
 
 type PublicState struct {
-	Version    string         `json:"version"`
-	Username   string         `json:"username"`
-	Settings   Settings       `json:"settings"`
-	Sites      []Site         `json:"sites"`
-	Backups    []Backup       `json:"backups"`
-	Activities []Activity     `json:"activities"`
-	System     SystemSnapshot `json:"system"`
+	Version            string              `json:"version"`
+	Username           string              `json:"username"`
+	Settings           Settings            `json:"settings"`
+	Sites              []Site              `json:"sites"`
+	Backups            []Backup            `json:"backups"`
+	BackupDestinations []BackupDestination `json:"backupDestinations"`
+	Databases          []ManagedDatabase   `json:"databases"`
+	FirewallRules      []FirewallRule      `json:"firewallRules"`
+	MailDomains        []MailDomain        `json:"mailDomains"`
+	Mailboxes          []Mailbox           `json:"mailboxes"`
+	MailAliases        []MailAlias         `json:"mailAliases"`
+	Activities         []Activity          `json:"activities"`
+	System             SystemSnapshot      `json:"system"`
 }
 
 type Store struct {
@@ -102,6 +171,23 @@ func OpenStore(dataDir string) (*Store, error) {
 			store.cfg.Sites[i].PHPVersion = "8.3"
 			changed = true
 		}
+		if store.cfg.Sites[i].Database != "" {
+			found := false
+			for _, database := range store.cfg.Databases {
+				if database.Name == store.cfg.Sites[i].Database {
+					found = true
+					break
+				}
+			}
+			if !found {
+				store.cfg.Databases = append(store.cfg.Databases, ManagedDatabase{
+					ID: "site-" + store.cfg.Sites[i].ID, Name: store.cfg.Sites[i].Database,
+					Username: store.cfg.Sites[i].DBUser, SiteID: store.cfg.Sites[i].ID,
+					Domain: store.cfg.Sites[i].Domain, CreatedAt: store.cfg.Sites[i].CreatedAt,
+				})
+				changed = true
+			}
+		}
 	}
 	if changed {
 		if err := store.saveLocked(); err != nil {
@@ -132,10 +218,16 @@ func (s *Store) Initialize(username, password string) error {
 		return errors.New("LiteCP is already initialized")
 	}
 	s.cfg = Config{
-		Admin:    Admin{Username: username, PasswordHash: hash},
-		Settings: Settings{Timezone: "UTC", BackupRetention: 14},
-		Sites:    []Site{},
-		Backups:  []Backup{},
+		Admin:              Admin{Username: username, PasswordHash: hash},
+		Settings:           Settings{Timezone: "UTC", BackupRetention: 14},
+		Sites:              []Site{},
+		Backups:            []Backup{},
+		BackupDestinations: []BackupDestination{},
+		Databases:          []ManagedDatabase{},
+		FirewallRules:      []FirewallRule{},
+		MailDomains:        []MailDomain{},
+		Mailboxes:          []Mailbox{},
+		MailAliases:        []MailAlias{},
 		Activities: []Activity{{
 			ID: "initial", Title: "LiteCP is ready", Detail: "Server management initialized", Kind: "success", CreatedAt: time.Now().UTC(),
 		}},
@@ -181,11 +273,22 @@ func (s *Store) SetPassword(password string) error {
 func (s *Store) PublicState() PublicState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	destinations := append([]BackupDestination{}, s.cfg.BackupDestinations...)
+	for i := range destinations {
+		destinations[i].HasPassword = destinations[i].PasswordCipher != ""
+		destinations[i].PasswordCipher = ""
+	}
+	mailboxes := append([]Mailbox{}, s.cfg.Mailboxes...)
+	for i := range mailboxes {
+		mailboxes[i].PasswordHash = ""
+	}
 	return PublicState{
 		Username: s.cfg.Admin.Username, Settings: s.cfg.Settings,
-		Sites:      append([]Site{}, s.cfg.Sites...),
-		Backups:    append([]Backup{}, s.cfg.Backups...),
-		Activities: append([]Activity{}, s.cfg.Activities...),
+		Sites: append([]Site{}, s.cfg.Sites...), Backups: append([]Backup{}, s.cfg.Backups...),
+		BackupDestinations: destinations, Databases: append([]ManagedDatabase{}, s.cfg.Databases...),
+		FirewallRules: append([]FirewallRule{}, s.cfg.FirewallRules...),
+		MailDomains:   append([]MailDomain{}, s.cfg.MailDomains...), Mailboxes: mailboxes,
+		MailAliases: append([]MailAlias{}, s.cfg.MailAliases...), Activities: append([]Activity{}, s.cfg.Activities...),
 	}
 }
 

@@ -49,18 +49,20 @@ type ServiceStatus struct {
 }
 
 type SystemSnapshot struct {
-	OS            string          `json:"os"`
-	OSID          string          `json:"osId"`
-	Hostname      string          `json:"hostname"`
-	IPAddress     string          `json:"ipAddress"`
-	UptimeSeconds uint64          `json:"uptimeSeconds"`
-	CPUPercent    float64         `json:"cpuPercent"`
-	LoadAverage   float64         `json:"loadAverage"`
-	Memory        ResourceUsage   `json:"memory"`
-	Disk          ResourceUsage   `json:"disk"`
-	Services      []ServiceStatus `json:"services"`
-	PHPVersions   []string        `json:"phpVersions"`
-	Demo          bool            `json:"demo"`
+	OS              string          `json:"os"`
+	OSID            string          `json:"osId"`
+	Hostname        string          `json:"hostname"`
+	IPAddress       string          `json:"ipAddress"`
+	UptimeSeconds   uint64          `json:"uptimeSeconds"`
+	CPUPercent      float64         `json:"cpuPercent"`
+	LoadAverage     float64         `json:"loadAverage"`
+	Memory          ResourceUsage   `json:"memory"`
+	Disk            ResourceUsage   `json:"disk"`
+	Services        []ServiceStatus `json:"services"`
+	PHPVersions     []string        `json:"phpVersions"`
+	DatabaseEngine  string          `json:"databaseEngine"`
+	FirewallBackend string          `json:"firewallBackend"`
+	Demo            bool            `json:"demo"`
 }
 
 type OSInfo struct {
@@ -74,6 +76,7 @@ type System struct {
 	os       OSInfo
 	demo     bool
 	cpuMu    sync.Mutex
+	secretMu sync.Mutex
 	prevIdle uint64
 	prevAll  uint64
 }
@@ -101,6 +104,7 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 	snapshot := SystemSnapshot{
 		OS: s.os.Name, OSID: s.os.ID, Hostname: hostname, IPAddress: primaryIP(), Demo: s.demo,
 		Memory: memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
+		DatabaseEngine: s.DatabaseEngine(), FirewallBackend: s.FirewallBackend(),
 	}
 	snapshot.UptimeSeconds, snapshot.LoadAverage = uptimeAndLoad()
 	snapshot.CPUPercent = s.cpuUsage()
@@ -114,6 +118,8 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 			defer wait.Done()
 			if item.Key == "php" {
 				item.State = s.phpStackState(ctx)
+			} else if item.Key == "mail" {
+				item.State = s.mailStackState(ctx)
 			} else {
 				item.State = s.serviceState(ctx, item.Unit)
 			}
@@ -134,12 +140,19 @@ func (s *System) serviceUnits() []ServiceStatus {
 	if phpUnitLabel == "" {
 		phpUnitLabel = "PHP-FPM"
 	}
-	return []ServiceStatus{
+	services := []ServiceStatus{
 		{Key: "nginx", Label: "Nginx", Unit: "nginx"},
 		{Key: "php", Label: "Multi-PHP FPM", Unit: phpUnitLabel},
-		{Key: "database", Label: "MariaDB", Unit: "mariadb"},
+		{Key: "database", Label: s.DatabaseEngine(), Unit: s.databaseUnit()},
 		{Key: "cron", Label: "App Scheduler", Unit: cronUnit},
 	}
+	mailUnits := s.mailUnits()
+	mailLabel := strings.Join(mailUnits, ", ")
+	if mailLabel == "" {
+		mailLabel = "Postfix, Dovecot"
+	}
+	services = append(services, ServiceStatus{Key: "mail", Label: "Email Hosting", Unit: mailLabel})
+	return services
 }
 
 func (s *System) serviceState(ctx context.Context, unit string) string {
@@ -167,6 +180,21 @@ func (s *System) ServiceAction(ctx context.Context, key, action string) error {
 		units := s.phpUnits()
 		if len(units) == 0 {
 			return errors.New("no PHP-FPM runtime is installed")
+		}
+		if s.demo {
+			return nil
+		}
+		for _, unit := range units {
+			if _, err := runCommand(ctx, 30*time.Second, "systemctl", action, unit); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if key == "mail" {
+		units := s.mailUnits()
+		if len(units) < 2 {
+			return errors.New("email hosting is not installed")
 		}
 		if s.demo {
 			return nil
@@ -323,7 +351,7 @@ func (s *System) createDatabase(ctx context.Context, domain string) (DBCredentia
 	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' IDENTIFIED BY '%s'; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, password, name, username)
 	databaseClient := firstAvailableCommand("mariadb", "mysql")
 	if _, err := runCommand(ctx, 20*time.Second, databaseClient, "--protocol=socket", "--user=root", "--execute", sql); err != nil {
-		return DBCredentials{}, fmt.Errorf("create MariaDB database: %w", err)
+		return DBCredentials{}, fmt.Errorf("create application database: %w", err)
 	}
 	return DBCredentials{Name: name, Username: username, Password: password, Host: "localhost"}, nil
 }
@@ -521,9 +549,11 @@ func (s *System) Logs(ctx context.Context, target string) ([]string, error) {
 			return nil, errors.New("no PHP-FPM runtime is installed")
 		}
 	case "database":
-		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", "mariadb"}
+		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", s.databaseUnit()}
 	case "cron":
 		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", s.cronUnit()}
+	case "mail":
+		command = []string{"journalctl", "--no-pager", "-n", "100", "-u", "postfix", "-u", "dovecot"}
 	default:
 		return nil, errors.New("unknown log target")
 	}

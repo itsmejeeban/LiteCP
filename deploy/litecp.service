@@ -30,8 +30,8 @@ ProtectClock=true
 RestrictSUIDSGID=true
 LockPersonality=true
 NoNewPrivileges=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=/var/lib/litecp /var/backups/litecp /var/www/litecp /var/log/nginx /etc/nginx /etc/cron.d
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadWritePaths=/var/lib/litecp /var/backups/litecp /var/www/litecp /var/vmail /var/log/nginx /etc/nginx /etc/cron.d /etc/litecp/mail
 ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
 
 [Install]

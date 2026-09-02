@@ -8,6 +8,8 @@
   let currentState = null;
   let credentialText = "";
   let logTimer = null;
+  let currentFilePath = "";
+  let editorFilePath = "";
 
   const icons = {
     globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>',
@@ -15,6 +17,8 @@
     clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     refresh: '<svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg>',
+    folder: '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 9h18"/></svg>',
+    file: '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>',
     empty: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>'
   };
 
@@ -22,11 +26,12 @@
     nginx: { symbol: "NX", description: "Handles secure web traffic and static assets." },
     php: { symbol: "PHP", description: "Runs per-site PHP versions through isolated FastCGI pools." },
     database: { symbol: "DB", description: "Stores clients, invoices and application data." },
-    cron: { symbol: "CR", description: "Executes scheduled WHMCS and WordPress automation tasks." }
+    cron: { symbol: "CR", description: "Executes scheduled WHMCS and WordPress automation tasks." },
+    mail: { symbol: "MX", description: "Provides authenticated SMTP submission and IMAP mailboxes." }
   };
 
   const demoState = {
-    version: "0.2.0",
+    version: "0.3.0",
     username: "admin",
     settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14 },
     sites: [
@@ -37,6 +42,15 @@
       { id: "backup_1", siteId: "site_demo_1", domain: "billing.hostingtom.com", path: "/var/backups/litecp/billing.hostingtom.com-20260831-020000.tar.gz", size: 193715264, status: "complete", createdAt: new Date(Date.now() - 7 * 3600000).toISOString() },
       { id: "backup_2", siteId: "site_demo_2", domain: "clients.northstar.test", path: "/var/backups/litecp/clients.northstar.test-20260830-020000.tar.gz", size: 128427910, status: "complete", createdAt: new Date(Date.now() - 31 * 3600000).toISOString() }
     ],
+    backupDestinations: [{ id: "remote_demo", name: "Off-site SFTP", protocol: "sftp", host: "backup.hostingtom.test", port: 22, username: "litecp", remotePath: "/backups", hasPassword: true, createdAt: new Date().toISOString() }],
+    databases: [
+      { id: "db_demo_1", name: "cp_billing", username: "cp_whmcs", siteId: "site_demo_1", domain: "billing.hostingtom.com", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
+      { id: "db_demo_2", name: "cp_blog", username: "cp_blog", siteId: "site_demo_2", domain: "blog.northstar.test", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
+    ],
+    firewallRules: [{ id: "fw_demo", port: 10050, protocol: "tcp", source: "203.0.113.0/24", label: "Monitoring", createdAt: new Date().toISOString() }],
+    mailDomains: [{ id: "md_demo", domain: "hostingtom.com", createdAt: new Date().toISOString() }],
+    mailboxes: [{ id: "mb_demo", domain: "hostingtom.com", address: "billing@hostingtom.com", quotaMb: 2048, createdAt: new Date().toISOString() }],
+    mailAliases: [{ id: "ma_demo", source: "sales@hostingtom.com", destination: "billing@hostingtom.com", createdAt: new Date().toISOString() }],
     activities: [
       { id: "a1", title: "Backup completed", detail: "billing.hostingtom.com files and database saved", kind: "success", createdAt: new Date(Date.now() - 7 * 3600000).toISOString() },
       { id: "a2", title: "SSL enabled", detail: "billing.hostingtom.com now redirects to HTTPS", kind: "success", createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
@@ -50,16 +64,17 @@
         { key: "nginx", label: "Nginx", unit: "nginx", state: "running" },
         { key: "php", label: "Multi-PHP FPM", unit: "php7.3-fpm … php8.4-fpm", state: "running" },
         { key: "database", label: "MariaDB", unit: "mariadb", state: "running" },
-        { key: "cron", label: "App Scheduler", unit: "cron", state: "running" }
+        { key: "cron", label: "App Scheduler", unit: "cron", state: "running" },
+        { key: "mail", label: "Email Hosting", unit: "postfix, dovecot", state: "running" }
       ],
-      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"]
+      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"], databaseEngine: "MariaDB", firewallBackend: "ufw"
     }
   };
 
   async function api(path, options = {}) {
     if (demoMode) return mockAPI(path, options);
     const config = { credentials: "same-origin", ...options };
-    if (config.body && typeof config.body !== "string") {
+    if (config.body && typeof config.body !== "string" && !(config.body instanceof FormData)) {
       config.headers = { "Content-Type": "application/json", ...(config.headers || {}) };
       config.body = JSON.stringify(config.body);
     }
@@ -92,10 +107,34 @@
     }
     if (path === "/api/backups" && options.method === "POST") {
       const site = demoState.sites.find(item => item.id === options.body.siteId);
-      const backup = { id: `backup_${Date.now()}`, siteId: site.id, domain: site.domain, path: `/var/backups/litecp/${site.domain}-preview.tar.gz`, size: 184812032, status: "complete", createdAt: new Date().toISOString() };
+      const remote = demoState.backupDestinations.find(item => item.id === options.body.destinationId);
+      const backup = { id: `backup_${Date.now()}`, siteId: site.id, domain: site.domain, path: `/var/backups/litecp/${site.domain}-preview.tar.gz`, size: 184812032, status: "complete", destinationName: remote?.name || "", remotePath: remote ? `${remote.protocol}://${remote.host}${remote.remotePath}/${site.domain}-preview.tar.gz` : "", createdAt: new Date().toISOString() };
       demoState.backups.unshift(backup);
       return backup;
     }
+    if (path.startsWith("/api/files") && (!options.method || options.method === "GET")) {
+      if (path.startsWith("/api/files/content")) return { path: "configuration.php", content: "<?php\n// WHMCS configuration preview\n", mode: "0640" };
+      return { siteId: "site_demo_1", domain: "billing.hostingtom.com", path: currentFilePath, entries: [
+        { name: "assets", path: currentFilePath ? `${currentFilePath}/assets` : "assets", type: "directory", size: 0, mode: "0750", modified: new Date().toISOString() },
+        { name: "index.php", path: currentFilePath ? `${currentFilePath}/index.php` : "index.php", type: "file", size: 2840, mode: "0640", modified: new Date().toISOString() },
+        { name: "whmcs.zip", path: currentFilePath ? `${currentFilePath}/whmcs.zip` : "whmcs.zip", type: "file", size: 48512000, mode: "0640", modified: new Date().toISOString() }
+      ] };
+    }
+    if (path === "/api/databases" && options.method === "POST") {
+      const item = { id: `db_${Date.now()}`, name: options.body.name, username: options.body.username, createdAt: new Date().toISOString() };
+      demoState.databases.push(item); return { database: item, password: options.body.password || "demo-generated-password", host: "localhost" };
+    }
+    if (path.startsWith("/api/databases/") && options.method === "DELETE") { demoState.databases = demoState.databases.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path === "/api/backup-destinations" && options.method === "POST") { const item = { id: `remote_${Date.now()}`, ...options.body, hasPassword: true, createdAt: new Date().toISOString() }; delete item.password; demoState.backupDestinations.push(item); return item; }
+    if (path.startsWith("/api/backup-destinations/") && options.method === "DELETE") { demoState.backupDestinations = demoState.backupDestinations.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path === "/api/firewall" && options.method === "POST") { const item = { id: `fw_${Date.now()}`, ...options.body, createdAt: new Date().toISOString() }; demoState.firewallRules.push(item); return item; }
+    if (path.startsWith("/api/firewall/") && options.method === "DELETE") { demoState.firewallRules = demoState.firewallRules.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path === "/api/mail/domains" && options.method === "POST") { const item = { id: `md_${Date.now()}`, domain: options.body.domain, createdAt: new Date().toISOString() }; demoState.mailDomains.push(item); return item; }
+    if (path === "/api/mail/mailboxes" && options.method === "POST") { const item = { id: `mb_${Date.now()}`, address: `${options.body.localPart}@${options.body.domain}`, domain: options.body.domain, quotaMb: options.body.quotaMb, createdAt: new Date().toISOString() }; demoState.mailboxes.push(item); return item; }
+    if (path === "/api/mail/aliases" && options.method === "POST") { const item = { id: `ma_${Date.now()}`, source: options.body.source, destination: options.body.destination, createdAt: new Date().toISOString() }; demoState.mailAliases.push(item); return item; }
+    if (path.startsWith("/api/mail/domains/") && options.method === "DELETE") { demoState.mailDomains = demoState.mailDomains.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path.startsWith("/api/mail/mailboxes/") && options.method === "DELETE") { demoState.mailboxes = demoState.mailboxes.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path.startsWith("/api/mail/aliases/") && options.method === "DELETE") { demoState.mailAliases = demoState.mailAliases.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
     if (path === "/api/sites/ssl") {
       const site = demoState.sites.find(item => item.id === options.body.id);
       if (site) site.ssl = true;
@@ -161,8 +200,33 @@
     $("#siteSearch").addEventListener("input", renderSites);
     $("#servicesGrid").addEventListener("click", handleServiceAction);
     $("#restartAll").addEventListener("click", restartAll);
-    $("#backupButton").addEventListener("click", runBackup);
     $$('[data-quick-backup]').forEach(button => button.addEventListener("click", runBackup));
+    $("#backupRunForm").addEventListener("submit", runBackup);
+    $("#backupDestinationForm").addEventListener("submit", createBackupDestination);
+    $("#backupProtocol").addEventListener("change", configureBackupProtocol);
+    $("#backupDestinationsTable").addEventListener("click", handleBackupDestinationAction);
+    $("#fileSiteSelect").addEventListener("change", () => { currentFilePath = ""; loadFiles(); });
+    $("#refreshFilesButton").addEventListener("click", loadFiles);
+    $("#fileUpButton").addEventListener("click", fileUp);
+    $("#newFolderButton").addEventListener("click", createFolder);
+    $("#uploadButton").addEventListener("click", () => $("#fileUploadInput").click());
+    $("#fileUploadInput").addEventListener("change", uploadFiles);
+    $("#archiveButton").addEventListener("click", archiveSelectedFiles);
+    $("#fileTable").addEventListener("click", handleFileAction);
+    $("#fileBreadcrumb").addEventListener("click", event => { const button = event.target.closest("[data-file-path]"); if (button) { currentFilePath = button.dataset.filePath; loadFiles(); } });
+    $("#editorForm").addEventListener("submit", saveEditor);
+    $("#closeEditor").addEventListener("click", closeEditor);
+    $("#cancelEditor").addEventListener("click", closeEditor);
+    $("#databaseForm").addEventListener("submit", createDatabase);
+    $("#databasesTable").addEventListener("click", handleDatabaseAction);
+    $("#firewallForm").addEventListener("submit", createFirewallRule);
+    $("#firewallTable").addEventListener("click", handleFirewallAction);
+    $("#mailDomainForm").addEventListener("submit", createMailDomain);
+    $("#mailboxForm").addEventListener("submit", createMailbox);
+    $("#mailAliasForm").addEventListener("submit", createMailAlias);
+    $("#mailDomainsTable").addEventListener("click", handleMailAction);
+    $("#mailboxesTable").addEventListener("click", handleMailAction);
+    $("#mailAliasesTable").addEventListener("click", handleMailAction);
     $("#settingsForm").addEventListener("submit", saveSettings);
     $("#passwordForm").addEventListener("submit", changePassword);
     $("#reloadLogs").addEventListener("click", loadLogs);
@@ -171,7 +235,7 @@
     $("#sidebarScrim").addEventListener("click", closeSidebar);
     window.addEventListener("hashchange", () => navigate(location.hash.slice(1) || "dashboard", false));
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape") { closeSiteModal(); $("#profileMenu").classList.add("hidden"); closeSidebar(); }
+      if (event.key === "Escape") { closeSiteModal(); closeEditor(); $("#profileMenu").classList.add("hidden"); closeSidebar(); }
     });
   }
 
@@ -237,6 +301,11 @@
     $("#settingsVersion").textContent = `v${version}`;
     $("#settingsOS").textContent = system.os;
     $("#settingsPHP").textContent = (system.phpVersions || []).map(item => `PHP ${item}`).join(", ") || "No runtime detected";
+    $("#settingsDatabase").textContent = system.databaseEngine || "Database";
+    $("#settingsFirewall").textContent = system.firewallBackend || "Firewall";
+    $("#databaseEngine").textContent = system.databaseEngine || "Database";
+    $("#firewallBackend").textContent = system.firewallBackend || "Firewall";
+    $("#siteDatabaseLabel").textContent = `Create a ${system.databaseEngine || "database"} database`;
     $("#detailOS").textContent = system.os;
     $("#detailIP").textContent = system.ipAddress;
     $("#modalServerIP").textContent = system.ipAddress;
@@ -246,6 +315,10 @@
     renderActivity();
     renderSites();
     renderBackups();
+    renderFileSiteOptions();
+    renderDatabases();
+    renderFirewall();
+    renderMail();
     fillSettings(settings);
     const healthy = system.services.every(service => service.state === "running");
     $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your hosting stack is healthy" : "One or more services need attention";
@@ -283,7 +356,7 @@
     $("#servicesGrid").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
-      const unitLabel = service.key === "php" ? service.unit : `${service.unit}.service`;
+      const unitLabel = service.key === "php" || service.key === "mail" ? service.unit : `${service.unit}.service`;
       return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><button class="button button-secondary" data-service="${escapeHTML(service.key)}" data-action="${stopped ? "start" : "restart"}">${stopped ? "Start" : "Restart"}</button></div></article>`;
     }).join("");
   }
@@ -323,12 +396,55 @@
 
   function renderBackups() {
     $("#retentionChip").textContent = `${currentState.settings.backupRetention}-day policy`;
+    const siteValue = $("#backupSite").value;
+    $("#backupSite").innerHTML = (currentState.sites || []).map(site => `<option value="${escapeHTML(site.id)}">${escapeHTML(site.domain)}</option>`).join("");
+    if ((currentState.sites || []).some(site => site.id === siteValue)) $("#backupSite").value = siteValue;
+    const destinationValue = $("#backupDestination").value;
+    const destinations = currentState.backupDestinations || [];
+    $("#backupDestination").innerHTML = '<option value="">Local storage only</option>' + destinations.map(destination => `<option value="${escapeHTML(destination.id)}">${escapeHTML(destination.name)} · ${escapeHTML(destination.protocol.toUpperCase())}</option>`).join("");
+    if (destinations.some(item => item.id === destinationValue)) $("#backupDestination").value = destinationValue;
+    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
     const backups = currentState.backups || [];
     if (!backups.length) {
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
     }
-    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>STORAGE PATH</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge success"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td></tr>`).join("")}</tbody></table>`;
+    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge success"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td></tr>`).join("")}</tbody></table>`;
+  }
+
+  function renderFileSiteOptions() {
+    const select = $("#fileSiteSelect");
+    const selected = select.value;
+    select.innerHTML = (currentState.sites || []).map(site => `<option value="${escapeHTML(site.id)}">${escapeHTML(site.domain)}</option>`).join("");
+    if ((currentState.sites || []).some(site => site.id === selected)) select.value = selected;
+  }
+
+  function renderDatabases() {
+    const databases = currentState.databases || [];
+    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><strong>${escapeHTML(database.name)}</strong></td><td><code>${escapeHTML(database.username)}</code></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
+  }
+
+  function renderFirewall() {
+    const protectedRules = [
+      { port: "22", protocol: "tcp", label: "SSH" }, { port: "80", protocol: "tcp", label: "HTTP" },
+      { port: "443", protocol: "tcp", label: "HTTPS" }, { port: "8443", protocol: "tcp", label: "LiteCP" },
+      { port: "25, 465, 587, 993", protocol: "tcp", label: "Email hosting" }
+    ];
+    const managed = currentState.firewallRules || [];
+    const rows = protectedRules.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${rule.protocol.toUpperCase()}</td><td>any</td><td>${rule.label}</td><td><span class="badge success">Protected</span></td></tr>`).join("") + managed.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${escapeHTML(rule.protocol.toUpperCase())}</td><td><code>${escapeHTML(rule.source)}</code></td><td>${escapeHTML(rule.label || "Custom rule")}</td><td><span class="row-actions"><button class="danger" data-firewall-action="delete" data-id="${escapeHTML(rule.id)}">${icons.trash}</button></span></td></tr>`).join("");
+    $("#firewallTable").innerHTML = `<table class="data-table"><thead><tr><th>PORT</th><th>PROTOCOL</th><th>SOURCE</th><th>LABEL</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function renderMail() {
+    const domains = currentState.mailDomains || [];
+    const mailboxes = currentState.mailboxes || [];
+    const aliases = currentState.mailAliases || [];
+    const selected = $("#mailboxDomain").value;
+    $("#mailboxDomain").innerHTML = domains.length ? domains.map(domain => `<option value="${escapeHTML(domain.domain)}">${escapeHTML(domain.domain)}</option>`).join("") : '<option value="">Add a mail domain first</option>';
+    if (domains.some(domain => domain.domain === selected)) $("#mailboxDomain").value = selected;
+    $("#mailDomainsTable").innerHTML = domains.length ? `<table class="data-table"><thead><tr><th>DOMAIN</th><th>MAILBOXES</th><th>ALIASES</th><th>CREATED</th><th></th></tr></thead><tbody>${domains.map(domain => `<tr><td><strong>${escapeHTML(domain.domain)}</strong></td><td>${mailboxes.filter(item => item.domain === domain.domain).length}</td><td>${aliases.filter(item => item.source.endsWith("@" + domain.domain)).length}</td><td>${formatDate(domain.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="domain-delete" data-id="${escapeHTML(domain.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mail domains configured.</p></div>';
+    $("#mailboxesTable").innerHTML = mailboxes.length ? `<table class="data-table"><thead><tr><th>ADDRESS</th><th>QUOTA</th><th>CREATED</th><th></th></tr></thead><tbody>${mailboxes.map(mailbox => `<tr><td><strong>${escapeHTML(mailbox.address)}</strong></td><td>${formatBytes(mailbox.quotaMb * 1024 * 1024)}</td><td>${formatDate(mailbox.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-mail-action="mailbox-password" data-id="${escapeHTML(mailbox.id)}">Password</button><button class="danger" data-mail-action="mailbox-delete" data-id="${escapeHTML(mailbox.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mailboxes created.</p></div>';
+    $("#mailAliasesTable").innerHTML = aliases.length ? `<table class="data-table"><thead><tr><th>SOURCE</th><th>DESTINATION</th><th>CREATED</th><th></th></tr></thead><tbody>${aliases.map(alias => `<tr><td><strong>${escapeHTML(alias.source)}</strong></td><td>${escapeHTML(alias.destination)}</td><td>${formatDate(alias.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="alias-delete" data-id="${escapeHTML(alias.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No forwarding aliases configured.</p></div>';
   }
 
   function fillSettings(settings) {
@@ -338,7 +454,7 @@
   }
 
   function navigate(page, updateHash = true) {
-    const allowed = ["dashboard", "websites", "services", "backups", "logs", "settings"];
+    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => link.classList.toggle("active", link.dataset.page === page));
@@ -350,6 +466,7 @@
       loadLogs();
       logTimer = setInterval(loadLogs, 30000);
     }
+    if (page === "files") loadFiles();
   }
 
   function openSiteModal() {
@@ -408,7 +525,13 @@
 
   function showCredentials(credentials, site) {
     const rows = [["Website", site.domain], ["Database host", credentials.host], ["Database name", credentials.name], ["Database user", credentials.username], ["Database password", credentials.password]];
+    showOneTimeCredentials("Website provisioned", "Save these database credentials now. The password is not stored by LiteCP.", rows);
+  }
+
+  function showOneTimeCredentials(title, description, rows) {
     credentialText = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
+    $("#credentialsTitle").textContent = title;
+    $("#credentialsModal .modal-head p").textContent = description;
     $("#credentialList").innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("");
     $("#credentialsModal").classList.remove("hidden");
   }
@@ -481,12 +604,12 @@
 
   async function restartAll() {
     const button = $("#restartAll");
-    if (!confirm("Restart Nginx, PHP-FPM, MariaDB and cron in sequence?")) return;
+    if (!confirm(`Restart Nginx, PHP-FPM, ${currentState.system.databaseEngine || "database"}, mail and cron in sequence?`)) return;
     button.disabled = true;
     const original = button.innerHTML;
     button.textContent = "Restarting stack…";
     try {
-      for (const service of ["php", "database", "cron", "nginx"]) await api("/api/services/action", { method: "POST", body: { service, action: "restart" } });
+      for (const service of ["php", "database", "mail", "cron", "nginx"]) await api("/api/services/action", { method: "POST", body: { service, action: "restart" } });
       showToast("Stack restarted", "All essential services restarted successfully.");
       currentState = await api("/api/state");
       renderAll();
@@ -494,21 +617,238 @@
     finally { button.disabled = false; button.innerHTML = original; }
   }
 
-  async function runBackup() {
+  async function runBackup(event) {
+    if (event?.preventDefault) event.preventDefault();
     if (!currentState.sites.length) { showToast("No website available", "Add a website before creating a backup.", "error"); return; }
-    let site = currentState.sites[0];
-    if (currentState.sites.length > 1) {
-      const choices = currentState.sites.map((item, index) => `${index + 1}. ${item.domain}`).join("\n");
-      const selected = Number(prompt(`Choose a website to back up:\n\n${choices}`, "1"));
-      if (!selected || !currentState.sites[selected - 1]) return;
-      site = currentState.sites[selected - 1];
-    }
+    const quick = !event || event.currentTarget?.hasAttribute?.("data-quick-backup");
+    const siteId = quick ? currentState.sites[0].id : $("#backupSite").value;
+    const destinationId = quick ? "" : $("#backupDestination").value;
+    const site = currentState.sites.find(item => item.id === siteId);
+    if (!site) return;
+    const button = quick ? null : $("#backupButton");
+    if (button) { button.disabled = true; button.textContent = "Creating backup…"; }
     showToast("Backup started", `Archiving ${site.domain}. This may take a moment.`);
     try {
-      await api("/api/backups", { method: "POST", body: { siteId: site.id } });
+      await api("/api/backups", { method: "POST", body: { siteId: site.id, destinationId } });
       currentState = await api("/api/state");
       renderAll();
-      showToast("Backup completed", `${site.domain} files and database were saved.`);
+      showToast("Backup completed", destinationId ? `${site.domain} was saved locally and uploaded off-server.` : `${site.domain} files and database were saved locally.`);
+    } catch (error) { handleError(error); }
+    finally { if (button) { button.disabled = false; button.textContent = "Create backup"; } }
+  }
+
+  function configureBackupProtocol() {
+    const protocol = $("#backupProtocol").value;
+    const port = $('#backupDestinationForm input[name="port"]');
+    port.value = protocol === "sftp" ? 22 : protocol === "ftps" ? 990 : 21;
+    $("#hostKeyField").classList.toggle("hidden", protocol !== "sftp");
+    $("#hostKeyField input").required = protocol === "sftp";
+  }
+
+  async function createBackupDestination(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const submit = $('button[type="submit"]', form);
+    submit.disabled = true;
+    try {
+      await api("/api/backup-destinations", { method: "POST", body: {
+        name: String(data.get("name")).trim(), protocol: data.get("protocol"), host: String(data.get("host")).trim(),
+        port: Number(data.get("port")), username: String(data.get("username")).trim(), password: data.get("password"),
+        remotePath: String(data.get("remotePath")).trim(), hostKeySha256: String(data.get("hostKeySha256") || "").trim()
+      } });
+      form.reset(); configureBackupProtocol();
+      currentState = await api("/api/state"); renderAll();
+      showToast("Destination saved", "The remote credential was encrypted and stored.");
+    } catch (error) { handleError(error); }
+    finally { submit.disabled = false; }
+  }
+
+  async function handleBackupDestinationAction(event) {
+    const button = event.target.closest("[data-backup-destination-action]");
+    if (!button || !confirm("Remove this remote destination? Existing backups will not be deleted.")) return;
+    try {
+      await api(`/api/backup-destinations/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
+      currentState = await api("/api/state"); renderAll();
+      showToast("Destination removed", "Stored remote credentials were removed from LiteCP.");
+    } catch (error) { handleError(error); }
+  }
+
+  async function loadFiles() {
+    const siteId = $("#fileSiteSelect").value;
+    if (!siteId) { $("#fileTable").innerHTML = '<div class="empty-state"><p>Add a website before using the file manager.</p></div>'; return; }
+    $("#fileTable").innerHTML = '<div class="loading-lines"><i></i><i></i><i></i></div>';
+    try {
+      const listing = await api(`/api/files?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(currentFilePath)}`);
+      currentFilePath = listing.path || "";
+      renderFileListing(listing);
+    } catch (error) { $("#fileTable").innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message)}</p></div>`; }
+  }
+
+  function renderFileListing(listing) {
+    const parts = currentFilePath ? currentFilePath.split("/") : [];
+    $("#fileBreadcrumb").innerHTML = '<button data-file-path="">public</button>' + parts.map((part, index) => `<button data-file-path="${escapeHTML(parts.slice(0, index + 1).join("/"))}">${escapeHTML(part)}</button>`).join("");
+    $("#fileUpButton").disabled = !currentFilePath;
+    const entries = listing.entries || [];
+    if (!entries.length) { $("#fileTable").innerHTML = '<div class="empty-state"><p>This directory is empty.</p></div>'; return; }
+    $("#fileTable").innerHTML = `<table class="data-table"><thead><tr><th><input class="file-check" type="checkbox" data-file-select-all></th><th>NAME</th><th>SIZE</th><th>PERMISSIONS</th><th>MODIFIED</th><th></th></tr></thead><tbody>${entries.map(entry => {
+      const isDirectory = entry.type === "directory";
+      const canEdit = entry.type === "file";
+      const isZip = canEdit && entry.name.toLowerCase().endsWith(".zip");
+      return `<tr><td><input class="file-check" type="checkbox" data-file-select value="${escapeHTML(entry.path)}"></td><td><span class="file-entry"><span class="file-type-icon">${isDirectory ? "DIR" : isZip ? "ZIP" : "FILE"}</span><button class="file-name-button ${isDirectory ? "directory" : ""}" data-file-action="${isDirectory ? "open" : "edit"}" data-path="${escapeHTML(entry.path)}">${escapeHTML(entry.name)}</button></span></td><td>${isDirectory ? "—" : formatBytes(entry.size)}</td><td><code>${escapeHTML(entry.mode)}</code></td><td>${formatDateTime(entry.modified)}</td><td><span class="row-actions">${isZip ? `<button class="text-action" data-file-action="extract" data-path="${escapeHTML(entry.path)}">Extract</button>` : ""}${canEdit ? `<button class="text-action" data-file-action="download" data-path="${escapeHTML(entry.path)}">Download</button>` : ""}<button class="text-action" data-file-action="rename" data-path="${escapeHTML(entry.path)}">Rename</button><button class="text-action" data-file-action="chmod" data-path="${escapeHTML(entry.path)}" data-mode="${escapeHTML(entry.mode)}">Mode</button><button class="danger" data-file-action="delete" data-path="${escapeHTML(entry.path)}">${icons.trash}</button></span></td></tr>`;
+    }).join("")}</tbody></table>`;
+    const selectAll = $("[data-file-select-all]", $("#fileTable"));
+    selectAll.addEventListener("change", () => $$('[data-file-select]', $("#fileTable")).forEach(item => { item.checked = selectAll.checked; }));
+  }
+
+  function fileUp() {
+    const parts = currentFilePath.split("/").filter(Boolean); parts.pop(); currentFilePath = parts.join("/"); loadFiles();
+  }
+
+  async function createFolder() {
+    const name = prompt("New folder name:", "new-folder");
+    if (!name) return;
+    try { await api("/api/files/directory", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path: currentFilePath, name } }); await loadFiles(); showToast("Folder created", name); }
+    catch (error) { handleError(error); }
+  }
+
+  async function uploadFiles(event) {
+    const files = [...event.target.files];
+    if (!files.length) return;
+    const body = new FormData();
+    body.append("siteId", $("#fileSiteSelect").value); body.append("path", currentFilePath);
+    files.forEach(file => body.append("files", file, file.name));
+    showToast("Upload started", `${files.length} file(s) are being transferred.`);
+    try { await api("/api/files/upload", { method: "POST", body }); await loadFiles(); showToast("Upload completed", `${files.length} file(s) uploaded.`); }
+    catch (error) { handleError(error); }
+    finally { event.target.value = ""; }
+  }
+
+  async function archiveSelectedFiles() {
+    const paths = $$('[data-file-select]:checked', $("#fileTable")).map(input => input.value);
+    if (!paths.length) { showToast("Nothing selected", "Select files or folders to add to a ZIP archive.", "error"); return; }
+    const name = prompt("Archive name:", "archive.zip");
+    if (!name) return;
+    const destination = currentFilePath ? `${currentFilePath}/${name}` : name;
+    try { await api("/api/files/archive", { method: "POST", body: { siteId: $("#fileSiteSelect").value, paths, destination } }); await loadFiles(); showToast("ZIP created", destination); }
+    catch (error) { handleError(error); }
+  }
+
+  async function handleFileAction(event) {
+    const button = event.target.closest("[data-file-action]");
+    if (!button) return;
+    const action = button.dataset.fileAction;
+    const path = button.dataset.path;
+    if (action === "open") { currentFilePath = path; loadFiles(); return; }
+    if (action === "download") { if (demoMode) showToast("Preview", "Downloads are disabled in demo mode."); else location.href = `/api/files/download?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`; return; }
+    if (action === "edit") { openEditor(path); return; }
+    try {
+      if (action === "extract") {
+        if (!confirm(`Extract ${path} into the current directory? Existing files with matching names will be overwritten.`)) return;
+        await api("/api/files/extract", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path, destination: currentFilePath } });
+      } else if (action === "rename") {
+        const oldName = path.split("/").pop(); const next = prompt("New name:", oldName); if (!next || next === oldName) return;
+        const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+        await api("/api/files/rename", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path, destination: parent ? `${parent}/${next}` : next } });
+      } else if (action === "chmod") {
+        const mode = prompt("Octal permissions (world-writable and special modes are blocked):", button.dataset.mode); if (!mode) return;
+        await api("/api/files/permissions", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path, mode } });
+      } else if (action === "delete") {
+        if (!confirm(`Permanently delete ${path}? This cannot be undone.`)) return;
+        await api("/api/files", { method: "DELETE", body: { siteId: $("#fileSiteSelect").value, path } });
+      }
+      await loadFiles(); showToast("File operation completed", path);
+    } catch (error) { handleError(error); }
+  }
+
+  async function openEditor(path) {
+    try {
+      const result = await api(`/api/files/content?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`);
+      editorFilePath = path; $("#editorTitle").textContent = `Edit ${path.split("/").pop()}`; $("#editorPath").textContent = path; $("#editorContent").value = result.content; $("#editorModal").classList.remove("hidden");
+    } catch (error) { handleError(error); }
+  }
+
+  function closeEditor() { editorFilePath = ""; $("#editorModal").classList.add("hidden"); }
+
+  async function saveEditor(event) {
+    event.preventDefault(); if (!editorFilePath) return;
+    const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
+    try { await api("/api/files/content", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path: editorFilePath, content: $("#editorContent").value } }); closeEditor(); await loadFiles(); showToast("File saved", "Changes are live on the website."); }
+    catch (error) { handleError(error); }
+    finally { submit.disabled = false; }
+  }
+
+  async function createDatabase(event) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const submit = $('button[type="submit"]', form); submit.disabled = true;
+    try {
+      const result = await api("/api/databases", { method: "POST", body: { name: String(data.get("name")).trim(), username: String(data.get("username")).trim(), password: data.get("password") } });
+      form.reset(); currentState = await api("/api/state"); renderAll();
+      showOneTimeCredentials("Database created", "Save this password now. LiteCP does not store database passwords.", [["Host", result.host], ["Database", result.database.name], ["Username", result.database.username], ["Password", result.password]]);
+    } catch (error) { handleError(error); }
+    finally { submit.disabled = false; }
+  }
+
+  async function handleDatabaseAction(event) {
+    const button = event.target.closest("[data-database-action]"); if (!button) return;
+    const database = (currentState.databases || []).find(item => item.id === button.dataset.id); if (!database) return;
+    try {
+      if (button.dataset.databaseAction === "delete") {
+        if (!confirm(`Permanently delete database ${database.name} and user ${database.username}? This cannot be undone.`)) return;
+        await api(`/api/databases/${encodeURIComponent(database.id)}`, { method: "DELETE" });
+      } else {
+        const password = prompt(`New password for ${database.username} (leave blank to generate):`, ""); if (password === null) return;
+        const result = await api("/api/databases/password", { method: "PUT", body: { id: database.id, password } });
+        showOneTimeCredentials("Database password reset", "Save the new password and update the application configuration.", [["Database", database.name], ["Username", database.username], ["Password", result.password]]);
+      }
+      currentState = await api("/api/state"); renderAll();
+    } catch (error) { handleError(error); }
+  }
+
+  async function createFirewallRule(event) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const submit = $('button[type="submit"]', form); submit.disabled = true;
+    try { await api("/api/firewall", { method: "POST", body: { port: Number(data.get("port")), protocol: data.get("protocol"), source: String(data.get("source")).trim(), label: String(data.get("label")).trim() } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Firewall rule added", "The permanent firewall configuration was reloaded."); }
+    catch (error) { handleError(error); }
+    finally { submit.disabled = false; }
+  }
+
+  async function handleFirewallAction(event) {
+    const button = event.target.closest("[data-firewall-action]"); if (!button || !confirm("Remove this custom firewall rule?")) return;
+    try { await api(`/api/firewall/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" }); currentState = await api("/api/state"); renderAll(); showToast("Firewall rule removed", "The permanent firewall configuration was reloaded."); }
+    catch (error) { handleError(error); }
+  }
+
+  async function createMailDomain(event) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
+    try { await api("/api/mail/domains", { method: "POST", body: { domain: String(data.get("domain")).trim().toLowerCase() } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mail domain added", "Add mailboxes after the required DNS records are configured."); }
+    catch (error) { handleError(error); }
+  }
+
+  async function createMailbox(event) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
+    try { await api("/api/mail/mailboxes", { method: "POST", body: { domain: data.get("domain"), localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
+    catch (error) { handleError(error); }
+  }
+
+  async function createMailAlias(event) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
+    try { await api("/api/mail/aliases", { method: "POST", body: { source: String(data.get("source")).trim().toLowerCase(), destination: String(data.get("destination")).trim() } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Alias created", "Incoming messages will be forwarded to the destination."); }
+    catch (error) { handleError(error); }
+  }
+
+  async function handleMailAction(event) {
+    const button = event.target.closest("[data-mail-action]"); if (!button) return;
+    const action = button.dataset.mailAction;
+    try {
+      if (action === "mailbox-password") {
+        const password = prompt("New mailbox password (12+ characters):", ""); if (!password) return;
+        await api("/api/mail/mailboxes/password", { method: "PUT", body: { id: button.dataset.id, password } }); showToast("Mailbox password reset", "Update the email client with the new password.");
+      } else {
+        const warning = action === "domain-delete" ? "Removing a mail domain disables all of its mailboxes and aliases. Stored Maildir messages are kept. Continue?" : action === "mailbox-delete" ? "Disable this mailbox login? Stored Maildir messages are kept." : "Remove this forwarding alias?";
+        if (!confirm(warning)) return;
+        const endpoint = action === "domain-delete" ? "domains" : action === "mailbox-delete" ? "mailboxes" : "aliases";
+        await api(`/api/mail/${endpoint}/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
+      }
+      currentState = await api("/api/state"); renderAll();
     } catch (error) { handleError(error); }
   }
 

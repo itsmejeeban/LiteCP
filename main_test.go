@@ -1,11 +1,14 @@
 package main
 
 import (
+	"archive/zip"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPasswordRoundTrip(t *testing.T) {
@@ -63,8 +66,167 @@ func TestFreshPublicStateUsesEmptyArrays(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := store.PublicState()
-	if state.Sites == nil || state.Backups == nil || state.Activities == nil {
+	if state.Sites == nil || state.Backups == nil || state.BackupDestinations == nil || state.Databases == nil || state.FirewallRules == nil || state.MailDomains == nil || state.Mailboxes == nil || state.MailAliases == nil || state.Activities == nil {
 		t.Fatal("fresh public state must use JSON arrays instead of null collections")
+	}
+}
+
+func TestPublicStateHidesStoredSecrets(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Initialize("admin", "a-correct-horse-battery-staple"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddBackupDestination(BackupDestination{ID: "remote", Name: "Remote", PasswordCipher: "ciphertext"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddMailbox(Mailbox{ID: "mailbox", Address: "admin@example.com", Domain: "example.com", PasswordHash: "{SHA512-CRYPT}secret"}); err != nil {
+		t.Fatal(err)
+	}
+	state := store.PublicState()
+	if state.BackupDestinations[0].PasswordCipher != "" || !state.BackupDestinations[0].HasPassword {
+		t.Fatal("backup credential leaked or password flag was lost")
+	}
+	if state.Mailboxes[0].PasswordHash != "" {
+		t.Fatal("mailbox password hash leaked through public state")
+	}
+}
+
+func TestSecretEncryptionRoundTrip(t *testing.T) {
+	system := &System{dataDir: t.TempDir(), demo: true}
+	encrypted, err := system.EncryptSecret("a remote backup password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(encrypted, "remote") {
+		t.Fatal("encrypted secret contains plaintext")
+	}
+	decrypted, err := system.DecryptSecret(encrypted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decrypted != "a remote backup password" {
+		t.Fatal("secret encryption round trip failed")
+	}
+}
+
+func TestManagedPathRejectsTraversalAndEscapingSymlink(t *testing.T) {
+	root := t.TempDir()
+	if _, _, err := resolveManagedPath(root, "../../etc/passwd", false); err == nil {
+		t.Fatal("path traversal was accepted")
+	}
+	outside := t.TempDir()
+	link := filepath.Join(root, "outside")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, _, err := resolveManagedPath(root, "outside/secret.txt", true); err == nil {
+		t.Fatal("escaping symbolic link was accepted")
+	}
+}
+
+func TestManagedZIPCreateAndExtract(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "source"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "source", "hello.txt"), []byte("hello LiteCP"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	system := &System{dataDir: t.TempDir(), demo: true}
+	site := Site{ID: "site", Domain: "example.com", Root: root}
+	entry, err := system.ArchiveManagedPaths(context.Background(), site, []string{"source"}, "bundle.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Path != "bundle.zip" || entry.Size == 0 {
+		t.Fatalf("unexpected ZIP metadata: %#v", entry)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "source")); err != nil {
+		t.Fatal(err)
+	}
+	if err := system.ExtractManagedArchive(context.Background(), site, "bundle.zip", ""); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "source", "hello.txt"))
+	if err != nil || string(content) != "hello LiteCP" {
+		t.Fatalf("ZIP round trip failed: %q, %v", content, err)
+	}
+}
+
+func TestZIPExtractionRejectsZipSlip(t *testing.T) {
+	root := t.TempDir()
+	archive, err := os.Create(filepath.Join(root, "unsafe.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(archive)
+	member, err := writer.Create("../escaped.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = member.Write([]byte("unsafe"))
+	_ = writer.Close()
+	_ = archive.Close()
+	system := &System{dataDir: t.TempDir(), demo: true}
+	if err := system.ExtractManagedArchive(context.Background(), Site{Root: root}, "unsafe.zip", ""); err == nil {
+		t.Fatal("ZIP path traversal was accepted")
+	}
+}
+
+func TestInfrastructureValidation(t *testing.T) {
+	validDestination := BackupDestination{Name: "SFTP", Protocol: "sftp", Host: "backup.example.com", Port: 22, Username: "backup", RemotePath: "/litecp", HostKeySHA256: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", PasswordCipher: "cipher"}
+	if err := validateBackupDestination(validDestination, true); err != nil {
+		t.Fatalf("valid destination rejected: %v", err)
+	}
+	invalidDestination := validDestination
+	invalidDestination.HostKeySHA256 = ""
+	if err := validateBackupDestination(invalidDestination, true); err == nil {
+		t.Fatal("SFTP destination without host-key fingerprint was accepted")
+	}
+	if err := validateDatabaseObjects("client_db", "client_user"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateDatabaseObjects("client-db", "client_user"); err == nil {
+		t.Fatal("unsafe database name was accepted")
+	}
+	if err := validateDatabasePassword("too-short"); err == nil {
+		t.Fatal("short database password was accepted")
+	}
+	if err := validateFirewallRule(FirewallRule{Port: 8448, Protocol: "tcp", Source: "203.0.113.0/24"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFirewallRule(FirewallRule{Port: 70000, Protocol: "tcp", Source: "any"}); err == nil {
+		t.Fatal("invalid firewall port was accepted")
+	}
+	if err := validateFirewallRule(FirewallRule{Port: 8443, Protocol: "tcp", Source: "any"}); err == nil {
+		t.Fatal("duplicate management of an essential LiteCP port was accepted")
+	}
+	if err := validateMailboxAddress("billing@example.com", "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateAliasAddress("sales@example.com", "owner@example.net"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStoreMigratesSiteDatabase(t *testing.T) {
+	directory := t.TempDir()
+	created := time.Now().UTC()
+	legacy := Config{Sites: []Site{{ID: "legacy", Domain: "billing.example.com", Root: "/var/www/example", AppType: "whmcs", PHPVersion: "8.3", Database: "legacy_db", DBUser: "legacy_user", CreatedAt: created}}}
+	content, _ := json.Marshal(legacy)
+	if err := os.WriteFile(filepath.Join(directory, "config.json"), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := OpenStore(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := store.PublicState()
+	if len(state.Databases) != 1 || state.Databases[0].Name != "legacy_db" || state.Databases[0].SiteID != "legacy" {
+		t.Fatalf("site database was not migrated: %#v", state.Databases)
 	}
 }
 

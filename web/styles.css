@@ -28,7 +28,7 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--canvas); }
 body { margin: 0; min-height: 100vh; background: var(--canvas); color: var(--ink); -webkit-font-smoothing: antialiased; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: inherit; text-decoration: none; }
@@ -294,6 +294,41 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .settings-details { padding-top: 7px; }
 .environment-card { align-self: start; }
 
+/* Management tools */
+.compact-select { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 9px; font-weight: 750; }
+.compact-select select { min-width: 250px; height: 40px; padding: 0 34px 0 12px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--ink); }
+.engine-chip { display: inline-flex; align-items: center; min-height: 34px; padding: 0 13px; border: 1px solid #cce5df; border-radius: 18px; background: var(--mint-2); color: var(--teal); font-size: 10px; font-weight: 800; }
+.management-grid { display: grid; grid-template-columns: minmax(300px,.65fr) minmax(0,1.35fr); gap: 14px; align-items: start; }
+.backup-management-grid { grid-template-columns: minmax(290px,.7fr) minmax(430px,1.3fr); margin-bottom: 14px; }
+.management-table { min-width: 0; }
+.compact-form-card { overflow: hidden; }
+.compact-form-card .field { margin-bottom: 14px; }
+.compact-form-card .field input, .compact-form-card .field select, .compact-form-card .suffix-input { height: 42px; }
+.compact-form-card .suffix-input input { height: 40px; }
+.two-column-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.field-span { grid-column: 1 / -1; }
+.mail-form-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; align-items: start; margin-bottom: 14px; }
+.stacked-panels { display: grid; gap: 14px; }
+.stacked-panels + .info-callout { margin-top: 14px; }
+
+.file-manager-panel { overflow: hidden; }
+.file-toolbar { min-height: 66px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.file-toolbar .button { min-height: 35px; font-size: 10px; }
+.file-breadcrumb { min-height: 42px; display: flex; align-items: center; gap: 4px; padding: 0 18px; background: #f8faf9; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.file-breadcrumb button { border: 0; background: transparent; color: var(--teal); padding: 5px 3px; font-size: 10px; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.file-breadcrumb button + button::before { content: "/"; color: #a2b0b1; margin-right: 7px; }
+.file-check { width: 15px; height: 15px; accent-color: var(--teal); }
+.file-name-button { border: 0; background: transparent; color: var(--ink); padding: 0; font-weight: 750; cursor: pointer; text-align: left; }
+.file-name-button.directory { color: var(--teal); }
+.file-type-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 7px; background: #eff7f5; color: var(--teal); font-size: 8px; font-weight: 850; }
+.file-entry { display: inline-flex; align-items: center; gap: 9px; }
+.row-actions .text-action { width: auto; min-width: 31px; padding: 0 8px; font-size: 8px; font-weight: 750; }
+.editor-modal { width: min(980px,100%); }
+.editor-modal .modal-body { padding: 0; }
+.code-editor { display: block; width: 100%; min-height: 58vh; resize: vertical; border: 0; outline: 0; padding: 20px; background: #0c2e34; color: #d7e8e6; font: 12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size: 2; }
+.secret-result { white-space: pre-wrap; overflow-wrap: anywhere; }
+.backup-management-grid + .table-panel { margin-bottom: 14px; }
+
 /* Modals and feedback */
 .modal-layer { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(6, 37, 43, .62); backdrop-filter: blur(5px); animation: fadeIn .18s ease; }
 .modal-card { width: min(560px,100%); max-height: calc(100vh - 40px); overflow-y: auto; background: white; border-radius: 14px; box-shadow: var(--shadow-lg); animation: modalIn .2s ease; }
@@ -352,6 +387,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
   .dashboard-grid { grid-template-columns: 1fr; }
   .quick-grid { grid-template-columns: repeat(4,1fr); }
   .quick-grid button { align-items: flex-start; flex-direction: column; }
+  .mail-form-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 900px) {
@@ -386,7 +422,8 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
   .quick-grid { grid-template-columns: 1fr 1fr; }
   .quick-grid button { flex-direction: row; align-items: center; }
   .summary-row { grid-template-columns: 1fr; }
-  .services-page-grid, .settings-grid { grid-template-columns: 1fr; }
+  .services-page-grid, .settings-grid, .management-grid, .backup-management-grid, .mail-form-grid { grid-template-columns: 1fr; }
+  .compact-select select { min-width: 180px; }
   .notice-meta { display: none; }
   .table-panel { overflow-x: auto; }
   .table-panel .panel-head { min-width: 690px; }
@@ -408,6 +445,10 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
   .modal-card { max-height: calc(100vh - 16px); }
   .modal-head, .modal-body { padding-left: 19px; padding-right: 19px; }
   .modal-actions { padding-left: 19px; padding-right: 19px; }
+  .two-column-fields { grid-template-columns: 1fr; }
+  .field-span { grid-column: auto; }
+  .file-toolbar { align-items: stretch; }
+  .file-toolbar .button { flex: 1 1 42%; }
   .toast-region { left: 12px; right: 12px; bottom: 12px; }
   .toast { min-width: 0; width: 100%; }
 }
