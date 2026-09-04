@@ -10,6 +10,7 @@
   let logTimer = null;
   let currentFilePath = "";
   let editorFilePath = "";
+  let editorOriginal = "";
 
   const icons = {
     globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>',
@@ -31,11 +32,11 @@
   };
 
   const demoState = {
-    version: "0.3.0",
+    version: "0.4.0",
     username: "admin",
     settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14 },
     sites: [
-      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", appType: "whmcs", phpVersion: "8.3", ssl: true, cron: true, database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
+      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", appType: "whmcs", appVersion: "9.0", phpVersion: "8.3", ssl: true, cron: true, database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
       { id: "site_demo_2", domain: "blog.northstar.test", root: "/var/www/litecp/blog.northstar.test/public", appType: "wordpress", phpVersion: "8.4", ssl: false, cron: true, database: "cp_blog", dbUser: "cp_blog", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
     ],
     backups: [
@@ -63,11 +64,11 @@
       services: [
         { key: "nginx", label: "Nginx", unit: "nginx", state: "running" },
         { key: "php", label: "Multi-PHP FPM", unit: "php7.3-fpm … php8.4-fpm", state: "running" },
-        { key: "database", label: "MariaDB", unit: "mariadb", state: "running" },
+        { key: "database", label: "MySQL", unit: "mysqld", state: "running" },
         { key: "cron", label: "App Scheduler", unit: "cron", state: "running" },
         { key: "mail", label: "Email Hosting", unit: "postfix, dovecot", state: "running" }
       ],
-      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"], databaseEngine: "MariaDB", firewallBackend: "ufw"
+      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"], databaseEngine: "MySQL", firewallBackend: "ufw"
     }
   };
 
@@ -101,7 +102,7 @@
     ] };
     if (path === "/api/sites" && options.method === "POST") {
       const input = options.body;
-      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, appType: input.appType, phpVersion: input.phpVersion, ssl: false, cron: !!input.enableCron, database: input.createDatabase ? "cp_new_app" : "", dbUser: input.createDatabase ? "cp_new_app" : "", createdAt: new Date().toISOString() };
+      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, appType: input.appType, appVersion: input.appVersion || "", phpVersion: input.phpVersion, ssl: false, cron: !!input.enableCron, database: input.createDatabase ? "cp_new_app" : "", dbUser: input.createDatabase ? "cp_new_app" : "", createdAt: new Date().toISOString() };
       demoState.sites.push(site);
       return { site, database: input.createDatabase ? { name: "cp_new_app", username: "cp_new_app", password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
     }
@@ -193,6 +194,7 @@
     $("#siteModal").addEventListener("click", event => { if (event.target.id === "siteModal") closeSiteModal(); });
     $("#siteForm").addEventListener("submit", createSite);
     $("#siteAppType").addEventListener("change", configureSiteForm);
+    $("#siteAppVersion").addEventListener("change", configureSiteForm);
     $("#closeCredentials").addEventListener("click", closeCredentials);
     $("#copyCredentials").addEventListener("click", copyCredentials);
     $("#sitesTable").addEventListener("click", handleSiteAction);
@@ -319,10 +321,11 @@
     renderDatabases();
     renderFirewall();
     renderMail();
+    window.LiteCPFeatures?.render(currentState);
     fillSettings(settings);
-    const healthy = system.services.every(service => service.state === "running");
+    const healthy = system.services.every(service => ["running", "disabled"].includes(service.state));
     $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your hosting stack is healthy" : "One or more services need attention";
-    $("#noticeBanner").querySelector("small").textContent = healthy ? "All required services are online and responding normally." : "Open Services to review and restart the affected component.";
+    $("#noticeBanner").querySelector("small").textContent = healthy ? "Required services are active and their lightweight health probes passed." : "Open Services to review and restart the affected component.";
   }
 
   function renderMetrics() {
@@ -362,6 +365,7 @@
   }
 
   function renderActivity() {
+    if (window.LiteCPFeatures) { window.LiteCPFeatures.activity(); return; }
     const activities = (currentState.activities || []).slice(0, 5);
     if (!activities.length) {
       $("#activityList").innerHTML = '<div class="empty-state"><p>No panel activity yet.</p></div>';
@@ -377,25 +381,25 @@
     $("#sslCount").textContent = currentState.sites.filter(site => site.ssl).length;
     $("#cronCount").textContent = currentState.sites.filter(site => site.cron).length;
     if (!sites.length) {
-      const copy = currentState.sites.length ? "No domains match your search." : "Provision a WHMCS or WordPress domain, database, PHP runtime and automation schedule in one short step.";
+      const copy = currentState.sites.length ? "No domains match your search." : "Provision WHMCS, WordPress or a regular PHP/HTML website with an isolated runtime in one short step.";
       $("#sitesTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.globe}</span><h3>${currentState.sites.length ? "Nothing found" : "No websites yet"}</h3><p>${copy}</p>${currentState.sites.length ? "" : '<button class="button button-primary" data-empty-add>Add your first website</button>'}</div>`;
       const emptyButton = $("[data-empty-add]", $("#sitesTable"));
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>PHP</th><th>SSL</th><th>APP CRON</th><th>CREATED</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell"><span class="domain-favicon">${escapeHTML(site.domain[0])}</span><span class="domain-copy"><strong>${escapeHTML(site.domain)}</strong><small>${escapeHTML(site.root)}</small></span></span></td><td><span class="badge">${escapeHTML(applicationLabel(site.appType))}</span></td><td>${renderPHPSelect(site)}</td><td><span class="badge ${site.ssl ? "success" : ""}">${site.ssl ? '<span class="pulse-dot"></span>Protected' : "Not enabled"}</span></td><td><span class="badge ${site.cron ? "success" : ""}">${site.cron ? '<span class="pulse-dot"></span>Every 5 min' : "Disabled"}</span></td><td>${formatDate(site.createdAt)}</td><td><span class="row-actions">${site.ssl ? "" : `<button title="Enable SSL" data-site-action="ssl" data-id="${site.id}">${icons.shield}</button>`}<button title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${site.id}">${icons.clock}</button><button class="danger" title="Detach website" data-site-action="delete" data-id="${site.id}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>PHP</th><th>SSL</th><th>APP CRON</th><th>CREATED</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell"><span class="domain-favicon">${escapeHTML(site.domain[0])}</span><span class="domain-copy"><strong>${escapeHTML(site.domain)}</strong><small>${escapeHTML(site.root)}</small></span></span></td><td><span class="badge">${escapeHTML(applicationLabel(site.appType))}${site.appVersion ? ` ${escapeHTML(site.appVersion)}` : ""}</span></td><td>${renderPHPSelect(site)}</td><td><span class="badge ${site.ssl ? "success" : ""}">${site.ssl ? '<span class="pulse-dot"></span>Protected' : "Not enabled"}</span></td><td><span class="badge ${site.cron ? "success" : ""}">${site.cron ? '<span class="pulse-dot"></span>Every 5 min' : site.appType === "regular" ? "Not applicable" : "Disabled"}</span></td><td>${formatDate(site.createdAt)}</td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}</button>`}${site.appType === "regular" ? "" : `<button aria-label="${site.cron ? "Disable" : "Enable"} cron for ${escapeHTML(site.domain)}" title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${escapeHTML(site.id)}">${icons.clock}</button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function renderPHPSelect(site) {
     const installed = currentState.system.phpVersions || [];
-    const compatible = compatiblePHPVersions(site.appType || "whmcs").filter(version => installed.includes(version));
+    const compatible = compatiblePHPVersions(site.appType || "whmcs", site.appVersion).filter(version => installed.includes(version));
     if (!compatible.includes(site.phpVersion)) compatible.unshift(site.phpVersion);
     const options = [...new Set(compatible)].map(version => `<option value="${escapeHTML(version)}" ${version === site.phpVersion ? "selected" : ""}>PHP ${escapeHTML(version)}</option>`).join("");
     return `<select class="inline-php-select" data-php-version data-id="${escapeHTML(site.id)}" aria-label="PHP version for ${escapeHTML(site.domain)}">${options}</select>`;
   }
 
   function renderBackups() {
-    $("#retentionChip").textContent = `${currentState.settings.backupRetention}-day policy`;
+    $("#retentionChip").textContent = `${currentState.settings.backupRetention}-day retention`;
     const siteValue = $("#backupSite").value;
     $("#backupSite").innerHTML = (currentState.sites || []).map(site => `<option value="${escapeHTML(site.id)}">${escapeHTML(site.domain)}</option>`).join("");
     if ((currentState.sites || []).some(site => site.id === siteValue)) $("#backupSite").value = siteValue;
@@ -403,7 +407,7 @@
     const destinations = currentState.backupDestinations || [];
     $("#backupDestination").innerHTML = '<option value="">Local storage only</option>' + destinations.map(destination => `<option value="${escapeHTML(destination.id)}">${escapeHTML(destination.name)} · ${escapeHTML(destination.protocol.toUpperCase())}</option>`).join("");
     if (destinations.some(item => item.id === destinationValue)) $("#backupDestination").value = destinationValue;
-    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
+    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
     const backups = currentState.backups || [];
     if (!backups.length) {
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
@@ -421,7 +425,7 @@
 
   function renderDatabases() {
     const databases = currentState.databases || [];
-    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><strong>${escapeHTML(database.name)}</strong></td><td><code>${escapeHTML(database.username)}</code></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
+    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>AUTH</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><strong>${escapeHTML(database.name)}</strong></td><td><code>${escapeHTML(database.username)}</code></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${database.legacyAuth ? '<span class="badge">Legacy PHP</span>' : '<span class="badge success">Modern</span>'}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database" aria-label="Delete database ${escapeHTML(database.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
   }
 
   function renderFirewall() {
@@ -431,7 +435,7 @@
       { port: "25, 465, 587, 993", protocol: "tcp", label: "Email hosting" }
     ];
     const managed = currentState.firewallRules || [];
-    const rows = protectedRules.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${rule.protocol.toUpperCase()}</td><td>any</td><td>${rule.label}</td><td><span class="badge success">Protected</span></td></tr>`).join("") + managed.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${escapeHTML(rule.protocol.toUpperCase())}</td><td><code>${escapeHTML(rule.source)}</code></td><td>${escapeHTML(rule.label || "Custom rule")}</td><td><span class="row-actions"><button class="danger" data-firewall-action="delete" data-id="${escapeHTML(rule.id)}">${icons.trash}</button></span></td></tr>`).join("");
+    const rows = protectedRules.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${rule.protocol.toUpperCase()}</td><td>any</td><td>${rule.label}</td><td><span class="badge success">Protected</span></td></tr>`).join("") + managed.map(rule => `<tr><td><strong>${rule.port}</strong></td><td>${escapeHTML(rule.protocol.toUpperCase())}</td><td><code>${escapeHTML(rule.source)}</code></td><td>${escapeHTML(rule.label || "Custom rule")}</td><td><span class="row-actions"><button class="danger" data-firewall-action="delete" data-id="${escapeHTML(rule.id)}" aria-label="Remove firewall rule ${rule.port}/${escapeHTML(rule.protocol)}">${icons.trash}</button></span></td></tr>`).join("");
     $("#firewallTable").innerHTML = `<table class="data-table"><thead><tr><th>PORT</th><th>PROTOCOL</th><th>SOURCE</th><th>LABEL</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
@@ -442,9 +446,9 @@
     const selected = $("#mailboxDomain").value;
     $("#mailboxDomain").innerHTML = domains.length ? domains.map(domain => `<option value="${escapeHTML(domain.domain)}">${escapeHTML(domain.domain)}</option>`).join("") : '<option value="">Add a mail domain first</option>';
     if (domains.some(domain => domain.domain === selected)) $("#mailboxDomain").value = selected;
-    $("#mailDomainsTable").innerHTML = domains.length ? `<table class="data-table"><thead><tr><th>DOMAIN</th><th>MAILBOXES</th><th>ALIASES</th><th>CREATED</th><th></th></tr></thead><tbody>${domains.map(domain => `<tr><td><strong>${escapeHTML(domain.domain)}</strong></td><td>${mailboxes.filter(item => item.domain === domain.domain).length}</td><td>${aliases.filter(item => item.source.endsWith("@" + domain.domain)).length}</td><td>${formatDate(domain.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="domain-delete" data-id="${escapeHTML(domain.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mail domains configured.</p></div>';
-    $("#mailboxesTable").innerHTML = mailboxes.length ? `<table class="data-table"><thead><tr><th>ADDRESS</th><th>QUOTA</th><th>CREATED</th><th></th></tr></thead><tbody>${mailboxes.map(mailbox => `<tr><td><strong>${escapeHTML(mailbox.address)}</strong></td><td>${formatBytes(mailbox.quotaMb * 1024 * 1024)}</td><td>${formatDate(mailbox.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-mail-action="mailbox-password" data-id="${escapeHTML(mailbox.id)}">Password</button><button class="danger" data-mail-action="mailbox-delete" data-id="${escapeHTML(mailbox.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mailboxes created.</p></div>';
-    $("#mailAliasesTable").innerHTML = aliases.length ? `<table class="data-table"><thead><tr><th>SOURCE</th><th>DESTINATION</th><th>CREATED</th><th></th></tr></thead><tbody>${aliases.map(alias => `<tr><td><strong>${escapeHTML(alias.source)}</strong></td><td>${escapeHTML(alias.destination)}</td><td>${formatDate(alias.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="alias-delete" data-id="${escapeHTML(alias.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No forwarding aliases configured.</p></div>';
+    $("#mailDomainsTable").innerHTML = domains.length ? `<table class="data-table"><thead><tr><th>DOMAIN</th><th>MAILBOXES</th><th>ALIASES</th><th>CREATED</th><th></th></tr></thead><tbody>${domains.map(domain => `<tr><td><strong>${escapeHTML(domain.domain)}</strong></td><td>${mailboxes.filter(item => item.domain === domain.domain).length}</td><td>${aliases.filter(item => item.source.endsWith("@" + domain.domain)).length}</td><td>${formatDate(domain.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="domain-delete" data-id="${escapeHTML(domain.id)}" aria-label="Remove mail domain ${escapeHTML(domain.domain)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mail domains configured.</p></div>';
+    $("#mailboxesTable").innerHTML = mailboxes.length ? `<table class="data-table"><thead><tr><th>ADDRESS</th><th>QUOTA</th><th>CREATED</th><th></th></tr></thead><tbody>${mailboxes.map(mailbox => `<tr><td><strong>${escapeHTML(mailbox.address)}</strong></td><td>${formatBytes(mailbox.quotaMb * 1024 * 1024)}</td><td>${formatDate(mailbox.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-mail-action="mailbox-password" data-id="${escapeHTML(mailbox.id)}">Password</button><button class="danger" data-mail-action="mailbox-delete" data-id="${escapeHTML(mailbox.id)}" aria-label="Disable mailbox ${escapeHTML(mailbox.address)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mailboxes created.</p></div>';
+    $("#mailAliasesTable").innerHTML = aliases.length ? `<table class="data-table"><thead><tr><th>SOURCE</th><th>DESTINATION</th><th>CREATED</th><th></th></tr></thead><tbody>${aliases.map(alias => `<tr><td><strong>${escapeHTML(alias.source)}</strong></td><td>${escapeHTML(alias.destination)}</td><td>${formatDate(alias.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="alias-delete" data-id="${escapeHTML(alias.id)}" aria-label="Remove alias ${escapeHTML(alias.source)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No forwarding aliases configured.</p></div>';
   }
 
   function fillSettings(settings) {
@@ -454,10 +458,14 @@
   }
 
   function navigate(page, updateHash = true) {
-    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings"];
+    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
-    $$("[data-page]").forEach(link => link.classList.toggle("active", link.dataset.page === page));
+    $$("[data-page]").forEach(link => {
+      const active = link.dataset.page === page;
+      link.classList.toggle("active", active);
+      if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+    });
     if (updateHash && location.hash !== `#${page}`) history.pushState(null, "", `#${page}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -467,6 +475,7 @@
       logTimer = setInterval(loadLogs, 30000);
     }
     if (page === "files") loadFiles();
+    window.LiteCPFeatures?.navigate(page);
   }
 
   function openSiteModal() {
@@ -479,9 +488,10 @@
 
   function configureSiteForm() {
     const appType = $("#siteAppType").value || "whmcs";
+    const appVersion = appType === "whmcs" ? $("#siteAppVersion").value : "";
     const installed = currentState?.system?.phpVersions || [];
-    const compatible = compatiblePHPVersions(appType);
-    const preferred = appType === "wordpress" ? "8.4" : "8.3";
+    const compatible = compatiblePHPVersions(appType, appVersion);
+    const preferred = appType === "wordpress" || appType === "regular" ? "8.4" : "8.3";
     $("#sitePHPVersion").innerHTML = ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"].map(version => {
       const available = installed.includes(version);
       const allowed = compatible.includes(version);
@@ -492,14 +502,23 @@
       const fallback = compatible.find(version => installed.includes(version));
       if (fallback) $("#sitePHPVersion").value = fallback;
     }
+    $("#whmcsVersionField").classList.toggle("hidden", appType !== "whmcs");
+    const cronInput = $('#cronOptionCard input[name="enableCron"]');
+    const cronWasDisabled = cronInput.disabled;
+    $("#cronOptionCard").classList.toggle("hidden", appType === "regular");
+    cronInput.disabled = appType === "regular";
+    if (appType === "regular") cronInput.checked = false;
+    else if (cronWasDisabled) cronInput.checked = true;
     if (appType === "wordpress") {
       $("#phpCompatibilityNote").textContent = "WordPress recommends PHP 8.3 or newer and requires PHP 7.4 or newer.";
       $("#cronOptionTitle").textContent = "Enable WordPress system cron";
       $("#cronOptionHelp").innerHTML = "Runs <code>wp-cron.php</code> every five minutes with the selected PHP version.";
-    } else {
-      $("#phpCompatibilityNote").textContent = "WHMCS supports PHP 7.3 through 8.3; PHP 8.3 requires WHMCS 8.13 or newer.";
+    } else if (appType === "whmcs") {
+      $("#phpCompatibilityNote").textContent = appVersion === "9.0" ? "WHMCS 9.0 requires PHP 8.2 or 8.3." : "WHMCS 8.13 LTS supports PHP 7.3 through 8.3; legacy PHP versions are end-of-life.";
       $("#cronOptionTitle").textContent = "Enable WHMCS automation cron";
       $("#cronOptionHelp").innerHTML = "Runs <code>crons/cron.php</code> every five minutes with the selected PHP version.";
+    } else {
+      $("#phpCompatibilityNote").textContent = "Regular PHP/HTML websites can use any installed runtime; PHP 8.3 or newer is recommended.";
     }
   }
 
@@ -508,7 +527,7 @@
     const form = event.currentTarget;
     const submit = $('button[type="submit"]', form);
     const data = new FormData(form);
-    const body = { domain: String(data.get("domain")).trim().toLowerCase(), appType: String(data.get("appType")), phpVersion: String(data.get("phpVersion")), createDatabase: data.get("createDatabase") === "on", enableCron: data.get("enableCron") === "on" };
+    const body = { domain: String(data.get("domain")).trim().toLowerCase(), appType: String(data.get("appType")), appVersion: String(data.get("appVersion") || ""), phpVersion: String(data.get("phpVersion")), createDatabase: data.get("createDatabase") === "on", enableCron: data.get("enableCron") === "on" };
     submit.disabled = true;
     submit.textContent = "Provisioning…";
     try {
@@ -547,6 +566,7 @@
     if (!button) return;
     const site = currentState.sites.find(item => item.id === button.dataset.id);
     if (!site) return;
+    if (button.dataset.siteAction === "files") { $("#fileSiteSelect").value = site.id; currentFilePath = ""; navigate("files"); return; }
     button.disabled = true;
     try {
       if (button.dataset.siteAction === "ssl") {
@@ -578,7 +598,16 @@
     const version = select.value;
     select.disabled = true;
     try {
-      await api("/api/sites/php", { method: "POST", body: { id: site.id, version } });
+      let databasePassword = "";
+      const database = currentState.databases.find(item => item.siteId === site.id);
+      if (["7.3", "7.4"].includes(version) && database && !database.legacyAuth) {
+        databasePassword = await window.LiteCPFeatures.askPassword(`Current database password for ${database.username}`, false) || "";
+        if (!databasePassword) {
+          renderSites();
+          return;
+        }
+      }
+      await api("/api/sites/php", { method: "POST", body: { id: site.id, version, databasePassword } });
       showToast("PHP version changed", `${site.domain} now uses PHP ${version}.`);
       currentState = await api("/api/state");
       renderAll();
@@ -609,7 +638,7 @@
     const original = button.innerHTML;
     button.textContent = "Restarting stack…";
     try {
-      for (const service of ["php", "database", "mail", "cron", "nginx"]) await api("/api/services/action", { method: "POST", body: { service, action: "restart" } });
+      for (const service of ["php", "database", ...(currentState.settings.emailHostingEnabled === false ? [] : ["mail"]), "cron", "nginx"]) await api("/api/services/action", { method: "POST", body: { service, action: "restart" } });
       showToast("Stack restarted", "All essential services restarted successfully.");
       currentState = await api("/api/state");
       renderAll();
@@ -681,6 +710,7 @@
     try {
       const listing = await api(`/api/files?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(currentFilePath)}`);
       currentFilePath = listing.path || "";
+      window.LiteCPFeatures?.rememberListing(listing);
       renderFileListing(listing);
     } catch (error) { $("#fileTable").innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message)}</p></div>`; }
   }
@@ -689,13 +719,13 @@
     const parts = currentFilePath ? currentFilePath.split("/") : [];
     $("#fileBreadcrumb").innerHTML = '<button data-file-path="">public</button>' + parts.map((part, index) => `<button data-file-path="${escapeHTML(parts.slice(0, index + 1).join("/"))}">${escapeHTML(part)}</button>`).join("");
     $("#fileUpButton").disabled = !currentFilePath;
-    const entries = listing.entries || [];
+    const entries = window.LiteCPFeatures ? window.LiteCPFeatures.filterFiles(listing.entries || []) : listing.entries || [];
     if (!entries.length) { $("#fileTable").innerHTML = '<div class="empty-state"><p>This directory is empty.</p></div>'; return; }
     $("#fileTable").innerHTML = `<table class="data-table"><thead><tr><th><input class="file-check" type="checkbox" data-file-select-all></th><th>NAME</th><th>SIZE</th><th>PERMISSIONS</th><th>MODIFIED</th><th></th></tr></thead><tbody>${entries.map(entry => {
       const isDirectory = entry.type === "directory";
       const canEdit = entry.type === "file";
       const isZip = canEdit && entry.name.toLowerCase().endsWith(".zip");
-      return `<tr><td><input class="file-check" type="checkbox" data-file-select value="${escapeHTML(entry.path)}"></td><td><span class="file-entry"><span class="file-type-icon">${isDirectory ? "DIR" : isZip ? "ZIP" : "FILE"}</span><button class="file-name-button ${isDirectory ? "directory" : ""}" data-file-action="${isDirectory ? "open" : "edit"}" data-path="${escapeHTML(entry.path)}">${escapeHTML(entry.name)}</button></span></td><td>${isDirectory ? "—" : formatBytes(entry.size)}</td><td><code>${escapeHTML(entry.mode)}</code></td><td>${formatDateTime(entry.modified)}</td><td><span class="row-actions">${isZip ? `<button class="text-action" data-file-action="extract" data-path="${escapeHTML(entry.path)}">Extract</button>` : ""}${canEdit ? `<button class="text-action" data-file-action="download" data-path="${escapeHTML(entry.path)}">Download</button>` : ""}<button class="text-action" data-file-action="rename" data-path="${escapeHTML(entry.path)}">Rename</button><button class="text-action" data-file-action="chmod" data-path="${escapeHTML(entry.path)}" data-mode="${escapeHTML(entry.mode)}">Mode</button><button class="danger" data-file-action="delete" data-path="${escapeHTML(entry.path)}">${icons.trash}</button></span></td></tr>`;
+      return `<tr><td><input class="file-check" type="checkbox" data-file-select value="${escapeHTML(entry.path)}" aria-label="Select ${escapeHTML(entry.name)}"></td><td><span class="file-entry"><span class="file-type-icon">${isDirectory ? "DIR" : isZip ? "ZIP" : "FILE"}</span><button class="file-name-button ${isDirectory ? "directory" : ""}" data-file-action="${isDirectory ? "open" : "edit"}" data-path="${escapeHTML(entry.path)}">${escapeHTML(entry.name)}</button></span></td><td>${isDirectory ? "—" : formatBytes(entry.size)}</td><td><code>${escapeHTML(entry.mode)}</code></td><td>${formatDateTime(entry.modified)}</td><td><span class="row-actions">${isZip ? `<button class="text-action" data-file-action="extract" data-path="${escapeHTML(entry.path)}">Extract</button>` : ""}${canEdit ? `<button class="text-action" data-file-action="download" data-path="${escapeHTML(entry.path)}">Download</button>` : ""}<button class="text-action" data-file-action="rename" data-path="${escapeHTML(entry.path)}">Rename</button><button class="text-action" data-file-action="chmod" data-path="${escapeHTML(entry.path)}" data-mode="${escapeHTML(entry.mode)}">Mode</button><button class="danger" data-file-action="delete" data-path="${escapeHTML(entry.path)}" aria-label="Delete ${escapeHTML(entry.name)}">${icons.trash}</button></span></td></tr>`;
     }).join("")}</tbody></table>`;
     const selectAll = $("[data-file-select-all]", $("#fileTable"));
     selectAll.addEventListener("change", () => $$('[data-file-select]', $("#fileTable")).forEach(item => { item.checked = selectAll.checked; }));
@@ -754,7 +784,7 @@
         const mode = prompt("Octal permissions (world-writable and special modes are blocked):", button.dataset.mode); if (!mode) return;
         await api("/api/files/permissions", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path, mode } });
       } else if (action === "delete") {
-        if (!confirm(`Permanently delete ${path}? This cannot be undone.`)) return;
+        if (!confirm(`Move ${path} to Trash? You can restore it from the Trash view.`)) return;
         await api("/api/files", { method: "DELETE", body: { siteId: $("#fileSiteSelect").value, path } });
       }
       await loadFiles(); showToast("File operation completed", path);
@@ -764,16 +794,21 @@
   async function openEditor(path) {
     try {
       const result = await api(`/api/files/content?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`);
-      editorFilePath = path; $("#editorTitle").textContent = `Edit ${path.split("/").pop()}`; $("#editorPath").textContent = path; $("#editorContent").value = result.content; $("#editorModal").classList.remove("hidden");
+      editorFilePath = path; editorOriginal = result.content; $("#editorTitle").textContent = `Edit ${path.split("/").pop()}`; $("#editorPath").textContent = path; $("#editorContent").value = result.content; $("#editorModal").classList.remove("hidden");
+      await window.LiteCPFeatures?.openEditor(path, result.content);
     } catch (error) { handleError(error); }
   }
 
-  function closeEditor() { editorFilePath = ""; $("#editorModal").classList.add("hidden"); }
+  function closeEditor() {
+    const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value;
+    if (editorFilePath && content !== editorOriginal && !confirm("Discard unsaved editor changes?")) return;
+    editorFilePath = ""; $("#editorModal").classList.add("hidden");
+  }
 
   async function saveEditor(event) {
     event.preventDefault(); if (!editorFilePath) return;
     const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
-    try { await api("/api/files/content", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path: editorFilePath, content: $("#editorContent").value } }); closeEditor(); await loadFiles(); showToast("File saved", "Changes are live on the website."); }
+    try { const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path: editorFilePath, content } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
     catch (error) { handleError(error); }
     finally { submit.disabled = false; }
   }
@@ -796,7 +831,7 @@
         if (!confirm(`Permanently delete database ${database.name} and user ${database.username}? This cannot be undone.`)) return;
         await api(`/api/databases/${encodeURIComponent(database.id)}`, { method: "DELETE" });
       } else {
-        const password = prompt(`New password for ${database.username} (leave blank to generate):`, ""); if (password === null) return;
+        const password = await window.LiteCPFeatures.askPassword(`New password for ${database.username}`, true); if (password === null) return;
         const result = await api("/api/databases/password", { method: "PUT", body: { id: database.id, password } });
         showOneTimeCredentials("Database password reset", "Save the new password and update the application configuration.", [["Database", database.name], ["Username", database.username], ["Password", result.password]]);
       }
@@ -805,6 +840,7 @@
   }
 
   async function createFirewallRule(event) {
+    if (window.LiteCPFeatures) { await window.LiteCPFeatures.saveFirewall(event); return; }
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const submit = $('button[type="submit"]', form); submit.disabled = true;
     try { await api("/api/firewall", { method: "POST", body: { port: Number(data.get("port")), protocol: data.get("protocol"), source: String(data.get("source")).trim(), label: String(data.get("label")).trim() } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Firewall rule added", "The permanent firewall configuration was reloaded."); }
     catch (error) { handleError(error); }
@@ -812,6 +848,7 @@
   }
 
   async function handleFirewallAction(event) {
+    if (window.LiteCPFeatures) { await window.LiteCPFeatures.firewallAction(event); return; }
     const button = event.target.closest("[data-firewall-action]"); if (!button || !confirm("Remove this custom firewall rule?")) return;
     try { await api(`/api/firewall/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" }); currentState = await api("/api/state"); renderAll(); showToast("Firewall rule removed", "The permanent firewall configuration was reloaded."); }
     catch (error) { handleError(error); }
@@ -840,7 +877,7 @@
     const action = button.dataset.mailAction;
     try {
       if (action === "mailbox-password") {
-        const password = prompt("New mailbox password (12+ characters):", ""); if (!password) return;
+        const password = await window.LiteCPFeatures.askPassword("New mailbox password", true); if (!password) return;
         await api("/api/mail/mailboxes/password", { method: "PUT", body: { id: button.dataset.id, password } }); showToast("Mailbox password reset", "Update the email client with the new password.");
       } else {
         const warning = action === "domain-delete" ? "Removing a mail domain disables all of its mailboxes and aliases. Stored Maildir messages are kept. Continue?" : action === "mailbox-delete" ? "Disable this mailbox login? Stored Maildir messages are kept." : "Remove this forwarding alias?";
@@ -859,7 +896,7 @@
     try {
       const body = { email: $("#settingsEmail").value.trim(), timezone: $("#settingsTimezone").value, backupRetention: Number($("#settingsRetention").value) };
       await api("/api/settings", { method: "PUT", body });
-      currentState.settings = body;
+      currentState.settings = { ...currentState.settings, ...body };
       renderAll();
       showToast("Preferences saved", "Your LiteCP defaults were updated.");
     } catch (error) { handleError(error); }
@@ -876,7 +913,9 @@
     try {
       await api("/api/password", { method: "PUT", body: { current: data.get("current"), next: data.get("next") } });
       form.reset();
-      showToast("Password updated", "Use your new password the next time you sign in.");
+      currentState = null;
+      showLogin();
+      showToast("Password updated", "All administrator sessions were signed out. Sign in with the new password.");
     } catch (error) { handleError(error); }
     finally { submit.disabled = false; }
   }
@@ -912,19 +951,26 @@
     showToast("Action failed", error.message || "The server could not complete that action.", "error");
   }
 
-  function compatiblePHPVersions(appType) {
-    return appType === "wordpress" ? ["7.4", "8.1", "8.2", "8.3", "8.4"] : ["7.3", "7.4", "8.1", "8.2", "8.3"];
+  function compatiblePHPVersions(appType, appVersion = "") {
+    if (appType === "wordpress") return ["7.4", "8.1", "8.2", "8.3", "8.4"];
+    if (appType === "regular") return ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"];
+    return appVersion === "9.0" ? ["8.2", "8.3"] : ["7.3", "7.4", "8.1", "8.2", "8.3"];
   }
 
-  function applicationLabel(appType) { return appType === "wordpress" ? "WordPress" : "WHMCS"; }
+  function applicationLabel(appType) { return appType === "wordpress" ? "WordPress" : appType === "regular" ? "Regular Website" : "WHMCS"; }
 
   function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
   function titleCase(value) { return String(value || "admin").replace(/(^|[-_\s])\w/g, match => match.toUpperCase()).replace(/[-_]/g, " "); }
   function formatBytes(bytes) { const value = Number(bytes) || 0; if (!value) return "0 B"; const units = ["B", "KB", "MB", "GB", "TB"]; const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1); return `${(value / 1024 ** index).toFixed(index > 2 ? 1 : 0)} ${units[index]}`; }
   function formatUptime(seconds) { const days = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); return days ? `${days}d ${hours}h` : `${hours}h ${Math.floor((seconds % 3600) / 60)}m`; }
-  function formatDate(value) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
-  function formatDateTime(value) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }
+  function displayTimezone() { return currentState?.settings?.timezone || "UTC"; }
+  function formatDate(value) { return new Intl.DateTimeFormat(undefined, { timeZone: displayTimezone(), month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
+  function formatDateTime(value) { return new Intl.DateTimeFormat(undefined, { timeZone: displayTimezone(), month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date(value)); }
   function relativeTime(value) { const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86400)}d ago`; }
 
+  window.LiteCP = { api, escapeHTML, showToast, handleError, navigate, renderAll, loadFiles, renderFileListing, openEditor,
+    state: () => currentState, path: () => currentFilePath, demo: demoMode,
+    refresh: async () => { currentState = await api("/api/state"); renderAll(); },
+    showOneTimeCredentials, formatBytes, formatDateTime };
   initialize();
 })();

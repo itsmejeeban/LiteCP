@@ -223,9 +223,9 @@ func (s *System) CreateManagedDatabase(ctx context.Context, name, username, pass
 	if s.demo {
 		return nil
 	}
-	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' IDENTIFIED BY '%s'; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, escapeSQLString(password), name, username)
+	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' %s; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, s.databaseUserIdentification(password, false), name, username)
 	client := firstAvailableCommand("mariadb", "mysql")
-	if _, err := runCommand(ctx, 30*time.Second, client, "--protocol=socket", "--user=root", "--execute", sql); err != nil {
+	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("create database: %w", err)
 	}
 	return nil
@@ -240,7 +240,7 @@ func (s *System) DropManagedDatabase(ctx context.Context, database ManagedDataba
 	}
 	sql := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`; DROP USER IF EXISTS '%s'@'localhost'; FLUSH PRIVILEGES;", database.Name, database.Username)
 	client := firstAvailableCommand("mariadb", "mysql")
-	if _, err := runCommand(ctx, 30*time.Second, client, "--protocol=socket", "--user=root", "--execute", sql); err != nil {
+	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("delete database: %w", err)
 	}
 	return nil
@@ -256,9 +256,9 @@ func (s *System) ResetDatabasePassword(ctx context.Context, database ManagedData
 	if s.demo {
 		return nil
 	}
-	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s'; FLUSH PRIVILEGES;", database.Username, escapeSQLString(password))
+	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' %s; FLUSH PRIVILEGES;", database.Username, s.databaseUserIdentification(password, database.LegacyAuth))
 	client := firstAvailableCommand("mariadb", "mysql")
-	if _, err := runCommand(ctx, 30*time.Second, client, "--protocol=socket", "--user=root", "--execute", sql); err != nil {
+	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("reset database password: %w", err)
 	}
 	return nil
@@ -266,6 +266,21 @@ func (s *System) ResetDatabasePassword(ctx context.Context, database ManagedData
 
 func escapeSQLString(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `'`, `''`)
+}
+
+func (s *System) databaseUserIdentification(password string, legacy bool) string {
+	clause := "IDENTIFIED BY"
+	if legacy && strings.EqualFold(s.DatabaseEngine(), "MySQL") {
+		// PHP 7.3's bundled mysqlnd cannot authenticate with caching_sha2_password.
+		// LiteCP's database server is bound to localhost and uses strong generated
+		// passwords, so MySQL's legacy plugin is limited to local application users.
+		clause = "IDENTIFIED WITH mysql_native_password BY"
+	}
+	return fmt.Sprintf("%s '%s'", clause, escapeSQLString(password))
+}
+
+func legacyPHPDatabaseAuth(version string) bool {
+	return version == "7.3" || version == "7.4"
 }
 
 func (s *System) DatabaseEngine() string {
@@ -298,6 +313,13 @@ func (s *System) databaseUnit() string {
 }
 
 func validateFirewallRule(rule FirewallRule) error {
+	rule = normalizeFirewallRule(rule)
+	if rule.Direction != "inbound" && rule.Direction != "outbound" {
+		return errors.New("firewall direction must be inbound or outbound")
+	}
+	if rule.Action != "allow" && rule.Action != "deny" {
+		return errors.New("firewall action must be allow or deny")
+	}
 	if rule.Port < 1 || rule.Port > 65535 {
 		return errors.New("firewall port must be between 1 and 65535")
 	}
@@ -307,17 +329,23 @@ func validateFirewallRule(rule FirewallRule) error {
 	if len(rule.Label) > 64 || strings.ContainsAny(rule.Label, "\r\n") {
 		return errors.New("firewall rule label must be at most 64 characters")
 	}
-	if rule.Source != "" && rule.Source != "any" {
-		if net.ParseIP(rule.Source) == nil {
-			if _, _, err := net.ParseCIDR(rule.Source); err != nil {
-				return errors.New("source must be an IP address, CIDR network or 'any'")
+	address := rule.Source
+	addressLabel := "source"
+	if rule.Direction == "outbound" {
+		address = rule.Destination
+		addressLabel = "destination"
+	}
+	if address != "" && address != "any" {
+		if net.ParseIP(address) == nil {
+			if _, _, err := net.ParseCIDR(address); err != nil {
+				return fmt.Errorf("%s must be an IP address, CIDR network or 'any'", addressLabel)
 			}
 		}
 	}
-	if rule.Source == "" || rule.Source == "any" {
+	if rule.Direction == "inbound" && (rule.Source == "" || rule.Source == "any") {
 		for _, protected := range []int{22, 25, 80, 443, 465, 587, 993, 8443} {
 			if rule.Port == protected && rule.Protocol == "tcp" {
-				return errors.New("that essential LiteCP port is already protected by the installer")
+				return errors.New("unscoped changes to essential LiteCP ports are protected by the installer")
 			}
 		}
 	}
@@ -325,49 +353,96 @@ func validateFirewallRule(rule FirewallRule) error {
 }
 
 func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remove bool) error {
+	rule = normalizeFirewallRule(rule)
 	if err := validateFirewallRule(rule); err != nil {
 		return err
 	}
 	if s.demo {
 		return nil
 	}
-	verb := "--add-port="
-	if remove {
-		verb = "--remove-port="
-	}
 	if s.firewallBackend() == "firewalld" {
-		var args []string
-		if rule.Source == "" || rule.Source == "any" {
-			args = []string{"--permanent", "--zone=public", verb + strconv.Itoa(rule.Port) + "/" + rule.Protocol}
-		} else {
-			family := "ipv4"
-			if strings.Contains(rule.Source, ":") {
+		richVerb := "--add-rich-rule="
+		if remove {
+			richVerb = "--remove-rich-rule="
+		}
+		decision := "accept"
+		if rule.Action == "deny" {
+			decision = "reject"
+		}
+		address := rule.Source
+		addressTerm := "source"
+		scopeArgs := []string{"--permanent", "--zone=public"}
+		if rule.Direction == "outbound" {
+			address, addressTerm = rule.Destination, "destination"
+			policies, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--permanent", "--get-policies")
+			if err != nil {
+				return err
+			}
+			if !containsString(strings.Fields(policies), "litecp-outbound") {
+				if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--permanent", "--new-policy", "litecp-outbound"); err != nil {
+					return err
+				}
+				for _, args := range [][]string{{"--permanent", "--policy", "litecp-outbound", "--add-ingress-zone", "HOST"}, {"--permanent", "--policy", "litecp-outbound", "--add-egress-zone", "ANY"}, {"--permanent", "--policy", "litecp-outbound", "--set-priority", "-500"}} {
+					if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", args...); err != nil {
+						return err
+					}
+				}
+			}
+			scopeArgs = []string{"--permanent", "--policy", "litecp-outbound"}
+		}
+		family := ""
+		if address != "" && address != "any" {
+			family = "ipv4"
+			if strings.Contains(address, ":") {
 				family = "ipv6"
 			}
-			richRule := fmt.Sprintf(`rule family="%s" source address="%s" port port="%d" protocol="%s" accept`, family, rule.Source, rule.Port, rule.Protocol)
-			richVerb := "--add-rich-rule="
-			if remove {
-				richVerb = "--remove-rich-rule="
-			}
-			args = []string{"--permanent", "--zone=public", richVerb + richRule}
 		}
+		parts := []string{"rule"}
+		if family != "" {
+			parts = append(parts, `family="`+family+`"`, addressTerm+` address="`+address+`"`)
+		}
+		parts = append(parts, fmt.Sprintf(`port port="%d" protocol="%s"`, rule.Port, rule.Protocol), decision)
+		operation := richVerb + strings.Join(parts, " ")
+		// Preserve the representation used by pre-0.5 unscoped allow rules.
+		if rule.Direction == "inbound" && rule.Action == "allow" && rule.Source == "any" {
+			verb := "--add-port="
+			if remove {
+				verb = "--remove-port="
+			}
+			operation = fmt.Sprintf("%s%d/%s", verb, rule.Port, rule.Protocol)
+		}
+		args := append(scopeArgs, operation)
 		if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", args...); err != nil {
 			return err
 		}
 		_, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--reload")
+		if err != nil {
+			inverse := strings.Replace(operation, "--add-", "--remove-", 1)
+			if remove {
+				inverse = strings.Replace(operation, "--remove-", "--add-", 1)
+			}
+			_, rollbackErr := runCommand(context.Background(), 20*time.Second, "firewall-cmd", append(scopeArgs, inverse)...)
+			if rollbackErr != nil {
+				return fmt.Errorf("firewall reload failed: %v; permanent configuration rollback also failed: %v", err, rollbackErr)
+			}
+		}
 		return err
 	}
-	action := "allow"
-	if remove {
-		action = "delete"
-	}
+	action := rule.Action
 	args := []string{}
 	if remove {
-		args = append(args, "--force", action, "allow")
-	} else {
-		args = append(args, action)
+		args = append(args, "--force", "delete")
 	}
-	if rule.Source != "" && rule.Source != "any" {
+	args = append(args, action)
+	if rule.Direction == "outbound" {
+		args = append(args, "out", "to")
+		if rule.Destination == "" || rule.Destination == "any" {
+			args = append(args, "any")
+		} else {
+			args = append(args, rule.Destination)
+		}
+		args = append(args, "port", strconv.Itoa(rule.Port), "proto", rule.Protocol)
+	} else if rule.Source != "" && rule.Source != "any" {
 		args = append(args, "from", rule.Source, "to", "any", "port", strconv.Itoa(rule.Port), "proto", rule.Protocol)
 	} else {
 		args = append(args, strconv.Itoa(rule.Port)+"/"+rule.Protocol)
@@ -375,7 +450,7 @@ func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remov
 	if !remove && rule.Label != "" {
 		args = append(args, "comment", "LiteCP: "+rule.Label)
 	}
-	_, err := runCommand(ctx, 20*time.Second, "ufw", args...)
+	_, err := runHostCommand(ctx, 30*time.Second, "ufw", args...)
 	return err
 }
 

@@ -1,0 +1,36 @@
+FROM docker.io/library/php:7.3.33-fpm-bullseye
+
+ARG WEB_UID=997
+ARG WEB_GID=995
+ARG IONCUBE_ARCH=x86-64
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        libc-client2007e-dev libfreetype6-dev libgmp-dev libicu-dev \
+        libjpeg62-turbo-dev libkrb5-dev libpng-dev libxml2-dev libzip-dev; \
+    docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/; \
+    docker-php-ext-configure imap --with-kerberos --with-imap-ssl; \
+    docker-php-ext-install -j2 bcmath gd gmp imap intl mysqli opcache pdo_mysql soap zip; \
+    curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \
+        "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_${IONCUBE_ARCH}.tar.gz" \
+        --output /tmp/ioncube.tar.gz; \
+    tar -xzf /tmp/ioncube.tar.gz -C /tmp; \
+    extension_dir="$(php-config --extension-dir)"; \
+    install -m 0644 /tmp/ioncube/ioncube_loader_lin_7.3.so "${extension_dir}/ioncube_loader_lin_7.3.so"; \
+    rm -rf /tmp/ioncube /tmp/ioncube.tar.gz /var/lib/apt/lists/*; \
+    php -m | grep -qx mysqli; \
+    php -m | grep -qx pdo_mysql
+
+RUN set -eux; \
+    groupmod -o -g "${WEB_GID}" www-data; \
+    usermod -o -u "${WEB_UID}" -g "${WEB_GID}" www-data
+
+COPY php-litecp.ini /usr/local/etc/php/conf.d/99-litecp.ini
+COPY zz-litecp.conf /usr/local/etc/php-fpm.d/zz-litecp.conf
+
+RUN rm -f /usr/local/etc/php-fpm.d/www.conf /usr/local/etc/php-fpm.d/www.conf.default /usr/local/etc/php-fpm.d/docker.conf /usr/local/etc/php-fpm.d/zz-docker.conf; \
+    mkdir -p /var/empty/litecp; \
+    chmod 0555 /var/empty/litecp; \
+    printf 'zend_extension=ioncube_loader_lin_7.3.so\n' > /usr/local/etc/php/conf.d/00-ioncube.ini; \
+    php -v | grep -qi ioncube

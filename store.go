@@ -16,9 +16,13 @@ type Site struct {
 	Domain     string    `json:"domain"`
 	Root       string    `json:"root"`
 	AppType    string    `json:"appType"`
+	AppVersion string    `json:"appVersion,omitempty"`
 	PHPVersion string    `json:"phpVersion"`
+	RuntimeUID int       `json:"runtimeUid,omitempty"`
+	RuntimeGID int       `json:"runtimeGid,omitempty"`
 	SSL        bool      `json:"ssl"`
 	Cron       bool      `json:"cron"`
+	WAFMode    string    `json:"wafMode,omitempty"`
 	Database   string    `json:"database,omitempty"`
 	DBUser     string    `json:"dbUser,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
@@ -52,27 +56,32 @@ type BackupDestination struct {
 }
 
 type ManagedDatabase struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Username  string    `json:"username"`
-	SiteID    string    `json:"siteId,omitempty"`
-	Domain    string    `json:"domain,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Username   string    `json:"username"`
+	SiteID     string    `json:"siteId,omitempty"`
+	Domain     string    `json:"domain,omitempty"`
+	LegacyAuth bool      `json:"legacyAuth,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type FirewallRule struct {
-	ID        string    `json:"id"`
-	Port      int       `json:"port"`
-	Protocol  string    `json:"protocol"`
-	Source    string    `json:"source"`
-	Label     string    `json:"label"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Direction   string    `json:"direction"`
+	Action      string    `json:"action"`
+	Port        int       `json:"port"`
+	Protocol    string    `json:"protocol"`
+	Source      string    `json:"source"`
+	Destination string    `json:"destination,omitempty"`
+	Label       string    `json:"label"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type MailDomain struct {
-	ID        string    `json:"id"`
-	Domain    string    `json:"domain"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID           string    `json:"id"`
+	Domain       string    `json:"domain"`
+	DKIMSelector string    `json:"dkimSelector"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type Mailbox struct {
@@ -100,9 +109,11 @@ type Activity struct {
 }
 
 type Settings struct {
-	Email           string `json:"email"`
-	Timezone        string `json:"timezone"`
-	BackupRetention int    `json:"backupRetention"`
+	Email               string   `json:"email"`
+	Timezone            string   `json:"timezone"`
+	BackupRetention     int      `json:"backupRetention"`
+	EmailHostingEnabled bool     `json:"emailHostingEnabled"`
+	Resolvers           []string `json:"resolvers,omitempty"`
 }
 
 type Admin struct {
@@ -111,6 +122,7 @@ type Admin struct {
 }
 
 type Config struct {
+	SchemaVersion      int                 `json:"schemaVersion"`
 	Admin              Admin               `json:"admin"`
 	Settings           Settings            `json:"settings"`
 	Sites              []Site              `json:"sites"`
@@ -162,6 +174,29 @@ func OpenStore(dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("parse configuration: %w", err)
 	}
 	changed := false
+	if store.cfg.SchemaVersion < 5 {
+		store.cfg.SchemaVersion = 5
+		store.cfg.Settings.EmailHostingEnabled = true
+		if len(store.cfg.Settings.Resolvers) == 0 {
+			// An upgrade has not applied DNS settings. Do not display Google
+			// resolvers as though the provider's current configuration changed.
+			store.cfg.Settings.Resolvers = []string{}
+		}
+		for i := range store.cfg.FirewallRules {
+			if store.cfg.FirewallRules[i].Direction == "" {
+				store.cfg.FirewallRules[i].Direction = "inbound"
+			}
+			if store.cfg.FirewallRules[i].Action == "" {
+				store.cfg.FirewallRules[i].Action = "allow"
+			}
+		}
+		for i := range store.cfg.MailDomains {
+			if store.cfg.MailDomains[i].DKIMSelector == "" {
+				store.cfg.MailDomains[i].DKIMSelector = "default"
+			}
+		}
+		changed = true
+	}
 	for i := range store.cfg.Sites {
 		if store.cfg.Sites[i].AppType == "" {
 			store.cfg.Sites[i].AppType = "whmcs"
@@ -171,11 +206,27 @@ func OpenStore(dataDir string) (*Store, error) {
 			store.cfg.Sites[i].PHPVersion = "8.3"
 			changed = true
 		}
+		if store.cfg.Sites[i].AppType == "whmcs" && store.cfg.Sites[i].AppVersion == "" {
+			// Existing installations used the WHMCS 8.13 compatibility matrix.
+			store.cfg.Sites[i].AppVersion = "8.13"
+			changed = true
+		}
+		if store.cfg.Sites[i].RuntimeUID == 0 || store.cfg.Sites[i].RuntimeGID == 0 {
+			runtimeID := siteRuntimeID(store.cfg.Sites[i].ID)
+			store.cfg.Sites[i].RuntimeUID = runtimeID
+			store.cfg.Sites[i].RuntimeGID = runtimeID
+			changed = true
+		}
 		if store.cfg.Sites[i].Database != "" {
 			found := false
-			for _, database := range store.cfg.Databases {
-				if database.Name == store.cfg.Sites[i].Database {
+			for databaseIndex := range store.cfg.Databases {
+				if store.cfg.Databases[databaseIndex].Name == store.cfg.Sites[i].Database {
 					found = true
+					legacy := legacyPHPDatabaseAuth(store.cfg.Sites[i].PHPVersion)
+					if store.cfg.Databases[databaseIndex].LegacyAuth != legacy {
+						store.cfg.Databases[databaseIndex].LegacyAuth = legacy
+						changed = true
+					}
 					break
 				}
 			}
@@ -183,7 +234,7 @@ func OpenStore(dataDir string) (*Store, error) {
 				store.cfg.Databases = append(store.cfg.Databases, ManagedDatabase{
 					ID: "site-" + store.cfg.Sites[i].ID, Name: store.cfg.Sites[i].Database,
 					Username: store.cfg.Sites[i].DBUser, SiteID: store.cfg.Sites[i].ID,
-					Domain: store.cfg.Sites[i].Domain, CreatedAt: store.cfg.Sites[i].CreatedAt,
+					Domain: store.cfg.Sites[i].Domain, LegacyAuth: legacyPHPDatabaseAuth(store.cfg.Sites[i].PHPVersion), CreatedAt: store.cfg.Sites[i].CreatedAt,
 				})
 				changed = true
 			}
@@ -218,8 +269,9 @@ func (s *Store) Initialize(username, password string) error {
 		return errors.New("LiteCP is already initialized")
 	}
 	s.cfg = Config{
+		SchemaVersion:      5,
 		Admin:              Admin{Username: username, PasswordHash: hash},
-		Settings:           Settings{Timezone: "UTC", BackupRetention: 14},
+		Settings:           Settings{Timezone: "UTC", BackupRetention: 14, EmailHostingEnabled: true, Resolvers: []string{"8.8.8.8", "8.8.4.4"}},
 		Sites:              []Site{},
 		Backups:            []Backup{},
 		BackupDestinations: []BackupDestination{},
@@ -282,13 +334,17 @@ func (s *Store) PublicState() PublicState {
 	for i := range mailboxes {
 		mailboxes[i].PasswordHash = ""
 	}
+	activities := append([]Activity{}, s.cfg.Activities...)
+	if len(activities) > 10 {
+		activities = activities[:10]
+	}
 	return PublicState{
 		Username: s.cfg.Admin.Username, Settings: s.cfg.Settings,
 		Sites: append([]Site{}, s.cfg.Sites...), Backups: append([]Backup{}, s.cfg.Backups...),
 		BackupDestinations: destinations, Databases: append([]ManagedDatabase{}, s.cfg.Databases...),
 		FirewallRules: append([]FirewallRule{}, s.cfg.FirewallRules...),
 		MailDomains:   append([]MailDomain{}, s.cfg.MailDomains...), Mailboxes: mailboxes,
-		MailAliases: append([]MailAlias{}, s.cfg.MailAliases...), Activities: append([]Activity{}, s.cfg.Activities...),
+		MailAliases: append([]MailAlias{}, s.cfg.MailAliases...), Activities: activities,
 	}
 }
 
@@ -317,64 +373,208 @@ func (s *Store) SiteByID(id string) *Site {
 	return nil
 }
 
-func (s *Store) AddSite(site Site) {
+func (s *Store) Sites() []Site {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Site{}, s.cfg.Sites...)
+}
+
+func (s *Store) AddSite(site Site) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.Sites = append(s.cfg.Sites, site)
-	_ = s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Sites = s.cfg.Sites[:len(s.cfg.Sites)-1]
+		return err
+	}
+	return nil
 }
 
-func (s *Store) UpdateSite(id string, update func(*Site)) {
+func (s *Store) AddSiteWithDatabase(site Site, database *ManagedDatabase) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.cfg.Sites {
+		if existing.ID == site.ID || existing.Domain == site.Domain {
+			return errors.New("website already exists")
+		}
+		if existing.RuntimeUID == site.RuntimeUID || existing.RuntimeGID == site.RuntimeGID {
+			return errors.New("website runtime identity collision; retry provisioning")
+		}
+	}
+	originalSites := append([]Site{}, s.cfg.Sites...)
+	originalDatabases := append([]ManagedDatabase{}, s.cfg.Databases...)
+	s.cfg.Sites = append(s.cfg.Sites, site)
+	if database != nil {
+		for _, existing := range s.cfg.Databases {
+			if existing.Name == database.Name || existing.Username == database.Username {
+				s.cfg.Sites = originalSites
+				return errors.New("database already exists")
+			}
+		}
+		s.cfg.Databases = append(s.cfg.Databases, *database)
+	}
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Sites = originalSites
+		s.cfg.Databases = originalDatabases
+		return err
+	}
+	return nil
+}
+
+func (s *Store) UpdateSite(id string, update func(*Site)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.cfg.Sites {
 		if s.cfg.Sites[i].ID == id {
+			original := s.cfg.Sites[i]
 			update(&s.cfg.Sites[i])
-			_ = s.saveLocked()
-			return
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Sites[i] = original
+				return err
+			}
+			return nil
 		}
 	}
+	return errors.New("website not found")
 }
 
-func (s *Store) RemoveSite(id string) {
+func (s *Store) RemoveSite(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.cfg.Sites {
 		if s.cfg.Sites[i].ID == id {
+			original := append([]Site{}, s.cfg.Sites...)
 			s.cfg.Sites = append(s.cfg.Sites[:i], s.cfg.Sites[i+1:]...)
-			_ = s.saveLocked()
-			return
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Sites = original
+				return err
+			}
+			return nil
 		}
 	}
+	return errors.New("website not found")
 }
 
-func (s *Store) AddBackup(backup Backup) {
+func (s *Store) AddBackup(backup Backup) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	original := append([]Backup{}, s.cfg.Backups...)
 	s.cfg.Backups = append([]Backup{backup}, s.cfg.Backups...)
 	if len(s.cfg.Backups) > 100 {
 		s.cfg.Backups = s.cfg.Backups[:100]
 	}
-	_ = s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Backups = original
+		return err
+	}
+	return nil
 }
 
-func (s *Store) AddActivity(title, detail, kind string) {
+func (s *Store) ExpiredBackups(cutoff time.Time) []Backup {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := []Backup{}
+	for _, backup := range s.cfg.Backups {
+		if backup.CreatedAt.Before(cutoff) {
+			result = append(result, backup)
+		}
+	}
+	return result
+}
+
+func (s *Store) RemoveBackups(ids map[string]bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	original := append([]Backup{}, s.cfg.Backups...)
+	kept := make([]Backup, 0, len(s.cfg.Backups))
+	for _, backup := range s.cfg.Backups {
+		if !ids[backup.ID] {
+			kept = append(kept, backup)
+		}
+	}
+	s.cfg.Backups = kept
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Backups = original
+		return err
+	}
+	return nil
+}
+
+func (s *Store) Settings() Settings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Settings
+}
+
+func (s *Store) AddActivity(title, detail, kind string) error {
 	id, _ := randomToken(8)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	original := append([]Activity{}, s.cfg.Activities...)
 	activity := Activity{ID: id, Title: title, Detail: detail, Kind: kind, CreatedAt: time.Now().UTC()}
 	s.cfg.Activities = append([]Activity{activity}, s.cfg.Activities...)
-	if len(s.cfg.Activities) > 40 {
-		s.cfg.Activities = s.cfg.Activities[:40]
+	if len(s.cfg.Activities) > 2000 {
+		s.cfg.Activities = s.cfg.Activities[:2000]
 	}
-	_ = s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Activities = original
+		return err
+	}
+	return nil
 }
 
-func (s *Store) SetSettings(settings Settings) {
+func (s *Store) SetSettings(settings Settings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	original := s.cfg.Settings
 	s.cfg.Settings = settings
-	_ = s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Settings = original
+		return err
+	}
+	return nil
+}
+
+func (s *Store) UpdateSettings(update func(*Settings)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	original := s.cfg.Settings
+	update(&s.cfg.Settings)
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Settings = original
+		return err
+	}
+	return nil
+}
+
+func (s *Store) Activities(page, perPage int) ([]Activity, int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 10
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	total := len(s.cfg.Activities)
+	if total == 0 || page-1 > (total-1)/perPage {
+		return []Activity{}, total
+	}
+	start := (page - 1) * perPage
+	if start >= total {
+		return []Activity{}, total
+	}
+	end := start + perPage
+	if end > total {
+		end = total
+	}
+	return append([]Activity{}, s.cfg.Activities[start:end]...), total
 }
 
 func (s *Store) saveLocked() error {
@@ -382,12 +582,37 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	temporary := s.path + ".tmp"
-	if err := os.WriteFile(temporary, content, 0600); err != nil {
+	temporary, err := os.CreateTemp(filepath.Dir(s.path), ".litecp-config-*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, s.path); err != nil {
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0600); err != nil {
+		_ = temporary.Close()
 		return err
 	}
-	return os.Chmod(s.path, 0600)
+	if _, err := temporary.Write(content); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, s.path); err != nil {
+		return err
+	}
+	if err := os.Chmod(s.path, 0600); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(s.path))
+	if err == nil {
+		_ = directory.Sync()
+		_ = directory.Close()
+	}
+	return nil
 }

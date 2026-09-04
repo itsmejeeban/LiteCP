@@ -1,0 +1,8 @@
+#!/bin/sh
+attempt=0
+while [ "${attempt}" -lt 100 ]; do
+  [ -S /run/litecp-php73/health.sock ] && exit 0
+  attempt=$((attempt + 1))
+  sleep 0.2
+done
+exit 1

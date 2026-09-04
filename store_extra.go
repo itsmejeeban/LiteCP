@@ -10,11 +10,15 @@ func (s *Store) AddDatabase(database ManagedDatabase) error {
 	defer s.mu.Unlock()
 	for _, item := range s.cfg.Databases {
 		if item.Name == database.Name || item.Username == database.Username {
-			return nil
+			return errors.New("a database with that name or username already exists")
 		}
 	}
 	s.cfg.Databases = append(s.cfg.Databases, database)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Databases = s.cfg.Databases[:len(s.cfg.Databases)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) DatabaseByID(id string) *ManagedDatabase {
@@ -29,13 +33,47 @@ func (s *Store) DatabaseByID(id string) *ManagedDatabase {
 	return nil
 }
 
+func (s *Store) DatabaseBySiteID(siteID string) *ManagedDatabase {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.cfg.Databases {
+		if item.SiteID == siteID {
+			copy := item
+			return &copy
+		}
+	}
+	return nil
+}
+
+func (s *Store) UpdateDatabase(id string, update func(*ManagedDatabase)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.Databases {
+		if s.cfg.Databases[i].ID == id {
+			original := s.cfg.Databases[i]
+			update(&s.cfg.Databases[i])
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Databases[i] = original
+				return err
+			}
+			return nil
+		}
+	}
+	return errors.New("database not found")
+}
+
 func (s *Store) RemoveDatabase(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.cfg.Databases {
 		if s.cfg.Databases[i].ID == id {
+			original := append([]ManagedDatabase{}, s.cfg.Databases...)
 			s.cfg.Databases = append(s.cfg.Databases[:i], s.cfg.Databases[i+1:]...)
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Databases = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -50,7 +88,11 @@ func (s *Store) AddBackupDestination(destination BackupDestination) error {
 		}
 	}
 	s.cfg.BackupDestinations = append(s.cfg.BackupDestinations, destination)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.BackupDestinations = s.cfg.BackupDestinations[:len(s.cfg.BackupDestinations)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) BackupDestinationByID(id string) *BackupDestination {
@@ -70,8 +112,13 @@ func (s *Store) RemoveBackupDestination(id string) error {
 	defer s.mu.Unlock()
 	for i := range s.cfg.BackupDestinations {
 		if s.cfg.BackupDestinations[i].ID == id {
+			original := append([]BackupDestination{}, s.cfg.BackupDestinations...)
 			s.cfg.BackupDestinations = append(s.cfg.BackupDestinations[:i], s.cfg.BackupDestinations[i+1:]...)
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.BackupDestinations = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -81,18 +128,45 @@ func (s *Store) AddFirewallRule(rule FirewallRule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.FirewallRules = append(s.cfg.FirewallRules, rule)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.FirewallRules = s.cfg.FirewallRules[:len(s.cfg.FirewallRules)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) HasFirewallRule(rule FirewallRule) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	rule = normalizeFirewallRule(rule)
 	for _, item := range s.cfg.FirewallRules {
-		if item.Port == rule.Port && item.Protocol == rule.Protocol && item.Source == rule.Source {
+		if rule.ID != "" && item.ID == rule.ID {
+			continue
+		}
+		item = normalizeFirewallRule(item)
+		if item.Port == rule.Port && item.Protocol == rule.Protocol && item.Source == rule.Source && item.Destination == rule.Destination && item.Direction == rule.Direction && item.Action == rule.Action {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *Store) UpdateFirewallRule(id string, rule FirewallRule) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.cfg.FirewallRules {
+		if s.cfg.FirewallRules[i].ID == id {
+			original := s.cfg.FirewallRules[i]
+			rule.ID, rule.CreatedAt = original.ID, original.CreatedAt
+			s.cfg.FirewallRules[i] = rule
+			if err := s.saveLocked(); err != nil {
+				s.cfg.FirewallRules[i] = original
+				return err
+			}
+			return nil
+		}
+	}
+	return errors.New("firewall rule not found")
 }
 
 func (s *Store) FirewallRuleByID(id string) *FirewallRule {
@@ -112,8 +186,13 @@ func (s *Store) RemoveFirewallRule(id string) error {
 	defer s.mu.Unlock()
 	for i := range s.cfg.FirewallRules {
 		if s.cfg.FirewallRules[i].ID == id {
+			original := append([]FirewallRule{}, s.cfg.FirewallRules...)
 			s.cfg.FirewallRules = append(s.cfg.FirewallRules[:i], s.cfg.FirewallRules[i+1:]...)
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.FirewallRules = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -129,7 +208,11 @@ func (s *Store) AddMailDomain(domain MailDomain) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.MailDomains = append(s.cfg.MailDomains, domain)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.MailDomains = s.cfg.MailDomains[:len(s.cfg.MailDomains)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) MailDomainByID(id string) *MailDomain {
@@ -158,6 +241,9 @@ func (s *Store) HasMailDomain(domain string) bool {
 func (s *Store) RemoveMailDomain(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	originalDomains := append([]MailDomain{}, s.cfg.MailDomains...)
+	originalMailboxes := append([]Mailbox{}, s.cfg.Mailboxes...)
+	originalAliases := append([]MailAlias{}, s.cfg.MailAliases...)
 	domain := ""
 	for i := range s.cfg.MailDomains {
 		if s.cfg.MailDomains[i].ID == id {
@@ -182,14 +268,27 @@ func (s *Store) RemoveMailDomain(id string) error {
 		}
 		s.cfg.MailAliases = aliases
 	}
-	return s.saveLocked()
+	if domain == "" {
+		return nil
+	}
+	if err := s.saveLocked(); err != nil {
+		s.cfg.MailDomains = originalDomains
+		s.cfg.Mailboxes = originalMailboxes
+		s.cfg.MailAliases = originalAliases
+		return err
+	}
+	return nil
 }
 
 func (s *Store) AddMailbox(mailbox Mailbox) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.Mailboxes = append(s.cfg.Mailboxes, mailbox)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Mailboxes = s.cfg.Mailboxes[:len(s.cfg.Mailboxes)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) MailboxByID(id string) *Mailbox {
@@ -209,8 +308,13 @@ func (s *Store) UpdateMailbox(id string, update func(*Mailbox)) error {
 	defer s.mu.Unlock()
 	for i := range s.cfg.Mailboxes {
 		if s.cfg.Mailboxes[i].ID == id {
+			original := s.cfg.Mailboxes[i]
 			update(&s.cfg.Mailboxes[i])
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Mailboxes[i] = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -221,8 +325,13 @@ func (s *Store) RemoveMailbox(id string) error {
 	defer s.mu.Unlock()
 	for i := range s.cfg.Mailboxes {
 		if s.cfg.Mailboxes[i].ID == id {
+			original := append([]Mailbox{}, s.cfg.Mailboxes...)
 			s.cfg.Mailboxes = append(s.cfg.Mailboxes[:i], s.cfg.Mailboxes[i+1:]...)
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.Mailboxes = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil
@@ -232,7 +341,11 @@ func (s *Store) AddMailAlias(alias MailAlias) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cfg.MailAliases = append(s.cfg.MailAliases, alias)
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		s.cfg.MailAliases = s.cfg.MailAliases[:len(s.cfg.MailAliases)-1]
+		return err
+	}
+	return nil
 }
 
 func (s *Store) MailAliasByID(id string) *MailAlias {
@@ -252,8 +365,13 @@ func (s *Store) RemoveMailAlias(id string) error {
 	defer s.mu.Unlock()
 	for i := range s.cfg.MailAliases {
 		if s.cfg.MailAliases[i].ID == id {
+			original := append([]MailAlias{}, s.cfg.MailAliases...)
 			s.cfg.MailAliases = append(s.cfg.MailAliases[:i], s.cfg.MailAliases[i+1:]...)
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				s.cfg.MailAliases = original
+				return err
+			}
+			return nil
 		}
 	}
 	return nil

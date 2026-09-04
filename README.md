@@ -1,8 +1,10 @@
 # LiteCP - By Hostingtom
 
-LiteCP is a small, purpose-built control panel for self-hosted WHMCS and WordPress websites. It supports Ubuntu and AlmaLinux and manages Nginx, parallel PHP-FPM runtimes, MySQL or MariaDB, files, cron, certificates, local and remote backups, firewall rules, databases, and basic email hosting.
+LiteCP is a small, purpose-built control panel for self-hosted WHMCS, WordPress, and regular PHP/HTML websites. It supports Ubuntu and AlmaLinux and manages Nginx, parallel PHP-FPM runtimes, MySQL or MariaDB, files, cron, certificates, local and remote backups, firewall rules, databases, and basic email hosting.
 
 The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript interface. It does not run a Node.js process, Redis, a message queue, or a second database.
+
+Release **0.5.0** adds migration, advanced file management/trash, Ace editing, dark mode, outbound firewall rules, optional webmail/DKIM, ClamAV, WAF, and server controls. See [implementation boundaries, installation and validation status](docs/v0.5-development.md) before deploying optional services.
 
 ![LiteCP dashboard](docs/dashboard-preview.png)
 
@@ -11,13 +13,13 @@ The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript int
 - Responsive, session-protected administrator dashboard
 - CPU, memory, disk, load, uptime, and essential service health
 - Safe start/restart actions for Nginx, every installed PHP-FPM runtime, MySQL/MariaDB, Postfix, Dovecot, and cron
-- WHMCS or WordPress virtual hosts with application-specific sensitive-file rules
-- Per-website PHP selection and safe runtime switching
+- WHMCS, WordPress, or regular PHP/HTML virtual hosts with application-specific sensitive-file rules
+- Per-website PHP selection, isolated PHP-FPM worker identities, and safe runtime switching
 - Optional MySQL or MariaDB database and one-time generated credentials
 - Website-root-confined file manager with multiple upload, browser editing, download, folders, rename, permissions, delete, ZIP, and safe ZIP extraction
 - Let's Encrypt certificates through Certbot
 - Five-minute WHMCS or WordPress cron management using each website's PHP version
-- On-demand website and database backups with encrypted FTP, FTPS, or host-key-pinned SFTP destinations
+- On-demand website and database backups with FTP, encrypted FTPS, or host-key-pinned SFTP destinations
 - Database creation, password reset, and destructive deletion with local-only application users
 - Postfix/Dovecot virtual mail domains, authenticated mailboxes, quotas, forwarding aliases, SMTP submission, and IMAPS
 - UFW or firewalld management for scoped custom inbound rules, with essential LiteCP ports protected
@@ -26,6 +28,7 @@ The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript int
 - ionCube Loader, OPcache, and low-idle-memory FPM defaults for every runtime
 - HTTPS panel proxy on port `8443`
 - Loopback-only database access and a minimal host firewall enabled during installation
+- Fail2ban protection for repeated SSH authentication failures
 
 LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS release or the official WordPress release to the provisioned document root.
 
@@ -36,12 +39,16 @@ LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS re
 - A fresh VPS is strongly recommended
 - At least 1 GB RAM; 2 GB or more is more comfortable for database, mail, and PHP traffic
 
-Ubuntu 22.04 and 24.04 receive all requested PHP versions through the co-installable Ondřej Surý PHP PPA. AlmaLinux uses native parallel Remi Software Collection packages. Remi does not publish PHP 7.3 for AlmaLinux 10, so LiteCP reports that runtime as unavailable there instead of mixing incompatible packages from an older Enterprise Linux release. PHP 7.3, 7.4, and 8.1 are end-of-life and should only be used temporarily for legacy application upgrades.
+Ubuntu 22.04 and 24.04 receive the requested PHP versions through the co-installable Ondřej Surý PHP PPA. AlmaLinux uses native parallel Remi Software Collection packages. Because Remi does not publish PHP 7.3 for AlmaLinux 10, LiteCP runs PHP 7.3 there in a resource-limited Podman container based on the final official PHP 7.3 FPM image. The FastCGI socket and database stay local to the VPS. PHP 7.3, 7.4, and 8.1 are end-of-life and should only be used temporarily for legacy application upgrades.
+
+The AlmaLinux 10 PHP 7.3 compatibility image is intentionally isolated because forcing Enterprise Linux 8 or 9 RPMs onto AlmaLinux 10 would mix incompatible system libraries. It still contains end-of-life software and receives no upstream PHP security fixes; migrate legacy applications to a supported runtime as quickly as possible.
 
 Application compatibility is enforced by the panel:
 
-- WHMCS: PHP 7.3, 7.4, 8.1, 8.2, or 8.3. PHP 8.3 requires WHMCS 8.13 or newer.
+- WHMCS 9.0: PHP 8.2 or 8.3.
+- WHMCS 8.13 LTS: PHP 7.3, 7.4, 8.1, 8.2, or 8.3.
 - WordPress: PHP 7.4, 8.1, 8.2, 8.3, or 8.4. PHP 8.3 or newer is recommended.
+- Regular websites: any installed LiteCP PHP runtime; PHP 8.3 or newer is recommended for new applications.
 
 Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13/installation-guide/system-requirements/) and [WordPress requirements](https://wordpress.org/about/requirements/) before upgrading an application or changing its PHP version.
 
@@ -49,19 +56,21 @@ Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13
 
 ## Install
 
-Run this command from a complete LiteCP source checkout on the target server. MariaDB is the default database engine:
+Run this command from a complete LiteCP source checkout on the target server. MySQL is the default database engine:
 
 ```bash
 sudo bash scripts/install.sh
 ```
 
-Choose MySQL instead on a fresh installation with:
+Choose MariaDB instead on a fresh installation with:
 
 ```bash
-sudo LITECP_DATABASE_ENGINE=mysql bash scripts/install.sh
+sudo LITECP_DATABASE_ENGINE=mariadb bash scripts/install.sh
 ```
 
 The installer never replaces an existing database engine. Re-running it automatically preserves the detected MySQL or MariaDB installation. Migrating production data between engines is a separate database-administration task.
+
+On AlmaLinux, the MySQL option installs Oracle MySQL 8.4 LTS from the official MySQL repository and binds it to localhost. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
 The installer asks for an administrator username and password, installs the required packages, builds LiteCP, and prints the panel URL:
 
@@ -84,7 +93,7 @@ The included panel certificate is self-signed so the first browser visit will sh
 ## First website
 
 1. Point the billing domain's A/AAAA records to the server.
-2. In LiteCP, choose **Add website**, select WHMCS or WordPress, select a compatible installed PHP version, and enter a name such as `billing.example.com`.
+2. In LiteCP, choose **Add website**, select WHMCS, WordPress, or Regular PHP/HTML Website, select a compatible installed PHP version, and enter a name such as `billing.example.com`.
 3. Save the generated database credentials immediately; the password is shown once.
 4. Upload the licensed WHMCS files or official WordPress files to `/var/www/litecp/billing.example.com/public` and remove the placeholder `index.html`.
 5. Complete the application web installer using the generated database values.
@@ -94,7 +103,7 @@ The included panel certificate is self-signed so the first browser visit will sh
 
 ## File manager
 
-Choose a managed website under **File manager**. LiteCP confines every operation to that website's document root, including paths reached through symbolic links. The manager supports multiple uploads up to 512 MiB per request, UTF-8 text editing up to 4 MiB, folder creation, rename/move paths, safe permissions, download, delete, ZIP creation, and ZIP extraction.
+Choose a managed website under **File manager**. LiteCP confines every operation to that website's document root and refuses symbolic links. The manager supports up to four files per upload request and 512 MiB per file, UTF-8 text editing up to 4 MiB, folder creation, rename/move paths, safe permissions, download, delete, ZIP creation, and ZIP extraction. Multi-file uploads preflight name conflicts and roll back newly created files if any item fails.
 
 ZIP extraction rejects absolute paths, traversal, symbolic links, more than 100,000 members, and archives expanding beyond 2 GiB. The editor blocks binary files, special permission bits, and world-writable modes.
 
@@ -153,21 +162,22 @@ go test ./...
 - Mail maps and password hashes: `/etc/litecp/mail`
 - Maildir data: `/var/vmail/<domain>/<mailbox>/Maildir`
 
-Detaching a website removes its LiteCP-managed Nginx and cron configuration, but it intentionally keeps website files and the database. Backups are never silently deleted; the retention setting is a policy reminder so an operator can coordinate off-server retention.
+Detaching a website removes its LiteCP-managed Nginx, isolated PHP pool, and cron configuration, but it intentionally keeps website files and the database. Local backups older than the configured retention period are pruned after a successful backup or settings update; off-server retention remains the remote provider's responsibility.
 
 ## Security model
 
 - PBKDF2-HMAC-SHA256 password hashing with a unique salt and 600,000 iterations
-- HTTP-only, SameSite=Strict, time-limited in-memory sessions
-- Login throttling and constant-time credential comparison
+- HTTP-only, SameSite=Strict, time-limited in-memory sessions; changing the password revokes all sessions
+- Reverse-proxy-aware login throttling and constant-time credential comparison
 - Same-origin checks for state-changing requests
 - A fixed command and service allowlist; no browser-provided shell commands
-- File path, symlink, ZIP-member, archive-size, upload-size, and permission validation
+- Descriptor-relative file operations that refuse symlinks, plus ZIP-member, archive-size, upload-size, and permission validation
 - AES-256-GCM encryption for stored remote-backup credentials
 - SFTP SHA256 host-key pinning and TLS-required FTPS support
 - Local-socket-only database administration with validated SQL identifiers
 - Authenticated SMTP submission with unauthenticated relay rejection
-- Atomic configuration writes and strict domain validation
+- Atomic durable state/configuration writes, rollback on failed mutations, and strict domain validation
+- Per-website numeric PHP identities, sockets, and document-root restrictions
 - Panel process isolated with systemd filesystem and kernel protections
 - No application database password persistence after provisioning; mailbox passwords are one-way hashed
 

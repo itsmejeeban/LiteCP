@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	maxEditableFileSize = 4 << 20
-	maxUploadSize       = 512 << 20
-	maxArchiveMembers   = 100000
-	maxExtractedSize    = int64(2 << 30)
+	maxEditableFileSize   = 4 << 20
+	maxUploadSize         = 512 << 20
+	maxUploadFiles        = 4
+	maxUploadRequestSize  = int64(maxUploadFiles*maxUploadSize + 1<<20)
+	maxArchiveMembers     = 100000
+	maxExtractedSize      = int64(2 << 30)
+	maxCreatedArchiveSize = int64(8 << 30)
 )
 
 type FileEntry struct {
@@ -39,29 +42,43 @@ type FileListing struct {
 }
 
 func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
-	path, clean, err := resolveManagedPath(site.Root, relative, false)
+	_, clean, err := resolveManagedPath(site.Root, relative, false)
 	if err != nil {
 		return FileListing{}, err
 	}
-	entries, err := os.ReadDir(path)
+	directory, err := secureOpenManaged(site.Root, clean, os.O_RDONLY, 0)
+	if err != nil {
+		return FileListing{}, fmt.Errorf("read directory: %w", err)
+	}
+	defer directory.Close()
+	directoryInfo, err := directory.Stat()
+	if err != nil || !directoryInfo.IsDir() {
+		return FileListing{}, errors.New("website path is not a directory")
+	}
+	entries, err := directory.ReadDir(-1)
 	if err != nil {
 		return FileListing{}, fmt.Errorf("read directory: %w", err)
 	}
 	listing := FileListing{SiteID: site.ID, Domain: site.Domain, Path: clean, Entries: make([]FileEntry, 0, len(entries))}
 	for _, entry := range entries {
-		info, err := os.Lstat(filepath.Join(path, entry.Name()))
+		entryPath := entry.Name()
+		if clean != "" {
+			entryPath = clean + "/" + entry.Name()
+		}
+		file, err := secureOpenManaged(site.Root, entryPath, os.O_RDONLY, 0)
+		if err != nil {
+			// Symlinks and paths concurrently replaced with symlinks are intentionally
+			// hidden because the file manager never follows them.
+			continue
+		}
+		info, err := file.Stat()
+		_ = file.Close()
 		if err != nil {
 			continue
 		}
 		kind := "file"
 		if info.IsDir() {
 			kind = "directory"
-		} else if info.Mode()&os.ModeSymlink != 0 {
-			kind = "symlink"
-		}
-		entryPath := entry.Name()
-		if clean != "" {
-			entryPath = clean + "/" + entry.Name()
 		}
 		listing.Entries = append(listing.Entries, FileEntry{
 			Name: entry.Name(), Path: filepath.ToSlash(entryPath), Type: kind,
@@ -77,12 +94,24 @@ func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
 	return listing, nil
 }
 
+func (s *System) ManagedPathExists(site Site, relative string) (bool, error) {
+	file, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, file.Close()
+}
+
 func (s *System) ReadManagedFile(site Site, relative string) (string, os.FileInfo, error) {
-	path, _, err := resolveManagedPath(site.Root, relative, false)
+	file, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
 	if err != nil {
 		return "", nil, err
 	}
-	info, err := os.Lstat(path)
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil {
 		return "", nil, fmt.Errorf("inspect file: %w", err)
 	}
@@ -92,7 +121,7 @@ func (s *System) ReadManagedFile(site Site, relative string) (string, os.FileInf
 	if info.Size() > maxEditableFileSize {
 		return "", nil, fmt.Errorf("files larger than %d MiB cannot be edited in the browser", maxEditableFileSize>>20)
 	}
-	content, err := os.ReadFile(path)
+	content, err := io.ReadAll(io.LimitReader(file, maxEditableFileSize+1))
 	if err != nil {
 		return "", nil, fmt.Errorf("read file: %w", err)
 	}
@@ -106,76 +135,81 @@ func (s *System) WriteManagedFile(site Site, relative, content string) error {
 	if len(content) > maxEditableFileSize {
 		return fmt.Errorf("file content exceeds %d MiB", maxEditableFileSize>>20)
 	}
-	path, _, err := resolveManagedPath(site.Root, relative, false)
+	file, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
-	info, err := os.Lstat(path)
+	info, err := file.Stat()
+	_ = file.Close()
 	if err != nil {
 		return fmt.Errorf("inspect file: %w", err)
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 		return errors.New("only regular files can be edited")
 	}
-	if err := writeAtomic(path, []byte(content), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("save file: %w", err)
+	ownerID, groupID, err := s.siteFileOwnership(site)
+	if err != nil {
+		return err
 	}
-	if !s.demo {
-		_ = chownWebTree(path, s.webUser())
+	if _, err := secureWriteManaged(site.Root, relative, strings.NewReader(content), maxEditableFileSize, info.Mode().Perm(), ownerID, groupID); err != nil {
+		return fmt.Errorf("save file: %w", err)
 	}
 	return nil
 }
 
 func (s *System) SaveUpload(site Site, directory, name string, source io.Reader) (FileEntry, error) {
+	return s.saveUpload(site, directory, name, source, false)
+}
+
+func (s *System) SaveNewUpload(site Site, directory, name string, source io.Reader) (FileEntry, error) {
+	return s.saveUpload(site, directory, name, source, true)
+}
+
+func (s *System) saveUpload(site Site, directory, name string, source io.Reader, noReplace bool) (FileEntry, error) {
 	if err := validateFileName(name); err != nil {
 		return FileEntry{}, err
 	}
-	dir, cleanDir, err := resolveManagedPath(site.Root, directory, false)
+	_, cleanDir, err := resolveManagedPath(site.Root, directory, false)
 	if err != nil {
 		return FileEntry{}, err
 	}
-	info, err := os.Stat(dir)
+	dir, err := secureOpenManaged(site.Root, cleanDir, os.O_RDONLY, 0)
+	if err != nil {
+		return FileEntry{}, errors.New("upload destination is not a directory")
+	}
+	info, err := dir.Stat()
+	_ = dir.Close()
 	if err != nil || !info.IsDir() {
 		return FileEntry{}, errors.New("upload destination is not a directory")
 	}
-	target, _, err := resolveManagedPath(site.Root, filepath.ToSlash(filepath.Join(cleanDir, name)), true)
+	relative := filepath.ToSlash(filepath.Join(cleanDir, name))
+	ownerID, groupID, err := s.siteFileOwnership(site)
 	if err != nil {
 		return FileEntry{}, err
 	}
-	if existing, err := os.Lstat(target); err == nil && existing.Mode()&os.ModeSymlink != 0 {
-		return FileEntry{}, errors.New("refusing to overwrite a symbolic link")
+	write := secureWriteManaged
+	if noReplace {
+		write = secureWriteManagedNoReplace
 	}
-	temporary, err := os.CreateTemp(dir, ".litecp-upload-")
+	written, err := write(site.Root, relative, source, maxUploadSize, 0640, ownerID, groupID)
 	if err != nil {
-		return FileEntry{}, fmt.Errorf("create upload: %w", err)
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	written, copyErr := io.Copy(temporary, io.LimitReader(source, maxUploadSize+1))
-	closeErr := temporary.Close()
-	if copyErr != nil {
-		return FileEntry{}, fmt.Errorf("receive upload: %w", copyErr)
-	}
-	if closeErr != nil {
-		return FileEntry{}, fmt.Errorf("finish upload: %w", closeErr)
+		if written > maxUploadSize {
+			return FileEntry{}, fmt.Errorf("uploads are limited to %d MiB per file", maxUploadSize>>20)
+		}
+		return FileEntry{}, fmt.Errorf("receive upload: %w", err)
 	}
 	if written > maxUploadSize {
 		return FileEntry{}, fmt.Errorf("uploads are limited to %d MiB per file", maxUploadSize>>20)
 	}
-	if err := os.Chmod(temporaryPath, 0640); err != nil {
-		return FileEntry{}, err
-	}
-	if err := os.Rename(temporaryPath, target); err != nil {
-		return FileEntry{}, fmt.Errorf("store upload: %w", err)
-	}
-	if !s.demo {
-		_ = chownWebTree(target, s.webUser())
-	}
-	stored, err := os.Stat(target)
+	storedFile, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
 	if err != nil {
 		return FileEntry{}, err
 	}
-	relative := filepath.ToSlash(filepath.Join(cleanDir, name))
+	stored, err := storedFile.Stat()
+	_ = storedFile.Close()
+	if err != nil {
+		return FileEntry{}, err
+	}
 	return FileEntry{Name: name, Path: relative, Type: "file", Size: stored.Size(), Mode: "0640", Modified: stored.ModTime().UTC()}, nil
 }
 
@@ -187,61 +221,53 @@ func (s *System) CreateManagedDirectory(site Site, parent, name string) error {
 	if err != nil {
 		return err
 	}
-	target, _, err := resolveManagedPath(site.Root, filepath.ToSlash(filepath.Join(cleanParent, name)), true)
+	ownerID, groupID, err := s.siteFileOwnership(site)
 	if err != nil {
 		return err
 	}
-	if err := os.Mkdir(target, 0750); err != nil {
+	if err := secureCreateManagedDirectory(site.Root, cleanParent, name, 0750, ownerID, groupID); err != nil {
 		return fmt.Errorf("create directory: %w", err)
-	}
-	if !s.demo {
-		_ = chownWebTree(target, s.webUser())
 	}
 	return nil
 }
 
 func (s *System) RenameManagedPath(site Site, relative, destination string) error {
-	source, sourceClean, err := resolveManagedPath(site.Root, relative, false)
+	_, sourceClean, err := resolveManagedPath(site.Root, relative, false)
 	if err != nil {
 		return err
 	}
 	if sourceClean == "" {
 		return errors.New("the website root cannot be renamed")
 	}
-	target, targetClean, err := resolveManagedPath(site.Root, destination, true)
+	_, targetClean, err := resolveManagedPath(site.Root, destination, true)
 	if err != nil {
 		return err
 	}
 	if targetClean == "" {
 		return errors.New("the website root cannot be replaced")
 	}
-	if _, err := os.Lstat(target); err == nil {
-		return errors.New("the destination already exists")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.Rename(source, target); err != nil {
+	if err := secureRenameManaged(site.Root, sourceClean, targetClean); err != nil {
 		return fmt.Errorf("rename path: %w", err)
 	}
 	return nil
 }
 
 func (s *System) DeleteManagedPath(site Site, relative string) error {
-	target, clean, err := resolveManagedPath(site.Root, relative, false)
+	_, clean, err := resolveManagedPath(site.Root, relative, false)
 	if err != nil {
 		return err
 	}
 	if clean == "" {
 		return errors.New("the website root cannot be deleted")
 	}
-	if err := os.RemoveAll(target); err != nil {
+	if err := secureRemoveManaged(site.Root, clean); err != nil {
 		return fmt.Errorf("delete path: %w", err)
 	}
 	return nil
 }
 
 func (s *System) ChmodManagedPath(site Site, relative, modeText string) error {
-	target, clean, err := resolveManagedPath(site.Root, relative, false)
+	_, clean, err := resolveManagedPath(site.Root, relative, false)
 	if err != nil {
 		return err
 	}
@@ -252,7 +278,7 @@ func (s *System) ChmodManagedPath(site Site, relative, modeText string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Chmod(target, value); err != nil {
+	if err := secureChmodManaged(site.Root, clean, value); err != nil {
 		return fmt.Errorf("change permissions: %w", err)
 	}
 	return nil
@@ -271,17 +297,25 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	if err := validateFileName(filepath.Base(destination)); err != nil {
 		return FileEntry{}, err
 	}
-	target, cleanDestination, err := resolveManagedPath(site.Root, destination, true)
+	_, cleanDestination, err := resolveManagedPath(site.Root, destination, true)
 	if err != nil {
 		return FileEntry{}, err
 	}
-	if _, err := os.Stat(target); err == nil {
+	exists, err := s.ManagedPathExists(site, cleanDestination)
+	if err != nil {
+		return FileEntry{}, fmt.Errorf("inspect archive destination: %w", err)
+	}
+	if exists {
 		return FileEntry{}, errors.New("archive destination already exists")
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0750); err != nil {
+	ownerID, groupID, err := s.siteFileOwnership(site)
+	if err != nil {
 		return FileEntry{}, err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(target), ".litecp-archive-*.zip")
+	if err := secureEnsureManagedDirectory(site.Root, filepath.ToSlash(filepath.Dir(cleanDestination)), 0750, ownerID, groupID); err != nil {
+		return FileEntry{}, err
+	}
+	temporary, err := os.CreateTemp(s.dataDir, ".litecp-archive-*.zip")
 	if err != nil {
 		return FileEntry{}, fmt.Errorf("create archive: %w", err)
 	}
@@ -290,69 +324,89 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	writer := zip.NewWriter(temporary)
 	seen := map[string]bool{}
 	members := 0
-	for _, relative := range paths {
+	var addPath func(string) error
+	addPath = func(relative string) error {
 		if err := ctx.Err(); err != nil {
-			_ = writer.Close()
-			_ = temporary.Close()
-			return FileEntry{}, err
+			return err
 		}
-		source, _, err := resolveManagedPath(site.Root, relative, false)
+		_, clean, err := resolveManagedPath(site.Root, relative, false)
 		if err != nil {
-			_ = writer.Close()
-			_ = temporary.Close()
-			return FileEntry{}, err
+			return err
 		}
-		err = filepath.Walk(source, func(path string, info os.FileInfo, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if path == temporaryPath {
-				return nil
-			}
-			if info.Mode()&os.ModeSymlink != 0 {
-				return fmt.Errorf("symbolic links cannot be archived: %s", info.Name())
-			}
-			archiveName, err := filepath.Rel(site.Root, path)
-			if err != nil {
-				return err
-			}
-			archiveName = filepath.ToSlash(archiveName)
-			if archiveName == "." || seen[archiveName] {
-				return nil
-			}
+		archiveName := filepath.ToSlash(clean)
+		if archiveName == "." {
+			archiveName = ""
+		}
+		if archiveName != "" && seen[archiveName] {
+			return nil
+		}
+		file, err := secureOpenManaged(site.Root, clean, os.O_RDONLY, 0)
+		if err != nil {
+			return err
+		}
+		info, err := file.Stat()
+		if err != nil {
+			_ = file.Close()
+			return err
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			_ = file.Close()
+			return fmt.Errorf("only regular files and directories can be archived: %s", archiveName)
+		}
+		if archiveName != "" {
 			seen[archiveName] = true
 			members++
 			if members > maxArchiveMembers {
+				_ = file.Close()
 				return errors.New("archive contains too many entries")
 			}
 			header, err := zip.FileInfoHeader(info)
 			if err != nil {
+				_ = file.Close()
 				return err
 			}
 			header.Name = archiveName
 			if info.IsDir() {
 				header.Name += "/"
 				header.Method = zip.Store
-				_, err = writer.CreateHeader(header)
-				return err
+				if _, err := writer.CreateHeader(header); err != nil {
+					_ = file.Close()
+					return err
+				}
+			} else {
+				header.Method = zip.Deflate
+				destination, err := writer.CreateHeader(header)
+				if err != nil {
+					_ = file.Close()
+					return err
+				}
+				_, copyErr := io.Copy(destination, file)
+				closeErr := file.Close()
+				if copyErr != nil {
+					return copyErr
+				}
+				return closeErr
 			}
-			header.Method = zip.Deflate
-			destination, err := writer.CreateHeader(header)
-			if err != nil {
-				return err
-			}
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			_, copyErr := io.Copy(destination, file)
-			closeErr := file.Close()
-			if copyErr != nil {
-				return copyErr
-			}
-			return closeErr
-		})
+		}
+		entries, err := file.ReadDir(-1)
+		closeErr := file.Close()
 		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+		for _, entry := range entries {
+			child := filepath.ToSlash(filepath.Join(clean, entry.Name()))
+			if err := addPath(child); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, relative := range paths {
+		if err := addPath(relative); err != nil {
 			_ = writer.Close()
 			_ = temporary.Close()
 			return FileEntry{}, fmt.Errorf("archive files: %w", err)
@@ -365,42 +419,70 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	if err := temporary.Close(); err != nil {
 		return FileEntry{}, err
 	}
-	if err := os.Chmod(temporaryPath, 0640); err != nil {
-		return FileEntry{}, err
-	}
-	if err := os.Rename(temporaryPath, target); err != nil {
-		return FileEntry{}, fmt.Errorf("store archive: %w", err)
-	}
-	if !s.demo {
-		_ = chownWebTree(target, s.webUser())
-	}
-	info, err := os.Stat(target)
+	archiveSource, err := os.Open(temporaryPath)
 	if err != nil {
 		return FileEntry{}, err
 	}
-	return FileEntry{Name: filepath.Base(target), Path: filepath.ToSlash(cleanDestination), Type: "file", Size: info.Size(), Mode: "0640", Modified: info.ModTime().UTC()}, nil
+	written, storeErr := secureWriteManaged(site.Root, cleanDestination, archiveSource, maxCreatedArchiveSize, 0640, ownerID, groupID)
+	closeErr := archiveSource.Close()
+	if storeErr != nil {
+		return FileEntry{}, fmt.Errorf("store archive: %w", storeErr)
+	}
+	if closeErr != nil {
+		return FileEntry{}, closeErr
+	}
+	storedArchive, err := secureOpenManaged(site.Root, cleanDestination, os.O_RDONLY, 0)
+	if err != nil {
+		return FileEntry{}, err
+	}
+	info, err := storedArchive.Stat()
+	_ = storedArchive.Close()
+	if err != nil {
+		return FileEntry{}, err
+	}
+	if info.Size() != written {
+		return FileEntry{}, errors.New("stored archive size verification failed")
+	}
+	return FileEntry{Name: filepath.Base(cleanDestination), Path: filepath.ToSlash(cleanDestination), Type: "file", Size: info.Size(), Mode: "0640", Modified: info.ModTime().UTC()}, nil
 }
 
 func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRelative, destinationRelative string) error {
-	archivePath, _, err := resolveManagedPath(site.Root, archiveRelative, false)
+	_, archiveClean, err := resolveManagedPath(site.Root, archiveRelative, false)
 	if err != nil {
 		return err
 	}
-	destination, _, err := resolveManagedPath(site.Root, destinationRelative, false)
+	_, destinationClean, err := resolveManagedPath(site.Root, destinationRelative, false)
 	if err != nil {
 		return err
 	}
-	info, err := os.Stat(destination)
+	destinationFile, err := secureOpenManaged(site.Root, destinationClean, os.O_RDONLY, 0)
+	if err != nil {
+		return errors.New("extraction destination is not a directory")
+	}
+	info, err := destinationFile.Stat()
+	_ = destinationFile.Close()
 	if err != nil || !info.IsDir() {
 		return errors.New("extraction destination is not a directory")
 	}
-	reader, err := zip.OpenReader(archivePath)
+	archiveFile, err := secureOpenManaged(site.Root, archiveClean, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("open ZIP archive: %w", err)
 	}
-	defer reader.Close()
+	defer archiveFile.Close()
+	archiveInfo, err := archiveFile.Stat()
+	if err != nil || !archiveInfo.Mode().IsRegular() {
+		return errors.New("ZIP archive must be a regular file")
+	}
+	reader, err := zip.NewReader(archiveFile, archiveInfo.Size())
+	if err != nil {
+		return fmt.Errorf("open ZIP archive: %w", err)
+	}
 	if len(reader.File) > maxArchiveMembers {
 		return errors.New("archive contains too many entries")
+	}
+	ownerID, groupID, err := s.siteFileOwnership(site)
+	if err != nil {
+		return err
 	}
 	var total int64
 	for _, member := range reader.File {
@@ -418,21 +500,18 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 		if name == "." || filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
 			return fmt.Errorf("archive contains an unsafe path: %s", member.Name)
 		}
-		relativeTarget, err := filepath.Rel(site.Root, filepath.Join(destination, name))
-		if err != nil {
-			return err
-		}
-		target, _, err := resolveManagedPath(site.Root, filepath.ToSlash(relativeTarget), true)
+		relativeTarget := filepath.ToSlash(filepath.Join(destinationClean, name))
+		_, cleanTarget, err := resolveManagedPath(site.Root, relativeTarget, true)
 		if err != nil {
 			return fmt.Errorf("unsafe archive member %s: %w", member.Name, err)
 		}
 		if member.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0750); err != nil {
+			if err := secureEnsureManagedDirectory(site.Root, cleanTarget, 0750, ownerID, groupID); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0750); err != nil {
+		if err := secureEnsureManagedDirectory(site.Root, filepath.ToSlash(filepath.Dir(cleanTarget)), 0750, ownerID, groupID); err != nil {
 			return err
 		}
 		source, err := member.Open()
@@ -443,13 +522,7 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 		if mode == 0 || mode&0002 != 0 || mode&04000 != 0 {
 			mode = 0640
 		}
-		output, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-		if err != nil {
-			_ = source.Close()
-			return err
-		}
-		written, copyErr := io.Copy(output, io.LimitReader(source, int64(member.UncompressedSize64)+1))
-		outputErr := output.Close()
+		written, copyErr := secureWriteManaged(site.Root, cleanTarget, source, int64(member.UncompressedSize64), mode, ownerID, groupID)
 		sourceErr := source.Close()
 		if copyErr != nil {
 			return copyErr
@@ -457,15 +530,9 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 		if written > int64(member.UncompressedSize64) {
 			return errors.New("archive member exceeded its declared size")
 		}
-		if outputErr != nil {
-			return outputErr
-		}
 		if sourceErr != nil {
 			return sourceErr
 		}
-	}
-	if !s.demo {
-		_ = chownWebTree(destination, s.webUser())
 	}
 	return nil
 }

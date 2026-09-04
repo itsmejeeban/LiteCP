@@ -18,6 +18,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/mail"
 	"os"
 	"os/signal"
 	"strconv"
@@ -27,7 +28,7 @@ import (
 	"time"
 )
 
-var version = "0.3.0"
+var version = "0.5.0-dev"
 
 //go:embed web/*
 var webAssets embed.FS
@@ -42,16 +43,26 @@ type loginAttempt struct {
 }
 
 type App struct {
-	store    *Store
-	system   *System
-	sessions map[string]session
-	attempts map[string]loginAttempt
-	mu       sync.Mutex
+	store      *Store
+	system     *System
+	sessions   map[string]session
+	attempts   map[string]loginAttempt
+	mu         sync.Mutex
+	mutationMu sync.Mutex
 }
 
 func main() {
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
+	if len(os.Args) > 1 && os.Args[1] == "host-resolvers" {
+		if os.Geteuid() != 0 {
+			log.Fatal("host-resolvers requires root")
+		}
+		if err := NewSystem(dataDir).applyHostResolvers(context.Background(), os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if len(os.Args) > 1 && os.Args[1] == "init" {
 		initFlags := flag.NewFlagSet("init", flag.ExitOnError)
@@ -68,6 +79,11 @@ func main() {
 		if err := store.Initialize(*username, password); err != nil {
 			log.Fatal(err)
 		}
+		if os.Getenv("LITECP_CONFIGURE_RESOLVERS") == "0" {
+			if err := store.UpdateSettings(func(settings *Settings) { settings.Resolvers = []string{} }); err != nil {
+				log.Fatal(err)
+			}
+		}
 		fmt.Println("LiteCP administrator created.")
 		return
 	}
@@ -79,6 +95,18 @@ func main() {
 	if !store.Initialized() {
 		log.Fatal("LiteCP is not initialized; run `LITECP_ADMIN_PASSWORD=... litecp init`")
 	}
+	if len(os.Args) > 1 && os.Args[1] == "sync-mail" {
+		if os.Geteuid() != 0 {
+			log.Fatal("sync-mail requires root")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		domains, mailboxes, aliases := store.MailConfig()
+		if err := NewSystem(dataDir).SyncMailConfig(ctx, domains, mailboxes, aliases); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	app := &App{
 		store:    store,
@@ -86,13 +114,19 @@ func main() {
 		sessions: make(map[string]session),
 		attempts: make(map[string]loginAttempt),
 	}
+	reconcileCtx, reconcileCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	if err := app.system.ReconcileSites(reconcileCtx, store.Sites()); err != nil {
+		reconcileCancel()
+		log.Fatalf("reconcile isolated website runtimes: %v", err)
+	}
+	reconcileCancel()
 
 	server := &http.Server{
 		Addr:              bind,
 		Handler:           app.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       20 * time.Minute,
-		WriteTimeout:      20 * time.Minute,
+		ReadTimeout:       45 * time.Minute,
+		WriteTimeout:      45 * time.Minute,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
@@ -117,6 +151,13 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))
+	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))
+	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
+	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
+	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
+	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))
+	mux.HandleFunc("/api/system/resolvers", only(http.MethodPut, a.withAuth(a.systemResolvers)))
+	mux.HandleFunc("/api/system/reboot", only(http.MethodPost, a.withAuth(a.systemReboot)))
 	mux.HandleFunc("/api/services/action", only(http.MethodPost, a.withAuth(a.serviceAction)))
 	mux.HandleFunc("/api/sites", only(http.MethodPost, a.withAuth(a.createSite)))
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
@@ -127,6 +168,12 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
+	mux.HandleFunc("/api/files/trash", a.withAuth(a.trash))
+	mux.HandleFunc("/api/migrations", a.withAuth(a.migrations))
+	mux.HandleFunc("/api/migrations/import", only(http.MethodPost, a.withAuth(a.migrationImport)))
+	mux.HandleFunc("/api/migrations/", only(http.MethodDelete, a.withAuth(a.migrationDelete)))
+	mux.HandleFunc("/api/files/create", only(http.MethodPost, a.withAuth(a.createFile)))
+	mux.HandleFunc("/api/files/transfer", only(http.MethodPost, a.withAuth(a.transferFiles)))
 	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
 	mux.HandleFunc("/api/files/upload", only(http.MethodPost, a.withAuth(a.uploadFiles)))
 	mux.HandleFunc("/api/files/directory", only(http.MethodPost, a.withAuth(a.createDirectory)))
@@ -139,7 +186,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/databases/password", only(http.MethodPut, a.withAuth(a.resetManagedDatabasePassword)))
 	mux.HandleFunc("/api/databases/", only(http.MethodDelete, a.withAuth(a.deleteManagedDatabase)))
 	mux.HandleFunc("/api/firewall", only(http.MethodPost, a.withAuth(a.createFirewallRule)))
-	mux.HandleFunc("/api/firewall/", only(http.MethodDelete, a.withAuth(a.deleteFirewallRule)))
+	mux.HandleFunc("/api/firewall/", a.withAuth(a.firewallRuleAction))
+	mux.HandleFunc("/api/mail/hosting", only(http.MethodPut, a.withAuth(a.toggleMailHosting)))
+	mux.HandleFunc("/api/mail/dns", only(http.MethodGet, a.withAuth(a.mailDNS)))
 	mux.HandleFunc("/api/mail/domains", only(http.MethodPost, a.withAuth(a.createMailDomain)))
 	mux.HandleFunc("/api/mail/domains/", only(http.MethodDelete, a.withAuth(a.deleteMailDomain)))
 	mux.HandleFunc("/api/mail/mailboxes", only(http.MethodPost, a.withAuth(a.createMailbox)))
@@ -209,6 +258,15 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "Request origin was rejected.")
 			return
 		}
+		// Serialize state-changing operations so file, service and config writes cannot race.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" {
+			a.mutationMu.Lock()
+			defer a.mutationMu.Unlock()
+			if !a.validSession(cookie.Value) {
+				writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")
+				return
+			}
+		}
 		next(w, r)
 	}
 }
@@ -218,10 +276,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "Request origin was rejected.")
 		return
 	}
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
+	ip := clientIP(r)
 	if a.rateLimited(ip) {
 		writeError(w, http.StatusTooManyRequests, "Too many sign-in attempts. Try again in 15 minutes.")
 		return
@@ -251,11 +306,12 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	a.sessions[token] = session{Expires: expires}
 	a.mu.Unlock()
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	http.SetCookie(w, &http.Cookie{
-		Name: "litecp_session", Value: token, Path: "/", Expires: expires,
+		Name: "litecp_session", Value: token, Path: "/api/", Expires: expires,
 		HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode,
 	})
-	a.store.AddActivity("Signed in", "Administrator session started", "success")
+	_ = a.store.AddActivity("Signed in", "Administrator session started", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -265,7 +321,9 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 		delete(a.sessions, cookie.Value)
 		a.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/api/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -312,9 +370,37 @@ func (a *App) clearLoginFailures(ip string) {
 	a.mu.Unlock()
 }
 
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	parsed := net.ParseIP(strings.TrimSpace(host))
+	if parsed != nil && parsed.IsLoopback() {
+		forwarded := strings.TrimSpace(r.Header.Get("X-Real-IP"))
+		if candidate := net.ParseIP(forwarded); candidate != nil {
+			return candidate.String()
+		}
+	}
+	if parsed != nil {
+		return parsed.String()
+	}
+	return host
+}
+
 func (a *App) state(w http.ResponseWriter, r *http.Request) {
 	state := a.store.PublicState()
-	state.System = a.system.Snapshot(r.Context())
+	for i := range state.Sites {
+		state.Sites[i].SSL = a.system.SiteSSLHealthy(state.Sites[i])
+	}
+	state.System = a.system.Snapshot(r.Context(), state.Sites)
+	if !state.Settings.EmailHostingEnabled {
+		for i := range state.System.Services {
+			if state.System.Services[i].Key == "mail" {
+				state.System.Services[i].State = "disabled"
+			}
+		}
+	}
 	state.Version = version
 	writeJSON(w, http.StatusOK, state)
 }
@@ -326,6 +412,10 @@ func (a *App) serviceAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if input.Service == "mail" && !a.store.Settings().EmailHostingEnabled {
+		writeError(w, http.StatusConflict, "Enable email hosting from the Email page first.")
 		return
 	}
 	if err := a.system.ServiceAction(r.Context(), input.Service, input.Action); err != nil {
@@ -350,11 +440,12 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 	if phpVersion == "" {
 		phpVersion = defaultPHPVersion(appType)
 	}
-	if err := validateSiteOptions(appType, phpVersion); err != nil {
+	appVersion := normalizeAppVersion(appType, input.AppVersion)
+	if err := validateSiteOptions(appType, appVersion, phpVersion); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	input.AppType, input.PHPVersion = appType, phpVersion
+	input.AppType, input.AppVersion, input.PHPVersion = appType, appVersion, phpVersion
 	if a.store.SiteByDomain(input.Domain) != nil {
 		writeError(w, http.StatusConflict, "That domain is already managed by LiteCP.")
 		return
@@ -364,13 +455,22 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.AddSite(site)
+	var database *ManagedDatabase
 	if credentials != nil {
 		databaseID, _ := randomToken(8)
-		_ = a.store.AddDatabase(ManagedDatabase{
+		value := ManagedDatabase{
 			ID: databaseID, Name: credentials.Name, Username: credentials.Username,
-			SiteID: site.ID, Domain: site.Domain, CreatedAt: site.CreatedAt,
-		})
+			SiteID: site.ID, Domain: site.Domain, LegacyAuth: legacyPHPDatabaseAuth(site.PHPVersion), CreatedAt: site.CreatedAt,
+		}
+		database = &value
+	}
+	if err := a.store.AddSiteWithDatabase(site, database); err != nil {
+		_ = a.system.RemoveSiteConfig(context.Background(), site)
+		if database != nil {
+			_ = a.system.DropManagedDatabase(context.Background(), *database)
+		}
+		writeError(w, http.StatusInternalServerError, "Website was rolled back because panel state could not be saved.")
+		return
 	}
 	warning := ""
 	if input.EnableCron {
@@ -378,7 +478,11 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 			warning = "Website created, but the application cron could not be enabled: " + err.Error()
 		} else {
 			site.Cron = true
-			a.store.UpdateSite(site.ID, func(stored *Site) { stored.Cron = true })
+			if err := a.store.UpdateSite(site.ID, func(stored *Site) { stored.Cron = true }); err != nil {
+				_ = a.system.SetCron(site, false)
+				site.Cron = false
+				warning = "Website created, but cron state could not be saved: " + err.Error()
+			}
 		}
 	}
 	a.store.AddActivity("Website added", site.Domain+" is ready for "+applicationName(site.AppType), "success")
@@ -399,11 +503,18 @@ func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
+	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.SSL = true }); err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not save the SSL state.")
+		return
+	}
 	if err := a.system.EnableSSL(r.Context(), *site, input.Email); err != nil {
+		if rollbackErr := a.store.UpdateSite(input.ID, func(site *Site) { site.SSL = false }); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "SSL setup failed and panel state rollback also failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.UpdateSite(input.ID, func(site *Site) { site.SSL = true })
 	a.store.AddActivity("SSL enabled", site.Domain+" now redirects to HTTPS", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -426,7 +537,11 @@ func (a *App) toggleCron(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.UpdateSite(input.ID, func(site *Site) { site.Cron = input.Enabled })
+	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.Cron = input.Enabled }); err != nil {
+		_ = a.system.SetCron(*site, !input.Enabled)
+		writeError(w, http.StatusInternalServerError, "Cron change was rolled back because panel state could not be saved.")
+		return
+	}
 	label := "disabled"
 	if input.Enabled {
 		label = "enabled"
@@ -437,8 +552,9 @@ func (a *App) toggleCron(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		ID      string `json:"id"`
-		Version string `json:"version"`
+		ID               string `json:"id"`
+		Version          string `json:"version"`
+		DatabasePassword string `json:"databasePassword"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -449,15 +565,51 @@ func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
-	if err := validateSiteOptions(site.AppType, strings.TrimSpace(input.Version)); err != nil {
+	if err := validateSiteOptions(site.AppType, site.AppVersion, strings.TrimSpace(input.Version)); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	var authenticationChanged bool
+	database := a.store.DatabaseBySiteID(site.ID)
+	if legacyPHPDatabaseAuth(input.Version) && database != nil && !database.LegacyAuth {
+		if err := validateDatabasePassword(input.DatabasePassword); err != nil {
+			writeError(w, http.StatusBadRequest, "Switching a site database to legacy PHP requires its current database password.")
+			return
+		}
+		compatibleDatabase := *database
+		compatibleDatabase.LegacyAuth = true
+		if err := a.system.ResetDatabasePassword(r.Context(), compatibleDatabase, input.DatabasePassword); err != nil {
+			writeError(w, http.StatusBadGateway, "Could not make the database compatible with legacy PHP: "+err.Error())
+			return
+		}
+		if err := a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = true }); err != nil {
+			_ = a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword)
+			writeError(w, http.StatusInternalServerError, "Database authentication was rolled back because panel state could not be saved.")
+			return
+		}
+		authenticationChanged = true
+	}
+	rollbackAuthentication := func() {
+		if !authenticationChanged || database == nil {
+			return
+		}
+		if err := a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword); err == nil {
+			_ = a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = database.LegacyAuth })
+		}
+	}
 	if err := a.system.SetPHPVersion(r.Context(), *site, input.Version); err != nil {
+		rollbackAuthentication()
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.UpdateSite(input.ID, func(site *Site) { site.PHPVersion = strings.TrimSpace(input.Version) })
+	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.PHPVersion = strings.TrimSpace(input.Version) }); err != nil {
+		changed := *site
+		changed.PHPVersion = strings.TrimSpace(input.Version)
+		_ = a.system.SetPHPVersion(context.Background(), changed, site.PHPVersion)
+		rollbackAuthentication()
+		writeError(w, http.StatusInternalServerError, "PHP change was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("PHP version changed", site.Domain+" now uses PHP "+strings.TrimSpace(input.Version), "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -473,11 +625,24 @@ func (a *App) deleteSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
-	if err := a.system.RemoveSiteConfig(r.Context(), *site); err != nil {
+	backup, err := a.system.snapshotSiteConfig(*site)
+	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.RemoveSite(id)
+	if err := a.system.RemoveSiteConfig(r.Context(), *site); err != nil {
+		_ = a.system.restoreSiteConfig(context.Background(), *site, backup)
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if err := a.store.RemoveSite(id); err != nil {
+		if rollbackErr := a.system.restoreSiteConfig(context.Background(), *site, backup); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Website detach failed and its configuration rollback also failed: "+rollbackErr.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Website detach was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Website detached", site.Domain+" configuration removed; files and database were kept", "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -515,7 +680,11 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 			backup.DestinationID = destination.ID
 			backup.DestinationName = destination.Name
 			backup.Status = "remote failed"
-			a.store.AddBackup(backup)
+			if saveErr := a.store.AddBackup(backup); saveErr != nil {
+				writeError(w, http.StatusInternalServerError, "Local backup completed, but its history could not be saved.")
+				return
+			}
+			_ = a.pruneExpiredBackups()
 			a.store.AddActivity("Remote backup failed", site.Domain+" was saved locally but could not upload to "+destination.Name, "warning")
 			writeError(w, http.StatusBadGateway, err.Error())
 			return
@@ -524,7 +693,11 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 		backup.DestinationName = destination.Name
 		backup.RemotePath = remotePath
 	}
-	a.store.AddBackup(backup)
+	if err := a.store.AddBackup(backup); err != nil {
+		writeError(w, http.StatusInternalServerError, "Backup completed, but its history could not be saved.")
+		return
+	}
+	_ = a.pruneExpiredBackups()
 	a.store.AddActivity("Backup completed", site.Domain+" files and database saved", "success")
 	writeJSON(w, http.StatusCreated, backup)
 }
@@ -547,13 +720,49 @@ func (a *App) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	settings.Email = strings.TrimSpace(settings.Email)
 	settings.Timezone = strings.TrimSpace(settings.Timezone)
+	if settings.Email != "" {
+		address, err := mail.ParseAddress(settings.Email)
+		if err != nil || address.Address != settings.Email {
+			writeError(w, http.StatusBadRequest, "Enter a valid administrator email address.")
+			return
+		}
+	}
+	if _, err := time.LoadLocation(settings.Timezone); err != nil {
+		writeError(w, http.StatusBadRequest, "Choose a valid display timezone.")
+		return
+	}
 	if settings.BackupRetention < 1 || settings.BackupRetention > 90 {
 		writeError(w, http.StatusBadRequest, "Backup retention must be between 1 and 90 days.")
 		return
 	}
-	a.store.SetSettings(settings)
+	if err := a.store.UpdateSettings(func(value *Settings) {
+		value.Email, value.Timezone, value.BackupRetention = settings.Email, settings.Timezone, settings.BackupRetention
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not save panel settings.")
+		return
+	}
+	if err := a.pruneExpiredBackups(); err != nil {
+		writeError(w, http.StatusInternalServerError, "Settings were saved, but expired backups could not be pruned: "+err.Error())
+		return
+	}
 	a.store.AddActivity("Settings saved", "Panel preferences were updated", "success")
 	writeJSON(w, http.StatusOK, settings)
+}
+
+func (a *App) pruneExpiredBackups() error {
+	retention := a.store.Settings().BackupRetention
+	if retention < 1 {
+		return nil
+	}
+	expired := a.store.ExpiredBackups(time.Now().UTC().Add(-time.Duration(retention) * 24 * time.Hour))
+	removed := map[string]bool{}
+	for _, backup := range expired {
+		if err := a.system.RemoveBackupFile(backup.Path); err != nil {
+			return err
+		}
+		removed[backup.ID] = true
+	}
+	return a.store.RemoveBackups(removed)
 }
 
 func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -578,8 +787,13 @@ func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Could not update the password.")
 		return
 	}
+	a.mu.Lock()
+	a.sessions = make(map[string]session)
+	a.mu.Unlock()
 	a.store.AddActivity("Password changed", "Administrator credentials were updated", "success")
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/api/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "signedOut": true})
 }
 
 func validOrigin(r *http.Request) bool {

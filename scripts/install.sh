@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="0.3.0"
+LITECP_VERSION="0.5.0"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -26,15 +26,20 @@ elif systemctl list-unit-files mysql.service mysqld.service --no-legend 2>/dev/n
 else
   EXISTING_DATABASE_ENGINE=""
 fi
-DATABASE_ENGINE="${DATABASE_ENGINE:-${EXISTING_DATABASE_ENGINE:-mariadb}}"
+DATABASE_ENGINE="${DATABASE_ENGINE:-${EXISTING_DATABASE_ENGINE:-mysql}}"
 [[ "${DATABASE_ENGINE}" == "mariadb" || "${DATABASE_ENGINE}" == "mysql" ]] || fail "LITECP_DATABASE_ENGINE must be 'mariadb' or 'mysql'."
 if [[ -n "${EXISTING_DATABASE_ENGINE}" && "${DATABASE_ENGINE}" != "${EXISTING_DATABASE_ENGINE}" ]]; then
   fail "${EXISTING_DATABASE_ENGINE} is already installed. LiteCP will not replace an existing database engine automatically. Rerun with LITECP_DATABASE_ENGINE=${EXISTING_DATABASE_ENGINE}."
 fi
 
 if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
-  DATABASE_PACKAGE="mysql-server"
-  [[ "${OS_ID}" == "ubuntu" ]] && DATABASE_UNIT="mysql" || DATABASE_UNIT="mysqld"
+  if [[ "${OS_ID}" == "ubuntu" ]]; then
+    DATABASE_PACKAGE="mysql-server"
+    DATABASE_UNIT="mysql"
+  else
+    DATABASE_PACKAGE="mysql-community-server"
+    DATABASE_UNIT="mysqld"
+  fi
 else
   DATABASE_PACKAGE="mariadb-server"
   DATABASE_UNIT="mariadb"
@@ -45,12 +50,13 @@ info "Installing the lean WHMCS and WordPress runtime with ${DATABASE_ENGINE} fo
 REQUESTED_PHP_VERSIONS=("7.3" "7.4" "8.1" "8.2" "8.3" "8.4")
 PHP_VERSIONS=()
 PHP_UNITS=()
+NEEDS_PHP73_CONTAINER=0
 
 if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   printf 'postfix postfix/mailname string %s\npostfix postfix/main_mailer_type select Internet Site\n' "$(hostname -f)" | debconf-set-selections
-  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw postfix dovecot-core dovecot-imapd dovecot-lmtpd
+  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd
   add-apt-repository -y ppa:ondrej/php
   apt-get update
   PHP_PACKAGES=()
@@ -65,8 +71,20 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
   CRON_UNIT="cron"
 else
   EL_MAJOR="$(rpm -E '%{rhel}')"
+  DNF_INSTALL_OPTIONS=()
   dnf install -y epel-release
-  dnf install -y ca-certificates curl unzip openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld postfix dovecot
+  if [[ "${DATABASE_ENGINE}" == "mysql" ]] && ! rpm -q mysql84-community-release >/dev/null 2>&1; then
+    info "Enabling Oracle's official MySQL 8.4 repository for Enterprise Linux ${EL_MAJOR}"
+    dnf install -y "https://dev.mysql.com/get/mysql84-community-release-el${EL_MAJOR}-3.noarch.rpm"
+  fi
+  if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
+    dnf config-manager --disable mysql-9.7-lts-community mysql-tools-9.7-lts-community >/dev/null 2>&1 || true
+    dnf config-manager --enable mysql-8.4-lts-community mysql-tools-8.4-lts-community >/dev/null
+    # AlmaLinux 10 advertises MariaDB 11.8 server packages as optional weak
+    # dependencies. Installing those beside Oracle MySQL would cause file conflicts.
+    DNF_INSTALL_OPTIONS+=(--setopt=install_weak_deps=False)
+  fi
+  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl unzip openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi
@@ -74,7 +92,12 @@ else
   for PHP_VERSION in "${REQUESTED_PHP_VERSIONS[@]}"; do
     PHP_COMPACT="${PHP_VERSION/.}"
     if ! dnf repoquery --available "php${PHP_COMPACT}-php-fpm" 2>/dev/null | grep -q .; then
-      info "PHP ${PHP_VERSION} is unavailable as a native package on ${PRETTY_NAME}; skipping it."
+      if [[ "${PHP_VERSION}" == "7.3" && "${EL_MAJOR}" -ge 10 ]]; then
+        NEEDS_PHP73_CONTAINER=1
+        info "PHP 7.3 has no compatible AlmaLinux ${EL_MAJOR} RPM; scheduling the isolated compatibility runtime."
+      else
+        info "PHP ${PHP_VERSION} is unavailable as a native package on ${PRETTY_NAME}; skipping it."
+      fi
       continue
     fi
     PHP_VERSIONS+=("${PHP_VERSION}")
@@ -132,10 +155,53 @@ for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
   "${PHP_BINARY}" -v | grep -qi ioncube || fail "ionCube Loader did not activate for PHP ${PHP_VERSION}."
 done
 
+if [[ "${NEEDS_PHP73_CONTAINER}" -eq 1 ]]; then
+  info "Building the isolated PHP 7.3 FPM compatibility runtime"
+  dnf install -y podman
+  PHP73_IMAGE="localhost/litecp-php73:7.3.33-3"
+  PHP73_BASE_IMAGE="docker.io/library/php:7.3.33-fpm-bullseye"
+  WEB_UID="$(id -u nginx)"
+  WEB_GID="$(id -g nginx)"
+  if ! podman image exists "${PHP73_IMAGE}"; then
+    podman image exists "${PHP73_BASE_IMAGE}" || podman pull "${PHP73_BASE_IMAGE}"
+    podman build --pull=never \
+      --build-arg "WEB_UID=${WEB_UID}" \
+      --build-arg "WEB_GID=${WEB_GID}" \
+      --build-arg "IONCUBE_ARCH=${IONCUBE_ARCH}" \
+      --tag "${PHP73_IMAGE}" "${SOURCE_DIR}/deploy/php73"
+  fi
+  PHP73_VERSION_OUTPUT="$(podman run --rm "${PHP73_IMAGE}" php -v)"
+  grep -qi ioncube <<< "${PHP73_VERSION_OUTPUT}" || fail "The PHP 7.3 compatibility image failed its ionCube check."
+  PHP73_MODULE_OUTPUT="$(podman run --rm "${PHP73_IMAGE}" php -m)"
+  for PHP73_MODULE in bcmath gd gmp imap intl mysqli opcache pdo_mysql soap zip; do
+    if [[ "${PHP73_MODULE}" == "opcache" ]]; then
+      grep -qi 'opcache' <<< "${PHP73_MODULE_OUTPUT}" || fail "The PHP 7.3 compatibility image is missing ${PHP73_MODULE}."
+    else
+      grep -qix "${PHP73_MODULE}" <<< "${PHP73_MODULE_OUTPUT}" || fail "The PHP 7.3 compatibility image is missing ${PHP73_MODULE}."
+    fi
+  done
+  install -m 0644 "${SOURCE_DIR}/deploy/litecp-php73-fpm.service" /etc/systemd/system/litecp-php73-fpm.service
+  install -m 0755 "${SOURCE_DIR}/deploy/litecp-php73-ready" /usr/local/libexec/litecp-php73-ready
+  cat > /usr/local/bin/litecp-php73 <<EOF
+#!/bin/sh
+exec /usr/bin/podman exec --user ${WEB_UID}:${WEB_GID} litecp-php73 php "\$@"
+EOF
+  chmod 0755 /usr/local/bin/litecp-php73
+  PHP_UNITS=("litecp-php73-fpm" "${PHP_UNITS[@]}")
+fi
+
 info "Building the LiteCP single-binary service"
+FRESH_INSTALL=0
+[[ -f /var/lib/litecp/config.json ]] || FRESH_INSTALL=1
 install -d -m 0700 /var/lib/litecp /var/backups/litecp
 install -d -m 0755 /var/www/litecp
-install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail
+install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail /etc/litecp/php73-pools
+touch /etc/litecp/php73-pools.conf
+chmod 0640 /etc/litecp/php73-pools.conf
+cat > /etc/tmpfiles.d/litecp-runtime.conf <<'EOF'
+d /run/litecp 0755 root root -
+EOF
+systemd-tmpfiles --create /etc/tmpfiles.d/litecp-runtime.conf
 
 if [[ "${OS_ID}" == "ubuntu" && "${DATABASE_ENGINE}" == "mariadb" ]]; then
   DATABASE_CONFIG=/etc/mysql/mariadb.conf.d/99-litecp.cnf
@@ -146,17 +212,52 @@ else
 fi
 DATABASE_SECTION="mariadb"
 [[ "${DATABASE_ENGINE}" == "mysql" ]] && DATABASE_SECTION="mysqld"
+if [[ "${OS_ID}" == "almalinux" ]]; then
+  install -d -o mysql -g mysql -m 0755 /run/mysqld
+  printf 'd /run/mysqld 0755 mysql mysql -\n' > /etc/tmpfiles.d/litecp-mysql.conf
+  systemd-tmpfiles --create /etc/tmpfiles.d/litecp-mysql.conf
+  if [[ "${DATABASE_ENGINE}" == "mysql" ]] && ! grep -Eq '^[[:space:]]*!includedir[[:space:]]+/etc/my\.cnf\.d([[:space:]]|$)' /etc/my.cnf; then
+    printf '\n!includedir /etc/my.cnf.d\n' >> /etc/my.cnf
+  fi
+fi
 cat > "${DATABASE_CONFIG}" <<EOF
 # LiteCP only connects to the database locally. Never expose application data publicly.
 [${DATABASE_SECTION}]
 bind-address=127.0.0.1
 skip-name-resolve
 EOF
+if [[ "${OS_ID}" == "almalinux" ]]; then
+  cat >> "${DATABASE_CONFIG}" <<'EOF'
+socket=/run/mysqld/mysqld.sock
+EOF
+  if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
+    cat >> "${DATABASE_CONFIG}" <<'EOF'
+mysqlx=0
+mysql_native_password=ON
+EOF
+  fi
+  cat >> "${DATABASE_CONFIG}" <<'EOF'
+
+[client]
+socket=/run/mysqld/mysqld.sock
+EOF
+fi
 chmod 0644 "${DATABASE_CONFIG}"
+if [[ "${OS_ID}" == "almalinux" && "${DATABASE_ENGINE}" == "mysql" && ! -d /var/lib/mysql/mysql ]]; then
+  info "Initializing MySQL 8.4 with local socket authentication for LiteCP"
+  install -d -o mysql -g mysql -m 0750 /var/lib/mysql
+  mysqld --initialize-insecure --user=mysql
+  systemctl enable --now mysqld
+  mysql --protocol=socket --user=root --skip-password --execute "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so'; ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket;"
+fi
 cd "${SOURCE_DIR}"
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
 chmod 0755 /usr/local/bin/litecp
 command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || true
+if [[ "${FRESH_INSTALL}" -eq 1 && "${LITECP_CONFIGURE_RESOLVERS:-1}" == 1 ]]; then
+  info "Setting default resolvers to 8.8.8.8 and 8.8.4.4 (upgrades preserve current DNS)"
+  /usr/local/bin/litecp host-resolvers 8.8.8.8 8.8.4.4
+fi
 
 ADMIN_USERNAME="${LITECP_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${LITECP_ADMIN_PASSWORD:-}"
@@ -214,9 +315,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_read_timeout 1200s;
-        proxy_send_timeout 1200s;
-        client_max_body_size 512m;
+        proxy_read_timeout 2700s;
+        proxy_send_timeout 2700s;
+        client_max_body_size 2100m;
     }
 }
 EOF
@@ -242,19 +343,19 @@ fi
 
 # Preserve an existing trusted panel certificate while raising upload/time limits for the file manager.
 if grep -q 'client_max_body_size' "${PANEL_CONFIG}"; then
-  sed -i -E 's/[[:space:]]*client_max_body_size[[:space:]]+[^;]+;/        client_max_body_size 512m;/' "${PANEL_CONFIG}"
+  sed -i -E 's/[[:space:]]*client_max_body_size[[:space:]]+[^;]+;/        client_max_body_size 2100m;/' "${PANEL_CONFIG}"
 else
-  sed -i '/proxy_pass/a\        client_max_body_size 512m;' "${PANEL_CONFIG}"
+  sed -i '/proxy_pass/a\        client_max_body_size 2100m;' "${PANEL_CONFIG}"
 fi
 if grep -q 'proxy_read_timeout' "${PANEL_CONFIG}"; then
-  sed -i -E 's/[[:space:]]*proxy_read_timeout[[:space:]]+[^;]+;/        proxy_read_timeout 1200s;/' "${PANEL_CONFIG}"
+  sed -i -E 's/[[:space:]]*proxy_read_timeout[[:space:]]+[^;]+;/        proxy_read_timeout 2700s;/' "${PANEL_CONFIG}"
 else
-  sed -i '/proxy_pass/a\        proxy_read_timeout 1200s;' "${PANEL_CONFIG}"
+  sed -i '/proxy_pass/a\        proxy_read_timeout 2700s;' "${PANEL_CONFIG}"
 fi
 if grep -q 'proxy_send_timeout' "${PANEL_CONFIG}"; then
-  sed -i -E 's/[[:space:]]*proxy_send_timeout[[:space:]]+[^;]+;/        proxy_send_timeout 1200s;/' "${PANEL_CONFIG}"
+  sed -i -E 's/[[:space:]]*proxy_send_timeout[[:space:]]+[^;]+;/        proxy_send_timeout 2700s;/' "${PANEL_CONFIG}"
 else
-  sed -i '/proxy_pass/a\        proxy_send_timeout 1200s;' "${PANEL_CONFIG}"
+  sed -i '/proxy_pass/a\        proxy_send_timeout 2700s;' "${PANEL_CONFIG}"
 fi
 
 info "Configuring lightweight Postfix and Dovecot email hosting"
@@ -326,8 +427,10 @@ fi
 
 nginx -t
 systemctl daemon-reload
-systemctl enable --now nginx "${DATABASE_UNIT}" "${PHP_UNITS[@]}" "${CRON_UNIT}" postfix dovecot litecp
-systemctl restart "${DATABASE_UNIT}" "${PHP_UNITS[@]}" postfix dovecot litecp
+MAIL_UNITS=()
+[[ -e /etc/litecp/mail/disabled ]] || MAIL_UNITS=(postfix dovecot)
+systemctl enable --now nginx "${DATABASE_UNIT}" "${PHP_UNITS[@]}" "${CRON_UNIT}" "${MAIL_UNITS[@]}" litecp
+systemctl restart "${DATABASE_UNIT}" "${PHP_UNITS[@]}" "${MAIL_UNITS[@]}" litecp
 systemctl reload nginx
 for CERTBOT_TIMER in certbot.timer certbot-renew.timer; do
   if systemctl list-unit-files "${CERTBOT_TIMER}" --no-legend 2>/dev/null | grep -q "^${CERTBOT_TIMER}"; then
@@ -369,7 +472,31 @@ else
   systemctl enable --now firewalld
 fi
 
+info "Enabling SSH brute-force protection"
+install -d -m 0755 /etc/fail2ban/jail.d
+if [[ "${OS_ID}" == "ubuntu" ]]; then
+  FAIL2BAN_ACTION="ufw"
+else
+  FAIL2BAN_ACTION="firewallcmd-rich-rules"
+fi
+cat > /etc/fail2ban/jail.d/litecp-sshd.local <<EOF
+[sshd]
+enabled = true
+backend = systemd
+banaction = ${FAIL2BAN_ACTION}
+maxretry = 5
+findtime = 10m
+bantime = 1h
+EOF
+fail2ban-client -t
+systemctl enable --now fail2ban
+
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+OPTIONAL_FEATURES=()
+[[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)
+[[ "${LITECP_INSTALL_ANTIVIRUS:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antivirus)
+[[ "${LITECP_INSTALL_WAF:-0}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
+if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
 printf '\nOpen: \033[1mhttps://%s:8443\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'

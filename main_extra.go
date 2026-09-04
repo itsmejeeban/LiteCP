@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"mime"
@@ -52,12 +53,13 @@ func (a *App) files(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Website not found.")
 			return
 		}
-		if err := a.system.DeleteManagedPath(*site, input.Path); err != nil {
+		entry, err := a.system.MoveManagedPathToTrash(*site, input.Path)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		a.store.AddActivity("File deleted", site.Domain+": "+input.Path, "warning")
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		a.store.AddActivity("File moved to trash", site.Domain+": "+input.Path, "warning")
+		writeJSON(w, http.StatusOK, entry)
 	default:
 		w.Header().Set("Allow", "GET, DELETE")
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed.")
@@ -106,7 +108,7 @@ func (a *App) fileContent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize+64*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestSize)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, "Upload is too large or malformed.")
 		return
@@ -124,16 +126,65 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Choose at least one file to upload.")
 		return
 	}
-	stored := make([]FileEntry, 0, len(files))
+	if len(files) > maxUploadFiles {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Upload at most %d files per request.", maxUploadFiles))
+		return
+	}
+	cleanNames := make([]string, len(files))
+	seenNames := make(map[string]bool, len(files))
 	for _, header := range files {
-		file, err := header.Open()
-		if err != nil {
+		if header.Size > maxUploadSize {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s exceeds the %d MiB per-file limit.", filepath.Base(header.Filename), maxUploadSize>>20))
+			return
+		}
+	}
+	for index, header := range files {
+		name := filepath.Base(header.Filename)
+		if err := validateFileName(name); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		entry, saveErr := a.system.SaveUpload(*site, r.FormValue("path"), filepath.Base(header.Filename), file)
+		if seenNames[name] {
+			writeError(w, http.StatusBadRequest, "An upload request cannot contain duplicate file names.")
+			return
+		}
+		seenNames[name] = true
+		cleanNames[index] = name
+		if len(files) > 1 {
+			relative := filepath.ToSlash(filepath.Join(r.FormValue("path"), name))
+			exists, err := a.system.ManagedPathExists(*site, relative)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if exists {
+				writeError(w, http.StatusConflict, "Multi-file uploads do not overwrite existing files. Rename or remove "+name+" first.")
+				return
+			}
+		}
+	}
+	stored := make([]FileEntry, 0, len(files))
+	for index, header := range files {
+		file, err := header.Open()
+		if err != nil {
+			for _, created := range stored {
+				_ = a.system.DeleteManagedPath(*site, created.Path)
+			}
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var entry FileEntry
+		var saveErr error
+		if len(files) > 1 {
+			entry, saveErr = a.system.SaveNewUpload(*site, r.FormValue("path"), cleanNames[index], file)
+		} else {
+			entry, saveErr = a.system.SaveUpload(*site, r.FormValue("path"), cleanNames[index], file)
+		}
 		_ = file.Close()
 		if saveErr != nil {
+			for _, created := range stored {
+				_ = a.system.DeleteManagedPath(*site, created.Path)
+			}
 			writeError(w, http.StatusBadRequest, saveErr.Error())
 			return
 		}
@@ -264,12 +315,7 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	path, _, err := resolveManagedPath(site.Root, r.URL.Query().Get("path"), false)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	file, err := os.Open(path)
+	file, err := secureOpenManaged(site.Root, r.URL.Query().Get("path"), os.O_RDONLY, 0)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "File not found.")
 		return
@@ -336,13 +382,24 @@ func (a *App) deleteManagedDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Database not found.")
 		return
 	}
-	if err := a.system.DropManagedDatabase(r.Context(), *database); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	if err := a.store.RemoveDatabase(id); err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not save database removal state.")
 		return
 	}
-	_ = a.store.RemoveDatabase(id)
 	if database.SiteID != "" {
-		a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = "", "" })
+		if err := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = "", "" }); err != nil {
+			_ = a.store.AddDatabase(*database)
+			writeError(w, http.StatusInternalServerError, "Could not detach the database from its website.")
+			return
+		}
+	}
+	if err := a.system.DropManagedDatabase(r.Context(), *database); err != nil {
+		_ = a.store.AddDatabase(*database)
+		if database.SiteID != "" {
+			_ = a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = database.Name, database.Username })
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
 	}
 	a.store.AddActivity("Database deleted", database.Name+" and its local user were removed", "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -374,7 +431,22 @@ func (a *App) resetManagedDatabasePassword(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := a.system.ResetDatabasePassword(r.Context(), *database, input.Password); err != nil {
+	desiredLegacy := database.LegacyAuth
+	if site := a.store.SiteByID(database.SiteID); site != nil {
+		desiredLegacy = legacyPHPDatabaseAuth(site.PHPVersion)
+	}
+	updatedDatabase := *database
+	updatedDatabase.LegacyAuth = desiredLegacy
+	if desiredLegacy != database.LegacyAuth {
+		if err := a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = desiredLegacy }); err != nil {
+			writeError(w, http.StatusInternalServerError, "Could not save database authentication state.")
+			return
+		}
+	}
+	if err := a.system.ResetDatabasePassword(r.Context(), updatedDatabase, input.Password); err != nil {
+		if desiredLegacy != database.LegacyAuth {
+			_ = a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = database.LegacyAuth })
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -433,27 +505,23 @@ func (a *App) deleteBackupDestination(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Backup destination not found.")
 		return
 	}
-	_ = a.store.RemoveBackupDestination(id)
+	if err := a.store.RemoveBackupDestination(id); err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not save backup destination removal.")
+		return
+	}
 	a.store.AddActivity("Backup destination removed", destination.Name, "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Port     int    `json:"port"`
-		Protocol string `json:"protocol"`
-		Source   string `json:"source"`
-		Label    string `json:"label"`
-	}
+	var input FirewallRule
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	id, _ := randomToken(8)
-	rule := FirewallRule{ID: id, Port: input.Port, Protocol: strings.ToLower(strings.TrimSpace(input.Protocol)), Source: strings.TrimSpace(input.Source), Label: strings.TrimSpace(input.Label), CreatedAt: time.Now().UTC()}
-	if rule.Source == "" {
-		rule.Source = "any"
-	}
+	rule := normalizeFirewallRule(input)
+	rule.ID, rule.CreatedAt = id, time.Now().UTC()
 	if err := validateFirewallRule(rule); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -471,7 +539,7 @@ func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Firewall rule was rolled back because panel state could not be saved.")
 		return
 	}
-	a.store.AddActivity("Firewall rule added", fmt.Sprintf("%d/%s from %s", rule.Port, rule.Protocol, rule.Source), "success")
+	a.store.AddActivity("Firewall rule added", fmt.Sprintf("%s %s %d/%s", rule.Direction, rule.Action, rule.Port, rule.Protocol), "success")
 	writeJSON(w, http.StatusCreated, rule)
 }
 
@@ -486,7 +554,11 @@ func (a *App) deleteFirewallRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.RemoveFirewallRule(id)
+	if err := a.store.RemoveFirewallRule(id); err != nil {
+		_ = a.system.ApplyFirewallRule(r.Context(), *rule, false)
+		writeError(w, http.StatusInternalServerError, "Firewall removal was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Firewall rule removed", fmt.Sprintf("%d/%s", rule.Port, rule.Protocol), "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -509,14 +581,18 @@ func (a *App) createMailDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := randomToken(8)
-	item := MailDomain{ID: id, Domain: domain, CreatedAt: time.Now().UTC()}
+	item := MailDomain{ID: id, Domain: domain, DKIMSelector: "default", CreatedAt: time.Now().UTC()}
 	domains, mailboxes, aliases := a.store.MailConfig()
 	domains = append(domains, item)
 	if err := a.system.SyncMailConfig(r.Context(), domains, mailboxes, aliases); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.AddMailDomain(item)
+	if err := a.store.AddMailDomain(item); err != nil {
+		_ = a.system.SyncMailConfig(context.Background(), domains[:len(domains)-1], mailboxes, aliases)
+		writeError(w, http.StatusInternalServerError, "Mail configuration was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mail domain added", domain+" is ready for mailboxes", "success")
 	writeJSON(w, http.StatusCreated, item)
 }
@@ -536,7 +612,12 @@ func (a *App) deleteMailDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.RemoveMailDomain(id)
+	if err := a.store.RemoveMailDomain(id); err != nil {
+		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
+		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		writeError(w, http.StatusInternalServerError, "Mail removal was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mail domain removed", item.Domain+" routing disabled; Maildir data kept", "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -591,7 +672,11 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.AddMailbox(mailbox)
+	if err := a.store.AddMailbox(mailbox); err != nil {
+		_ = a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases)
+		writeError(w, http.StatusInternalServerError, "Mailbox creation was rolled back because panel state could not be saved.")
+		return
+	}
 	mailbox.PasswordHash = ""
 	a.store.AddActivity("Mailbox created", address, "success")
 	writeJSON(w, http.StatusCreated, mailbox)
@@ -610,7 +695,12 @@ func (a *App) deleteMailbox(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.RemoveMailbox(id)
+	if err := a.store.RemoveMailbox(id); err != nil {
+		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
+		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		writeError(w, http.StatusInternalServerError, "Mailbox removal was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mailbox removed", mailbox.Address+" login disabled; Maildir data kept", "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -641,7 +731,12 @@ func (a *App) resetMailboxPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.UpdateMailbox(input.ID, func(value *Mailbox) { value.PasswordHash = hash })
+	if err := a.store.UpdateMailbox(input.ID, func(value *Mailbox) { value.PasswordHash = hash }); err != nil {
+		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
+		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		writeError(w, http.StatusInternalServerError, "Password change was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mailbox password reset", mailbox.Address, "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -682,7 +777,11 @@ func (a *App) createMailAlias(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.AddMailAlias(alias)
+	if err := a.store.AddMailAlias(alias); err != nil {
+		_ = a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases)
+		writeError(w, http.StatusInternalServerError, "Alias creation was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mail alias created", alias.Source+" → "+alias.Destination, "success")
 	writeJSON(w, http.StatusCreated, alias)
 }
@@ -700,7 +799,12 @@ func (a *App) deleteMailAlias(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = a.store.RemoveMailAlias(id)
+	if err := a.store.RemoveMailAlias(id); err != nil {
+		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
+		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		writeError(w, http.StatusInternalServerError, "Alias removal was rolled back because panel state could not be saved.")
+		return
+	}
 	a.store.AddActivity("Mail alias removed", alias.Source, "warning")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

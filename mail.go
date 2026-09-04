@@ -100,7 +100,7 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 	sort.Slice(domains, func(i, j int) bool { return domains[i].Domain < domains[j].Domain })
 	sort.Slice(mailboxes, func(i, j int) bool { return mailboxes[i].Address < mailboxes[j].Address })
 	sort.Slice(aliases, func(i, j int) bool { return aliases[i].Source < aliases[j].Source })
-	var domainMap, mailboxMap, aliasMap, passwordFile strings.Builder
+	var domainMap, mailboxMap, aliasMap, passwordFile, senderMap strings.Builder
 	for _, domain := range domains {
 		if err := validateMailDomain(domain.Domain); err != nil {
 			return err
@@ -115,6 +115,7 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 			return fmt.Errorf("mailbox %s has an invalid password hash", mailbox.Address)
 		}
 		mailboxMap.WriteString(mailbox.Address + " OK\n")
+		senderMap.WriteString(mailbox.Address + " " + mailbox.Address + "\n")
 		passwordFile.WriteString(fmt.Sprintf("%s:%s::::::userdb_quota_rule=*:storage=%dM\n", mailbox.Address, mailbox.PasswordHash, mailbox.QuotaMB))
 		parts := strings.Split(mailbox.Address, "@")
 		domainRoot := filepath.Join("/var/vmail", mailbox.Domain)
@@ -148,6 +149,7 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 		{"domains", domainMap.String(), 0644},
 		{"mailboxes", mailboxMap.String(), 0644},
 		{"aliases", aliasMap.String(), 0644},
+		{"senders", senderMap.String(), 0644},
 		{"users", passwordFile.String(), 0600},
 	}
 	for _, file := range files {
@@ -158,17 +160,20 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 	if err := chownWebTree(filepath.Join(mailDir, "users"), "dovecot"); err != nil {
 		return fmt.Errorf("secure mailbox password file: %w", err)
 	}
-	for _, name := range []string{"domains", "mailboxes", "aliases"} {
+	for _, name := range []string{"domains", "mailboxes", "aliases", "senders"} {
 		if _, err := runCommand(ctx, 20*time.Second, "postmap", mapType+":"+filepath.Join(mailDir, name)); err != nil {
 			return err
 		}
 	}
 	for _, unit := range s.mailUnits() {
+		if s.mailHostingDisabled() {
+			break
+		}
 		if _, err := runCommand(ctx, 30*time.Second, "systemctl", "reload-or-restart", unit); err != nil {
 			return err
 		}
 	}
-	return nil
+	return s.syncDKIM(ctx, domains)
 }
 
 func (s *System) mailMapType(ctx context.Context) (string, error) {
@@ -209,6 +214,9 @@ func (s *System) mailStackState(ctx context.Context) string {
 		if s.serviceState(ctx, unit) != "running" {
 			return "stopped"
 		}
+	}
+	if !probeTCP("127.0.0.1:25") || !probeTCP("127.0.0.1:143") {
+		return "degraded"
 	}
 	return "running"
 }

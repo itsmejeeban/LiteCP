@@ -252,8 +252,8 @@ func TestOpenStoreMigratesLegacySiteDefaults(t *testing.T) {
 
 func TestNginxConfigProtectsWHMCSFiles(t *testing.T) {
 	system := &System{os: OSInfo{ID: "ubuntu"}}
-	config := system.nginxConfig(Site{Domain: "billing.example.com", Root: "/var/www/litecp/billing.example.com/public", AppType: "whmcs", PHPVersion: "8.1"})
-	for _, required := range []string{"server_name billing.example.com", "location = /configuration.php", "location ^~ /crons/", "php8.1-fpm.sock"} {
+	config := system.nginxConfig(Site{ID: "billing", Domain: "billing.example.com", Root: "/var/www/litecp/billing.example.com/public", AppType: "whmcs", AppVersion: "8.13", PHPVersion: "8.1"})
+	for _, required := range []string{"server_name billing.example.com", "location = /configuration.php", "location ^~ /crons/", "php8.1-litecp-billing.sock"} {
 		if !strings.Contains(config, required) {
 			t.Errorf("nginx config is missing %q", required)
 		}
@@ -262,8 +262,8 @@ func TestNginxConfigProtectsWHMCSFiles(t *testing.T) {
 
 func TestNginxConfigProtectsWordPressFiles(t *testing.T) {
 	system := &System{os: OSInfo{ID: "almalinux"}}
-	config := system.nginxConfig(Site{Domain: "blog.example.com", Root: "/var/www/litecp/blog.example.com/public", AppType: "wordpress", PHPVersion: "8.4"})
-	for _, required := range []string{"server_name blog.example.com", "location = /wp-config.php", "wp-content/uploads/.*\\.php", "/var/opt/remi/php84/run/php-fpm/www.sock"} {
+	config := system.nginxConfig(Site{ID: "blog", Domain: "blog.example.com", Root: "/var/www/litecp/blog.example.com/public", AppType: "wordpress", PHPVersion: "8.4"})
+	for _, required := range []string{"server_name blog.example.com", "location = /wp-config.php", "wp-content/uploads/.*\\.php", "/var/opt/remi/php84/run/php-fpm/litecp-blog.sock"} {
 		if !strings.Contains(config, required) {
 			t.Errorf("nginx config is missing %q", required)
 		}
@@ -278,17 +278,30 @@ func TestNginxConfigProtectsWordPressFiles(t *testing.T) {
 	}
 }
 
-func TestApplicationPHPCompatibility(t *testing.T) {
-	valid := [][2]string{{"whmcs", "7.3"}, {"whmcs", "8.3"}, {"wordpress", "7.4"}, {"wordpress", "8.4"}}
-	for _, pair := range valid {
-		if err := validateSiteOptions(pair[0], pair[1]); err != nil {
-			t.Errorf("valid combination %v rejected: %v", pair, err)
+func TestNginxConfigProtectsRegularWebsiteSecrets(t *testing.T) {
+	system := &System{os: OSInfo{ID: "ubuntu"}}
+	config := system.nginxConfig(Site{ID: "regular", Domain: "www.example.com", Root: "/var/www/litecp/www.example.com/public", AppType: "regular", PHPVersion: "8.4"})
+	for _, required := range []string{"server_name www.example.com", "composer\\.(?:json|lock)", "php8.4-litecp-regular.sock"} {
+		if !strings.Contains(config, required) {
+			t.Errorf("regular website config is missing %q", required)
 		}
 	}
-	invalid := [][2]string{{"whmcs", "8.4"}, {"wordpress", "7.3"}, {"unknown", "8.3"}, {"whmcs", "8.0"}}
-	for _, pair := range invalid {
-		if err := validateSiteOptions(pair[0], pair[1]); err == nil {
-			t.Errorf("invalid combination accepted: %v", pair)
+	if strings.Contains(config, "configuration.php") || strings.Contains(config, "wp-config.php") {
+		t.Fatal("regular website config contains application-specific rules")
+	}
+}
+
+func TestApplicationPHPCompatibility(t *testing.T) {
+	valid := [][3]string{{"whmcs", "8.13", "7.3"}, {"whmcs", "9.0", "8.3"}, {"wordpress", "", "7.4"}, {"wordpress", "", "8.4"}, {"regular", "", "7.3"}}
+	for _, item := range valid {
+		if err := validateSiteOptions(item[0], item[1], item[2]); err != nil {
+			t.Errorf("valid combination %v rejected: %v", item, err)
+		}
+	}
+	invalid := [][3]string{{"whmcs", "8.13", "8.4"}, {"whmcs", "9.0", "8.1"}, {"wordpress", "", "7.3"}, {"unknown", "", "8.3"}, {"whmcs", "8.13", "8.0"}}
+	for _, item := range invalid {
+		if err := validateSiteOptions(item[0], item[1], item[2]); err == nil {
+			t.Errorf("invalid combination accepted: %v", item)
 		}
 	}
 }

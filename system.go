@@ -3,8 +3,11 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"net/mail"
 	"os"
@@ -23,6 +26,7 @@ import (
 type CreateSiteInput struct {
 	Domain         string `json:"domain"`
 	AppType        string `json:"appType"`
+	AppVersion     string `json:"appVersion"`
 	PHPVersion     string `json:"phpVersion"`
 	CreateDatabase bool   `json:"createDatabase"`
 	EnableCron     bool   `json:"enableCron"`
@@ -49,20 +53,24 @@ type ServiceStatus struct {
 }
 
 type SystemSnapshot struct {
-	OS              string          `json:"os"`
-	OSID            string          `json:"osId"`
-	Hostname        string          `json:"hostname"`
-	IPAddress       string          `json:"ipAddress"`
-	UptimeSeconds   uint64          `json:"uptimeSeconds"`
-	CPUPercent      float64         `json:"cpuPercent"`
-	LoadAverage     float64         `json:"loadAverage"`
-	Memory          ResourceUsage   `json:"memory"`
-	Disk            ResourceUsage   `json:"disk"`
-	Services        []ServiceStatus `json:"services"`
-	PHPVersions     []string        `json:"phpVersions"`
-	DatabaseEngine  string          `json:"databaseEngine"`
-	FirewallBackend string          `json:"firewallBackend"`
-	Demo            bool            `json:"demo"`
+	OS                 string          `json:"os"`
+	OSID               string          `json:"osId"`
+	Hostname           string          `json:"hostname"`
+	IPAddress          string          `json:"ipAddress"`
+	UptimeSeconds      uint64          `json:"uptimeSeconds"`
+	CPUPercent         float64         `json:"cpuPercent"`
+	LoadAverage        float64         `json:"loadAverage"`
+	Memory             ResourceUsage   `json:"memory"`
+	Disk               ResourceUsage   `json:"disk"`
+	Services           []ServiceStatus `json:"services"`
+	PHPVersions        []string        `json:"phpVersions"`
+	DatabaseEngine     string          `json:"databaseEngine"`
+	FirewallBackend    string          `json:"firewallBackend"`
+	WAFEngine          string          `json:"wafEngine"`
+	AntivirusAvailable bool            `json:"antivirusAvailable"`
+	WebmailAvailable   bool            `json:"webmailAvailable"`
+	WebmailURL         string          `json:"webmailUrl"`
+	Demo               bool            `json:"demo"`
 }
 
 type OSInfo struct {
@@ -99,12 +107,13 @@ func NewSystem(dataDir string) *System {
 	return system
 }
 
-func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
+func (s *System) Snapshot(ctx context.Context, sites []Site) SystemSnapshot {
 	hostname, _ := os.Hostname()
 	snapshot := SystemSnapshot{
 		OS: s.os.Name, OSID: s.os.ID, Hostname: hostname, IPAddress: primaryIP(), Demo: s.demo,
 		Memory: memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
 		DatabaseEngine: s.DatabaseEngine(), FirewallBackend: s.FirewallBackend(),
+		WAFEngine: s.WAFEngine(), AntivirusAvailable: s.AntivirusAvailable(), WebmailAvailable: s.WebmailAvailable(), WebmailURL: s.WebmailURL(),
 	}
 	snapshot.UptimeSeconds, snapshot.LoadAverage = uptimeAndLoad()
 	snapshot.CPUPercent = s.cpuUsage()
@@ -117,17 +126,63 @@ func (s *System) Snapshot(ctx context.Context) SystemSnapshot {
 		go func(index int, item ServiceStatus) {
 			defer wait.Done()
 			if item.Key == "php" {
-				item.State = s.phpStackState(ctx)
+				item.State = s.phpStackState(ctx, sites)
 			} else if item.Key == "mail" {
 				item.State = s.mailStackState(ctx)
 			} else {
 				item.State = s.serviceState(ctx, item.Unit)
+				if item.State == "running" && !s.serviceProbe(ctx, item.Key) {
+					item.State = "degraded"
+				}
 			}
 			snapshot.Services[index] = item
 		}(i, service)
 	}
 	wait.Wait()
 	return snapshot
+}
+
+func (s *System) SiteSSLHealthy(site Site) bool {
+	if !site.SSL || s.demo {
+		return site.SSL
+	}
+	content, err := os.ReadFile(filepath.Join("/etc/letsencrypt/live", site.Domain, "fullchain.pem"))
+	if err != nil {
+		return false
+	}
+	block, _ := pem.Decode(content)
+	if block == nil {
+		return false
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	return err == nil && time.Now().Before(certificate.NotAfter)
+}
+
+func (s *System) serviceProbe(ctx context.Context, key string) bool {
+	if s.demo {
+		return true
+	}
+	switch key {
+	case "nginx":
+		return probeTCP("127.0.0.1:80")
+	case "database":
+		client := firstAvailableCommand("mariadb", "mysql")
+		_, err := runCommand(ctx, 3*time.Second, client, "--protocol=socket", "--user=root", "--batch", "--skip-column-names", "--execute", "SELECT 1")
+		return err == nil
+	case "cron":
+		return true
+	default:
+		return true
+	}
+}
+
+func probeTCP(address string) bool {
+	connection, err := net.DialTimeout("tcp", address, 1200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = connection.Close()
+	return true
 }
 
 func (s *System) serviceUnits() []ServiceStatus {
@@ -236,7 +291,8 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	if phpVersion == "" {
 		phpVersion = defaultPHPVersion(appType)
 	}
-	if err := validateSiteOptions(appType, phpVersion); err != nil {
+	appVersion := normalizeAppVersion(appType, input.AppVersion)
+	if err := validateSiteOptions(appType, appVersion, phpVersion); err != nil {
 		return Site{}, nil, err
 	}
 	if !s.phpRuntimeAvailable(phpVersion) {
@@ -248,7 +304,8 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	}
 	site := Site{
 		ID: id, Domain: domain, Root: filepath.Join("/var/www/litecp", domain, "public"),
-		AppType: appType, PHPVersion: phpVersion, CreatedAt: time.Now().UTC(),
+		AppType: appType, AppVersion: appVersion, PHPVersion: phpVersion,
+		RuntimeUID: siteRuntimeID(id), RuntimeGID: siteRuntimeID(id), CreatedAt: time.Now().UTC(),
 	}
 	if s.demo {
 		if input.CreateDatabase {
@@ -262,10 +319,10 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	if err := os.MkdirAll(site.Root, 0750); err != nil {
 		return Site{}, nil, fmt.Errorf("create website root: %w", err)
 	}
-	if err := chownWebTree(filepath.Dir(site.Root), s.webUser()); err != nil {
+	if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
 		return Site{}, nil, err
 	}
-	if err := chownWebTree(site.Root, s.webUser()); err != nil {
+	if err := chownSitePath(site.Root, site, 0750, s.webUser()); err != nil {
 		return Site{}, nil, err
 	}
 	placeholder := filepath.Join(site.Root, "index.html")
@@ -274,13 +331,24 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		guidance := "Upload your licensed WHMCS files"
 		if site.AppType == "wordpress" {
 			guidance = "Upload WordPress files"
+		} else if site.AppType == "regular" {
+			guidance = "Upload your PHP or HTML website files"
 		}
 		content := []byte("<!doctype html><meta charset=utf-8><title>LiteCP</title><style>body{font:16px system-ui;max-width:680px;margin:12vh auto;padding:32px;color:#173b46}code{background:#edf6f4;padding:3px 6px;border-radius:5px}</style><h1>Ready for " + appName + "</h1><p>" + guidance + " to <code>" + site.Root + "</code>, then remove this file.</p>")
 		if err := os.WriteFile(placeholder, content, 0640); err != nil {
 			return Site{}, nil, fmt.Errorf("write placeholder: %w", err)
 		}
-		_ = chownWebTree(placeholder, s.webUser())
+		_ = chownSitePath(placeholder, site, 0640, s.webUser())
 	}
+	if err := s.ensureSitePHPPool(ctx, site); err != nil {
+		return Site{}, nil, err
+	}
+	keepPool := false
+	defer func() {
+		if !keepPool {
+			_ = s.removeSitePHPPool(context.Background(), site)
+		}
+	}()
 
 	configPath, enabledPath := s.nginxPaths(domain)
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
@@ -301,6 +369,7 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		if enabledPath != "" {
 			_ = os.Remove(enabledPath)
 		}
+		_ = s.removeSitePHPPool(context.Background(), site)
 	}
 	if _, err := runCommand(ctx, 10*time.Second, "nginx", "-t"); err != nil {
 		rollback()
@@ -313,7 +382,7 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 
 	var credentials *DBCredentials
 	if input.CreateDatabase {
-		created, err := s.createDatabase(ctx, domain)
+		created, err := s.createDatabase(ctx, domain, phpVersion)
 		if err != nil {
 			rollback()
 			_, _ = runCommand(ctx, 10*time.Second, "systemctl", "reload", "nginx")
@@ -322,10 +391,11 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		site.Database, site.DBUser = created.Name, created.Username
 		credentials = &created
 	}
+	keepPool = true
 	return site, credentials, nil
 }
 
-func (s *System) createDatabase(ctx context.Context, domain string) (DBCredentials, error) {
+func (s *System) createDatabase(ctx context.Context, domain, phpVersion string) (DBCredentials, error) {
 	part := strings.Trim(safeDatabasePart.ReplaceAllString(strings.ToLower(domain), "_"), "_")
 	if len(part) > 12 {
 		part = part[:12]
@@ -348,9 +418,9 @@ func (s *System) createDatabase(ctx context.Context, domain string) (DBCredentia
 	if err != nil {
 		return DBCredentials{}, err
 	}
-	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' IDENTIFIED BY '%s'; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, password, name, username)
+	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' %s; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, s.databaseUserIdentification(password, legacyPHPDatabaseAuth(phpVersion)), name, username)
 	databaseClient := firstAvailableCommand("mariadb", "mysql")
-	if _, err := runCommand(ctx, 20*time.Second, databaseClient, "--protocol=socket", "--user=root", "--execute", sql); err != nil {
+	if _, err := runCommandInput(ctx, 20*time.Second, sql, databaseClient, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return DBCredentials{}, fmt.Errorf("create application database: %w", err)
 	}
 	return DBCredentials{Name: name, Username: username, Password: password, Host: "localhost"}, nil
@@ -386,6 +456,9 @@ func (s *System) SetCron(site Site, enabled bool) error {
 	if s.demo {
 		return nil
 	}
+	if site.AppType == "regular" && enabled {
+		return errors.New("regular websites do not have an application-specific cron target")
+	}
 	cronPath := filepath.Join("/etc/cron.d", "litecp-"+site.ID)
 	if !enabled {
 		if err := os.Remove(cronPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -403,13 +476,18 @@ func (s *System) SetCron(site Site, enabled bool) error {
 			return fmt.Errorf("PHP %s CLI is unavailable: %w", site.PHPVersion, err)
 		}
 	}
-	content := fmt.Sprintf("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nMAILTO=\"\"\n*/5 * * * * %s %s -q %s >/dev/null 2>&1\n", s.webUser(), phpBinary, cronScript)
+	cronUser := "root"
+	command := fmt.Sprintf("/usr/bin/setpriv --reuid=%d --regid=%d --clear-groups %s -q %s", site.RuntimeUID, site.RuntimeGID, phpBinary, cronScript)
+	if s.usesPHP73Container(site.PHPVersion) {
+		command = fmt.Sprintf("/usr/bin/podman exec --user %d:%d litecp-php73 php -q %s", site.RuntimeUID, site.RuntimeGID, cronScript)
+	}
+	content := fmt.Sprintf("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nMAILTO=\"\"\n*/5 * * * * %s %s >/dev/null 2>&1\n", cronUser, command)
 	return writeAtomic(cronPath, []byte(content), 0644)
 }
 
 func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
 	phpVersion = strings.TrimSpace(phpVersion)
-	if err := validateSiteOptions(site.AppType, phpVersion); err != nil {
+	if err := validateSiteOptions(site.AppType, site.AppVersion, phpVersion); err != nil {
 		return err
 	}
 	if !s.phpRuntimeAvailable(phpVersion) {
@@ -418,18 +496,28 @@ func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string
 	if s.demo {
 		return nil
 	}
+	originalVersion := site.PHPVersion
+	updatedSite := site
+	updatedSite.PHPVersion = phpVersion
+	if err := s.ensureSitePHPPool(ctx, updatedSite); err != nil {
+		return fmt.Errorf("prepare isolated PHP pool: %w", err)
+	}
 	configPath, _ := s.nginxPaths(site.Domain)
 	original, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read nginx configuration: %w", err)
 	}
-	updated, err := replaceFastCGISocket(string(original), s.phpSocket(phpVersion))
+	updated, err := replaceFastCGISocket(string(original), s.sitePHPSocket(updatedSite))
 	if err != nil {
+		_ = s.removeSitePHPPool(context.Background(), updatedSite)
 		return err
 	}
 	rollback := func() {
 		_ = writeAtomic(configPath, original, 0644)
 		_, _ = runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
+		if originalVersion != phpVersion {
+			_ = s.removeSitePHPPool(context.Background(), updatedSite)
+		}
 	}
 	if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
 		return fmt.Errorf("update nginx configuration: %w", err)
@@ -443,11 +531,13 @@ func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string
 		return err
 	}
 	if site.Cron {
-		site.PHPVersion = phpVersion
-		if err := s.SetCron(site, true); err != nil {
+		if err := s.SetCron(updatedSite, true); err != nil {
 			rollback()
 			return fmt.Errorf("update application cron: %w", err)
 		}
+	}
+	if originalVersion != phpVersion {
+		_ = s.removeSitePHPPool(context.Background(), site)
 	}
 	return nil
 }
@@ -457,6 +547,65 @@ func replaceFastCGISocket(config, socket string) (string, error) {
 		return "", errors.New("managed nginx configuration has no FastCGI socket")
 	}
 	return fastCGIPassPattern.ReplaceAllString(config, "${1}"+socket+"${2}"), nil
+}
+
+type siteConfigBackup struct {
+	nginx []byte
+	cron  []byte
+}
+
+func (s *System) snapshotSiteConfig(site Site) (siteConfigBackup, error) {
+	if s.demo {
+		return siteConfigBackup{}, nil
+	}
+	configPath, _ := s.nginxPaths(site.Domain)
+	nginx, err := os.ReadFile(configPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return siteConfigBackup{}, fmt.Errorf("read nginx configuration: %w", err)
+	}
+	cron, err := os.ReadFile(filepath.Join("/etc/cron.d", "litecp-"+site.ID))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return siteConfigBackup{}, fmt.Errorf("read cron configuration: %w", err)
+	}
+	return siteConfigBackup{nginx: nginx, cron: cron}, nil
+}
+
+func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteConfigBackup) error {
+	if s.demo {
+		return nil
+	}
+	if err := s.ensureSitePHPPool(ctx, site); err != nil {
+		return fmt.Errorf("restore isolated PHP pool: %w", err)
+	}
+	configPath, enabledPath := s.nginxPaths(site.Domain)
+	nginx := backup.nginx
+	if len(nginx) == 0 {
+		nginx = []byte(s.nginxConfig(site))
+	}
+	if err := writeAtomic(configPath, nginx, 0644); err != nil {
+		return fmt.Errorf("restore nginx configuration: %w", err)
+	}
+	if enabledPath != "" {
+		_ = os.Remove(enabledPath)
+		if err := os.Symlink(configPath, enabledPath); err != nil {
+			return fmt.Errorf("re-enable nginx website: %w", err)
+		}
+	}
+	cronPath := filepath.Join("/etc/cron.d", "litecp-"+site.ID)
+	if len(backup.cron) > 0 {
+		if err := writeAtomic(cronPath, backup.cron, 0644); err != nil {
+			return fmt.Errorf("restore cron configuration: %w", err)
+		}
+	} else if site.Cron {
+		if err := s.SetCron(site, true); err != nil {
+			return err
+		}
+	}
+	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
+		return err
+	}
+	_, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
+	return err
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
@@ -476,8 +625,10 @@ func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
 		}
 	}
 	_ = os.Remove(filepath.Join("/etc/cron.d", "litecp-"+site.ID))
-	_, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
-	return err
+	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
+		return err
+	}
+	return s.removeSitePHPPool(ctx, site)
 }
 
 func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
@@ -486,9 +637,9 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 		return Backup{}, err
 	}
 	created := time.Now().UTC()
-	stamp := created.Format("20060102-150405")
+	stamp := created.Format("20060102-150405.000000000")
 	backupDir := "/var/backups/litecp"
-	finalPath := filepath.Join(backupDir, site.Domain+"-"+stamp+".tar.gz")
+	finalPath := filepath.Join(backupDir, site.Domain+"-"+stamp+"-"+backupID+".tar.gz")
 	backup := Backup{ID: backupID, SiteID: site.ID, Domain: site.Domain, Path: finalPath, Status: "complete", CreatedAt: created}
 	if s.demo {
 		backup.Size = 184*1024*1024 + 739*1024
@@ -522,6 +673,25 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 	}
 	backup.Size = info.Size()
 	return backup, nil
+}
+
+func (s *System) RemoveBackupFile(path string) error {
+	backupRoot := filepath.Clean("/var/backups/litecp")
+	path = filepath.Clean(path)
+	if filepath.Dir(path) != backupRoot || !strings.HasSuffix(path, ".tar.gz") {
+		return errors.New("backup path is outside LiteCP storage")
+	}
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("backup path is not a regular file")
+	}
+	return os.Remove(path)
 }
 
 func (s *System) Logs(ctx context.Context, target string) ([]string, error) {
@@ -582,9 +752,12 @@ func (s *System) nginxConfig(site Site) string {
 	if site.AppType == "wordpress" {
 		applicationRules = `    location = /wp-config.php { deny all; }
     location ~* ^/wp-content/uploads/.*\.php$ { deny all; }`
+	} else if site.AppType == "regular" {
+		applicationRules = `    location ~* ^/(?:\.env|composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock)$ { deny all; }`
 	}
 	return fmt.Sprintf(`# Managed by LiteCP - By Hostingtom
 server {
+%s
     listen 80;
     listen [::]:80;
     server_name %s;
@@ -605,7 +778,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param HTTP_PROXY "";
-        fastcgi_pass unix:%s;
+		fastcgi_pass unix:%s;
         fastcgi_read_timeout 120s;
     }
 
@@ -618,7 +791,243 @@ server {
         access_log off;
     }
 }
-`, site.Domain, site.Root, applicationRules, s.phpSocket(site.PHPVersion))
+`, wafBlock(site, site.WAFMode), site.Domain, site.Root, applicationRules, s.sitePHPSocket(site))
+}
+
+func siteRuntimeID(id string) int {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(id))
+	return 100000 + int(hash.Sum32()%2000000000)
+}
+
+func (s *System) sitePHPSocket(site Site) string {
+	name := safeSiteID(site.ID)
+	if s.usesPHP73Container(site.PHPVersion) {
+		return filepath.Join("/run/litecp-php73", name+".sock")
+	}
+	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
+		return filepath.Join("/run/php", "php"+site.PHPVersion+"-litecp-"+name+".sock")
+	}
+	compact := strings.ReplaceAll(site.PHPVersion, ".", "")
+	if site.PHPVersion == "8.3" && !unitFileExists("php83-php-fpm") && unitFileExists("php-fpm") {
+		return filepath.Join("/run/php-fpm", "litecp-"+name+".sock")
+	}
+	return filepath.Join("/var/opt/remi", "php"+compact, "run/php-fpm", "litecp-"+name+".sock")
+}
+
+func safeSiteID(id string) string {
+	var result strings.Builder
+	for _, character := range id {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' {
+			result.WriteRune(character)
+		} else {
+			result.WriteByte('_')
+		}
+	}
+	if result.Len() == 0 {
+		return "site"
+	}
+	return result.String()
+}
+
+func (s *System) phpPoolConfigPath(site Site) string {
+	name := "litecp-" + safeSiteID(site.ID) + ".conf"
+	if s.usesPHP73Container(site.PHPVersion) {
+		return filepath.Join("/etc/litecp/php73-pools", name)
+	}
+	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
+		return filepath.Join("/etc/php", site.PHPVersion, "fpm", "pool.d", name)
+	}
+	compact := strings.ReplaceAll(site.PHPVersion, ".", "")
+	if site.PHPVersion == "8.3" && !unitFileExists("php83-php-fpm") && unitFileExists("php-fpm") {
+		return filepath.Join("/etc/php-fpm.d", name)
+	}
+	return filepath.Join("/etc/opt/remi", "php"+compact, "php-fpm.d", name)
+}
+
+func (s *System) phpPoolConfig(site Site) string {
+	webUser := s.webUser()
+	socketOwner, socketGroup := webUser, webUser
+	if s.usesPHP73Container(site.PHPVersion) {
+		// The container remaps www-data to the host Nginx UID/GID at image
+		// build time. FPM's listen.owner/listen.group require account names,
+		// while the worker user/group directives accept isolated numeric IDs.
+		socketOwner, socketGroup = "www-data", "www-data"
+	}
+	return fmt.Sprintf(`[litecp_%s]
+user = %d
+group = %d
+listen = %s
+listen.owner = %s
+listen.group = %s
+listen.mode = 0660
+pm = ondemand
+pm.max_children = 5
+pm.process_idle_timeout = 10s
+pm.max_requests = 300
+request_terminate_timeout = 120s
+catch_workers_output = yes
+clear_env = yes
+security.limit_extensions = .php
+php_admin_value[open_basedir] = %s:/tmp
+php_admin_value[upload_tmp_dir] = /tmp
+php_admin_value[session.save_path] = /tmp
+`, safeSiteID(site.ID), site.RuntimeUID, site.RuntimeGID, s.sitePHPSocket(site), socketOwner, socketGroup, site.Root)
+}
+
+func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
+	if s.demo {
+		return nil
+	}
+	if site.RuntimeUID == 0 || site.RuntimeGID == 0 {
+		return errors.New("website runtime identity is missing")
+	}
+	configPath := s.phpPoolConfigPath(site)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0750); err != nil {
+		return err
+	}
+	if err := writeAtomic(configPath, []byte(s.phpPoolConfig(site)), 0640); err != nil {
+		return err
+	}
+	if s.usesPHP73Container(site.PHPVersion) {
+		if err := s.syncPHP73Pools(); err != nil {
+			return err
+		}
+	}
+	if _, err := runCommand(ctx, 30*time.Second, "systemctl", "restart", s.phpUnitForVersion(site.PHPVersion)); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(s.sitePHPSocket(site)); err == nil {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("isolated PHP socket was not created: %s", s.sitePHPSocket(site))
+}
+
+func (s *System) removeSitePHPPool(ctx context.Context, site Site) error {
+	if s.demo {
+		return nil
+	}
+	configPath := s.phpPoolConfigPath(site)
+	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if s.usesPHP73Container(site.PHPVersion) {
+		if err := s.syncPHP73Pools(); err != nil {
+			return err
+		}
+	}
+	_, err := runCommand(ctx, 30*time.Second, "systemctl", "restart", s.phpUnitForVersion(site.PHPVersion))
+	return err
+}
+
+func (s *System) syncPHP73Pools() error {
+	directory := "/etc/litecp/php73-pools"
+	entries, err := os.ReadDir(directory)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	var content strings.Builder
+	content.WriteString("; Generated by LiteCP. Do not edit.\n")
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
+			continue
+		}
+		value, err := os.ReadFile(filepath.Join(directory, entry.Name()))
+		if err != nil {
+			return err
+		}
+		content.Write(value)
+		content.WriteByte('\n')
+	}
+	return writeAtomic("/etc/litecp/php73-pools.conf", []byte(content.String()), 0640)
+}
+
+func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
+	if s.demo {
+		return nil
+	}
+	for _, site := range sites {
+		if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
+			return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
+		}
+		if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {
+			return fmt.Errorf("secure %s ownership: %w", site.Domain, err)
+		}
+		if err := s.ensureSitePHPPool(ctx, site); err != nil {
+			return fmt.Errorf("prepare %s PHP pool: %w", site.Domain, err)
+		}
+		configPath, _ := s.nginxPaths(site.Domain)
+		if _, err := os.Stat(configPath); err == nil {
+			content, err := os.ReadFile(configPath)
+			if err != nil {
+				return err
+			}
+			updated, err := replaceFastCGISocket(string(content), s.sitePHPSocket(site))
+			if err != nil {
+				return err
+			}
+			if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
+		return err
+	}
+	_, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
+	return err
+}
+
+func chownSitePath(path string, site Site, mode os.FileMode, webUser string) error {
+	account, err := user.Lookup(webUser)
+	if err != nil {
+		return err
+	}
+	groupID, err := strconv.Atoi(account.Gid)
+	if err != nil {
+		return err
+	}
+	if err := os.Chown(path, site.RuntimeUID, groupID); err != nil {
+		return err
+	}
+	return os.Chmod(path, mode)
+}
+
+func lookupUserGroupID(username string) (int, error) {
+	account, err := user.Lookup(username)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(account.Gid)
+}
+
+func (s *System) siteFileOwnership(site Site) (int, int, error) {
+	if s.demo {
+		return site.RuntimeUID, site.RuntimeGID, nil
+	}
+	groupID, err := lookupUserGroupID(s.webUser())
+	return site.RuntimeUID, groupID, err
+}
+
+func chownSiteTree(root string, site Site, webUser string) error {
+	account, err := user.Lookup(webUser)
+	if err != nil {
+		return err
+	}
+	groupID, err := strconv.Atoi(account.Gid)
+	if err != nil {
+		return err
+	}
+	return filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		return os.Lchown(path, site.RuntimeUID, groupID)
+	})
 }
 
 func (s *System) webUser() string {
@@ -664,7 +1073,7 @@ func (s *System) phpUnits() []string {
 	return units
 }
 
-func (s *System) phpStackState(ctx context.Context) string {
+func (s *System) phpStackState(ctx context.Context, sites []Site) string {
 	units := s.phpUnits()
 	if len(units) == 0 {
 		return "stopped"
@@ -674,12 +1083,21 @@ func (s *System) phpStackState(ctx context.Context) string {
 			return "degraded"
 		}
 	}
+	for _, site := range sites {
+		info, err := os.Stat(s.sitePHPSocket(site))
+		if err != nil || info.Mode()&os.ModeSocket == 0 {
+			return "degraded"
+		}
+	}
 	return "running"
 }
 
 func (s *System) phpUnitForVersion(version string) string {
 	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
 		return "php" + version + "-fpm"
+	}
+	if version == "7.3" && unitFileExists("litecp-php73-fpm") {
+		return "litecp-php73-fpm"
 	}
 	unit := "php" + strings.ReplaceAll(version, ".", "") + "-php-fpm"
 	if version == "8.3" && !unitFileExists(unit) && unitFileExists("php-fpm") {
@@ -692,6 +1110,9 @@ func (s *System) phpSocket(version string) string {
 	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
 		return "/run/php/php" + version + "-fpm.sock"
 	}
+	if s.usesPHP73Container(version) {
+		return "/run/litecp-php73/php-fpm.sock"
+	}
 	compact := strings.ReplaceAll(version, ".", "")
 	if version == "8.3" && !unitFileExists("php83-php-fpm") && unitFileExists("php-fpm") {
 		return "/run/php-fpm/www.sock"
@@ -703,6 +1124,9 @@ func (s *System) phpBinary(version string) string {
 	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
 		return "/usr/bin/php" + version
 	}
+	if s.usesPHP73Container(version) {
+		return "/usr/local/bin/litecp-php73"
+	}
 	compact := strings.ReplaceAll(version, ".", "")
 	path := "/opt/remi/php" + compact + "/root/usr/bin/php"
 	if version == "8.3" {
@@ -711,6 +1135,10 @@ func (s *System) phpBinary(version string) string {
 		}
 	}
 	return path
+}
+
+func (s *System) usesPHP73Container(version string) bool {
+	return version == "7.3" && s.os.ID == "almalinux" && unitFileExists("litecp-php73-fpm")
 }
 
 func unitFileExists(unit string) bool {
@@ -722,15 +1150,23 @@ func unitFileExists(unit string) bool {
 	return false
 }
 
-func validateSiteOptions(appType, phpVersion string) error {
-	if appType != "whmcs" && appType != "wordpress" {
-		return errors.New("application must be WHMCS or WordPress")
+func validateSiteOptions(appType, appVersion, phpVersion string) error {
+	if appType != "whmcs" && appType != "wordpress" && appType != "regular" {
+		return errors.New("application must be WHMCS, WordPress or Regular Website")
 	}
 	if !containsString(supportedPHPVersions, phpVersion) {
 		return errors.New("choose PHP 7.3, 7.4, 8.1, 8.2, 8.3 or 8.4")
 	}
-	if appType == "whmcs" && phpVersion == "8.4" {
-		return errors.New("WHMCS does not currently support PHP 8.4; choose PHP 7.3 through 8.3")
+	if appType == "whmcs" {
+		if appVersion != "8.13" && appVersion != "9.0" {
+			return errors.New("choose WHMCS 8.13 LTS or WHMCS 9.0")
+		}
+		if appVersion == "9.0" && phpVersion != "8.2" && phpVersion != "8.3" {
+			return errors.New("WHMCS 9.0 requires PHP 8.2 or 8.3")
+		}
+		if appVersion == "8.13" && phpVersion == "8.4" {
+			return errors.New("WHMCS 8.13 does not support PHP 8.4")
+		}
 	}
 	if appType == "wordpress" && phpVersion == "7.3" {
 		return errors.New("current WordPress requires PHP 7.4 or newer")
@@ -738,8 +1174,19 @@ func validateSiteOptions(appType, phpVersion string) error {
 	return nil
 }
 
+func normalizeAppVersion(appType, version string) string {
+	if appType != "whmcs" {
+		return ""
+	}
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "9.0"
+	}
+	return version
+}
+
 func defaultPHPVersion(appType string) string {
-	if appType == "wordpress" {
+	if appType == "wordpress" || appType == "regular" {
 		return "8.4"
 	}
 	return "8.3"
@@ -748,6 +1195,9 @@ func defaultPHPVersion(appType string) string {
 func applicationName(appType string) string {
 	if appType == "wordpress" {
 		return "WordPress"
+	}
+	if appType == "regular" {
+		return "Regular Website"
 	}
 	return "WHMCS"
 }
@@ -889,17 +1339,33 @@ func (s *System) cpuUsage() float64 {
 }
 
 func primaryIP() string {
+	if connection, err := net.DialTimeout("udp", "1.1.1.1:53", time.Second); err == nil {
+		if local, ok := connection.LocalAddr().(*net.UDPAddr); ok && local.IP != nil && !local.IP.IsLoopback() {
+			_ = connection.Close()
+			return local.IP.String()
+		}
+		_ = connection.Close()
+	}
 	addresses, _ := net.InterfaceAddrs()
-	candidates := make([]string, 0)
+	publicCandidates := make([]string, 0)
+	privateCandidates := make([]string, 0)
 	for _, address := range addresses {
 		ip, _, err := net.ParseCIDR(address.String())
 		if err == nil && ip.To4() != nil && !ip.IsLoopback() {
-			candidates = append(candidates, ip.String())
+			if ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+				privateCandidates = append(privateCandidates, ip.String())
+			} else {
+				publicCandidates = append(publicCandidates, ip.String())
+			}
 		}
 	}
-	sort.Strings(candidates)
-	if len(candidates) > 0 {
-		return candidates[0]
+	sort.Strings(publicCandidates)
+	if len(publicCandidates) > 0 {
+		return publicCandidates[0]
+	}
+	sort.Strings(privateCandidates)
+	if len(privateCandidates) > 0 {
+		return privateCandidates[0]
 	}
 	return "127.0.0.1"
 }
@@ -918,21 +1384,64 @@ func chownWebTree(path, username string) error {
 }
 
 func writeAtomic(path string, content []byte, mode os.FileMode) error {
-	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, content, mode); err != nil {
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".litecp-write-*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Chmod(temporary, mode); err != nil {
-		_ = os.Remove(temporary)
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(mode); err != nil {
+		_ = temporary.Close()
 		return err
 	}
-	return os.Rename(temporary, path)
+	if _, err := temporary.Write(content); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(path))
+	if err == nil {
+		_ = directory.Sync()
+		_ = directory.Close()
+	}
+	return nil
 }
 
 func runCommand(parent context.Context, timeout time.Duration, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	text := strings.TrimSpace(string(output))
+	if ctx.Err() == context.DeadlineExceeded {
+		return text, fmt.Errorf("%s timed out", name)
+	}
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		}
+		if len(text) > 1200 {
+			text = text[len(text)-1200:]
+		}
+		return text, fmt.Errorf("%s failed: %s", name, text)
+	}
+	return text, nil
+}
+
+func runCommandInput(parent context.Context, timeout time.Duration, input, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, name, args...)
+	command.Stdin = strings.NewReader(input)
+	output, err := command.CombinedOutput()
 	text := strings.TrimSpace(string(output))
 	if ctx.Err() == context.DeadlineExceeded {
 		return text, fmt.Errorf("%s timed out", name)
