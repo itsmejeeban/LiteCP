@@ -6,6 +6,7 @@
   const esc = cp.escapeHTML;
   let activityPage = 1, activityRequest = 0, listing = null, editor = null, aceLoading = null, preview = null;
   const icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8M12 8v8"/></svg>';
+  const fileManagerIcon = '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 9h18"/></svg>';
   const page = (id, title, copy, content) => `<section class="page" data-page-view="${id}"><div class="page-heading"><div><span class="eyebrow">LITECP MANAGEMENT</span><h1>${title}</h1><p>${copy}</p></div></div>${content}</section>`;
   const field = (label, input) => `<label class="field"><span>${label}</span>${input}</label>`;
   const resultBox = id => `<pre class="feature-output hidden" id="${id}" role="status"></pre>`;
@@ -208,7 +209,7 @@
   function fillSiteSelect(id,state){const node=$(`#${id}`),value=node.value;node.innerHTML=state.sites.map(s=>`<option value="${esc(s.id)}">${esc(s.domain)}</option>`).join("");if(state.sites.some(s=>s.id===value))node.value=value;}
   function render(state){
     if(!state)return;
-    $$('[data-site-action="delete"]').forEach(button=>{if(button.parentElement.querySelector('[data-site-action="files"]'))return;button.insertAdjacentHTML("beforebegin",`<button title="Open file manager" aria-label="Open file manager" data-site-action="files" data-id="${esc(button.dataset.id)}">${icon}</button>`);});
+    $$('[data-site-action="delete"]').forEach(button=>{if(button.parentElement.querySelector('[data-site-action="files"]'))return;button.insertAdjacentHTML("beforebegin",`<button title="Open file manager" aria-label="Open file manager" data-site-action="files" data-id="${esc(button.dataset.id)}">${fileManagerIcon}</button>`);});
     const rows=(state.firewallRules||[]).map(rule=>`<tr><td>${esc(rule.direction||"inbound")}</td><td>${esc(rule.action||"allow")}</td><td>${rule.port}/${esc(rule.protocol)}</td><td><code>${esc(rule.direction==="outbound"?rule.destination:rule.source)}</code></td><td>${esc(rule.label)}</td><td><span class="row-actions"><button class="text-action" data-firewall-action="edit" data-id="${esc(rule.id)}">Edit</button><button class="text-action danger" data-firewall-action="delete" data-id="${esc(rule.id)}">Delete</button></span></td></tr>`).join("");
     $("#firewallTable").innerHTML=`<p class="feature-note">Installer rules for SSH, HTTP, HTTPS and LiteCP remain protected. Other outbound traffic remains allowed unless blocked by a rule. Host rules do not govern separately routed container/VM traffic.</p><table class="data-table"><thead><tr><th>DIRECTION</th><th>ACTION</th><th>PORT</th><th>ADDRESS</th><th>LABEL</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6">No custom firewall rules.</td></tr>'}</tbody></table>`;
     $("#mailHostingToggle").textContent=state.settings.emailHostingEnabled===false?"Enable email hosting":"Disable email hosting";
