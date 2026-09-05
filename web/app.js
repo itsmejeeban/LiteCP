@@ -32,12 +32,12 @@
   };
 
   const demoState = {
-    version: "0.4.0",
+    version: "0.5.1",
     username: "admin",
-    settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14 },
+    settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14, emailHostingEnabled: true, resolvers: ["8.8.8.8", "8.8.4.4"] },
     sites: [
-      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", appType: "whmcs", appVersion: "9.0", phpVersion: "8.3", ssl: true, cron: true, database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
-      { id: "site_demo_2", domain: "blog.northstar.test", root: "/var/www/litecp/blog.northstar.test/public", appType: "wordpress", phpVersion: "8.4", ssl: false, cron: true, database: "cp_blog", dbUser: "cp_blog", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
+      { id: "site_demo_1", domain: "billing.hostingtom.com", root: "/var/www/litecp/billing.hostingtom.com/public", appType: "whmcs", appVersion: "9.0", phpVersion: "8.3", ssl: true, cron: true, wafMode: "block", database: "cp_billing", dbUser: "cp_whmcs", createdAt: new Date(Date.now() - 32 * 86400000).toISOString() },
+      { id: "site_demo_2", domain: "blog.northstar.test", root: "/var/www/litecp/blog.northstar.test/public", appType: "wordpress", phpVersion: "8.4", ssl: false, cron: true, wafMode: "detect", database: "cp_blog", dbUser: "cp_blog", createdAt: new Date(Date.now() - 3 * 86400000).toISOString() }
     ],
     backups: [
       { id: "backup_1", siteId: "site_demo_1", domain: "billing.hostingtom.com", path: "/var/backups/litecp/billing.hostingtom.com-20260831-020000.tar.gz", size: 193715264, status: "complete", createdAt: new Date(Date.now() - 7 * 3600000).toISOString() },
@@ -94,6 +94,13 @@
     await new Promise(resolve => setTimeout(resolve, options.method && options.method !== "GET" ? 420 : 100));
     if (path === "/api/state") return structuredClone(demoState);
     if (path === "/api/login") return { ok: true };
+    if (path.startsWith("/api/activities")) {
+      const query = new URL(path, location.href).searchParams;
+      const page = Math.max(1, Number(query.get("page")) || 1);
+      const perPage = Math.max(1, Number(query.get("perPage")) || 5);
+      const start = (page - 1) * perPage;
+      return { items: structuredClone(demoState.activities.slice(start, start + perPage)), total: demoState.activities.length, page, perPage };
+    }
     if (path.startsWith("/api/logs")) return { target: "demo", lines: [
       "2026/09/01 10:18:02 [notice] LiteCP preview log stream connected",
       "2026/09/01 10:17:55 [info] PHP-FPM pool www is healthy (2 idle workers)",
@@ -102,9 +109,11 @@
     ] };
     if (path === "/api/sites" && options.method === "POST") {
       const input = options.body;
-      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, appType: input.appType, appVersion: input.appVersion || "", phpVersion: input.phpVersion, ssl: false, cron: !!input.enableCron, database: input.createDatabase ? "cp_new_app" : "", dbUser: input.createDatabase ? "cp_new_app" : "", createdAt: new Date().toISOString() };
+      const databaseName = `cp_${String(input.domain).toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 8)}_${Date.now().toString(36).slice(-5)}`;
+      const site = { id: `demo_${Date.now()}`, domain: input.domain, root: `/var/www/litecp/${input.domain}/public`, appType: input.appType, appVersion: input.appVersion || "", phpVersion: input.phpVersion, ssl: false, cron: input.appType !== "regular" && !!input.enableCron, wafMode: "off", database: input.createDatabase ? databaseName : "", dbUser: input.createDatabase ? databaseName : "", createdAt: new Date().toISOString() };
       demoState.sites.push(site);
-      return { site, database: input.createDatabase ? { name: "cp_new_app", username: "cp_new_app", password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
+      if (input.createDatabase) demoState.databases.push({ id: `db_${Date.now()}`, name: databaseName, username: databaseName, siteId: site.id, domain: site.domain, createdAt: site.createdAt });
+      return { site, database: input.createDatabase ? { name: databaseName, username: databaseName, password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
     }
     if (path === "/api/backups" && options.method === "POST") {
       const site = demoState.sites.find(item => item.id === options.body.siteId);
@@ -121,6 +130,7 @@
         { name: "whmcs.zip", path: currentFilePath ? `${currentFilePath}/whmcs.zip` : "whmcs.zip", type: "file", size: 48512000, mode: "0640", modified: new Date().toISOString() }
       ] };
     }
+    if (path === "/api/files/create" && options.method === "POST") return { path: [options.body.path, options.body.name].filter(Boolean).join("/") };
     if (path === "/api/databases" && options.method === "POST") {
       const item = { id: `db_${Date.now()}`, name: options.body.name, username: options.body.username, createdAt: new Date().toISOString() };
       demoState.databases.push(item); return { database: item, password: options.body.password || "demo-generated-password", host: "localhost" };
@@ -129,6 +139,7 @@
     if (path === "/api/backup-destinations" && options.method === "POST") { const item = { id: `remote_${Date.now()}`, ...options.body, hasPassword: true, createdAt: new Date().toISOString() }; delete item.password; demoState.backupDestinations.push(item); return item; }
     if (path.startsWith("/api/backup-destinations/") && options.method === "DELETE") { demoState.backupDestinations = demoState.backupDestinations.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
     if (path === "/api/firewall" && options.method === "POST") { const item = { id: `fw_${Date.now()}`, ...options.body, createdAt: new Date().toISOString() }; demoState.firewallRules.push(item); return item; }
+    if (path.startsWith("/api/firewall/") && options.method === "PUT") { const id = path.split("/").pop(); const index = demoState.firewallRules.findIndex(item => item.id === id); if (index >= 0) demoState.firewallRules[index] = { ...demoState.firewallRules[index], ...options.body, id }; return demoState.firewallRules[index]; }
     if (path.startsWith("/api/firewall/") && options.method === "DELETE") { demoState.firewallRules = demoState.firewallRules.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
     if (path === "/api/mail/domains" && options.method === "POST") { const item = { id: `md_${Date.now()}`, domain: options.body.domain, createdAt: new Date().toISOString() }; demoState.mailDomains.push(item); return item; }
     if (path === "/api/mail/mailboxes" && options.method === "POST") { const item = { id: `mb_${Date.now()}`, address: `${options.body.localPart}@${options.body.domain}`, domain: options.body.domain, quotaMb: options.body.quotaMb, createdAt: new Date().toISOString() }; demoState.mailboxes.push(item); return item; }
@@ -136,6 +147,12 @@
     if (path.startsWith("/api/mail/domains/") && options.method === "DELETE") { demoState.mailDomains = demoState.mailDomains.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
     if (path.startsWith("/api/mail/mailboxes/") && options.method === "DELETE") { demoState.mailboxes = demoState.mailboxes.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
     if (path.startsWith("/api/mail/aliases/") && options.method === "DELETE") { demoState.mailAliases = demoState.mailAliases.filter(item => item.id !== path.split("/").pop()); return { ok: true }; }
+    if (path === "/api/mail/hosting" && options.method === "PUT") { demoState.settings.emailHostingEnabled = !!options.body.enabled; return { enabled: demoState.settings.emailHostingEnabled }; }
+    if (path === "/api/mail/mailboxes/password" && options.method === "PUT") return { ok: true };
+    if (path === "/api/sites/waf" && options.method === "PUT") { const site = demoState.sites.find(item => item.id === options.body.id); if (site) site.wafMode = options.body.mode; return { ok: true }; }
+    if (path === "/api/system/hostname" && options.method === "PUT") { demoState.system.hostname = options.body.hostname; return { ok: true }; }
+    if (path === "/api/system/resolvers" && options.method === "PUT") { demoState.settings.resolvers = [...options.body.resolvers]; return { resolvers: demoState.settings.resolvers }; }
+    if (path === "/api/system/reboot" && options.method === "POST") return { scheduled: true };
     if (path === "/api/sites/ssl") {
       const site = demoState.sites.find(item => item.id === options.body.id);
       if (site) site.ssl = true;

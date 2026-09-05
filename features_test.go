@@ -305,6 +305,35 @@ func TestLimitedCommandOutput(t *testing.T) {
 	}
 }
 
+func TestMailFileSnapshotRestoresPreviousState(t *testing.T) {
+	directory := t.TempDir()
+	existing := filepath.Join(directory, "existing")
+	created := filepath.Join(directory, "created")
+	if err := os.WriteFile(existing, []byte("before"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	snapshots, err := snapshotMailFiles([]string{existing, created})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(existing, []byte("after"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(created, []byte("new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreMailFiles(snapshots); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(existing)
+	if err != nil || string(content) != "before" {
+		t.Fatalf("existing file was not restored: %q, %v", content, err)
+	}
+	if _, err := os.Stat(created); !os.IsNotExist(err) {
+		t.Fatal("new mail file was not removed during rollback")
+	}
+}
+
 func TestSchemaUpgradePreservesUnmanagedDNSAndMailPreference(t *testing.T) {
 	directory := t.TempDir()
 	legacy := Config{SchemaVersion: 4}

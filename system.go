@@ -166,7 +166,7 @@ func (s *System) serviceProbe(ctx context.Context, key string) bool {
 	case "nginx":
 		return probeTCP("127.0.0.1:80")
 	case "database":
-		client := firstAvailableCommand("mariadb", "mysql")
+		client := firstAvailableCommand("mysql", "mariadb")
 		_, err := runCommand(ctx, 3*time.Second, client, "--protocol=socket", "--user=root", "--batch", "--skip-column-names", "--execute", "SELECT 1")
 		return err == nil
 	case "cron":
@@ -201,7 +201,12 @@ func (s *System) serviceUnits() []ServiceStatus {
 		{Key: "database", Label: s.DatabaseEngine(), Unit: s.databaseUnit()},
 		{Key: "cron", Label: "App Scheduler", Unit: cronUnit},
 	}
-	mailUnits := s.mailUnits()
+	mailUnits := append([]string{}, s.mailUnits()...)
+	for _, unit := range []string{"opendkim", "rspamd"} {
+		if unitFileExists(unit) {
+			mailUnits = append(mailUnits, unit)
+		}
+	}
 	mailLabel := strings.Join(mailUnits, ", ")
 	if mailLabel == "" {
 		mailLabel = "Postfix, Dovecot"
@@ -247,7 +252,12 @@ func (s *System) ServiceAction(ctx context.Context, key, action string) error {
 		return nil
 	}
 	if key == "mail" {
-		units := s.mailUnits()
+		units := append([]string{}, s.mailUnits()...)
+		for _, unit := range []string{"opendkim", "rspamd"} {
+			if unitFileExists(unit) {
+				units = append(units, unit)
+			}
+		}
 		if len(units) < 2 {
 			return errors.New("email hosting is not installed")
 		}
@@ -316,6 +326,24 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		return site, nil, nil
 	}
 
+	_, rootErr := os.Lstat(site.Root)
+	rootCreated := errors.Is(rootErr, os.ErrNotExist)
+	if rootErr != nil && !rootCreated {
+		return Site{}, nil, fmt.Errorf("inspect website root: %w", rootErr)
+	}
+	placeholderCreated := false
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		if rootCreated {
+			_ = os.RemoveAll(site.Root)
+			_ = os.Remove(filepath.Dir(site.Root))
+		} else if placeholderCreated {
+			_ = os.Remove(filepath.Join(site.Root, "index.html"))
+		}
+	}()
 	if err := os.MkdirAll(site.Root, 0750); err != nil {
 		return Site{}, nil, fmt.Errorf("create website root: %w", err)
 	}
@@ -338,6 +366,7 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		if err := os.WriteFile(placeholder, content, 0640); err != nil {
 			return Site{}, nil, fmt.Errorf("write placeholder: %w", err)
 		}
+		placeholderCreated = true
 		_ = chownSitePath(placeholder, site, 0640, s.webUser())
 	}
 	if err := s.ensureSitePHPPool(ctx, site); err != nil {
@@ -392,7 +421,38 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		credentials = &created
 	}
 	keepPool = true
+	site.provisionedRoot = rootCreated
+	site.provisionedPlaceholder = placeholderCreated
+	committed = true
 	return site, credentials, nil
+}
+
+func (s *System) CleanupFailedSiteFiles(site Site) error {
+	if !domainPattern.MatchString(site.Domain) {
+		return errors.New("website domain is invalid")
+	}
+	expected := filepath.Clean(filepath.Join("/var/www/litecp", site.Domain, "public"))
+	if filepath.Clean(site.Root) != expected {
+		return errors.New("refusing to clean an unexpected website root")
+	}
+	if site.provisionedRoot {
+		if err := os.RemoveAll(expected); err != nil {
+			return err
+		}
+		if err := os.Remove(filepath.Dir(expected)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			// A non-empty parent is preserved deliberately.
+			if entries, readErr := os.ReadDir(filepath.Dir(expected)); readErr != nil || len(entries) == 0 {
+				return err
+			}
+		}
+		return nil
+	}
+	if site.provisionedPlaceholder {
+		if err := os.Remove(filepath.Join(expected, "index.html")); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *System) createDatabase(ctx context.Context, domain, phpVersion string) (DBCredentials, error) {
@@ -419,7 +479,7 @@ func (s *System) createDatabase(ctx context.Context, domain, phpVersion string) 
 		return DBCredentials{}, err
 	}
 	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' %s; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, s.databaseUserIdentification(password, legacyPHPDatabaseAuth(phpVersion)), name, username)
-	databaseClient := firstAvailableCommand("mariadb", "mysql")
+	databaseClient := firstAvailableCommand("mysql", "mariadb")
 	if _, err := runCommandInput(ctx, 20*time.Second, sql, databaseClient, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return DBCredentials{}, fmt.Errorf("create application database: %w", err)
 	}
@@ -428,10 +488,14 @@ func (s *System) createDatabase(ctx context.Context, domain, phpVersion string) 
 
 func demoCredentials(domain string) DBCredentials {
 	part := strings.Trim(safeDatabasePart.ReplaceAllString(strings.ToLower(domain), "_"), "_")
-	if len(part) > 10 {
-		part = part[:10]
+	if len(part) > 8 {
+		part = part[:8]
 	}
-	return DBCredentials{Name: "cp_" + part, Username: "cp_whmcs", Password: "saved-once-demo-password", Host: "localhost"}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(strings.ToLower(domain)))
+	suffix := fmt.Sprintf("%08x", hash.Sum32())[:6]
+	name := "cp_" + part + "_" + suffix
+	return DBCredentials{Name: name, Username: name, Password: "saved-once-demo-password", Host: "localhost"}
 }
 
 func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
@@ -453,11 +517,11 @@ func (s *System) SetCron(site Site, enabled bool) error {
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
-	if s.demo {
-		return nil
-	}
 	if site.AppType == "regular" && enabled {
 		return errors.New("regular websites do not have an application-specific cron target")
+	}
+	if s.demo {
+		return nil
 	}
 	cronPath := filepath.Join("/etc/cron.d", "litecp-"+site.ID)
 	if !enabled {
@@ -505,39 +569,61 @@ func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string
 	configPath, _ := s.nginxPaths(site.Domain)
 	original, err := os.ReadFile(configPath)
 	if err != nil {
+		if originalVersion != phpVersion {
+			_ = s.removeSitePHPPool(context.Background(), updatedSite)
+		}
 		return fmt.Errorf("read nginx configuration: %w", err)
 	}
 	updated, err := replaceFastCGISocket(string(original), s.sitePHPSocket(updatedSite))
 	if err != nil {
-		_ = s.removeSitePHPPool(context.Background(), updatedSite)
+		if originalVersion != phpVersion {
+			if cleanupErr := s.removeSitePHPPool(context.Background(), updatedSite); cleanupErr != nil {
+				return fmt.Errorf("%v; new PHP pool cleanup failed: %v", err, cleanupErr)
+			}
+		}
 		return err
 	}
-	rollback := func() {
-		_ = writeAtomic(configPath, original, 0644)
-		_, _ = runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
+	rollback := func(cause error) error {
+		errorsFound := []string{}
 		if originalVersion != phpVersion {
-			_ = s.removeSitePHPPool(context.Background(), updatedSite)
+			if err := s.ensureSitePHPPool(context.Background(), site); err != nil {
+				errorsFound = append(errorsFound, "restore original pool: "+err.Error())
+			}
 		}
+		if err := writeAtomic(configPath, original, 0644); err != nil {
+			errorsFound = append(errorsFound, "restore Nginx config: "+err.Error())
+		}
+		if _, err := runCommand(context.Background(), 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
+			errorsFound = append(errorsFound, "reload Nginx: "+err.Error())
+		}
+		if originalVersion != phpVersion {
+			if err := s.removeSitePHPPool(context.Background(), updatedSite); err != nil {
+				errorsFound = append(errorsFound, "remove new pool: "+err.Error())
+			}
+		}
+		if len(errorsFound) > 0 {
+			return fmt.Errorf("%v; PHP runtime rollback failed: %s", cause, strings.Join(errorsFound, "; "))
+		}
+		return cause
 	}
 	if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
-		return fmt.Errorf("update nginx configuration: %w", err)
+		return rollback(fmt.Errorf("update nginx configuration: %w", err))
 	}
 	if _, err := runCommand(ctx, 10*time.Second, "nginx", "-t"); err != nil {
-		rollback()
-		return err
+		return rollback(err)
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
-		rollback()
-		return err
+		return rollback(err)
 	}
 	if site.Cron {
 		if err := s.SetCron(updatedSite, true); err != nil {
-			rollback()
-			return fmt.Errorf("update application cron: %w", err)
+			return rollback(fmt.Errorf("update application cron: %w", err))
 		}
 	}
 	if originalVersion != phpVersion {
-		_ = s.removeSitePHPPool(context.Background(), site)
+		if err := s.removeSitePHPPool(context.Background(), site); err != nil {
+			return rollback(fmt.Errorf("remove previous PHP pool: %w", err))
+		}
 	}
 	return nil
 }
@@ -659,7 +745,7 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 	}
 	if site.Database != "" {
 		dumpPath := filepath.Join(staging, "database.sql")
-		dumpCommand := firstAvailableCommand("mariadb-dump", "mysqldump")
+		dumpCommand := firstAvailableCommand("mysqldump", "mariadb-dump")
 		if _, err := runCommand(ctx, 5*time.Minute, dumpCommand, "--protocol=socket", "--user=root", "--single-transaction", "--result-file="+dumpPath, site.Database); err != nil {
 			return Backup{}, fmt.Errorf("dump database: %w", err)
 		}

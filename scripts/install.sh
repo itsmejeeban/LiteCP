@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="0.5.0"
+LITECP_VERSION="0.5.1"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -17,32 +17,16 @@ OS_ID="${ID,,}"
 [[ "${OS_ID}" == "ubuntu" || "${OS_ID}" == "almalinux" ]] || fail "LiteCP supports Ubuntu and AlmaLinux. Detected: ${PRETTY_NAME:-$OS_ID}."
 [[ -f "${SOURCE_DIR}/go.mod" && -f "${SOURCE_DIR}/deploy/litecp.service" ]] || fail "Run this script from a complete LiteCP source checkout."
 
-DATABASE_ENGINE="${LITECP_DATABASE_ENGINE:-}"
-DATABASE_ENGINE="${DATABASE_ENGINE,,}"
 if systemctl list-unit-files mariadb.service --no-legend 2>/dev/null | grep -q '^mariadb.service'; then
-  EXISTING_DATABASE_ENGINE="mariadb"
-elif systemctl list-unit-files mysql.service mysqld.service --no-legend 2>/dev/null | grep -Eq '^(mysql|mysqld)\.service'; then
-  EXISTING_DATABASE_ENGINE="mysql"
-else
-  EXISTING_DATABASE_ENGINE=""
+  fail "MariaDB is installed. LiteCP now requires MySQL; migrate and remove MariaDB before installing or upgrading LiteCP."
 fi
-DATABASE_ENGINE="${DATABASE_ENGINE:-${EXISTING_DATABASE_ENGINE:-mysql}}"
-[[ "${DATABASE_ENGINE}" == "mariadb" || "${DATABASE_ENGINE}" == "mysql" ]] || fail "LITECP_DATABASE_ENGINE must be 'mariadb' or 'mysql'."
-if [[ -n "${EXISTING_DATABASE_ENGINE}" && "${DATABASE_ENGINE}" != "${EXISTING_DATABASE_ENGINE}" ]]; then
-  fail "${EXISTING_DATABASE_ENGINE} is already installed. LiteCP will not replace an existing database engine automatically. Rerun with LITECP_DATABASE_ENGINE=${EXISTING_DATABASE_ENGINE}."
-fi
-
-if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
-  if [[ "${OS_ID}" == "ubuntu" ]]; then
-    DATABASE_PACKAGE="mysql-server"
-    DATABASE_UNIT="mysql"
-  else
-    DATABASE_PACKAGE="mysql-community-server"
-    DATABASE_UNIT="mysqld"
-  fi
+DATABASE_ENGINE="mysql"
+if [[ "${OS_ID}" == "ubuntu" ]]; then
+  DATABASE_PACKAGE="mysql-server"
+  DATABASE_UNIT="mysql"
 else
-  DATABASE_PACKAGE="mariadb-server"
-  DATABASE_UNIT="mariadb"
+  DATABASE_PACKAGE="mysql-community-server"
+  DATABASE_UNIT="mysqld"
 fi
 
 info "Installing the lean WHMCS and WordPress runtime with ${DATABASE_ENGINE} for ${PRETTY_NAME}"
@@ -56,7 +40,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   printf 'postfix postfix/mailname string %s\npostfix postfix/main_mailer_type select Internet Site\n' "$(hostname -f)" | debconf-set-selections
-  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd
+  apt-get install -y ca-certificates curl gnupg unzip software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd unattended-upgrades
   add-apt-repository -y ppa:ondrej/php
   apt-get update
   PHP_PACKAGES=()
@@ -73,18 +57,16 @@ else
   EL_MAJOR="$(rpm -E '%{rhel}')"
   DNF_INSTALL_OPTIONS=()
   dnf install -y epel-release
-  if [[ "${DATABASE_ENGINE}" == "mysql" ]] && ! rpm -q mysql84-community-release >/dev/null 2>&1; then
+  if ! rpm -q mysql84-community-release >/dev/null 2>&1; then
     info "Enabling Oracle's official MySQL 8.4 repository for Enterprise Linux ${EL_MAJOR}"
     dnf install -y "https://dev.mysql.com/get/mysql84-community-release-el${EL_MAJOR}-3.noarch.rpm"
   fi
-  if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
-    dnf config-manager --disable mysql-9.7-lts-community mysql-tools-9.7-lts-community >/dev/null 2>&1 || true
-    dnf config-manager --enable mysql-8.4-lts-community mysql-tools-8.4-lts-community >/dev/null
-    # AlmaLinux 10 advertises MariaDB 11.8 server packages as optional weak
-    # dependencies. Installing those beside Oracle MySQL would cause file conflicts.
-    DNF_INSTALL_OPTIONS+=(--setopt=install_weak_deps=False)
-  fi
-  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl unzip openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot
+  dnf config-manager --disable mysql-9.7-lts-community mysql-tools-9.7-lts-community >/dev/null 2>&1 || true
+  dnf config-manager --enable mysql-8.4-lts-community mysql-tools-8.4-lts-community >/dev/null
+  # AlmaLinux 10 advertises MariaDB 11.8 server packages as optional weak
+  # dependencies. Installing those beside Oracle MySQL would cause file conflicts.
+  DNF_INSTALL_OPTIONS+=(--setopt=install_weak_deps=False)
+  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl unzip openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot dnf-automatic
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi
@@ -203,20 +185,17 @@ d /run/litecp 0755 root root -
 EOF
 systemd-tmpfiles --create /etc/tmpfiles.d/litecp-runtime.conf
 
-if [[ "${OS_ID}" == "ubuntu" && "${DATABASE_ENGINE}" == "mariadb" ]]; then
-  DATABASE_CONFIG=/etc/mysql/mariadb.conf.d/99-litecp.cnf
-elif [[ "${OS_ID}" == "ubuntu" ]]; then
+if [[ "${OS_ID}" == "ubuntu" ]]; then
   DATABASE_CONFIG=/etc/mysql/mysql.conf.d/99-litecp.cnf
 else
   DATABASE_CONFIG=/etc/my.cnf.d/litecp.cnf
 fi
-DATABASE_SECTION="mariadb"
-[[ "${DATABASE_ENGINE}" == "mysql" ]] && DATABASE_SECTION="mysqld"
+DATABASE_SECTION="mysqld"
 if [[ "${OS_ID}" == "almalinux" ]]; then
   install -d -o mysql -g mysql -m 0755 /run/mysqld
   printf 'd /run/mysqld 0755 mysql mysql -\n' > /etc/tmpfiles.d/litecp-mysql.conf
   systemd-tmpfiles --create /etc/tmpfiles.d/litecp-mysql.conf
-  if [[ "${DATABASE_ENGINE}" == "mysql" ]] && ! grep -Eq '^[[:space:]]*!includedir[[:space:]]+/etc/my\.cnf\.d([[:space:]]|$)' /etc/my.cnf; then
+  if ! grep -Eq '^[[:space:]]*!includedir[[:space:]]+/etc/my\.cnf\.d([[:space:]]|$)' /etc/my.cnf; then
     printf '\n!includedir /etc/my.cnf.d\n' >> /etc/my.cnf
   fi
 fi
@@ -230,12 +209,10 @@ if [[ "${OS_ID}" == "almalinux" ]]; then
   cat >> "${DATABASE_CONFIG}" <<'EOF'
 socket=/run/mysqld/mysqld.sock
 EOF
-  if [[ "${DATABASE_ENGINE}" == "mysql" ]]; then
-    cat >> "${DATABASE_CONFIG}" <<'EOF'
+  cat >> "${DATABASE_CONFIG}" <<'EOF'
 mysqlx=0
 mysql_native_password=ON
 EOF
-  fi
   cat >> "${DATABASE_CONFIG}" <<'EOF'
 
 [client]
@@ -243,12 +220,36 @@ socket=/run/mysqld/mysqld.sock
 EOF
 fi
 chmod 0644 "${DATABASE_CONFIG}"
-if [[ "${OS_ID}" == "almalinux" && "${DATABASE_ENGINE}" == "mysql" && ! -d /var/lib/mysql/mysql ]]; then
+if [[ "${OS_ID}" == "almalinux" && ! -d /var/lib/mysql/mysql ]]; then
   info "Initializing MySQL 8.4 with local socket authentication for LiteCP"
   install -d -o mysql -g mysql -m 0750 /var/lib/mysql
   mysqld --initialize-insecure --user=mysql
   systemctl enable --now mysqld
   mysql --protocol=socket --user=root --skip-password --execute "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so'; ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket;"
+fi
+
+info "Enabling automatic operating-system security updates"
+if [[ "${OS_ID}" == "ubuntu" ]]; then
+  cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+  systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
+else
+  cat > /etc/dnf/automatic.conf <<'EOF'
+[commands]
+upgrade_type = security
+random_sleep = 300
+download_updates = yes
+apply_updates = yes
+
+[emitters]
+emit_via = stdio
+
+[base]
+debuglevel = 1
+EOF
+  systemctl enable --now dnf-automatic-install.timer
 fi
 cd "${SOURCE_DIR}"
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
@@ -488,6 +489,31 @@ maxretry = 5
 findtime = 10m
 bantime = 1h
 EOF
+cat > /etc/fail2ban/jail.d/litecp-mail.local <<EOF
+[postfix]
+enabled = true
+backend = systemd
+banaction = ${FAIL2BAN_ACTION}
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+[postfix-sasl]
+enabled = true
+backend = systemd
+banaction = ${FAIL2BAN_ACTION}
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+[dovecot]
+enabled = true
+backend = systemd
+banaction = ${FAIL2BAN_ACTION}
+maxretry = 5
+findtime = 10m
+bantime = 1h
+EOF
 fail2ban-client -t
 systemctl enable --now fail2ban
 
@@ -496,9 +522,10 @@ OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)
 [[ "${LITECP_INSTALL_ANTIVIRUS:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antivirus)
 [[ "${LITECP_INSTALL_WAF:-0}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
+[[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
 printf '\nOpen: \033[1mhttps://%s:8443\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
 printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 8443 and mail ports 25, 465, 587, 993 as needed.\n'
-printf 'Database engine: %s (choose with LITECP_DATABASE_ENGINE=mariadb|mysql before a fresh install).\n' "${DATABASE_ENGINE}"
+printf 'Database engine: MySQL 8.4 LTS.\n'

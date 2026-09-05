@@ -41,6 +41,21 @@ type FileListing struct {
 	Entries []FileEntry `json:"entries"`
 }
 
+type cappedArchiveWriter struct {
+	destination io.Writer
+	written     int64
+	maximum     int64
+}
+
+func (w *cappedArchiveWriter) Write(value []byte) (int, error) {
+	if int64(len(value)) > w.maximum-w.written {
+		return 0, errors.New("archive exceeds the 8 GiB safety limit")
+	}
+	written, err := w.destination.Write(value)
+	w.written += int64(written)
+	return written, err
+}
+
 func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
 	_, clean, err := resolveManagedPath(site.Root, relative, false)
 	if err != nil {
@@ -321,7 +336,8 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	writer := zip.NewWriter(temporary)
+	limitedDestination := &cappedArchiveWriter{destination: temporary, maximum: maxCreatedArchiveSize}
+	writer := zip.NewWriter(limitedDestination)
 	seen := map[string]bool{}
 	members := 0
 	var addPath func(string) error
@@ -484,12 +500,61 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 	if err != nil {
 		return err
 	}
+	type extractionItem struct {
+		member  *zip.File
+		target  string
+		mode    os.FileMode
+		existed bool
+	}
+	type movedBackup struct{ target, backup string }
+	items := make([]extractionItem, 0, len(reader.File))
+	directoryExisted := map[string]bool{}
+	targetKinds := map[string]string{}
+	seenTargets := map[string]bool{}
+	inspectManaged := func(relative string) (os.FileInfo, bool, error) {
+		file, openErr := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
+		if openErr != nil {
+			if errors.Is(openErr, os.ErrNotExist) {
+				return nil, false, nil
+			}
+			return nil, false, openErr
+		}
+		defer file.Close()
+		value, statErr := file.Stat()
+		return value, true, statErr
+	}
+	var addDirectory func(string) error
+	addDirectory = func(relative string) error {
+		relative = filepath.ToSlash(filepath.Clean(filepath.FromSlash(relative)))
+		if relative == "." || relative == "" {
+			return nil
+		}
+		if kind := targetKinds[relative]; kind == "file" {
+			return fmt.Errorf("archive path is both a file and a directory: %s", relative)
+		}
+		targetKinds[relative] = "directory"
+		if _, planned := directoryExisted[relative]; planned {
+			return nil
+		}
+		if err := addDirectory(filepath.ToSlash(filepath.Dir(relative))); err != nil {
+			return err
+		}
+		current, exists, inspectErr := inspectManaged(relative)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if exists && !current.IsDir() {
+			return fmt.Errorf("archive directory conflicts with an existing file: %s", relative)
+		}
+		directoryExisted[relative] = exists
+		return nil
+	}
 	var total int64
 	for _, member := range reader.File {
-		total += int64(member.UncompressedSize64)
-		if total > maxExtractedSize {
+		if member.UncompressedSize64 > uint64(maxExtractedSize-total) {
 			return errors.New("archive expands beyond the 2 GiB safety limit")
 		}
+		total += int64(member.UncompressedSize64)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -505,33 +570,139 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 		if err != nil {
 			return fmt.Errorf("unsafe archive member %s: %w", member.Name, err)
 		}
+		if cleanTarget == archiveClean {
+			return errors.New("archive cannot overwrite itself while it is being extracted")
+		}
+		if seenTargets[cleanTarget] {
+			return fmt.Errorf("archive contains a duplicate path: %s", member.Name)
+		}
+		seenTargets[cleanTarget] = true
 		if member.FileInfo().IsDir() {
-			if err := secureEnsureManagedDirectory(site.Root, cleanTarget, 0750, ownerID, groupID); err != nil {
+			if err := addDirectory(cleanTarget); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := secureEnsureManagedDirectory(site.Root, filepath.ToSlash(filepath.Dir(cleanTarget)), 0750, ownerID, groupID); err != nil {
+		if !member.Mode().IsRegular() {
+			return fmt.Errorf("archive contains a non-regular file: %s", member.Name)
+		}
+		if kind := targetKinds[cleanTarget]; kind == "directory" {
+			return fmt.Errorf("archive path is both a file and a directory: %s", member.Name)
+		}
+		targetKinds[cleanTarget] = "file"
+		if err := addDirectory(filepath.ToSlash(filepath.Dir(cleanTarget))); err != nil {
 			return err
 		}
-		source, err := member.Open()
-		if err != nil {
-			return err
+		current, exists, inspectErr := inspectManaged(cleanTarget)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		if exists && !current.Mode().IsRegular() {
+			return fmt.Errorf("archive file conflicts with a non-regular path: %s", member.Name)
 		}
 		mode := member.Mode().Perm()
 		if mode == 0 || mode&0002 != 0 || mode&04000 != 0 {
 			mode = 0640
 		}
-		written, copyErr := secureWriteManaged(site.Root, cleanTarget, source, int64(member.UncompressedSize64), mode, ownerID, groupID)
+		items = append(items, extractionItem{member: member, target: cleanTarget, mode: mode, existed: exists})
+	}
+
+	directories := make([]string, 0, len(directoryExisted))
+	for directory := range directoryExisted {
+		directories = append(directories, directory)
+	}
+	sort.Slice(directories, func(i, j int) bool {
+		left, right := strings.Count(filepath.ToSlash(directories[i]), "/"), strings.Count(filepath.ToSlash(directories[j]), "/")
+		if left == right {
+			return directories[i] < directories[j]
+		}
+		return left < right
+	})
+	token, err := randomToken(8)
+	if err != nil {
+		return err
+	}
+	backupRoot := ".litecp-extract-backup-" + safeSiteID(token)
+	backupCreated := false
+	backups := []movedBackup{}
+	writtenTargets := []string{}
+	rollback := func(cause error) error {
+		var rollbackErr error
+		for i := len(writtenTargets) - 1; i >= 0; i-- {
+			if removeErr := secureRemoveManaged(site.Root, writtenTargets[i]); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) && rollbackErr == nil {
+				rollbackErr = removeErr
+			}
+		}
+		for i := len(backups) - 1; i >= 0; i-- {
+			if restoreErr := secureRenameManaged(site.Root, backups[i].backup, backups[i].target); restoreErr != nil && rollbackErr == nil {
+				rollbackErr = restoreErr
+			}
+		}
+		for i := len(directories) - 1; i >= 0; i-- {
+			if directoryExisted[directories[i]] {
+				continue
+			}
+			// Remove only empty directories. A concurrent SFTP upload is preserved.
+			_ = secureRemoveManagedDirectoryIfEmpty(site.Root, directories[i])
+		}
+		if backupCreated && rollbackErr == nil {
+			if removeErr := secureRemoveManaged(site.Root, backupRoot); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				rollbackErr = removeErr
+			}
+		}
+		if rollbackErr != nil {
+			return fmt.Errorf("%v; extraction rollback failed: %v; recovery data was kept under %s", cause, rollbackErr, backupRoot)
+		}
+		return cause
+	}
+	for _, item := range items {
+		if !item.existed {
+			continue
+		}
+		if !backupCreated {
+			if err := secureCreateManagedDirectory(site.Root, "", backupRoot, 0700, ownerID, groupID); err != nil {
+				return err
+			}
+			backupCreated = true
+		}
+		backupTarget := filepath.ToSlash(filepath.Join(backupRoot, item.target))
+		if err := secureEnsureManagedDirectory(site.Root, filepath.ToSlash(filepath.Dir(backupTarget)), 0700, ownerID, groupID); err != nil {
+			return rollback(err)
+		}
+		if err := secureRenameManaged(site.Root, item.target, backupTarget); err != nil {
+			return rollback(fmt.Errorf("preserve existing file %s: %w", item.target, err))
+		}
+		backups = append(backups, movedBackup{target: item.target, backup: backupTarget})
+	}
+	for _, directory := range directories {
+		if directoryExisted[directory] {
+			continue
+		}
+		if err := secureEnsureManagedDirectory(site.Root, directory, 0750, ownerID, groupID); err != nil {
+			return rollback(err)
+		}
+	}
+	for _, item := range items {
+		source, openErr := item.member.Open()
+		if openErr != nil {
+			return rollback(openErr)
+		}
+		written, copyErr := secureWriteManagedNoReplace(site.Root, item.target, source, int64(item.member.UncompressedSize64), item.mode, ownerID, groupID)
 		sourceErr := source.Close()
 		if copyErr != nil {
-			return copyErr
+			return rollback(copyErr)
 		}
-		if written > int64(member.UncompressedSize64) {
-			return errors.New("archive member exceeded its declared size")
+		writtenTargets = append(writtenTargets, item.target)
+		if written > int64(item.member.UncompressedSize64) {
+			return rollback(errors.New("archive member exceeded its declared size"))
 		}
 		if sourceErr != nil {
-			return sourceErr
+			return rollback(sourceErr)
+		}
+	}
+	if backupCreated {
+		if err := secureRemoveManaged(site.Root, backupRoot); err != nil {
+			return fmt.Errorf("archive extracted, but old-file cleanup failed: %w", err)
 		}
 	}
 	return nil

@@ -122,37 +122,50 @@ func (s *System) SetWAFMode(ctx context.Context, site Site, mode string) error {
 	if rulesErr != nil && !errors.Is(rulesErr, os.ErrNotExist) {
 		return rulesErr
 	}
-	restoreRules := func() {
+	restoreRules := func() error {
 		if rulesErr == nil {
-			_ = writeAtomic(rulePath, oldRules, 0640)
-		} else {
-			_ = os.Remove(rulePath)
+			return writeAtomic(rulePath, oldRules, 0640)
 		}
+		err := os.Remove(rulePath)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 	if mode != "off" {
 		if err := writeAtomic(rulePath, []byte(s.wafRules(site, mode)), 0640); err != nil {
 			return err
 		}
+	} else if err := os.Remove(rulePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("disable WAF rule cleanup: %w", err)
 	}
-	rollback := func() {
-		restoreRules()
-		_ = writeAtomic(configPath, original, 0644)
-		_, _ = runCommand(context.Background(), 15*time.Second, "systemctl", "reload", "nginx")
+	rollback := func(cause error) error {
+		errorsFound := []string{}
+		if err := restoreRules(); err != nil {
+			errorsFound = append(errorsFound, "rules: "+err.Error())
+		}
+		if err := writeAtomic(configPath, original, 0644); err != nil {
+			errorsFound = append(errorsFound, "Nginx config: "+err.Error())
+		}
+		if _, err := runCommand(context.Background(), 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
+			errorsFound = append(errorsFound, "Nginx reload: "+err.Error())
+		}
+		if len(errorsFound) > 0 {
+			return fmt.Errorf("%v; WAF rollback failed: %s", cause, strings.Join(errorsFound, "; "))
+		}
+		return cause
 	}
 	if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
-		restoreRules()
+		if restoreErr := restoreRules(); restoreErr != nil {
+			return fmt.Errorf("%v; WAF rule rollback failed: %v", err, restoreErr)
+		}
 		return err
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
-		rollback()
-		return err
+		return rollback(err)
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
-		rollback()
-		return err
-	}
-	if mode == "off" {
-		_ = os.Remove(rulePath)
+		return rollback(err)
 	}
 	return nil
 }
@@ -532,7 +545,10 @@ func (a *App) setSiteWAF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.UpdateSite(site.ID, func(value *Site) { value.WAFMode = mode }); err != nil {
-		_ = a.system.SetWAFMode(context.Background(), *site, original)
+		if rollbackErr := a.system.SetWAFMode(context.Background(), *site, original); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and WAF rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "WAF change was rolled back because panel state could not be saved.")
 		return
 	}
@@ -565,12 +581,21 @@ func (a *App) systemResolvers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := a.system.SetResolvers(r.Context(), values); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	original := a.store.Settings()
+	original.Resolvers = append([]string{}, original.Resolvers...)
+	updated := original
+	updated.Resolvers = append([]string{}, values...)
+	if err := a.store.SetSettings(updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "Resolver settings were not changed because panel state could not be saved.")
 		return
 	}
-	if err := a.store.UpdateSettings(func(settings *Settings) { settings.Resolvers = append([]string{}, values...) }); err != nil {
-		writeError(w, http.StatusInternalServerError, "Resolvers changed but panel state could not be saved.")
+	if err := a.system.SetResolvers(r.Context(), values); err != nil {
+		rollbackErr := a.store.SetSettings(original)
+		if rollbackErr != nil {
+			writeError(w, http.StatusBadGateway, fmt.Sprintf("Host resolvers were not changed (%v), and panel-state rollback failed (%v).", err, rollbackErr))
+			return
+		}
+		writeError(w, http.StatusBadGateway, "Resolver change failed and panel state was restored: "+err.Error())
 		return
 	}
 	a.store.AddActivity("DNS resolvers changed", strings.Join(values, ", "), "warning")
@@ -588,11 +613,11 @@ func (a *App) systemReboot(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Type the current hostname to confirm the reboot.")
 		return
 	}
-	a.store.AddActivity("Server reboot scheduled", hostname, "warning")
 	if err := a.system.ScheduleReboot(r.Context()); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	a.store.AddActivity("Server reboot scheduled", hostname, "warning")
 	writeJSON(w, http.StatusAccepted, map[string]bool{"scheduled": true})
 }
 

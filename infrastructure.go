@@ -224,7 +224,7 @@ func (s *System) CreateManagedDatabase(ctx context.Context, name, username, pass
 		return nil
 	}
 	sql := fmt.Sprintf("CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER '%s'@'localhost' %s; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost'; FLUSH PRIVILEGES;", name, username, s.databaseUserIdentification(password, false), name, username)
-	client := firstAvailableCommand("mariadb", "mysql")
+	client := firstAvailableCommand("mysql", "mariadb")
 	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("create database: %w", err)
 	}
@@ -239,7 +239,7 @@ func (s *System) DropManagedDatabase(ctx context.Context, database ManagedDataba
 		return nil
 	}
 	sql := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`; DROP USER IF EXISTS '%s'@'localhost'; FLUSH PRIVILEGES;", database.Name, database.Username)
-	client := firstAvailableCommand("mariadb", "mysql")
+	client := firstAvailableCommand("mysql", "mariadb")
 	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("delete database: %w", err)
 	}
@@ -257,7 +257,7 @@ func (s *System) ResetDatabasePassword(ctx context.Context, database ManagedData
 		return nil
 	}
 	sql := fmt.Sprintf("ALTER USER '%s'@'localhost' %s; FLUSH PRIVILEGES;", database.Username, s.databaseUserIdentification(password, database.LegacyAuth))
-	client := firstAvailableCommand("mariadb", "mysql")
+	client := firstAvailableCommand("mysql", "mariadb")
 	if _, err := runCommandInput(ctx, 30*time.Second, sql, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
 		return fmt.Errorf("reset database password: %w", err)
 	}
@@ -285,9 +285,9 @@ func legacyPHPDatabaseAuth(version string) bool {
 
 func (s *System) DatabaseEngine() string {
 	if s.demo {
-		return "MariaDB"
+		return "MySQL"
 	}
-	for _, command := range []string{"mariadb", "mysql"} {
+	for _, command := range []string{"mysql", "mariadb"} {
 		path, err := exec.LookPath(command)
 		if err != nil {
 			continue
@@ -301,7 +301,7 @@ func (s *System) DatabaseEngine() string {
 }
 
 func (s *System) databaseUnit() string {
-	for _, unit := range []string{"mariadb", "mysql", "mysqld"} {
+	for _, unit := range []string{"mysql", "mysqld", "mariadb"} {
 		if unitFileExists(unit) {
 			return unit
 		}
@@ -309,7 +309,7 @@ func (s *System) databaseUnit() string {
 	if s.os.ID == "ubuntu" || s.os.ID == "debian" {
 		return "mysql"
 	}
-	return "mariadb"
+	return "mysqld"
 }
 
 func validateFirewallRule(rule FirewallRule) error {

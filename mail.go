@@ -17,6 +17,64 @@ import (
 
 var mailboxLocalPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._+\-]{0,62}[a-z0-9])?$`)
 
+type mailFileSpec struct {
+	name    string
+	content string
+	mode    os.FileMode
+}
+
+type mailFileSnapshot struct {
+	path    string
+	content []byte
+	mode    os.FileMode
+	exists  bool
+}
+
+func snapshotMailFiles(paths []string) ([]mailFileSnapshot, error) {
+	result := make([]mailFileSnapshot, 0, len(paths))
+	for _, path := range paths {
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			result = append(result, mailFileSnapshot{path: path})
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("mail configuration path is not a regular file: %s", path)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mailFileSnapshot{path: path, content: content, mode: info.Mode().Perm(), exists: true})
+	}
+	return result, nil
+}
+
+func restoreMailFiles(snapshots []mailFileSnapshot) error {
+	errorsFound := []string{}
+	for _, snapshot := range snapshots {
+		var err error
+		if snapshot.exists {
+			err = writeAtomic(snapshot.path, snapshot.content, snapshot.mode)
+		} else {
+			err = os.Remove(snapshot.path)
+			if errors.Is(err, os.ErrNotExist) {
+				err = nil
+			}
+		}
+		if err != nil {
+			errorsFound = append(errorsFound, snapshot.path+": "+err.Error())
+		}
+	}
+	if len(errorsFound) > 0 {
+		return errors.New(strings.Join(errorsFound, "; "))
+	}
+	return nil
+}
+
 func validateMailDomain(domain string) error {
 	domain = strings.ToLower(strings.TrimSpace(domain))
 	if len(domain) > 253 || !domainPattern.MatchString(domain) {
@@ -97,6 +155,11 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 	if err := os.MkdirAll(mailDir, 0750); err != nil {
 		return fmt.Errorf("create mail configuration directory: %w", err)
 	}
+	// Sorting must not mutate caller-owned slices: handlers retain the original
+	// ordering for durable-state rollback if a later save fails.
+	domains = append([]MailDomain{}, domains...)
+	mailboxes = append([]Mailbox{}, mailboxes...)
+	aliases = append([]MailAlias{}, aliases...)
 	sort.Slice(domains, func(i, j int) bool { return domains[i].Domain < domains[j].Domain })
 	sort.Slice(mailboxes, func(i, j int) bool { return mailboxes[i].Address < mailboxes[j].Address })
 	sort.Slice(aliases, func(i, j int) bool { return aliases[i].Source < aliases[j].Source })
@@ -141,39 +204,101 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 		}
 		aliasMap.WriteString(alias.Source + " " + alias.Destination + "\n")
 	}
-	files := []struct {
-		name    string
-		content string
-		mode    os.FileMode
-	}{
+	files := []mailFileSpec{
 		{"domains", domainMap.String(), 0644},
 		{"mailboxes", mailboxMap.String(), 0644},
 		{"aliases", aliasMap.String(), 0644},
 		{"senders", senderMap.String(), 0644},
 		{"users", passwordFile.String(), 0600},
 	}
+	staging, err := os.MkdirTemp(mailDir, ".litecp-mail-sync-")
+	if err != nil {
+		return fmt.Errorf("create mail configuration staging: %w", err)
+	}
+	defer os.RemoveAll(staging)
 	for _, file := range files {
-		if err := writeAtomic(filepath.Join(mailDir, file.name), []byte(file.content), file.mode); err != nil {
+		if err := writeAtomic(filepath.Join(staging, file.name), []byte(file.content), file.mode); err != nil {
 			return fmt.Errorf("write mail %s: %w", file.name, err)
 		}
 	}
-	if err := chownWebTree(filepath.Join(mailDir, "users"), "dovecot"); err != nil {
+	if err := chownWebTree(filepath.Join(staging, "users"), "dovecot"); err != nil {
 		return fmt.Errorf("secure mailbox password file: %w", err)
 	}
 	for _, name := range []string{"domains", "mailboxes", "aliases", "senders"} {
-		if _, err := runCommand(ctx, 20*time.Second, "postmap", mapType+":"+filepath.Join(mailDir, name)); err != nil {
+		if _, err := runCommand(ctx, 20*time.Second, "postmap", mapType+":"+filepath.Join(staging, name)); err != nil {
 			return err
 		}
 	}
-	for _, unit := range s.mailUnits() {
-		if s.mailHostingDisabled() {
-			break
+	mapSuffix := ".db"
+	if mapType == "lmdb" {
+		mapSuffix = ".lmdb"
+	}
+	commitNames := []string{"domains", "mailboxes", "aliases", "senders", "users"}
+	for _, name := range []string{"domains", "mailboxes", "aliases", "senders"} {
+		commitNames = append(commitNames, name+mapSuffix)
+	}
+	snapshotPaths := make([]string, 0, len(commitNames)+2)
+	for _, name := range commitNames {
+		snapshotPaths = append(snapshotPaths, filepath.Join(mailDir, name))
+	}
+	snapshotPaths = append(snapshotPaths, filepath.Join(mailDir, "KeyTable"), filepath.Join(mailDir, "SigningTable"))
+	snapshots, err := snapshotMailFiles(snapshotPaths)
+	if err != nil {
+		return fmt.Errorf("snapshot mail configuration: %w", err)
+	}
+	rollback := func(cause error) error {
+		restoreErr := restoreMailFiles(snapshots)
+		if _, statErr := os.Stat(filepath.Join(mailDir, "users")); statErr == nil {
+			if ownerErr := chownWebTree(filepath.Join(mailDir, "users"), "dovecot"); ownerErr != nil && restoreErr == nil {
+				restoreErr = ownerErr
+			}
 		}
-		if _, err := runCommand(ctx, 30*time.Second, "systemctl", "reload-or-restart", unit); err != nil {
-			return err
+		units := append([]string{}, s.mailUnits()...)
+		for _, optionalUnit := range []string{"opendkim", "rspamd"} {
+			if unitFileExists(optionalUnit) {
+				units = append(units, optionalUnit)
+			}
+		}
+		if !s.mailHostingDisabled() {
+			for _, unit := range units {
+				if _, reloadErr := runCommand(context.Background(), 30*time.Second, "systemctl", "reload-or-restart", unit); reloadErr != nil && restoreErr == nil {
+					restoreErr = reloadErr
+				}
+			}
+		}
+		if restoreErr != nil {
+			return fmt.Errorf("%v; mail configuration rollback failed: %v", cause, restoreErr)
+		}
+		return cause
+	}
+	for _, name := range commitNames {
+		source := filepath.Join(staging, name)
+		content, readErr := os.ReadFile(source)
+		if readErr != nil {
+			return rollback(fmt.Errorf("read staged mail %s: %w", name, readErr))
+		}
+		mode := os.FileMode(0644)
+		if name == "users" {
+			mode = 0600
+		}
+		if err := writeAtomic(filepath.Join(mailDir, name), content, mode); err != nil {
+			return rollback(fmt.Errorf("activate mail %s: %w", name, err))
 		}
 	}
-	return s.syncDKIM(ctx, domains)
+	if err := chownWebTree(filepath.Join(mailDir, "users"), "dovecot"); err != nil {
+		return rollback(fmt.Errorf("secure active mailbox password file: %w", err))
+	}
+	if err := s.syncDKIM(ctx, domains); err != nil {
+		return rollback(err)
+	}
+	if !s.mailHostingDisabled() {
+		for _, unit := range s.mailUnits() {
+			if _, err := runCommand(ctx, 30*time.Second, "systemctl", "reload-or-restart", unit); err != nil {
+				return rollback(err)
+			}
+		}
+	}
+	return nil
 }
 
 func (s *System) mailMapType(ctx context.Context) (string, error) {

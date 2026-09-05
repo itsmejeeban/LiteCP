@@ -176,6 +176,71 @@ func TestZIPExtractionRejectsZipSlip(t *testing.T) {
 	}
 }
 
+func TestZIPExtractionOverwritesTransactionallyAndRemovesBackup(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "replace.txt"), []byte("old"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := os.Create(filepath.Join(root, "update.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(archive)
+	member, err := writer.Create("replace.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = member.Write([]byte("new"))
+	_ = writer.Close()
+	_ = archive.Close()
+	system := &System{dataDir: t.TempDir(), demo: true}
+	if err := system.ExtractManagedArchive(context.Background(), Site{Root: root}, "update.zip", ""); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "replace.txt"))
+	if err != nil || string(content) != "new" {
+		t.Fatalf("existing file was not replaced: %q, %v", content, err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".litecp-extract-backup-") {
+			t.Fatal("successful extraction left recovery data behind")
+		}
+	}
+}
+
+func TestCappedArchiveWriterRejectsOverflowBeforeWriting(t *testing.T) {
+	var destination strings.Builder
+	writer := &cappedArchiveWriter{destination: &destination, maximum: 4}
+	if _, err := writer.Write([]byte("1234")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write([]byte("5")); err == nil {
+		t.Fatal("archive size limit was not enforced")
+	}
+	if destination.String() != "1234" {
+		t.Fatal("overflow bytes reached the destination")
+	}
+}
+
+func TestDemoDatabaseAndCronBehaviorMatchesProduction(t *testing.T) {
+	system := &System{demo: true}
+	if system.DatabaseEngine() != "MySQL" {
+		t.Fatalf("unexpected demo database engine: %s", system.DatabaseEngine())
+	}
+	first := demoCredentials("billing-one.example.com")
+	second := demoCredentials("billing-two.example.com")
+	if first.Name == second.Name || first.Username == second.Username {
+		t.Fatal("demo database credentials collide between domains")
+	}
+	if err := system.SetCron(Site{Domain: "static.example.com", AppType: "regular"}, true); err == nil {
+		t.Fatal("demo accepted application cron for a regular website")
+	}
+}
+
 func TestInfrastructureValidation(t *testing.T) {
 	validDestination := BackupDestination{Name: "SFTP", Protocol: "sftp", Host: "backup.example.com", Port: 22, Username: "backup", RemotePath: "/litecp", HostKeySHA256: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", PasswordCipher: "cipher"}
 	if err := validateBackupDestination(validDestination, true); err != nil {

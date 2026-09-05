@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var version = "0.5.0-dev"
+var version = "0.5.1-dev"
 
 //go:embed web/*
 var webAssets embed.FS
@@ -465,9 +465,21 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		database = &value
 	}
 	if err := a.store.AddSiteWithDatabase(site, database); err != nil {
-		_ = a.system.RemoveSiteConfig(context.Background(), site)
+		rollbackErrors := []string{}
+		if rollbackErr := a.system.RemoveSiteConfig(context.Background(), site); rollbackErr != nil {
+			rollbackErrors = append(rollbackErrors, "configuration: "+rollbackErr.Error())
+		}
 		if database != nil {
-			_ = a.system.DropManagedDatabase(context.Background(), *database)
+			if rollbackErr := a.system.DropManagedDatabase(context.Background(), *database); rollbackErr != nil {
+				rollbackErrors = append(rollbackErrors, "database: "+rollbackErr.Error())
+			}
+		}
+		if rollbackErr := a.system.CleanupFailedSiteFiles(site); rollbackErr != nil {
+			rollbackErrors = append(rollbackErrors, "files: "+rollbackErr.Error())
+		}
+		if len(rollbackErrors) > 0 {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved and website rollback was incomplete: "+strings.Join(rollbackErrors, "; "))
+			return
 		}
 		writeError(w, http.StatusInternalServerError, "Website was rolled back because panel state could not be saved.")
 		return
@@ -479,9 +491,12 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		} else {
 			site.Cron = true
 			if err := a.store.UpdateSite(site.ID, func(stored *Site) { stored.Cron = true }); err != nil {
-				_ = a.system.SetCron(site, false)
+				rollbackErr := a.system.SetCron(site, false)
 				site.Cron = false
 				warning = "Website created, but cron state could not be saved: " + err.Error()
+				if rollbackErr != nil {
+					warning += "; cron rollback also failed: " + rollbackErr.Error()
+				}
 			}
 		}
 	}
@@ -538,7 +553,10 @@ func (a *App) toggleCron(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.Cron = input.Enabled }); err != nil {
-		_ = a.system.SetCron(*site, !input.Enabled)
+		if rollbackErr := a.system.SetCron(*site, !input.Enabled); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and cron rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Cron change was rolled back because panel state could not be saved.")
 		return
 	}
@@ -583,30 +601,41 @@ func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = true }); err != nil {
-			_ = a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword)
+			if rollbackErr := a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword); rollbackErr != nil {
+				writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and database-authentication rollback failed: "+rollbackErr.Error())
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "Database authentication was rolled back because panel state could not be saved.")
 			return
 		}
 		authenticationChanged = true
 	}
-	rollbackAuthentication := func() {
+	rollbackAuthentication := func() error {
 		if !authenticationChanged || database == nil {
-			return
+			return nil
 		}
-		if err := a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword); err == nil {
-			_ = a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = database.LegacyAuth })
+		if err := a.system.ResetDatabasePassword(context.Background(), *database, input.DatabasePassword); err != nil {
+			return err
 		}
+		return a.store.UpdateDatabase(database.ID, func(value *ManagedDatabase) { value.LegacyAuth = database.LegacyAuth })
 	}
 	if err := a.system.SetPHPVersion(r.Context(), *site, input.Version); err != nil {
-		rollbackAuthentication()
+		if rollbackErr := rollbackAuthentication(); rollbackErr != nil {
+			writeError(w, http.StatusBadGateway, fmt.Sprintf("PHP change failed (%v), and database-authentication rollback failed (%v).", err, rollbackErr))
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.PHPVersion = strings.TrimSpace(input.Version) }); err != nil {
 		changed := *site
 		changed.PHPVersion = strings.TrimSpace(input.Version)
-		_ = a.system.SetPHPVersion(context.Background(), changed, site.PHPVersion)
-		rollbackAuthentication()
+		phpRollbackErr := a.system.SetPHPVersion(context.Background(), changed, site.PHPVersion)
+		authRollbackErr := rollbackAuthentication()
+		if phpRollbackErr != nil || authRollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Panel state could not be saved, and PHP recovery was incomplete (runtime: %v; database authentication: %v).", phpRollbackErr, authRollbackErr))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "PHP change was rolled back because panel state could not be saved.")
 		return
 	}
@@ -631,7 +660,10 @@ func (a *App) deleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.system.RemoveSiteConfig(r.Context(), *site); err != nil {
-		_ = a.system.restoreSiteConfig(context.Background(), *site, backup)
+		if rollbackErr := a.system.restoreSiteConfig(context.Background(), *site, backup); rollbackErr != nil {
+			writeError(w, http.StatusBadGateway, fmt.Sprintf("Website detach failed (%v), and configuration rollback failed (%v).", err, rollbackErr))
+			return
+		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}

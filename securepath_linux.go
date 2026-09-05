@@ -261,6 +261,15 @@ func secureRemoveManaged(root, relative string) error {
 	return secureRemoveAt(parentFD, name)
 }
 
+func secureRemoveManagedDirectoryIfEmpty(root, relative string) error {
+	parentFD, name, err := secureParent(root, relative)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parentFD)
+	return unix.Unlinkat(parentFD, name, unix.AT_REMOVEDIR)
+}
+
 func secureRemoveAt(parentFD int, name string) error {
 	var stat unix.Stat_t
 	if err := unix.Fstatat(parentFD, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != nil {

@@ -1,10 +1,10 @@
 # LiteCP - By Hostingtom
 
-LiteCP is a small, purpose-built control panel for self-hosted WHMCS, WordPress, and regular PHP/HTML websites. It supports Ubuntu and AlmaLinux and manages Nginx, parallel PHP-FPM runtimes, MySQL or MariaDB, files, cron, certificates, local and remote backups, firewall rules, databases, and basic email hosting.
+LiteCP is a small, purpose-built control panel for self-hosted WHMCS, WordPress, and regular PHP/HTML websites. It supports Ubuntu and AlmaLinux and manages Nginx, parallel PHP-FPM runtimes, MySQL 8.4 LTS, files, cron, certificates, local and remote backups, firewall rules, databases, and email hosting.
 
-The panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript interface. It does not run a Node.js process, Redis, a message queue, or a second database.
+The base panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript interface. It does not require a Node.js process, a cache/message-queue service, or a second database. Optional Rspamd spam filtering adds Redis-compatible cache storage and a local DNS resolver.
 
-Release **0.5.0** adds migration, advanced file management/trash, Ace editing, dark mode, outbound firewall rules, optional webmail/DKIM, ClamAV, WAF, and server controls. See [implementation boundaries, installation and validation status](docs/v0.5-development.md) before deploying optional services.
+Release **0.5.1** adds failure-safe file extraction and migration, transactional mail configuration, MySQL-only installation, automatic security updates, mail-authentication bans, optional Rspamd filtering, and correctness fixes across demo, firewall, resolver, cron, WAF and PHP rollback paths. See [implementation boundaries, installation and validation status](docs/v0.5-development.md) before deploying optional services.
 
 ![LiteCP dashboard](docs/dashboard-preview.png)
 
@@ -12,10 +12,10 @@ Release **0.5.0** adds migration, advanced file management/trash, Ace editing, d
 
 - Responsive, session-protected administrator dashboard
 - CPU, memory, disk, load, uptime, and essential service health
-- Safe start/restart actions for Nginx, every installed PHP-FPM runtime, MySQL/MariaDB, Postfix, Dovecot, and cron
+- Safe start/restart actions for Nginx, every installed PHP-FPM runtime, MySQL, Postfix, Dovecot, and cron
 - WHMCS, WordPress, or regular PHP/HTML virtual hosts with application-specific sensitive-file rules
 - Per-website PHP selection, isolated PHP-FPM worker identities, and safe runtime switching
-- Optional MySQL or MariaDB database and one-time generated credentials
+- Optional MySQL database and one-time generated credentials
 - Website-root-confined file manager with multiple upload, browser editing, download, folders, rename, permissions, delete, ZIP, and safe ZIP extraction
 - Let's Encrypt certificates through Certbot
 - Five-minute WHMCS or WordPress cron management using each website's PHP version
@@ -56,21 +56,13 @@ Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13
 
 ## Install
 
-Run this command from a complete LiteCP source checkout on the target server. MySQL is the default database engine:
+Run this command from a complete LiteCP source checkout on the target server. LiteCP installs MySQL 8.4 LTS and refuses to mix or automatically replace an existing MariaDB installation:
 
 ```bash
 sudo bash scripts/install.sh
 ```
 
-Choose MariaDB instead on a fresh installation with:
-
-```bash
-sudo LITECP_DATABASE_ENGINE=mariadb bash scripts/install.sh
-```
-
-The installer never replaces an existing database engine. Re-running it automatically preserves the detected MySQL or MariaDB installation. Migrating production data between engines is a separate database-administration task.
-
-On AlmaLinux, the MySQL option installs Oracle MySQL 8.4 LTS from the official MySQL repository and binds it to localhost. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
+On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository and binds MySQL to localhost. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
 The installer asks for an administrator username and password, installs the required packages, builds LiteCP, and prints the panel URL:
 
@@ -83,7 +75,6 @@ For automated provisioning, provide credentials through the process environment.
 ```bash
 sudo LITECP_ADMIN_USERNAME=admin \
   LITECP_ADMIN_PASSWORD='use-a-long-unique-passphrase' \
-  LITECP_DATABASE_ENGINE=mariadb \
   LITECP_MAIL_HOSTNAME=mail.example.com \
   bash scripts/install.sh
 ```
@@ -105,7 +96,7 @@ The included panel certificate is self-signed so the first browser visit will sh
 
 Choose a managed website under **File manager**. LiteCP confines every operation to that website's document root and refuses symbolic links. The manager supports up to four files per upload request and 512 MiB per file, UTF-8 text editing up to 4 MiB, folder creation, rename/move paths, safe permissions, download, delete, ZIP creation, and ZIP extraction. Multi-file uploads preflight name conflicts and roll back newly created files if any item fails.
 
-ZIP extraction rejects absolute paths, traversal, symbolic links, more than 100,000 members, and archives expanding beyond 2 GiB. The editor blocks binary files, special permission bits, and world-writable modes.
+ZIP extraction rejects absolute paths, traversal, symbolic links, duplicate/conflicting members, more than 100,000 members, and archives expanding beyond 2 GiB. Existing files are moved to private recovery storage before replacement and automatically restored if extraction fails. ZIP creation enforces its 8 GiB compressed-size limit while writing, before it can consume unbounded temporary disk space. The editor blocks binary files, special permission bits, and world-writable modes.
 
 ## Remote backups
 
@@ -121,11 +112,13 @@ Production delivery also requires work outside LiteCP:
 
 - Set the mail hostname to a public FQDN and install a trusted certificate matching it.
 - Point the mail hostname A/AAAA record and each hosted domain's MX record to the server.
-- Publish SPF, DKIM, and DMARC records. LiteCP does not currently sign DKIM messages.
+- Publish the SPF, DKIM, and DMARC records shown by LiteCP. OpenDKIM signs outgoing messages after the optional mail feature is installed.
 - Confirm that the VPS provider permits outbound TCP port 25 and configure reverse DNS with the provider.
 - Test reputation and deliverability before sending billing messages.
 
-The installer configures authenticated submission and rejects unauthenticated relaying. Removing a mailbox or mail domain disables delivery/login but intentionally keeps its Maildir under `/var/vmail` for manual recovery.
+The installer configures authenticated submission and rejects unauthenticated relaying. Mail-map changes are staged and rolled back if activation or service reload fails. Removing a mailbox or mail domain disables delivery/login but intentionally keeps its Maildir under `/var/vmail` for manual recovery.
+
+For inbound/outbound spam filtering, run `sudo bash scripts/install-features.sh antispam`. This installs Rspamd, Redis (or AlmaLinux 10's compatible Valkey service) and a localhost-only Unbound resolver, connects Rspamd's milter to Postfix, and keeps the Rspamd controller private on loopback. Filtering and authentication improve delivery safety but cannot guarantee inbox placement.
 
 ## Firewall management
 
@@ -176,6 +169,7 @@ Detaching a website removes its LiteCP-managed Nginx, isolated PHP pool, and cro
 - SFTP SHA256 host-key pinning and TLS-required FTPS support
 - Local-socket-only database administration with validated SQL identifiers
 - Authenticated SMTP submission with unauthenticated relay rejection
+- Fail2ban protection for SSH, Postfix/SASL and Dovecot, plus automatic operating-system security updates
 - Atomic durable state/configuration writes, rollback on failed mutations, and strict domain validation
 - Per-website numeric PHP identities, sockets, and document-root restrictions
 - Panel process isolated with systemd filesystem and kernel protections

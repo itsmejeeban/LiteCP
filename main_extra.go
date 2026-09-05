@@ -25,6 +25,19 @@ func (a *App) requestSite(r *http.Request) (*Site, error) {
 	return site, nil
 }
 
+func rollbackUploadedFiles(system *System, site Site, files []FileEntry) error {
+	failures := []string{}
+	for _, created := range files {
+		if err := system.DeleteManagedPath(site, created.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			failures = append(failures, created.Path+": "+err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		return errors.New(strings.Join(failures, "; "))
+	}
+	return nil
+}
+
 func (a *App) files(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -167,8 +180,9 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 	for index, header := range files {
 		file, err := header.Open()
 		if err != nil {
-			for _, created := range stored {
-				_ = a.system.DeleteManagedPath(*site, created.Path)
+			if rollbackErr := rollbackUploadedFiles(a.system, *site, stored); rollbackErr != nil {
+				writeError(w, http.StatusInternalServerError, fmt.Sprintf("Upload failed (%v), and uploaded-file rollback failed (%v).", err, rollbackErr))
+				return
 			}
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -182,8 +196,9 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = file.Close()
 		if saveErr != nil {
-			for _, created := range stored {
-				_ = a.system.DeleteManagedPath(*site, created.Path)
+			if rollbackErr := rollbackUploadedFiles(a.system, *site, stored); rollbackErr != nil {
+				writeError(w, http.StatusInternalServerError, fmt.Sprintf("Upload failed (%v), and uploaded-file rollback failed (%v).", saveErr, rollbackErr))
+				return
 			}
 			writeError(w, http.StatusBadRequest, saveErr.Error())
 			return
@@ -367,7 +382,10 @@ func (a *App) createManagedDatabase(w http.ResponseWriter, r *http.Request) {
 	id, _ := randomToken(8)
 	database := ManagedDatabase{ID: id, Name: input.Name, Username: input.Username, CreatedAt: time.Now().UTC()}
 	if err := a.store.AddDatabase(database); err != nil {
-		_ = a.system.DropManagedDatabase(r.Context(), database)
+		if rollbackErr := a.system.DropManagedDatabase(context.Background(), database); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and database rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Database was rolled back because panel state could not be saved.")
 		return
 	}
@@ -388,15 +406,27 @@ func (a *App) deleteManagedDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	if database.SiteID != "" {
 		if err := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = "", "" }); err != nil {
-			_ = a.store.AddDatabase(*database)
+			if rollbackErr := a.store.AddDatabase(*database); rollbackErr != nil {
+				writeError(w, http.StatusInternalServerError, "Website detachment failed, and database-state rollback also failed: "+rollbackErr.Error())
+				return
+			}
 			writeError(w, http.StatusInternalServerError, "Could not detach the database from its website.")
 			return
 		}
 	}
 	if err := a.system.DropManagedDatabase(r.Context(), *database); err != nil {
-		_ = a.store.AddDatabase(*database)
+		rollbackErrors := []string{}
+		if rollbackErr := a.store.AddDatabase(*database); rollbackErr != nil {
+			rollbackErrors = append(rollbackErrors, "database state: "+rollbackErr.Error())
+		}
 		if database.SiteID != "" {
-			_ = a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = database.Name, database.Username })
+			if rollbackErr := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = database.Name, database.Username }); rollbackErr != nil {
+				rollbackErrors = append(rollbackErrors, "website state: "+rollbackErr.Error())
+			}
+		}
+		if len(rollbackErrors) > 0 {
+			writeError(w, http.StatusBadGateway, fmt.Sprintf("Database removal failed (%v), and state rollback was incomplete: %s", err, strings.Join(rollbackErrors, "; ")))
+			return
 		}
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -535,7 +565,11 @@ func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.AddFirewallRule(rule); err != nil {
-		_ = a.system.ApplyFirewallRule(r.Context(), rule, true)
+		rollbackErr := a.system.ApplyFirewallRule(context.Background(), rule, true)
+		if rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Panel state could not be saved, and the new firewall rule could not be removed (%v). Check the host firewall immediately.", rollbackErr))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Firewall rule was rolled back because panel state could not be saved.")
 		return
 	}
@@ -555,7 +589,11 @@ func (a *App) deleteFirewallRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.RemoveFirewallRule(id); err != nil {
-		_ = a.system.ApplyFirewallRule(r.Context(), *rule, false)
+		rollbackErr := a.system.ApplyFirewallRule(context.Background(), *rule, false)
+		if rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("Panel state could not be saved, and the removed firewall rule could not be restored (%v). Check the host firewall immediately.", rollbackErr))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Firewall removal was rolled back because panel state could not be saved.")
 		return
 	}
@@ -589,7 +627,10 @@ func (a *App) createMailDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.AddMailDomain(item); err != nil {
-		_ = a.system.SyncMailConfig(context.Background(), domains[:len(domains)-1], mailboxes, aliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains[:len(domains)-1], mailboxes, aliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mail rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Mail configuration was rolled back because panel state could not be saved.")
 		return
 	}
@@ -614,7 +655,10 @@ func (a *App) deleteMailDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.store.RemoveMailDomain(id); err != nil {
 		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
-		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mail rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Mail removal was rolled back because panel state could not be saved.")
 		return
 	}
@@ -673,7 +717,10 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.AddMailbox(mailbox); err != nil {
-		_ = a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mailbox rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Mailbox creation was rolled back because panel state could not be saved.")
 		return
 	}
@@ -697,7 +744,10 @@ func (a *App) deleteMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.store.RemoveMailbox(id); err != nil {
 		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
-		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mailbox rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Mailbox removal was rolled back because panel state could not be saved.")
 		return
 	}
@@ -733,7 +783,10 @@ func (a *App) resetMailboxPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.store.UpdateMailbox(input.ID, func(value *Mailbox) { value.PasswordHash = hash }); err != nil {
 		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
-		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and password rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Password change was rolled back because panel state could not be saved.")
 		return
 	}
@@ -778,7 +831,10 @@ func (a *App) createMailAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.AddMailAlias(alias); err != nil {
-		_ = a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and alias rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Alias creation was rolled back because panel state could not be saved.")
 		return
 	}
@@ -801,7 +857,10 @@ func (a *App) deleteMailAlias(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.store.RemoveMailAlias(id); err != nil {
 		originalDomains, originalMailboxes, originalAliases := a.store.MailConfig()
-		_ = a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases)
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), originalDomains, originalMailboxes, originalAliases); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and alias rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "Alias removal was rolled back because panel state could not be saved.")
 		return
 	}

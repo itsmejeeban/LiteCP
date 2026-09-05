@@ -321,9 +321,12 @@ func copyMigrationTree(ctx context.Context, sourceRoot string, site Site, uid, g
 		if err != nil {
 			return err
 		}
-		defer input.Close()
-		_, err = secureWriteManagedNoReplace(site.Root, relative, input, info.Size(), 0640, uid, gid)
-		return err
+		_, writeErr := secureWriteManagedNoReplace(site.Root, relative, input, info.Size(), 0640, uid, gid)
+		closeErr := input.Close()
+		if writeErr != nil {
+			return writeErr
+		}
+		return closeErr
 	})
 }
 
@@ -362,28 +365,80 @@ func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "Destination website must be empty. Move its placeholder or existing files to Trash first.")
 		return
 	}
+	uid, gid, err := a.system.siteFileOwnership(*site)
+	if err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	staging, err := os.MkdirTemp(filepath.Dir(site.Root), ".litecp-migration-"+safeSiteID(input.ID)+"-")
+	if err != nil {
+		writeError(w, 500, "Create migration staging directory: "+err.Error())
+		return
+	}
+	keepStaging := false
+	defer func() {
+		if !keepStaging {
+			_ = os.RemoveAll(staging)
+		}
+	}()
+	if err := os.Chmod(staging, 0750); err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	if err := os.Chown(staging, uid, gid); err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	stagedSite := *site
+	stagedSite.Root = staging
+	if err := copyMigrationTree(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.Root)), stagedSite, uid, gid); err != nil {
+		writeError(w, 502, "Migration staging failed; the live website was not changed: "+err.Error())
+		return
+	}
 	database := a.store.DatabaseBySiteID(site.ID)
+	databaseImported := false
 	if input.SQL != "" {
 		if database == nil || validateDatabasePassword(input.Password) != nil {
 			writeError(w, 400, "The target site needs a managed database and its current password.")
 			return
 		}
 		if err := a.system.importScopedSQL(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.SQL)), *database, input.Password); err != nil {
-			writeError(w, 502, "Database import failed; partial tables may remain in the selected database: "+err.Error())
+			writeError(w, 502, "Database import failed and the empty target database was restored: "+err.Error())
 			return
 		}
+		databaseImported = true
 	}
-	uid, gid, err := a.system.siteFileOwnership(*site)
-	if err != nil {
-		writeError(w, 500, err.Error())
+	rollbackDatabase := func(cause error) error {
+		if !databaseImported || database == nil {
+			return cause
+		}
+		if rollbackErr := a.system.resetManagedDatabase(context.Background(), *database); rollbackErr != nil {
+			return fmt.Errorf("%v; database rollback failed: %v", cause, rollbackErr)
+		}
+		return cause
+	}
+	previousRoot := staging + "-previous"
+	if err := os.Rename(site.Root, previousRoot); err != nil {
+		writeError(w, 502, rollbackDatabase(fmt.Errorf("prepare atomic website switch: %w", err)).Error())
 		return
 	}
-	if err := copyMigrationTree(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.Root)), *site, uid, gid); err != nil {
-		writeError(w, 502, "Import stopped; some files may have been copied. Staging is preserved: "+err.Error())
+	if err := os.Rename(staging, site.Root); err != nil {
+		restoreErr := os.Rename(previousRoot, site.Root)
+		cause := fmt.Errorf("activate staged website: %w", err)
+		if restoreErr != nil {
+			keepStaging = true
+			cause = fmt.Errorf("%v; original website restore failed: %v; staged files remain at %s", cause, restoreErr, staging)
+		}
+		writeError(w, 502, rollbackDatabase(cause).Error())
+		return
+	}
+	keepStaging = true
+	if err := os.RemoveAll(previousRoot); err != nil {
+		writeError(w, 500, "Migration was activated, but the previous empty document root could not be removed: "+err.Error())
 		return
 	}
 	a.store.AddActivity("Website migration imported", preview.Platform+" → "+site.Domain, "success")
-	writeJSON(w, 200, map[string]any{"ok": true, "note": "Update application database credentials and paths using the file manager. SSL, DNS, email accounts, server settings and arbitrary source cron jobs are not imported. Test the site before changing DNS. Delete the staged archive when verified."})
+	writeJSON(w, 200, map[string]any{"ok": true, "note": "Website files were activated atomically. Update application database credentials and paths using the file manager. SSL, DNS, email accounts, server settings and arbitrary source cron jobs are not imported. Test the site before changing DNS. Delete the staged archive when verified."})
 }
 
 func (a *App) migrationDelete(w http.ResponseWriter, r *http.Request) {
@@ -446,7 +501,26 @@ func (s *System) importScopedSQL(ctx context.Context, sqlPath string, database M
 	var stderr limitedBuffer
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
+		rollbackErr := s.resetManagedDatabase(context.Background(), database)
+		if rollbackErr != nil {
+			return fmt.Errorf("SQL import: %s (empty-database restore failed: %v)", stderr.String(), rollbackErr)
+		}
 		return fmt.Errorf("SQL import: %s", stderr.String())
+	}
+	return nil
+}
+
+func (s *System) resetManagedDatabase(ctx context.Context, database ManagedDatabase) error {
+	if err := validateDatabaseObjects(database.Name, database.Username); err != nil {
+		return err
+	}
+	if s.demo {
+		return nil
+	}
+	statement := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`; CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", database.Name, database.Name)
+	client := firstAvailableCommand("mysql", "mariadb")
+	if _, err := runCommandInput(ctx, 30*time.Second, statement, client, "--protocol=socket", "--user=root", "--batch"); err != nil {
+		return fmt.Errorf("restore empty managed database: %w", err)
 	}
 	return nil
 }

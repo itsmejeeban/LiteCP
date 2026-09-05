@@ -115,6 +115,14 @@ func secureRemoveManaged(root, relative string) error {
 	return os.RemoveAll(path)
 }
 
+func secureRemoveManagedDirectoryIfEmpty(root, relative string) error {
+	path, _, err := resolveManagedPath(root, relative, false)
+	if err != nil {
+		return err
+	}
+	return os.Remove(path)
+}
+
 func secureChmodManaged(root, relative string, mode os.FileMode) error {
 	path, _, err := resolveManagedPath(root, relative, false)
 	if err != nil {

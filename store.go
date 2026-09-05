@@ -26,6 +26,11 @@ type Site struct {
 	Database   string    `json:"database,omitempty"`
 	DBUser     string    `json:"dbUser,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
+
+	// Provisioning markers are request-scoped and never persisted. They allow
+	// the API to remove only files it created if durable state saving fails.
+	provisionedRoot        bool
+	provisionedPlaceholder bool
 }
 
 type Backup struct {

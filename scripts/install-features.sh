@@ -4,15 +4,15 @@ set -Eeuo pipefail
 [[ $(id -u) -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 source /etc/os-release
 [[ $ID == ubuntu || $ID == almalinux ]] || exit 1
-[[ $# -gt 0 ]] || { echo 'Usage: bash scripts/install-features.sh mail antivirus waf'; exit 1; }
-for feature in "$@"; do [[ $feature == mail || $feature == antivirus || $feature == waf ]] || { echo "Unknown feature: $feature"; exit 1; }; done
+[[ $# -gt 0 ]] || { echo 'Usage: bash scripts/install-features.sh mail antivirus waf antispam'; exit 1; }
+for feature in "$@"; do [[ $feature == mail || $feature == antivirus || $feature == waf || $feature == antispam ]] || { echo "Unknown feature: $feature"; exit 1; }; done
 exec 9>/run/litecp-feature-installer.lock
 flock -n 9 || { echo 'Another feature installer is running.' >&2; exit 1; }
 FEATURE_TMP=$(mktemp -d /tmp/litecp-features.XXXXXXXX)
 trap 'rm -rf -- "$FEATURE_TMP"' EXIT
 BACKUP=/var/backups/litecp/feature-install-$(date -u +%Y%m%dT%H%M%SZ)
 install -d -m 0700 "$BACKUP"
-for directory in /etc/nginx /etc/postfix /etc/dovecot /etc/opendkim.conf /etc/litecp/mail; do
+for directory in /etc/nginx /etc/postfix /etc/dovecot /etc/opendkim.conf /etc/litecp/mail /etc/rspamd /etc/unbound; do
   [[ ! -e $directory ]] || cp -a --parents "$directory" "$BACKUP/"
 done
 # Restore just the Nginx files this installer can replace if validation fails.
@@ -250,6 +250,93 @@ EOF
   echo "Webmail ready at https://$host:8444/; publish the panel's DNS records and test mail before changing MX."
 }
 
+install_antispam() {
+  local redis_unit unbound_config current
+  [[ -f /etc/litecp/mail/mailboxes ]] || { echo 'Install the base LiteCP mail stack first.' >&2; return 1; }
+  if [[ $ID == ubuntu ]]; then
+    install -d -m 0755 /etc/apt/keyrings
+    curl --fail --location --proto '=https' --tlsv1.2 --retry 3 https://rspamd.com/apt-stable/gpg.key -o "$FEATURE_TMP/rspamd.key"
+    gpg --dearmor --yes --output /etc/apt/keyrings/rspamd.gpg "$FEATURE_TMP/rspamd.key"
+    printf 'deb [signed-by=/etc/apt/keyrings/rspamd.gpg] https://rspamd.com/apt-stable/ %s main\n' "$VERSION_CODENAME" > /etc/apt/sources.list.d/rspamd.list
+    apt-get update
+    packages rspamd redis-server unbound
+    redis_unit=redis-server
+    unbound_config=/etc/unbound/unbound.conf.d/litecp-rspamd.conf
+  else
+    local el_major cache_package
+    el_major=$(rpm -E '%{rhel}')
+    curl --fail --location --proto '=https' --tlsv1.2 --retry 3 "https://rspamd.com/rpm-stable/centos-$el_major/rspamd.repo" -o /etc/yum.repos.d/rspamd.repo
+    cache_package=redis
+    if ! dnf -q repoquery --available redis | grep -q .; then
+      cache_package=valkey
+    fi
+    packages rspamd "$cache_package" unbound
+    redis_unit="$cache_package"
+    unbound_config=/etc/unbound/conf.d/litecp-rspamd.conf
+  fi
+  install -d -m 0755 "$(dirname "$unbound_config")" /etc/rspamd/local.d
+  cat > "$unbound_config" <<'EOF'
+server:
+  interface: 127.0.0.1
+  port: 5353
+  access-control: 127.0.0.0/8 allow
+  hide-identity: yes
+  hide-version: yes
+  prefetch: yes
+EOF
+  cat > /etc/rspamd/local.d/options.inc <<'EOF'
+task_timeout = 15s;
+dns {
+  nameserver = ["127.0.0.1:5353"];
+}
+EOF
+  cat > /etc/rspamd/local.d/redis.conf <<'EOF'
+servers = "127.0.0.1:6379";
+EOF
+  cat > /etc/rspamd/local.d/actions.conf <<'EOF'
+reject = 15;
+add_header = 6;
+greylist = 4;
+EOF
+  cat > /etc/rspamd/local.d/worker-proxy.inc <<'EOF'
+bind_socket = "127.0.0.1:11332";
+milter = yes;
+timeout = 120s;
+upstream "local" {
+  default = yes;
+  self_scan = yes;
+}
+EOF
+  cat > /etc/rspamd/local.d/worker-controller.inc <<'EOF'
+bind_socket = "127.0.0.1:11334";
+secure_ip = "127.0.0.1";
+EOF
+  if [[ $ID == almalinux ]]; then
+    semanage port -a -t dns_port_t -p tcp 5353 2>/dev/null || semanage port -m -t dns_port_t -p tcp 5353
+    semanage port -a -t dns_port_t -p udp 5353 2>/dev/null || semanage port -m -t dns_port_t -p udp 5353
+  fi
+  unbound-checkconf
+  systemctl enable --now unbound "$redis_unit"
+  rspamadm configtest
+  systemctl enable --now rspamd
+  current=$(postconf -h smtpd_milters)
+  if [[ $current != *'127.0.0.1:11332'* ]]; then
+    [[ -z $current ]] || current="$current, "
+    postconf -e "smtpd_milters = ${current}inet:127.0.0.1:11332"
+  fi
+  current=$(postconf -h non_smtpd_milters)
+  if [[ $current != *'127.0.0.1:11332'* ]]; then
+    [[ -z $current ]] || current="$current, "
+    postconf -e "non_smtpd_milters = ${current}inet:127.0.0.1:11332"
+  fi
+  postconf -e 'milter_default_action = tempfail'
+  postconf -e 'milter_protocol = 6'
+  postfix check
+  systemctl restart postfix
+  printf 'Subject: LiteCP Rspamd test\n\nAntispam scanner is ready.\n' | rspamc >/dev/null
+  echo 'Rspamd inbound/outbound filtering is active. Its controller is bound to localhost only.'
+}
+
 install_waf() {
   if [[ $ID == ubuntu ]]; then
     packages libnginx-mod-http-modsecurity
@@ -316,16 +403,9 @@ SecRule REQUEST_HEADERS:Content-Type "@rx (?:application/(?:soap\+)?xml|text/xml
 SecRule REQBODY_ERROR "!@eq 0" "id:200003,phase:2,deny,status:400,log,msg:'Request body parsing failed'"
 EOF
   fi
-  cat > /etc/logrotate.d/litecp-waf <<'EOF'
-/var/log/nginx/litecp-waf-*.log {
-  daily
-  rotate 7
-  compress
-  missingok
-  notifempty
-  copytruncate
-}
-EOF
+  # The distribution Nginx policy already rotates /var/log/nginx/*.log.
+  # Remove the older overlapping policy, which makes logrotate reject both.
+  rm -f /etc/logrotate.d/litecp-waf
   nginx -t
   systemctl reload nginx
   echo 'WAF engine installed. Enable Detect per website, tune false positives, then choose Block. Rebuild the AlmaLinux connector after a Nginx ABI upgrade.'

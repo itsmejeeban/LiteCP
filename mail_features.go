@@ -145,8 +145,10 @@ func (s *System) SetMailHosting(ctx context.Context, enabled bool) error {
 		return errors.New("Postfix and Dovecot are not installed")
 	}
 	units := s.mailUnits()
-	if unitFileExists("opendkim") {
-		units = append(units, "opendkim")
+	for _, unit := range []string{"opendkim", "rspamd"} {
+		if unitFileExists(unit) {
+			units = append(units, unit)
+		}
 	}
 	action := "disable"
 	if enabled {
@@ -193,7 +195,10 @@ func (a *App) toggleMailHosting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.UpdateSettings(func(value *Settings) { value.EmailHostingEnabled = input.Enabled }); err != nil {
-		_ = a.system.SetMailHosting(context.Background(), previous)
+		if rollbackErr := a.system.SetMailHosting(context.Background(), previous); rollbackErr != nil {
+			writeError(w, 500, "Panel state could not be saved, and mail-service rollback failed: "+rollbackErr.Error())
+			return
+		}
 		writeError(w, 500, "Mail hosting change was rolled back because state could not be saved.")
 		return
 	}

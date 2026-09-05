@@ -83,14 +83,22 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.system.ApplyFirewallRule(r.Context(), rule, false); err != nil {
-		_ = a.system.ApplyFirewallRule(context.Background(), *old, false)
-		writeError(w, 502, "Rule update failed; the original rule was reapplied: "+err.Error())
+		restoreErr := a.system.ApplyFirewallRule(context.Background(), *old, false)
+		if restoreErr != nil {
+			writeError(w, 502, fmt.Sprintf("Rule update failed (%v), and the original rule could not be restored (%v). Check the host firewall immediately.", err, restoreErr))
+			return
+		}
+		writeError(w, 502, "Rule update failed; the original rule was restored: "+err.Error())
 		return
 	}
 	if err := a.store.UpdateFirewallRule(id, rule); err != nil {
-		_ = a.system.ApplyFirewallRule(context.Background(), rule, true)
-		_ = a.system.ApplyFirewallRule(context.Background(), *old, false)
-		writeError(w, 500, "Firewall edit was rolled back because state could not be saved.")
+		removeErr := a.system.ApplyFirewallRule(context.Background(), rule, true)
+		restoreErr := a.system.ApplyFirewallRule(context.Background(), *old, false)
+		if removeErr != nil || restoreErr != nil {
+			writeError(w, 500, fmt.Sprintf("Panel state could not be saved, and firewall recovery was incomplete (remove new: %v; restore original: %v). Check the host firewall immediately.", removeErr, restoreErr))
+			return
+		}
+		writeError(w, 500, "Firewall edit was rolled back because panel state could not be saved.")
 		return
 	}
 	a.store.AddActivity("Firewall rule edited", rule.Direction+" "+rule.Action+": "+rule.Label, "warning")
