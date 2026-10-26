@@ -24,6 +24,24 @@
   if (typeof document === "undefined") return;
   const cp = window.LiteCP, $ = s => document.querySelector(s), esc = cp.escapeHTML;
   const page = $('[data-page-view="files"]'), panel = $(".file-manager-panel");
+  const heading = page.querySelector(".page-heading");
+  heading.querySelector(".eyebrow")?.remove();
+  heading.querySelector("p")?.remove();
+  const fullscreen = document.createElement("button");
+  fullscreen.type = "button"; fullscreen.className = "button button-secondary fm-fullscreen-toggle";
+  fullscreen.textContent = "Full screen"; fullscreen.setAttribute("aria-pressed", "false");
+  heading.append(fullscreen);
+  const setFullscreen = enabled => {
+    page.classList.toggle("fm-fullscreen", enabled);
+    document.body.classList.toggle("fm-fullscreen-open", enabled);
+    fullscreen.textContent = enabled ? "Exit full screen" : "Full screen";
+    fullscreen.setAttribute("aria-pressed", String(enabled));
+  };
+  fullscreen.addEventListener("click", () => setFullscreen(!page.classList.contains("fm-fullscreen")));
+  document.addEventListener("keydown", event => {
+    if(event.key === "Escape" && page.classList.contains("fm-fullscreen") && !document.querySelector("dialog[open]")) setFullscreen(false);
+  });
+  window.addEventListener("hashchange", () => { if(location.hash !== "#files") setFullscreen(false); });
   const paths = {
     folder:'M3 7h7l2-3h9v16H3z', file:'M6 3h8l4 4v14H6z M14 3v5h5', upload:'M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6',
     plus:'M12 5v14M5 12h14', copy:'M8 8h13v13H8zM16 8V3H3v13h5', move:'M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4',

@@ -127,3 +127,15 @@
 @media(max-width:1350px) {.fm-body{grid-template-columns:180px minmax(0,1fr);}.fm-inspector{display:none;}.fm-tool{padding:8px;font-size:11px;}.fm-page .file-toolbar{gap:1px;}}
 @media(max-width:1000px) {.fm-table th:nth-child(4),.fm-table td:nth-child(4){display:none;}.fm-body{grid-template-columns:155px minmax(0,1fr);}.fm-toolbar .fm-tool{padding:7px;}}
 @media(max-width:720px) {.fm-page .page-heading{gap:12px;}.fm-page .compact-select{width:100%;}.fm-page .compact-select select{width:100%;min-width:0;}.fm-page .file-toolbar{padding:8px;gap:3px;}.fm-tool{font-size:11px;padding:7px;}.fm-tool svg{width:15px;height:15px;}.fm-divider{display:none;}.fm-body{display:block;height:58vh;min-height:350px;}.fm-folders{display:none;}.fm-content{height:100%;}.fm-address{gap:5px;padding:8px;}.fm-address>label{padding:0 8px;}.fm-address .button{padding:0 10px;}.fm-page .file-filters{gap:7px;padding:9px;}.fm-search{min-width:100%;}.fm-hidden{margin-right:auto;}.fm-table th:nth-child(6),.fm-table td:nth-child(6){display:none;}.fm-table td{font-size:11px;padding:7px;}.fm-table th{padding:9px 7px;}.fm-name{font-size:12px;}.fm-table td:nth-child(2){max-width:170px;}.fm-selection{padding:6px 10px;}.fm-selection .fm-tool span{display:none;}.fm-footer>span:last-child{display:none;}.fm-dialog header,.fm-dialog-body{padding:18px;}.fm-cards{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));padding:10px;}}
+
+/* Compact heading and a file-manager-only fullscreen workspace. */
+.fm-page .page-heading { margin-bottom: 12px; gap: 16px; }
+.fm-page .page-heading h1 { margin: 0; font-size: 26px; }
+.fm-page .page-heading .compact-select { margin-left: auto; }
+.fm-fullscreen-toggle { flex-shrink: 0; }
+body.fm-fullscreen-open { overflow: hidden; }
+.fm-page.fm-fullscreen { position: fixed; inset: 0; z-index: 100; background: var(--paper); padding: 14px; display: flex; flex-direction: column; overflow: auto; }
+.fm-page.fm-fullscreen .page-heading { flex-shrink: 0; }
+.fm-page.fm-fullscreen .file-manager-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fm-page.fm-fullscreen .fm-body { flex: 1; height: auto; min-height: 0; }
+@media(max-width:720px) { .fm-page .page-heading { flex-wrap: wrap; } .fm-page .page-heading .compact-select { width: auto; flex: 1; } .fm-page.fm-fullscreen { padding: 8px; } }
