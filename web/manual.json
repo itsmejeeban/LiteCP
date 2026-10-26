@@ -45,6 +45,36 @@
     ]
   },
   {
+    "title": "Node.js, Python and Ruby hosting",
+    "page": "applications",
+    "topics": [
+      {
+        "title": "Enable a runtime and configure a website",
+        "steps": [
+          "Open Application Hosting. Node.js, Python and Ruby are disabled independently by default. Enable only the language you require; enabling alone starts no application.",
+          "Create a dedicated Regular PHP/HTML website and upload the application through File Manager or FTPS. WordPress and WHMCS websites cannot be converted by this feature.",
+          "Enable SSL before starting the application. Choose Configure website, the website and runtime version, then enter the startup command and optional dependency setup command. Save configuration.",
+          "Use a production application server that listens on 0.0.0.0:8080. PORT=8080 and HOST=0.0.0.0 are supplied to the container. The application directory is /app.",
+          "Start downloads the selected official runtime image, optionally runs dependency setup, starts the container and switches Nginx only after the application listens. Review errors and logs if setup or startup fails."
+        ]
+      },
+      {
+        "title": "Operate and change versions",
+        "steps": [
+          "Start resumes a stopped application. Stop interrupts application traffic but retains the proxy configuration. Disable website runtime stops it and restores the saved PHP/HTML routing, retaining uploaded files and runtime configuration.",
+          "Disable website runtime before editing the version or commands. Save the new configuration and Start again. Dependencies may need rebuilding for a new version.",
+          "Disable all websites using a language before switching off that hosting feature. Configurations and files remain retained.",
+          "Application containers run as the website UID/GID, with a read-only system filesystem, a writable application directory, no added capabilities, and limits of 256 MiB memory, 1 CPU and 128 processes. Ports are bound only to localhost and Nginx handles the public domain.",
+          "Container restart policy and podman-restart.service provide boot startup for deployed apps. This does not replace monitoring or guarantee application health after reboot.",
+          "Local MySQL can be reached through /run/mysqld/mysqld.sock when present. Configure a database driver with unix socket support, the managed database username and its password. Database credentials are not automatically injected.",
+          "Use trusted dependencies. Setup commands can modify application files. Slim runtime images do not include every native build dependency; prebuild dependencies compatible with the selected runtime when needed.",
+          "Do not place passwords or tokens in startup/setup commands because configuration is visible to panel administrators. Use application configuration files and protect them appropriately.",
+          "Application images and old stopped containers are retained; there is no automatic destructive cleanup. Use the dependency installer if Podman is unavailable."
+        ]
+      }
+    ]
+  },
+  {
     "title": "File manager",
     "page": "files",
     "topics": [

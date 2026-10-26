@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+ Application *ApplicationHosting `json:"application,omitempty"`
 	ID         string    `json:"id"`
 	Domain     string    `json:"domain"`
 	Root       string    `json:"root"`
@@ -114,6 +115,7 @@ type Activity struct {
 }
 
 type Settings struct {
+ ApplicationHosting map[string]bool `json:"applicationHosting,omitempty"`
  ActivityRetentionDays int `json:"activityRetentionDays"`
 	Email               string   `json:"email"`
 	Timezone            string   `json:"timezone"`

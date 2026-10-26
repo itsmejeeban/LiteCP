@@ -1,0 +1,6 @@
+.application-hosting-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:18px 0;}
+.application-hosting-grid h2 {font-size:19px;margin-top:0;}
+[data-page-view="applications"]>.panel {margin:18px 0;overflow-x:auto;}
+[data-page-view="applications"] .data-table {min-width:780px;}
+[data-page-view="applications"] .feature-output {white-space:pre-wrap;overflow-wrap:anywhere;max-height:450px;overflow:auto;}
+@media(max-width:1000px){.application-hosting-grid{grid-template-columns:1fr;}}

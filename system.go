@@ -501,6 +501,7 @@ func demoCredentials(domain string) DBCredentials {
 }
 
 func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
+ if site.Application!=nil&&site.Application.Enabled{return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")}
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
@@ -552,6 +553,7 @@ func (s *System) SetCron(site Site, enabled bool) error {
 }
 
 func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
+ if site.Application!=nil&&site.Application.Enabled{return errors.New("disable the application runtime before changing PHP")}
 	phpVersion = strings.TrimSpace(phpVersion)
 	if err := validateSiteOptions(site.AppType, site.AppVersion, phpVersion); err != nil {
 		return err
@@ -697,6 +699,7 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
+ if site.Application!=nil&&site.Application.Container!="" {if _,err:=runHostCommand(ctx,45*time.Second,"podman","stop",site.Application.Container);err!=nil{return errors.New("stop the application before detaching this website")}}
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
@@ -835,6 +838,7 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) string {
+ if site.Application!=nil&&site.Application.Enabled {return s.applicationNginx(site)}
 	applicationRules := `    location = /configuration.php { deny all; }
     location ^~ /crons/ { deny all; }`
 	if site.AppType == "wordpress" {

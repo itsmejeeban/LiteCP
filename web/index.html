@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="file-manager.css?v=1">
   <link rel="stylesheet" href="panel-settings.css?v=1">
   <link rel="stylesheet" href="documentation.css?v=1">
+  <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=1">
   <script src="theme.js"></script>
 </head>
@@ -237,7 +238,7 @@
   <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit">Save file</button></div></form></div></div>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=application-hosting-1" defer></script>
   <script src="features.js?v=0.5.1" defer></script>
   <script src="file-manager.js?v=1" defer></script>
   <script src="panel-settings.js?v=1" defer></script>
@@ -246,5 +247,6 @@
   <script src="activities.js?v=1" defer></script>
   <script src="website-ftp.js?v=1" defer></script>
   <script src="documentation.js?v=1" defer></script>
+  <script src="application-hosting.js?v=1" defer></script>
 </body>
 </html>
