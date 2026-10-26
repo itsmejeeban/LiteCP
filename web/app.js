@@ -464,8 +464,10 @@
     const mailboxes = currentState.mailboxes || [];
     const aliases = currentState.mailAliases || [];
     const selected = $("#mailboxDomain").value;
-    $("#mailboxDomain").innerHTML = domains.length ? domains.map(domain => `<option value="${escapeHTML(domain.domain)}">${escapeHTML(domain.domain)}</option>`).join("") : '<option value="">Add a mail domain first</option>';
-    if (domains.some(domain => domain.domain === selected)) $("#mailboxDomain").value = selected;
+    const websiteDomains = [...new Set((currentState.sites || []).map(site => site.domain))];
+    const availableDomains = [...new Set([...domains.map(item => item.domain), ...websiteDomains])].sort();
+    $("#mailboxDomain").innerHTML = availableDomains.length ? availableDomains.map(domain => `<option value="${escapeHTML(domain)}">${escapeHTML(domain)}${domains.some(item => item.domain === domain) ? "" : " — website"}</option>`).join("") : '<option value="">Add a website or mail domain first</option>';
+    if (availableDomains.includes(selected)) $("#mailboxDomain").value = selected;
     $("#mailDomainsTable").innerHTML = domains.length ? `<table class="data-table"><thead><tr><th>DOMAIN</th><th>MAILBOXES</th><th>ALIASES</th><th>CREATED</th><th></th></tr></thead><tbody>${domains.map(domain => `<tr><td><strong>${escapeHTML(domain.domain)}</strong></td><td>${mailboxes.filter(item => item.domain === domain.domain).length}</td><td>${aliases.filter(item => item.source.endsWith("@" + domain.domain)).length}</td><td>${formatDate(domain.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="domain-delete" data-id="${escapeHTML(domain.id)}" aria-label="Remove mail domain ${escapeHTML(domain.domain)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mail domains configured.</p></div>';
     $("#mailboxesTable").innerHTML = mailboxes.length ? `<table class="data-table"><thead><tr><th>ADDRESS</th><th>QUOTA</th><th>CREATED</th><th></th></tr></thead><tbody>${mailboxes.map(mailbox => `<tr><td><strong>${escapeHTML(mailbox.address)}</strong></td><td>${formatBytes(mailbox.quotaMb * 1024 * 1024)}</td><td>${formatDate(mailbox.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-mail-action="mailbox-password" data-id="${escapeHTML(mailbox.id)}">Password</button><button class="danger" data-mail-action="mailbox-delete" data-id="${escapeHTML(mailbox.id)}" aria-label="Disable mailbox ${escapeHTML(mailbox.address)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No mailboxes created.</p></div>';
     $("#mailAliasesTable").innerHTML = aliases.length ? `<table class="data-table"><thead><tr><th>SOURCE</th><th>DESTINATION</th><th>CREATED</th><th></th></tr></thead><tbody>${aliases.map(alias => `<tr><td><strong>${escapeHTML(alias.source)}</strong></td><td>${escapeHTML(alias.destination)}</td><td>${formatDate(alias.createdAt)}</td><td><span class="row-actions"><button class="danger" data-mail-action="alias-delete" data-id="${escapeHTML(alias.id)}" aria-label="Remove alias ${escapeHTML(alias.source)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No forwarding aliases configured.</p></div>';
@@ -865,10 +867,15 @@
       }
       if (button.dataset.databaseAction === "open") {
         if (demoMode) { showToast("Server required", "phpMyAdmin is available on the installed server."); return; }
-        const url = `/api/phpmyadmin/index.php?route=/database/structure&db=${encodeURIComponent(database.name)}`;
-        const tab = window.open(url, "_blank");
-        if (!tab) showToast("Tab blocked", "Allow new tabs for LiteCP, then click the database again.", "error");
-        else { tab.opener = null; tab.focus(); }
+        const target = "litecp_pma_" + Date.now();
+        const tab = window.open("about:blank", target);
+        if (!tab) { showToast("Tab blocked", "Allow new tabs for LiteCP, then click the database again.", "error"); return; }
+        try {
+          const result = await api("/api/databases/phpmyadmin", { method: "POST", body: { id: database.id } });
+          const form = document.createElement("form"); form.method = "POST"; form.action = "/api/phpmyadmin/sign-on.php"; form.target = target;
+          const ticket = document.createElement("input"); ticket.type = "hidden"; ticket.name = "ticket"; ticket.value = result.ticket; form.append(ticket);
+          document.body.append(form); form.submit(); form.remove(); tab.opener = null; tab.focus();
+        } catch (error) { tab.close(); throw error; }
         return;
       }
       if (button.dataset.databaseAction === "delete") {
@@ -906,7 +913,13 @@
 
   async function createMailbox(event) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    try { await api("/api/mail/mailboxes", { method: "POST", body: { domain: data.get("domain"), localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
+    try {
+      const domain = String(data.get("domain")).trim().toLowerCase();
+      if (!(currentState.mailDomains || []).some(item => item.domain === domain)) {
+        await api("/api/mail/domains", { method: "POST", body: { domain } });
+        currentState = await api("/api/state"); renderMail();
+      }
+      await api("/api/mail/mailboxes", { method: "POST", body: { domain: data.get("domain"), localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
     catch (error) { handleError(error); }
   }
 

@@ -50,6 +50,18 @@ PHP
  chown "root:${WEB_USER}" "${ROOT}/config.inc.php"
  chmod 640 "${ROOT}/config.inc.php"
 fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cp "${SCRIPT_DIR}/../deploy/phpmyadmin-signon.php" "${ROOT}/sign-on.php"
+chmod 644 "${ROOT}/sign-on.php"
+if ! grep -q "LiteCPSignon" "${ROOT}/config.inc.php"; then
+ cat >> "${ROOT}/config.inc.php" <<'PHP'
+$cfg['Servers'][1]['auth_type'] = 'signon';
+$cfg['Servers'][1]['SignonSession'] = 'LiteCPSignon';
+$cfg['Servers'][1]['SignonCookieParams'] = ['lifetime'=>0,'path'=>'/api/phpmyadmin/','domain'=>'','secure'=>true,'httponly'=>true,'samesite'=>'Strict'];
+$cfg['Servers'][1]['SignonURL'] = $cfg['PmaAbsoluteUri'].'sign-on.php';
+$cfg['Servers'][1]['LogoutURL'] = '/#databases';
+PHP
+fi
 cat > "${POOL}" <<EOF
 [litecp_phpmyadmin]
 user = ${WEB_USER}
@@ -100,4 +112,4 @@ EOF
 nginx -t
 systemctl reload "${PHP_UNIT}"
 systemctl reload nginx
-echo "phpMyAdmin ${PMA_VERSION} installed behind LiteCP authentication. Database user login is required."
+echo "phpMyAdmin ${PMA_VERSION} installed behind LiteCP authentication. Open a managed database from LiteCP for automatic sign-in."

@@ -24,7 +24,7 @@ func (a *App) phpMyAdmin(w http.ResponseWriter, r *http.Request) {
   request.Header.Set("X-Forwarded-Proto",scheme)
   // Never pass the panel session credential into PHP.
   request.Header.Del("Cookie")
-  for _,cookie:=range r.Cookies(){name:=strings.TrimPrefix(cookie.Name,"__Secure-");if strings.HasPrefix(name,"pma")||name=="phpMyAdmin"||name=="phpMyAdmin_https"{request.AddCookie(cookie)}}
+  for _,cookie:=range r.Cookies(){name:=strings.TrimPrefix(cookie.Name,"__Secure-");if strings.HasPrefix(name,"pma")||name=="phpMyAdmin"||name=="phpMyAdmin_https"||name=="LiteCPSignon"{request.AddCookie(cookie)}}
  }
  proxy.ModifyResponse=func(response *http.Response)error{
   // phpMyAdmin supplies the CSP required by its bundled scripts.
