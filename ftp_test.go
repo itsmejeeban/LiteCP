@@ -1,0 +1,12 @@
+package main
+import("context";"net/http/httptest";"os";"os/exec";"path/filepath";"strings";"testing")
+func TestFTPValidationAndAuthentication(t *testing.T){for _,name:=range []string{"root;id","../site","-user","UPPER","a"}{if ftpNamePattern.MatchString(name){t.Fatal("unsafe username accepted",name)}};if validFTPPassword("123456789012\nattack"){t.Fatal("line break accepted")};app:=&App{};response:=httptest.NewRecorder();app.routes().ServeHTTP(response,httptest.NewRequest("GET","/api/website-ftp?siteId=x",nil));if response.Code!=401{t.Fatal(response.Code)}}
+func TestFTPVirtualAccountLifecycleFixture(t *testing.T){if _,err:=exec.LookPath("pure-pw");err!=nil{t.Skip("pure-pw required")};system:=&System{dataDir:t.TempDir()};root:=system.ftpRoot();if err:=os.MkdirAll(root,0700);err!=nil{t.Fatal(err)};if err:=os.WriteFile(filepath.Join(root,"installed"),nil,0600);err!=nil{t.Fatal(err)};site:=Site{ID:"fixture",Root:filepath.Join(t.TempDir(),"public"),RuntimeUID:15001,RuntimeGID:15001};account:=FTPAccount{ID:"fixture",SiteID:site.ID,Username:"fixture_ftp"};accounts:=[]FTPAccount{account}
+ for _,action:=range []string{"useradd","passwd","userdel"}{next:=accounts;if action=="userdel"{next=[]FTPAccount{}};if err:=system.updateFTP(context.Background(),site,next,account,"fixture-strong-password-28",action);err!=nil{t.Fatalf("%s: %v",action,err)};content,err:=os.ReadFile(filepath.Join(root,"users.passwd"));if err!=nil{t.Fatal(err)};if strings.Contains(string(content),"fixture-strong-password"){t.Fatal("plaintext password retained")};if action!="userdel"&&!strings.Contains(string(content),site.Root+"/./"){t.Fatalf("missing chroot directory: %s",content)}}}
+
+func TestFTPRejectsAccountFromAnotherWebsite(t *testing.T){
+ system:=&System{dataDir:t.TempDir()};if err:=os.MkdirAll(system.ftpRoot(),0700);err!=nil{t.Fatal(err)}
+ if err:=os.WriteFile(filepath.Join(system.ftpRoot(),"accounts.json"),[]byte(`[{"id":"foreign","siteId":"other","username":"foreign_ftp"}]`),0600);err!=nil{t.Fatal(err)}
+ store,err:=OpenStore(t.TempDir());if err!=nil{t.Fatal(err)};store.cfg.Sites=[]Site{{ID:"selected",Domain:"example.test"}}
+ app:=&App{store:store,system:system};request:=httptest.NewRequest("DELETE","/api/website-ftp?siteId=selected",strings.NewReader(`{"id":"foreign","confirm":true}`));response:=httptest.NewRecorder();app.websiteFTP(response,request);if response.Code!=404{t.Fatal("cross-site account accepted",response.Code)}
+}
