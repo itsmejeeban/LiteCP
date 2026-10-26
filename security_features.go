@@ -170,6 +170,16 @@ func (s *System) SetWAFMode(ctx context.Context, site Site, mode string) error {
 	return nil
 }
 
+func (s *System) phpModules(ctx context.Context, version string) (string, error) {
+	if s.usesPHP73Container(version) {
+		// Podman needs host storage locks which are read-only in the panel's
+		// filesystem sandbox. Keep the sandbox and use the existing host helper
+		// for this fixed, read-only module query.
+		return runHostCommand(ctx, 20*time.Second, s.phpBinary(version), "-m")
+	}
+	return runCommand(ctx, 15*time.Second, s.phpBinary(version), "-m")
+}
+
 func (s *System) PHPExtensions(ctx context.Context) ([]PHPExtensionStatus, error) {
 	result := []PHPExtensionStatus{}
 	for _, version := range s.installedPHPVersions() {
@@ -179,7 +189,7 @@ func (s *System) PHPExtensions(ctx context.Context) ([]PHPExtensionStatus, error
 				modules[item.key] = item.key != "redis"
 			}
 		} else {
-			output, err := runCommand(ctx, 15*time.Second, s.phpBinary(version), "-m")
+			output, err := s.phpModules(ctx, version)
 			if err != nil {
 				return nil, fmt.Errorf("read PHP %s modules: %w", version, err)
 			}
@@ -238,7 +248,7 @@ func (s *System) packageAvailable(ctx context.Context, name string) bool {
 }
 
 func (s *System) phpExtensionLoaded(ctx context.Context, version, extension string) (bool, error) {
-	output, err := runCommand(ctx, 20*time.Second, s.phpBinary(version), "-m")
+	output, err := s.phpModules(ctx, version)
 	if err != nil {
 		return false, err
 	}

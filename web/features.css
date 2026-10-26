@@ -16,6 +16,7 @@
 .feature-actions,.pagination,.file-filters,.editor-tools { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .pagination { justify-content:space-between;padding:12px 18px;border-top:1px solid var(--line);font-size:14px; }
 .feature-note { font-size:14px;line-height:1.6;color:var(--muted);padding:0 18px;overflow-wrap:anywhere; }
+#extensionsTable .empty-state p { font-size:14px;max-width:680px;overflow-wrap:anywhere; }
 .settings-body .feature-note {padding:0;}
 .feature-output {white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto;background:var(--paper);color:var(--ink);padding:20px;border:1px solid var(--line);border-radius:10px;font:14px/1.6 ui-monospace,Consolas,monospace;}
 .password-actions {display:flex;justify-content:flex-end;gap:5px;margin-top:-5px;}.password-actions .button {min-height:30px;font-size:13px;padding:0 9px;}
