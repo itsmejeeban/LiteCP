@@ -262,6 +262,7 @@ func (s *System) phpExtensionLoaded(ctx context.Context, version, extension stri
 
 func (s *System) SetPHPExtension(ctx context.Context, version, extension string, install bool) error {
 	version, extension = strings.TrimSpace(version), strings.ToLower(strings.TrimSpace(extension))
+ if strings.HasPrefix(extension,"package:") { return s.setCatalogueExtension(ctx,version,extension,install) }
 	if !containsString(supportedPHPVersions, version) || !s.phpRuntimeAvailable(version) {
 		return errors.New("selected PHP version is not installed")
 	}
@@ -477,7 +478,7 @@ func (a *App) activities(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) phpExtensions(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		items, err := a.system.PHPExtensions(r.Context())
+		items, err := a.system.extensionCatalogue(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err.Error())
 			return
