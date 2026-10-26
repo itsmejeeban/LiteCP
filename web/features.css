@@ -31,3 +31,19 @@
 #trashPanel{margin-top:18px;}.feature-actions .danger {color:var(--red);}.activity-row .activity-time{white-space:normal;text-align:right;min-width:110px;}
 .modal-card.editor-modal{width:min(1000px,96vw);}
 @media(max-width:700px){.theme-control{margin-right:4px;}.theme-control select{max-width:110px;font-size:12px;}.feature-actions{width:100%;}.editor-tools .button{min-height:32px;padding:0 7px;}.pagination{font-size:12px;}.file-filters{padding:10px;}}
+
+/* PHP extension states/actions use explicit colors in both themes. */
+#extensionsTable .extension-state,#extensionsTable .extension-managed,#extensionsTable .extension-action {display:inline-flex;align-items:center;gap:6px;}
+#extensionsTable svg {width:15px;height:15px;flex-shrink:0;}
+#extensionsTable .extension-installed,#extensionsTable .extension-install {background:#def7e9;color:#145d3c;border:1px solid #9cdbb9;}
+#extensionsTable .extension-available {background:#e6efff;color:#234f91;border:1px solid #b4cafa;}
+#extensionsTable .extension-managed,#extensionsTable .extension-baseline {background:#fff0cc;color:#775009;border:1px solid #e3c77c;}
+#extensionsTable .extension-remove {background:#ffe5e9;color:#942d40;border:1px solid #edafbb;}
+#extensionsTable .extension-install:hover {background:#c4ebd5;color:#10462e;}
+#extensionsTable .extension-remove:hover {background:#ffd0d9;color:#762133;}
+:root[data-theme="dark"] #extensionsTable .extension-installed,:root[data-theme="dark"] #extensionsTable .extension-install {background:#204c3e;color:#a4ebc7;border-color:#39785d;}
+:root[data-theme="dark"] #extensionsTable .extension-available {background:#263f62;color:#b5d5ff;border-color:#45658e;}
+:root[data-theme="dark"] #extensionsTable .extension-managed,:root[data-theme="dark"] #extensionsTable .extension-baseline {background:#51432a;color:#f5d58c;border-color:#806a3d;}
+:root[data-theme="dark"] #extensionsTable .extension-remove {background:#512d3b;color:#ffb6c4;border-color:#865062;}
+:root[data-theme="dark"] #extensionsTable .extension-install:hover {background:#2b624d;color:#d3ffe7;}
+:root[data-theme="dark"] #extensionsTable .extension-remove:hover {background:#71394b;color:#ffe1e8;}
