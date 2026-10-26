@@ -243,6 +243,9 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .inline-php-select:focus { border-color: rgba(15,138,131,.65); box-shadow: 0 0 0 3px rgba(15,138,131,.09); }
 .inline-php-select:disabled { opacity: .65; cursor: wait; }
 .domain-cell { display: flex; align-items: center; gap: 11px; }
+.website-link { color: inherit; text-decoration: none; }
+.website-link:hover { color: var(--teal); text-decoration: underline; }
+.website-link:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 2px; }
 .domain-favicon { width: 32px; height: 32px; border-radius: 8px; background: #eaf7f4; color: var(--teal); display: grid; place-items: center; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .domain-copy { display: flex; flex-direction: column; }
 .domain-copy strong { font-size: 11px; }
