@@ -1,5 +1,7 @@
 .top-server-ip {display:inline-block;margin-left:10px;font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap;}
-#topHostname {display:inline;}
+.server-hostname-row {display:flex;align-items:baseline;gap:10px;white-space:nowrap;}
+.server-hostname-row #topHostname {display:inline;margin-top:0;}
+.server-hostname-row .top-server-ip {margin-left:0;}
 .server-identity>span:last-child {min-width:0;}
 .mobile-menu {display:grid;place-items:center;width:36px;height:36px;margin-right:10px;flex-shrink:0;}
 .mobile-menu svg {width:19px;height:19px;}
@@ -21,5 +23,5 @@
 :root[data-theme="dark"] .row-actions button.danger:hover {background:#472c3a;color:#ffb0bc;border-color:#754359;}
 :root[data-theme="dark"] .button-primary:hover {background:#8472d9;color:#fff;}
 :root[data-theme="dark"] .button-secondary:hover {background:var(--mint);color:var(--ink);border-color:var(--teal);}
-@media(max-width:700px){.resolver-fields{grid-template-columns:1fr;gap:0;}.top-server-ip{display:block;margin:3px 0 0;font-size:10px;}.server-identity small{font-size:7px;}.mobile-menu{margin-right:5px;}}
+@media(max-width:700px){.resolver-fields{grid-template-columns:1fr;gap:0;}.server-hostname-row{gap:7px;}.server-hostname-row .top-server-ip{display:inline-block;margin:0;font-size:10px;}.server-identity small{font-size:7px;}.mobile-menu{margin-right:5px;}}
 @media(prefers-reduced-motion:reduce){.sidebar,.workspace{transition:none;}}

@@ -1,7 +1,11 @@
 (() => {
   "use strict";
   const cp=window.LiteCP, $=s=>document.querySelector(s), esc=cp.escapeHTML;
-  $("#topHostname").insertAdjacentHTML("afterend",'<span id="topServerIP" class="top-server-ip"></span>');
+  const hostnameRow = document.createElement("span");
+  hostnameRow.className = "server-hostname-row";
+  $("#topHostname").before(hostnameRow);
+  hostnameRow.append($("#topHostname"));
+  hostnameRow.insertAdjacentHTML("beforeend",'<span id="topServerIP" class="top-server-ip"></span>');
   const form=$("#resolversForm");
   form.querySelector(".panel-head p").textContent="View the server’s current DNS servers and configure up to two resolver addresses.";
   form.querySelector(".settings-body").innerHTML=`<div class="resolver-current"><strong>Current resolvers</strong><div id="currentResolverList" aria-live="polite">Reading current configuration…</div></div><div class="resolver-fields"><label class="field"><span>Primary resolver</span><input id="resolverPrimary" name="primary" required placeholder="8.8.8.8" autocomplete="off" spellcheck="false"><small>IPv4 or IPv6 address</small></label><label class="field"><span>Secondary resolver</span><input id="resolverSecondary" name="secondary" placeholder="8.8.4.4" autocomplete="off" spellcheck="false"><small>Optional alternate DNS server</small></label></div><input id="resolversInput" type="hidden"><p class="feature-note">Applying these fields replaces the current resolver list. Private networks may require the provider’s DNS servers.</p><button class="button button-secondary" type="submit">Apply resolvers</button>`;
