@@ -121,7 +121,6 @@ func (a *App) fileContent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestSize)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, "Upload is too large or malformed.")
 		return
@@ -139,18 +138,8 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Choose at least one file to upload.")
 		return
 	}
-	if len(files) > maxUploadFiles {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Upload at most %d files per request.", maxUploadFiles))
-		return
-	}
-	cleanNames := make([]string, len(files))
-	seenNames := make(map[string]bool, len(files))
-	for _, header := range files {
-		if header.Size > maxUploadSize {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("%s exceeds the %d MiB per-file limit.", filepath.Base(header.Filename), maxUploadSize>>20))
-			return
-		}
-	}
+ cleanNames := make([]string,len(files))
+ seenNames := make(map[string]bool,len(files))
 	for index, header := range files {
 		name := filepath.Base(header.Filename)
 		if err := validateFileName(name); err != nil {
@@ -163,7 +152,7 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		seenNames[name] = true
 		cleanNames[index] = name
-		if len(files) > 1 {
+		if len(files) > 1 || r.FormValue("noReplace")=="1" {
 			relative := filepath.ToSlash(filepath.Join(r.FormValue("path"), name))
 			exists, err := a.system.ManagedPathExists(*site, relative)
 			if err != nil {
@@ -189,7 +178,7 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		var entry FileEntry
 		var saveErr error
-		if len(files) > 1 {
+		if len(files) > 1 || r.FormValue("noReplace")=="1" {
 			entry, saveErr = a.system.SaveNewUpload(*site, r.FormValue("path"), cleanNames[index], file)
 		} else {
 			entry, saveErr = a.system.SaveUpload(*site, r.FormValue("path"), cleanNames[index], file)

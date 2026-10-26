@@ -139,3 +139,15 @@ body.fm-fullscreen-open { overflow: hidden; }
 .fm-page.fm-fullscreen .file-manager-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .fm-page.fm-fullscreen .fm-body { flex: 1; height: auto; min-height: 0; }
 @media(max-width:720px) { .fm-page .page-heading { flex-wrap: wrap; } .fm-page .page-heading .compact-select { width: auto; flex: 1; } .fm-page.fm-fullscreen { padding: 8px; } }
+
+/* Give the file list the available height without redundant explanatory rows. */
+.fm-page > .info-callout {display:none;}
+.fm-page .file-toolbar {padding:6px 10px;}
+.fm-page .fm-address {padding:6px 10px;}
+.fm-page .file-breadcrumb {display:none;}
+.fm-page .file-filters {padding:7px 10px;}
+.fm-page .fm-selection {min-height:32px;padding:4px 10px;}
+.fm-page .fm-footer {padding:6px 12px;}
+.fm-page .fm-body {height:calc(100vh - 330px);min-height:300px;}
+.fm-page.fm-fullscreen .fm-body {height:auto;min-height:0;}
+.fm-page .fm-folders>p {display:none;}

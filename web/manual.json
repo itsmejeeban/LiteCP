@@ -53,7 +53,7 @@
         "steps": [
           "Select the website. Use the folder tree, breadcrumb, back/forward/up buttons or address field to navigate inside its public root.",
           "Search filters the current folder. Toggle hidden files, sorting, and list/grid view as needed. Select files to see details and actions.",
-          "Use New file, New folder or Upload. Open text files in the editor and save changes. Binary files require download and an appropriate local editor.",
+          "Use New file, New folder or Upload. Uploads have no panel-imposed file-size or queue-count cap and are sent one file at a time; disk space, browser and connection timeouts still apply. Completed files remain if a later queued file fails. Open text files in the editor and save changes. Binary files require download and an appropriate local editor.",
           "Select items to copy, move, rename, change permissions, compress, extract or download. Existing-path conflicts and unsafe archive paths may be rejected."
         ]
       },

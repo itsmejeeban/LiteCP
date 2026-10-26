@@ -36,14 +36,14 @@ func secureWriteManagedMode(root, relative string, source io.Reader, maximum int
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	written, err := io.Copy(temporary, io.LimitReader(source, maximum+1))
+	written, err := io.Copy(temporary, managedWriteReader(source, maximum))
 	if closeErr := temporary.Close(); err == nil {
 		err = closeErr
 	}
 	if err != nil {
 		return written, err
 	}
-	if written > maximum {
+	if maximum >= 0 && written > maximum {
 		return written, errors.New("managed file exceeds its size limit")
 	}
 	if err := os.Chmod(temporaryPath, mode); err != nil {

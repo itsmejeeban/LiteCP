@@ -24,6 +24,7 @@
   if (typeof document === "undefined") return;
   const cp = window.LiteCP, $ = s => document.querySelector(s), esc = cp.escapeHTML;
   const page = $('[data-page-view="files"]'), panel = $(".file-manager-panel");
+  page.querySelector(":scope > .info-callout")?.remove();
   const heading = page.querySelector(".page-heading");
   heading.querySelector(".eyebrow")?.remove();
   heading.querySelector("p")?.remove();
@@ -200,19 +201,24 @@
   }
   function upload(files) {
     if (!files.length) return;
-    if (files.length>4 || files.some(file=>file.size>512*1024*1024)) {cp.showToast("Upload limit","Choose up to 4 files, each no larger than 512 MiB.","error");return;}
+    if(new Set(files.map(file=>file.name)).size!==files.length){cp.showToast("Duplicate filenames","Choose files with unique names.","error");return;}
     const current=cp.path(), activeSite=siteID();
     if (!activeSite) return;
     const conflicts=files.filter(file=>listing?.entries.some(x=>x.name===file.name));
-    openDialog({title:"Upload files",description:`Destination: /public${current ? "/"+current : ""}.${conflicts.length ? " Existing names detected: a single-file upload may replace its existing file; multi-file uploads reject conflicts." : " Review the files before uploading."}`,fields:`<ul class="fm-upload-list">${files.map(file=>`<li>${icon("file")}<span>${esc(file.name)}</span><small>${cp.formatBytes(file.size)}</small></li>`).join("")}</ul><progress id="fmUploadProgress" value="0" max="100"></progress><p id="fmUploadStatus" role="status">Ready to upload ${files.length} file(s).</p>`,submit:"Upload files",perform:()=>new Promise((resolve,reject)=>{
-      if (cp.demo) {reject(new Error("Uploads are unavailable in demo mode."));return;}
-      const data=new FormData();data.append("siteId",activeSite);data.append("path",current);files.forEach(file=>data.append("files",file,file.name));
-      const xhr=new XMLHttpRequest();xhr.open("POST","/api/files/upload");xhr.responseType="json";
-      xhr.upload.onprogress=event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);$("#fmUploadProgress").value=percent;$("#fmUploadStatus").textContent=percent===100 ? "Transfer complete. Saving files…" : `Uploading… ${percent}%`;}};
-      xhr.onerror=()=>reject(new Error("Connection interrupted. Refresh the folder to check uploaded files."));
-      xhr.onload=async()=>{if(xhr.status<200 || xhr.status>=300){reject(new Error(xhr.response?.error || "Upload failed. Refresh the folder and try again."));return;}try{await refresh();cp.showToast("Upload complete",`${files.length} file(s) uploaded.`);resolve();}catch(error){reject(error);}};
-      xhr.send(data);
-    })});
+    openDialog({title:"Upload files",description:`Destination: /public${current ? "/"+current : ""}.${conflicts.length ? " Existing names detected: a single-file upload may replace its existing file; multi-file uploads reject conflicts." : " Review the files before uploading."}`,fields:`<ul class="fm-upload-list">${files.map(file=>`<li>${icon("file")}<span>${esc(file.name)}</span><small>${cp.formatBytes(file.size)}</small></li>`).join("")}</ul><progress id="fmUploadProgress" value="0" max="100"></progress><p id="fmUploadStatus" role="status">Ready to upload ${files.length} file(s).</p>`,submit:"Upload files",perform:async()=>{
+      if(cp.demo)throw new Error("Uploads are unavailable in demo mode.");
+      if(files.length>1&&conflicts.length)throw new Error("Rename existing files before uploading multiple files with the same names.");
+      for(let index=0;index<files.length;index++){
+        const file=files[index];await new Promise((resolve,reject)=>{
+          const data=new FormData();data.append("siteId",activeSite);data.append("path",current);if(files.length>1)data.append("noReplace","1");data.append("files",file,file.name);
+          const xhr=new XMLHttpRequest();xhr.open("POST","/api/files/upload");xhr.responseType="json";
+          xhr.upload.onprogress=event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);$("#fmUploadProgress").value=(index+event.loaded/event.total)/files.length*100;$("#fmUploadStatus").textContent=`File ${index+1} of ${files.length}: ${file.name} — ${percent}%`;}};
+          xhr.onerror=()=>reject(new Error(`Connection interrupted at ${file.name}. ${index} earlier file(s) uploaded; refresh before retrying.`));
+          xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error(xhr.response?.error||`Upload failed at ${file.name}; ${index} earlier file(s) uploaded.`));xhr.send(data);
+        });
+      }
+      await refresh();cp.showToast("Upload complete",`${files.length} file(s) uploaded.`);
+    }});
   }
   function run(name) { action(name).catch(error=>cp.handleError(error)); }
   page.addEventListener("click",event=>{

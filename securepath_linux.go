@@ -112,11 +112,11 @@ func secureWriteManagedMode(root, relative string, source io.Reader, maximum int
 			_ = unix.Unlinkat(parentFD, temporaryName, 0)
 		}
 	}()
-	written, copyErr := io.Copy(temporary, io.LimitReader(source, maximum+1))
+	written, copyErr := io.Copy(temporary, managedWriteReader(source, maximum))
 	if copyErr != nil {
 		return written, copyErr
 	}
-	if written > maximum {
+	if maximum >= 0 && written > maximum {
 		return written, errors.New("managed file exceeds its size limit")
 	}
 	if err := unix.Fchown(fd, uid, gid); err != nil {

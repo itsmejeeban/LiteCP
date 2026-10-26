@@ -313,6 +313,19 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:LiteCPSSL:5m;
     ssl_session_timeout 1d;
+    location = /api/files/upload {
+        client_max_body_size 0;
+        client_body_timeout 86400s;
+        proxy_pass http://127.0.0.1:9090;
+        proxy_request_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host:$server_port;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
     location / {
         proxy_pass http://127.0.0.1:9090;
         proxy_http_version 1.1;

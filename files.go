@@ -17,9 +17,7 @@ import (
 
 const (
 	maxEditableFileSize   = 4 << 20
-	maxUploadSize         = 512 << 20
-	maxUploadFiles        = 4
-	maxUploadRequestSize  = int64(maxUploadFiles*maxUploadSize + 1<<20)
+	maxUploadSize         = -1 // Negative means no application-imposed upload size cap.
 	maxArchiveMembers     = 100000
 	maxExtractedSize      = int64(2 << 30)
 	maxCreatedArchiveSize = int64(8 << 30)
@@ -206,16 +204,8 @@ func (s *System) saveUpload(site Site, directory, name string, source io.Reader,
 	if noReplace {
 		write = secureWriteManagedNoReplace
 	}
-	written, err := write(site.Root, relative, source, maxUploadSize, 0640, ownerID, groupID)
-	if err != nil {
-		if written > maxUploadSize {
-			return FileEntry{}, fmt.Errorf("uploads are limited to %d MiB per file", maxUploadSize>>20)
-		}
-		return FileEntry{}, fmt.Errorf("receive upload: %w", err)
-	}
-	if written > maxUploadSize {
-		return FileEntry{}, fmt.Errorf("uploads are limited to %d MiB per file", maxUploadSize>>20)
-	}
+	_, err = write(site.Root, relative, source, maxUploadSize, 0640, ownerID, groupID)
+ if err != nil { return FileEntry{}, fmt.Errorf("receive upload: %w",err) }
 	storedFile, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
 	if err != nil {
 		return FileEntry{}, err
@@ -773,3 +763,5 @@ func parseSafeFileMode(value string) (os.FileMode, error) {
 	}
 	return mode, nil
 }
+
+func managedWriteReader(source io.Reader,maximum int64)io.Reader{if maximum<0{return source};return io.LimitReader(source,maximum+1)}
