@@ -242,7 +242,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	}
 	stage:=filepath.Join(a.system.dataDir,"migrations",job.ID)
 	if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<migrationExtractLimit+(1<<30){job.Status="captured";job.Message="Native backup verified. Website extraction needs at least 9 GiB free disk space; no target data was changed.";_ = a.saveLiveJob(&job);return}
-	stages,_:=os.ReadDir(filepath.Dir(stage));if len(stages)>=3{job.Status="captured";job.Message="Native backup verified. Three website stages already exist; review them before staging this capture.";_ = a.saveLiveJob(&job);return}
+	staged,err:=a.retainedMigrationStages();if err!=nil{fail(err);return};if staged>=3{job.Status="captured";job.Message="Native backup verified. Three website stages already exist; review them before staging this capture.";_ = a.saveLiveJob(&job);return}
 	if err:=os.MkdirAll(filepath.Join(stage,"files"),0700);err!=nil{fail(err);return}
 	preview,err:=extractMigration(ctx,archive,filepath.Join(stage,"files"),job.Source.Platform)
 	if err!=nil{job.Status="captured";job.Message="Native backup verified; website staging could not complete: "+err.Error();_ = a.saveLiveJob(&job);return}

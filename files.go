@@ -429,7 +429,7 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	if err != nil {
 		return FileEntry{}, err
 	}
-	written, storeErr := secureWriteManaged(site.Root, cleanDestination, archiveSource, maxCreatedArchiveSize, 0640, ownerID, groupID)
+	written, storeErr := secureWriteManagedNoReplace(site.Root, cleanDestination, archiveSource, maxCreatedArchiveSize, 0640, ownerID, groupID)
 	closeErr := archiveSource.Close()
 	if storeErr != nil {
 		return FileEntry{}, fmt.Errorf("store archive: %w", storeErr)

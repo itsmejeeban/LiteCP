@@ -383,6 +383,7 @@ if grep -q 'proxy_send_timeout' "${PANEL_CONFIG}"; then
 else
   sed -i '/proxy_pass/a\        proxy_send_timeout 2700s;' "${PANEL_CONFIG}"
 fi
+bash "${SCRIPT_DIR}/configure-panel-uploads.sh" "${PANEL_CONFIG}"
 
 info "Configuring lightweight Postfix and Dovecot email hosting"
 getent group vmail >/dev/null 2>&1 || groupadd --system vmail
@@ -555,4 +556,9 @@ success "LiteCP - By Hostingtom is installed."
 printf '\nOpen: \033[1mhttps://%s:8443\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
 printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 8443 and mail ports 25, 465, 587, 993 as needed.\n'
-printf 'Database engine: MySQL 8.4 LTS.\n'
+DATABASE_VERSION="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute 'SELECT VERSION()' 2>/dev/null || true)"
+if [[ -n "${DATABASE_VERSION}" ]]; then
+  printf 'Database engine: MySQL %s.\n' "${DATABASE_VERSION}"
+else
+  printf 'Database engine: MySQL (%s package).\n' "${DATABASE_PACKAGE}"
+fi

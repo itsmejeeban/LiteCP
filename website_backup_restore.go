@@ -28,7 +28,7 @@ func inspectManualBackup(ctx context.Context,archivePath,stage string)(Migration
    if member.UncompressedSize64>uint64(migrationExtractLimit-preview.Bytes){inner.Close();return preview,errors.New("backup exceeds the combined 8 GiB extraction limit")}
    if directory{if err=secureEnsureManagedDirectory(filesRoot,clean,0700,os.Getuid(),os.Getgid());err!=nil{inner.Close();return preview,err};continue}
    if err=secureEnsureManagedDirectory(filesRoot,path.Dir(clean),0700,os.Getuid(),os.Getgid());err!=nil{inner.Close();return preview,err}
-   input,err:=member.Open();if err!=nil{inner.Close();return preview,err};written,copyErr:=secureWriteManagedNoReplace(filesRoot,clean,input,int64(member.UncompressedSize64),0600,os.Getuid(),os.Getgid());input.Close();if copyErr!=nil{inner.Close();return preview,copyErr};if written!=int64(member.UncompressedSize64){inner.Close();return preview,errors.New("backup member size mismatch")};preview.Bytes+=written;preview.Files++;if strings.HasSuffix(clean,".sql"){preview.Databases=append(preview.Databases,clean)}
+   input,err:=member.Open();if err!=nil{inner.Close();return preview,err};written,copyErr:=secureWriteManagedNoReplace(filesRoot,clean,input,int64(member.UncompressedSize64),0600,os.Getuid(),os.Getgid());input.Close();if copyErr!=nil{inner.Close();return preview,copyErr};if written!=int64(member.UncompressedSize64){inner.Close();return preview,errors.New("backup member size mismatch")};preview.Bytes+=written;preview.Files++;if name=="databases.zip"&&strings.HasSuffix(clean,".sql"){preview.Databases=append(preview.Databases,clean)}
   };inner.Close()
  }
  return preview,nil
@@ -37,8 +37,7 @@ func(a *App) stageWebsiteBackup(ctx context.Context,site Site,backupID string)(M
  var preview MigrationPreview
  if !liveJobIDPattern.MatchString(backupID){return preview,errors.New("invalid backup ID")}
  backupRoot:=filepath.Join(a.system.dataDir,"website-backups",safeSiteID(site.ID),backupID)
- content,err:=os.ReadFile(filepath.Join(backupRoot,"manifest.json"));var backup websiteZIPBackup
- if err!=nil||json.Unmarshal(content,&backup)!=nil||backup.SiteID!=site.ID||backup.ID!=backupID{return preview,errors.New("backup not found for this website")}
+ if _,err:=loadWebsiteZIPBackup(filepath.Dir(backupRoot),backupID,site.ID);err!=nil{return preview,err}
  return a.prepareManualBackupStage(ctx,site,filepath.Join(backupRoot,"website.zip"))
 }
 func(a *App) prepareManualBackupStage(ctx context.Context,site Site,archive string)(MigrationPreview,error){

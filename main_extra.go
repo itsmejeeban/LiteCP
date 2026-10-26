@@ -668,10 +668,10 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	domain := strings.ToLower(strings.TrimSpace(input.Domain))
 	address := strings.ToLower(strings.TrimSpace(input.LocalPart)) + "@" + domain
-	if !a.store.HasMailDomain(domain) {
-		writeError(w, http.StatusBadRequest, "Add the mail domain before creating mailboxes.")
-		return
-	}
+ newDomain:=!a.store.HasMailDomain(domain)
+ if newDomain && a.store.SiteByDomain(domain)==nil {
+  writeError(w,http.StatusBadRequest,"Add the mail domain before creating mailboxes.");return
+ }
 	if err := validateMailboxAddress(address, domain); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -700,12 +700,15 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := randomToken(8)
 	mailbox := Mailbox{ID: id, Domain: domain, Address: address, QuotaMB: input.QuotaMB, PasswordHash: hash, CreatedAt: time.Now().UTC()}
-	prospective := append(mailboxes, mailbox)
-	if err := a.system.SyncMailConfig(r.Context(), domains, prospective, aliases); err != nil {
+ prospective := append(append([]Mailbox{},mailboxes...),mailbox)
+ prospectiveDomains:=append([]MailDomain{},domains...)
+ var addedDomain *MailDomain
+ if newDomain {domainID,err:=randomToken(8);if err!=nil{writeError(w,500,"Could not allocate mail domain");return};value:=MailDomain{ID:domainID,Domain:domain,DKIMSelector:"default",CreatedAt:time.Now().UTC()};addedDomain=&value;prospectiveDomains=append(prospectiveDomains,value)}
+ if err := a.system.SyncMailConfig(r.Context(), prospectiveDomains, prospective, aliases); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := a.store.AddMailbox(mailbox); err != nil {
+	if err := a.store.AddMailboxWithDomain(mailbox,addedDomain); err != nil {
 		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mailbox rollback failed: "+rollbackErr.Error())
 			return

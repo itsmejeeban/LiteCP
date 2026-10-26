@@ -10,3 +10,10 @@ func TestFTPRejectsAccountFromAnotherWebsite(t *testing.T){
  store,err:=OpenStore(t.TempDir());if err!=nil{t.Fatal(err)};store.cfg.Sites=[]Site{{ID:"selected",Domain:"example.test"}}
  app:=&App{store:store,system:system};request:=httptest.NewRequest("DELETE","/api/website-ftp?siteId=selected",strings.NewReader(`{"id":"foreign","confirm":true}`));response:=httptest.NewRecorder();app.websiteFTP(response,request);if response.Code!=404{t.Fatal("cross-site account accepted",response.Code)}
 }
+
+func TestFTPUpdateRejectsUnreadableRecoveryState(t *testing.T){
+ system:=&System{dataDir:t.TempDir()};root:=system.ftpRoot();if err:=os.MkdirAll(filepath.Join(root,"accounts.json"),0700);err!=nil{t.Fatal(err)};if err:=os.WriteFile(filepath.Join(root,"installed"),nil,0600);err!=nil{t.Fatal(err)}
+ site:=Site{RuntimeUID:15001,RuntimeGID:15001};account:=FTPAccount{Username:"fixture_ftp"};err:=system.updateFTP(context.Background(),site,[]FTPAccount{account},account,"fixture-strong-password-28","useradd")
+ if err==nil||!strings.Contains(err.Error(),"read FTP account recovery metadata"){t.Fatal("unreadable metadata did not fail before credential mutation",err)}
+ metadata,err:=readFTPState(filepath.Join(root,"missing.json"),[]byte("[]"));if err!=nil||string(metadata)!="[]"{t.Fatal("missing metadata has no valid rollback state",err)}
+}

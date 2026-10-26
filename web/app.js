@@ -12,6 +12,9 @@
   let fileListingRequest = 0;
   let lastFileListing = null;
   let editorFilePath = "";
+  let editorSiteID = "";
+  let editorRequest = 0;
+  let editorSaving = false;
   let editorOriginal = "";
 
   const icons = {
@@ -826,25 +829,31 @@
   }
 
   async function openEditor(path) {
+    if (editorSaving) return;
+    const request = ++editorRequest, siteId = $("#fileSiteSelect").value;
     try {
-      const result = await api(`/api/files/content?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`);
+      const result = await api(`/api/files/content?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(path)}`);
+      if (request !== editorRequest || siteId !== $("#fileSiteSelect").value) return;
+      editorSiteID = siteId;
       editorFilePath = path; editorOriginal = result.content; $("#editorTitle").textContent = `Edit ${path.split("/").pop()}`; $("#editorPath").textContent = path; $("#editorContent").value = result.content; $("#editorModal").classList.remove("hidden");
       await window.LiteCPFeatures?.openEditor(path, result.content);
-    } catch (error) { handleError(error); }
+    } catch (error) { if (request === editorRequest) handleError(error); }
   }
 
   function closeEditor() {
+    if (editorSaving) return;
     const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value;
     if (editorFilePath && content !== editorOriginal && !confirm("Discard unsaved editor changes?")) return;
-    editorFilePath = ""; $("#editorModal").classList.add("hidden");
+    editorRequest++; editorFilePath = ""; editorSiteID = ""; $("#editorModal").classList.add("hidden");
   }
 
   async function saveEditor(event) {
-    event.preventDefault(); if (!editorFilePath) return;
+    event.preventDefault(); if (!editorFilePath || !editorSiteID || editorSaving) return;
+    editorSaving = true;
     const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
-    try { const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path: editorFilePath, content } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
+    try { const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: editorSiteID, path: editorFilePath, content } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
     catch (error) { handleError(error); }
-    finally { submit.disabled = false; }
+    finally { editorSaving = false; submit.disabled = false; }
   }
 
   async function createDatabase(event) {
@@ -917,11 +926,7 @@
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
     try {
       const domain = String(data.get("domain")).trim().toLowerCase();
-      if (!(currentState.mailDomains || []).some(item => item.domain === domain)) {
-        await api("/api/mail/domains", { method: "POST", body: { domain } });
-        currentState = await api("/api/state"); renderMail();
-      }
-      await api("/api/mail/mailboxes", { method: "POST", body: { domain: data.get("domain"), localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
+      await api("/api/mail/mailboxes", { method: "POST", body: { domain, localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
     catch (error) { handleError(error); }
   }
 

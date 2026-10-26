@@ -13,6 +13,14 @@ import (
 )
 
 type websiteZIPBackup struct{ ID string `json:"id"`; SiteID string `json:"siteId"`; Domain string `json:"domain"`; Size int64 `json:"size"`; CreatedAt time.Time `json:"createdAt"` }
+func loadWebsiteZIPBackup(root,id,siteID string)(websiteZIPBackup,error){
+ var item websiteZIPBackup
+ if !liveJobIDPattern.MatchString(id){return item,fmt.Errorf("invalid backup ID")}
+ directory:=filepath.Join(root,id);info,err:=os.Lstat(directory);if err!=nil||!info.IsDir(){return item,fmt.Errorf("backup not found")}
+ content,err:=os.ReadFile(filepath.Join(directory,"manifest.json"));if err!=nil||json.Unmarshal(content,&item)!=nil||item.ID!=id||item.SiteID!=siteID{return item,fmt.Errorf("backup not found for this website")}
+ info,err=os.Lstat(filepath.Join(directory,"website.zip"));if err!=nil||!info.Mode().IsRegular()||info.Size()!=item.Size||item.Size<=0{return item,fmt.Errorf("backup archive is incomplete or unavailable")}
+ return item,nil
+}
 func zipWebsite(ctx context.Context,root,destination string)error{
  output,err:=os.OpenFile(destination,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600);if err!=nil{return err};defer output.Close()
  archive:=zip.NewWriter(output)
@@ -36,8 +44,8 @@ func (a *App) websiteBackups(w http.ResponseWriter,r *http.Request){
  site:=a.store.SiteByID(r.URL.Query().Get("siteId"));if site==nil{writeError(w,404,"Website not found.");return}
  root:=filepath.Join(a.system.dataDir,"website-backups",safeSiteID(site.ID));if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,err.Error());return}
  if r.Method==http.MethodGet{
-  if id:=r.URL.Query().Get("id");id!=""{if !liveJobIDPattern.MatchString(id){writeError(w,400,"Invalid backup ID");return};file,err:=os.Open(filepath.Join(root,id,"website.zip"));if err!=nil{writeError(w,404,"Backup not found");return};defer file.Close();info,err:=file.Stat();if err!=nil{writeError(w,500,"Cannot inspect backup");return};w.Header().Set("Content-Type","application/zip");w.Header().Set("Content-Disposition",fmt.Sprintf(`attachment; filename="%s-%s.zip"`,site.Domain,id));http.ServeContent(w,r,"website.zip",info.ModTime(),file);return}
-  items:=[]websiteZIPBackup{};entries,_:=os.ReadDir(root);for _,entry:=range entries{content,err:=os.ReadFile(filepath.Join(root,entry.Name(),"manifest.json"));var item websiteZIPBackup;if err==nil&&json.Unmarshal(content,&item)==nil{items=append(items,item)}};writeJSON(w,200,map[string]any{"items":items});return
+  if id:=r.URL.Query().Get("id");id!=""{if !liveJobIDPattern.MatchString(id){writeError(w,400,"Invalid backup ID");return};if _,err:=loadWebsiteZIPBackup(root,id,site.ID);err!=nil{writeError(w,404,"Complete backup not found for this website");return};file,err:=secureOpenManaged(root,id+"/website.zip",os.O_RDONLY,0);if err!=nil{writeError(w,404,"Backup not found");return};defer file.Close();info,err:=file.Stat();if err!=nil{writeError(w,500,"Cannot inspect backup");return};w.Header().Set("Content-Type","application/zip");w.Header().Set("Content-Disposition",fmt.Sprintf(`attachment; filename="%s-%s.zip"`,site.Domain,id));http.ServeContent(w,r,"website.zip",info.ModTime(),file);return}
+  items:=[]websiteZIPBackup{};entries,_:=os.ReadDir(root);for _,entry:=range entries{if !entry.IsDir(){continue};if item,err:=loadWebsiteZIPBackup(root,entry.Name(),site.ID);err==nil{items=append(items,item)}};writeJSON(w,200,map[string]any{"items":items});return
  }
  if r.Method==http.MethodDelete{
   var input struct{ID string;Confirm bool};if decodeJSON(r,&input)!=nil||!input.Confirm||!liveJobIDPattern.MatchString(input.ID){writeError(w,400,"Confirm permanent backup deletion.");return}

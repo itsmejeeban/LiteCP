@@ -209,9 +209,14 @@ func (a *App) migrations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) migrationUpload(w http.ResponseWriter, r *http.Request) {
-	// Bound retained archives; failed/unused stages can be reviewed and deleted.
-	stages, _ := os.ReadDir(filepath.Join(a.system.dataDir, "migrations"))
-	if len(stages) >= 3 {
+	// Only completed stages appear in the review list. Retained partial work must
+	// not permanently use every slot after a failed live capture or inspection.
+	staged, err := a.retainedMigrationStages()
+	if err != nil {
+		writeError(w, 500, "Cannot inspect retained migration stages.")
+		return
+	}
+	if staged >= 3 {
 		writeError(w, 409, "Three migration archives are already staged. Delete an unused stage before uploading another.")
 		return
 	}
@@ -279,11 +284,34 @@ func (a *App) migrationUpload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, preview)
 }
 
+func (a *App) retainedMigrationStages() (int, error) {
+	entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "migrations"))
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if _, _, err := a.loadMigration(entry.Name()); err == nil {
+				count++
+			}
+		}
+	}
+	return count, nil
+}
+
 func (a *App) loadMigration(id string) (MigrationPreview, string, error) {
 	if id == "" || safeSiteID(id) != id {
 		return MigrationPreview{}, "", errors.New("invalid migration ID")
 	}
 	root := filepath.Join(a.system.dataDir, "migrations", id)
+	info, err := os.Lstat(root)
+	if err != nil || !info.IsDir() {
+		return MigrationPreview{}, "", errors.New("migration not found")
+	}
 	content, err := os.ReadFile(filepath.Join(root, "manifest.json"))
 	if err != nil {
 		return MigrationPreview{}, "", errors.New("migration not found")

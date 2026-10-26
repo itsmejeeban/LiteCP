@@ -578,7 +578,7 @@ func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.system.EnableSSL(r.Context(), *site, input.Email); err != nil {
-		if rollbackErr := a.store.UpdateSite(input.ID, func(site *Site) { site.SSL = false }); rollbackErr != nil {
+		if rollbackErr := a.store.UpdateSite(input.ID, func(value *Site) { value.SSL = site.SSL }); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "SSL setup failed and panel state rollback also failed: "+rollbackErr.Error())
 			return
 		}
@@ -608,7 +608,7 @@ func (a *App) toggleCron(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.UpdateSite(input.ID, func(site *Site) { site.Cron = input.Enabled }); err != nil {
-		if rollbackErr := a.system.SetCron(*site, !input.Enabled); rollbackErr != nil {
+		if rollbackErr := a.system.SetCron(*site, site.Cron); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and cron rollback failed: "+rollbackErr.Error())
 			return
 		}

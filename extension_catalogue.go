@@ -23,8 +23,30 @@ func(s *System) setCatalogueExtension(ctx context.Context,version,key string,ins
  name:=strings.TrimPrefix(key,"package:");if _,ok:=extensionPackageSuffix(version,name,s.os.ID);!ok{return errors.New("invalid PHP extension package")}
  catalogue,err:=s.extensionCatalogue(ctx);if err!=nil{return err};found:=false;for _,item:=range catalogue{if item.Version==version&&item.Key==key{if item.ReadOnly&&!install{return errors.New("application baseline packages are protected")};found=true;break}};if !found{return errors.New("package is absent from the configured repository catalogue")}
  wasInstalled:=s.packageInstalled(ctx,name);if wasInstalled==install{return nil}
- command:=[]string{"rpm","-e",name};if s.os.ID=="ubuntu"||s.os.ID=="debian"{command=[]string{"dpkg","--remove",name};if install{command=[]string{"apt-get","install","--no-remove","--no-install-recommends","-y",name}}}else if install{command=[]string{"dnf","install","--setopt=install_weak_deps=False","-y",name}}
- if _,err=runHostCommand(ctx,10*time.Minute,command[0],command[1:]...);err!=nil{return err}
- if _,err=runCommand(ctx,45*time.Second,"systemctl","restart",s.phpUnitForVersion(version));err!=nil{return fmt.Errorf("package changed but PHP restart failed: %w; check runtime service",err)}
- if s.packageInstalled(ctx,name)!=install{return errors.New("package state verification failed")};return nil
+
+ change:=func(changeCtx context.Context,wanted bool)error{
+  args:=extensionPackageCommand(s.os.ID,name,wanted)
+  _,err:=runHostCommand(changeCtx,10*time.Minute,args[0],args[1:]...);return err
+ }
+ restart:=func(restartCtx context.Context)error{_,err:=runCommand(restartCtx,45*time.Second,"systemctl","restart",s.phpUnitForVersion(version));return err}
+ return extensionPackageTransaction(ctx,install,wasInstalled,change,restart,func(checkCtx context.Context)bool{return s.packageInstalled(checkCtx,name)})
+}
+
+func extensionPackageCommand(osID,name string,install bool)[]string{
+ if osID=="ubuntu"||osID=="debian"{if install{return []string{"apt-get","install","--no-remove","--no-install-recommends","-y",name}};return []string{"dpkg","--remove",name}}
+ if install{return []string{"dnf","install","--setopt=install_weak_deps=False","-y",name}};return []string{"rpm","-e",name}
+}
+// Restore the previously requested package state if a completed package change
+// leaves PHP unable to restart. Never touch unrelated pre-existing packages.
+func extensionPackageTransaction(ctx context.Context,wanted,previous bool,change func(context.Context,bool)error,restart func(context.Context)error,installed func(context.Context)bool)error{
+ if wanted==previous{return nil}
+ if err:=change(ctx,wanted);err!=nil{return err}
+ var failure error
+ if installed(ctx)!=wanted{failure=errors.New("package state verification failed")}else{failure=restart(ctx)}
+ if failure==nil{return nil}
+ rollbackCtx,cancel:=context.WithTimeout(context.Background(),11*time.Minute);defer cancel()
+ if err:=change(rollbackCtx,previous);err!=nil{return fmt.Errorf("extension change failed: %v; previous package state could not be restored: %w",failure,err)}
+ if installed(rollbackCtx)!=previous{return fmt.Errorf("extension change failed: %v; rollback package verification failed",failure)}
+ if err:=restart(rollbackCtx);err!=nil{return fmt.Errorf("extension change failed: %v; package restored but PHP restart still failed: %w",failure,err)}
+ return fmt.Errorf("extension change failed: %v; previous package state and PHP service restored",failure)
 }

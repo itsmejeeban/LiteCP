@@ -272,6 +272,7 @@ func (s *System) SetPHPExtension(ctx context.Context, version, extension string,
 	if s.usesPHP73Container(version) {
 		return errors.New("PHP 7.3 compatibility extensions are immutable; rebuild the compatibility image to change them")
 	}
+ if !install && extensionRecommended(extension) {return errors.New("application baseline packages are protected; use the extension catalogue for optional packages")}
 	if s.demo {
 		return nil
 	}

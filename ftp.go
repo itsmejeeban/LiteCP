@@ -11,6 +11,8 @@ func(s *System) updateFTP(ctx context.Context,site Site,accounts []FTPAccount,ac
  if site.RuntimeUID<1000||site.RuntimeGID<1000{return errors.New("website must have an isolated runtime identity")}
  if !ftpNamePattern.MatchString(account.Username){return errors.New("invalid FTP username")}
  current:=filepath.Join(root,"users.passwd");original,err:=os.ReadFile(current);if err!=nil&&!os.IsNotExist(err){return err}
+ previousMeta,err:=readFTPState(filepath.Join(root,"accounts.json"),[]byte("[]"));if err!=nil{return fmt.Errorf("read FTP account recovery metadata: %w",err)}
+ previousDB,err:=readFTPState(filepath.Join(root,"users.pdb"),nil);if err!=nil{return fmt.Errorf("read FTP credential recovery database: %w",err)}
  work,err:=os.MkdirTemp(root,"transaction-");if err!=nil{return err}
  source:=filepath.Join(work,"users.passwd");if err=os.WriteFile(source,original,0600);err!=nil{return err}
  args:=[]string{action,account.Username,"-f",source}
@@ -22,13 +24,13 @@ func(s *System) updateFTP(ctx context.Context,site Site,accounts []FTPAccount,ac
  content,err:=json.Marshal(accounts);if err!=nil{return err}
  // Preserve prior credentials and metadata for rollback. Transaction files are
  // retained root-only; no website content or OS account is removed.
- previousMeta,_:=os.ReadFile(filepath.Join(root,"accounts.json"));previousDB,_:=os.ReadFile(filepath.Join(root,"users.pdb"))
  nextSource,err:=os.ReadFile(source);if err!=nil{return err};nextDB,err:=os.ReadFile(db);if err!=nil{return err}
  if err=writeAtomic(current,nextSource,0600);err!=nil{return err}
  if err=writeAtomic(filepath.Join(root,"accounts.json"),content,0600);err!=nil{_ = writeAtomic(current,original,0600);return err}
  if err=writeAtomic(filepath.Join(root,"users.pdb"),nextDB,0600);err!=nil{_ = writeAtomic(current,original,0600);_ = writeAtomic(filepath.Join(root,"accounts.json"),previousMeta,0600);if len(previousDB)>0{_ = writeAtomic(filepath.Join(root,"users.pdb"),previousDB,0600)};return err}
  return nil
 }
+func readFTPState(path string,missing []byte)([]byte,error){content,err:=os.ReadFile(path);if os.IsNotExist(err){return missing,nil};return content,err}
 func(a *App) websiteFTP(w http.ResponseWriter,r *http.Request){
  site:=a.store.SiteByID(r.URL.Query().Get("siteId"));if site==nil{writeError(w,404,"Website not found");return}
  accounts,err:=a.system.ftpAccounts();if err!=nil{writeError(w,500,"Cannot read FTP accounts");return}

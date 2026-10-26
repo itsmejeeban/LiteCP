@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,21 +33,115 @@ func parseSystemResolvers(content string) []string {
 }
 
 func currentSystemResolvers() []string {
-	content, err := os.ReadFile("/etc/resolv.conf")
+	values, err := systemResolversFromFile(context.Background(), "/etc/resolv.conf")
 	if err != nil {
 		return []string{}
 	}
+	return values
+}
+
+func systemResolversFromFile(ctx context.Context, path string) ([]string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil { return nil, err }
 	values := parseSystemResolvers(string(content))
+	result, seen := []string{}, map[string]bool{}
+	var upstream []string
 	for _, value := range values {
+		actual := []string{value}
 		if value == "127.0.0.53" || value == "127.0.0.54" {
-			if upstream, readErr := os.ReadFile("/run/systemd/resolve/resolv.conf"); readErr == nil {
-				if actual := parseSystemResolvers(string(upstream)); len(actual) > 0 {
-					return actual
-				}
-			}
+			if upstream == nil { upstream, err = effectiveResolvedResolvers(ctx); if err != nil { return nil, err } }
+			actual = upstream
+		}
+		for _, server := range actual { if !seen[server] { result = append(result, server); seen[server] = true } }
+	}
+	return result, nil
+}
+
+// resolvectl exposes live daemon state. Its all-known resolv.conf export does
+// not describe which DNS scopes actually handle default/unmatched queries.
+type resolvedDNSState struct { dns, domains map[string][]string; order []string }
+var resolvedScopeLine = regexp.MustCompile(`^(Global|Link ([0-9]+) \([^)]*\)):\s*(.*)$`)
+
+func parseResolvedScopes(content string) (map[string][]string, []string, error) {
+	values, order := map[string][]string{}, []string{}
+	scanner, current := bufio.NewScanner(strings.NewReader(content)), ""
+	for scanner.Scan() {
+		line := scanner.Text(); if strings.TrimSpace(line) == "" { continue }
+		if match := resolvedScopeLine.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			current = "Global"; if match[2] != "" { current = "Link " + match[2] }
+			if _, exists := values[current]; exists { return nil, nil, errors.New("duplicate resolver scope") }
+			values[current] = strings.Fields(match[3]); order = append(order, current)
+		} else if current != "" && (line[0] == ' ' || line[0] == '\t') {
+			values[current] = append(values[current], strings.Fields(line)...)
+		} else { return nil, nil, errors.New("unrecognized resolvectl output") }
+	}
+	if err := scanner.Err(); err != nil { return nil, nil, err }
+	if len(order) == 0 { return nil, nil, errors.New("no resolver scopes reported") }
+	return values, order, nil
+}
+
+func resolvedServerAddress(value string) (string, error) {
+	address := strings.SplitN(value, "#", 2)[0] // DNS-over-TLS server name is not an address.
+	zone := ""
+	if index := strings.IndexByte(address, '%'); index >= 0 {
+		end := strings.IndexByte(address[index:], ']')
+		if end >= 0 { end += index; zone, address = address[index+1:end], address[:index]+address[end:] } else { zone, address = address[index+1:], address[:index] }
+		if zone == "" { return "", errors.New("empty resolver zone") }
+	}
+	port := ""
+	if host, service, err := net.SplitHostPort(address); err == nil { address, port = host, service }
+	address = strings.TrimPrefix(strings.TrimSuffix(address, "]"), "[")
+	ip := net.ParseIP(address); if ip == nil { return "", fmt.Errorf("invalid live DNS address %q", value) }
+	address = ip.String(); if zone != "" && ip.IsLinkLocalUnicast() { address += "%"+zone }
+	if port != "" { number, err := strconv.Atoi(port); if err != nil || number < 1 || number > 65535 { return "", errors.New("invalid live DNS port") }; if number != 53 { address = net.JoinHostPort(address, strconv.Itoa(number)) } }
+	return address, nil
+}
+
+func resolvedCommand(ctx context.Context, action string) (string, error) {
+	command := exec.CommandContext(ctx, "resolvectl", "--no-pager", action)
+	command.Env = append(os.Environ(), "LC_ALL=C", "LANG=C", "SYSTEMD_COLORS=0", "SYSTEMD_PAGER=cat", "COLUMNS=4096")
+	output, err := command.Output(); if err != nil { return "", fmt.Errorf("read live resolver %s: %w", action, err) }; return string(output), nil
+}
+
+func readResolvedDNSState(ctx context.Context) (resolvedDNSState, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second); defer cancel()
+	state := resolvedDNSState{}
+	content, err := resolvedCommand(ctx, "dns"); if err != nil { return state, err }
+	state.dns, state.order, err = parseResolvedScopes(content); if err != nil { return state, err }
+	if _, exists := state.dns["Global"]; !exists { return state, errors.New("global DNS scope missing") }
+	for key, servers := range state.dns { normalized := []string{}; for _, server := range servers { address, err := resolvedServerAddress(server); if err != nil { return state, err }; normalized = append(normalized, address) }; state.dns[key] = normalized }
+	content, err = resolvedCommand(ctx, "domain"); if err != nil { return state, err }
+	state.domains, _, err = parseResolvedScopes(content); if err != nil { return state, err }
+	for scope := range state.dns { if _, exists := state.domains[scope]; !exists { return state, errors.New("DNS routing scope missing") } }
+	for scope := range state.domains { if _, exists := state.dns[scope]; !exists { return state, errors.New("DNS server scope missing") } }
+	return state, nil
+}
+
+func resolvedRootRoute(domains []string) bool { for _, domain := range domains { if domain == "~." || domain == "." { return true } }; return false }
+
+func effectiveResolvedResolvers(ctx context.Context) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second); defer cancel()
+	state, err := readResolvedDNSState(ctx); if err != nil { return nil, err }
+	scopes := []string{}
+	for _, scope := range state.order { if resolvedRootRoute(state.domains[scope]) && len(state.dns[scope]) > 0 { scopes = append(scopes, scope) } }
+	if len(scopes) == 0 {
+		scopes = append(scopes, "Global")
+		if len(state.order) > 1 {
+			content, err := resolvedCommand(ctx, "default-route"); if err != nil { return nil, err }
+			defaults, _, err := parseResolvedScopes(content); if err != nil { return nil, err }
+			for _, scope := range state.order { if scope == "Global" { continue }; values := defaults[scope]; if len(values) != 1 || (values[0] != "yes" && values[0] != "no") { return nil, errors.New("DNS default route is unverified") }; if values[0] == "yes" { scopes = append(scopes, scope) } }
 		}
 	}
-	return values
+	result, seen := []string{}, map[string]bool{}
+	for _, scope := range scopes { for _, address := range state.dns[scope] { if !seen[address] { result = append(result, address); seen[address] = true } } }
+	if len(result) == 0 { return nil, errors.New("no effective default DNS upstreams reported") }; return result, nil
+}
+
+func checkResolvedRootConflicts(ctx context.Context, wanted []string) error {
+	state, err := readResolvedDNSState(ctx); if err != nil { return err }
+	allowed := map[string]bool{}; for _, address := range wanted { allowed[address] = true }
+	for scope, domains := range state.domains { if scope == "Global" || !resolvedRootRoute(domains) { continue }; for _, address := range state.dns[scope] { if !allowed[address] { return fmt.Errorf("%s has a conflicting default DNS route; existing link settings are unchanged", scope) } } }
+	return nil
 }
 
 // Called only by the root-only host-resolvers CLI in a transient systemd unit.
@@ -58,6 +155,7 @@ func (s *System) applyHostResolvers(ctx context.Context, values []string) error 
 		if !unitFileExists("systemd-resolved") {
 			return errors.New("systemd-resolved is required; unmanaged resolver files are left unchanged")
 		}
+		if err := checkResolvedRootConflicts(ctx, resolvers); err != nil { return fmt.Errorf("cannot safely apply global DNS: %w", err) }
 		const target = "/etc/systemd/resolved.conf.d/90-litecp.conf"
 		original, readErr := os.ReadFile(target)
 		if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {

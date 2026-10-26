@@ -699,13 +699,13 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
- if site.Application!=nil&&site.Application.Container!="" {if _,err:=runHostCommand(ctx,45*time.Second,"podman","stop",site.Application.Container);err!=nil{return errors.New("stop the application before detaching this website")}}
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
 	if s.demo {
 		return nil
 	}
+ if site.Application!=nil&&site.Application.Container!="" {if err:=s.stopApplicationContainer(ctx,site.Application.Container);err!=nil{return errors.New("stop the application before detaching this website")}}
 	configPath, enabledPath := s.nginxPaths(site.Domain)
 	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove nginx configuration: %w", err)
@@ -838,7 +838,7 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) string {
- if site.Application!=nil&&site.Application.Enabled {return s.applicationNginx(site)}
+ if site.Application!=nil {return s.applicationNginx(site)}
 	applicationRules := `    location = /configuration.php { deny all; }
     location ^~ /crons/ { deny all; }`
 	if site.AppType == "wordpress" {

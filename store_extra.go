@@ -376,3 +376,13 @@ func (s *Store) RemoveMailAlias(id string) error {
 	}
 	return nil
 }
+
+// Commit the website's first mail routing domain and mailbox together.
+func(s *Store) AddMailboxWithDomain(mailbox Mailbox,domain *MailDomain)error{
+ s.mu.Lock();defer s.mu.Unlock()
+ for _,item:=range s.cfg.Mailboxes{if item.Address==mailbox.Address{return errors.New("mailbox already exists")}}
+ originalDomains:=append([]MailDomain{},s.cfg.MailDomains...);originalMailboxes:=append([]Mailbox{},s.cfg.Mailboxes...)
+ if domain!=nil{for _,item:=range s.cfg.MailDomains{if item.Domain==domain.Domain{return errors.New("mail domain already exists")}};s.cfg.MailDomains=append(s.cfg.MailDomains,*domain)}
+ s.cfg.Mailboxes=append(s.cfg.Mailboxes,mailbox)
+ if err:=s.saveLocked();err!=nil{s.cfg.MailDomains=originalDomains;s.cfg.Mailboxes=originalMailboxes;return err};return nil
+}

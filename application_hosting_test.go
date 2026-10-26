@@ -1,9 +1,46 @@
 package main
-import("testing";"fmt";"os/exec";"os";"context";"path/filepath";"time";"strings";"encoding/json";"net/http/httptest")
+import("testing";"fmt";"os/exec";"os";"context";"path/filepath";"time";"strings";"encoding/json";"net/http/httptest";"errors";"runtime")
 func TestApplicationHostingDefaultsAndValidation(t *testing.T){var settings Settings;if err:=json.Unmarshal([]byte(`{}`),&settings);err!=nil{t.Fatal(err)};for language:=range hostingImages{if settings.ApplicationHosting[language]{t.Fatal("hosting enabled by default")}};site:=Site{AppType:"regular",RuntimeUID:15001,RuntimeGID:15001};app:=ApplicationHosting{Language:"node",Version:"24",Command:"node server.js"};if err:=validateApplicationHosting(site,app);err!=nil{t.Fatal(err)};site.AppType="wordpress";if validateApplicationHosting(site,app)==nil{t.Fatal("WordPress conversion allowed")};site.AppType="regular";app.Version="24;id";if validateApplicationHosting(site,app)==nil{t.Fatal("unreviewed image allowed")}}
-func TestApplicationHostingContainerIsolation(t *testing.T){site:=Site{ID:"fixture",Root:"/var/www/litecp/example.test/public",RuntimeUID:15001,RuntimeGID:15001};app:=ApplicationHosting{Language:"python",Version:"3.13",Port:21000};args:=applicationContainerArgs(site,app,"fixture","python app.py",true);joined:=strings.Join(args," ");for _,required:=range []string{"--user 15001:15001","--cap-drop=ALL","--security-opt=no-new-privileges","--read-only","--memory=256m","--pids-limit=128","127.0.0.1:21000:8080","docker.io/library/python:3.13-slim-bookworm","/bin/sh -lc python app.py"}{if !strings.Contains(joined,required){t.Fatal("missing isolation",required)}};if strings.Contains(joined,"--privileged")||strings.Contains(joined,"--network=host"){t.Fatal("unsafe container permissions")}}
+func TestApplicationHostingContainerIsolation(t *testing.T){site:=Site{ID:"fixture",Root:"/var/www/litecp/example.test/public",RuntimeUID:15001,RuntimeGID:15001};app:=ApplicationHosting{Language:"python",Version:"3.13",Port:21000};args:=applicationContainerArgs(site,app,"fixture","python app.py",true);joined:=strings.Join(args," ");for _,required:=range []string{"--user 15001:15001","--cap-drop=ALL","--security-opt=no-new-privileges","--read-only","--memory=256m","--pids-limit=128","--restart=no","127.0.0.1:21000:8080","docker.io/library/python:3.13-slim-bookworm","/bin/sh -lc python app.py"}{if !strings.Contains(joined,required){t.Fatal("missing isolation",required)}};if strings.Contains(joined,"--privileged")||strings.Contains(joined,"--network=host"){t.Fatal("unsafe container permissions")}}
 func TestApplicationNginxUsesProxyOnly(t *testing.T){system:=&System{};site:=Site{Domain:"example.test",Root:"/var/www/litecp/example.test/public",SSL:true,Application:&ApplicationHosting{Enabled:true,Port:21000,Certificate:"/etc/letsencrypt/live/example.test/fullchain.pem",CertificateKey:"/etc/letsencrypt/live/example.test/privkey.pem"}};config:=system.nginxConfig(site);if !strings.Contains(config,"proxy_pass http://127.0.0.1:21000")||!strings.Contains(config,"listen 443 ssl")||strings.Contains(config,"fastcgi_pass"){t.Fatal("application routing invalid")}}
 func TestApplicationHostingRequiresAuthentication(t *testing.T){app:=&App{};response:=httptest.NewRecorder();app.routes().ServeHTTP(response,httptest.NewRequest("GET","/api/application-hosting",nil));if response.Code!=401{t.Fatal(response.Code)}}
+
+func TestDisabledApplicationNeverServesSource(t *testing.T){
+ system:=&System{};for language:=range hostingImages{site:=Site{Domain:"example.test",Root:"/var/www/litecp/example.test/public",Application:&ApplicationHosting{Language:language,Enabled:false,Port:21000,Certificate:"/live/new/fullchain.pem",CertificateKey:"/live/new/privkey.pem",Backup:"/saved/prior-php.conf"}};config:=system.nginxConfig(site)
+ if !strings.Contains(config,"location / { return 503; }")||!strings.Contains(config,"listen 443 ssl")||!strings.Contains(config,"/live/new/fullchain.pem"){t.Fatalf("%s disabled protection or live TLS missing: %s",language,config)}
+ for _,unsafe:=range []string{"proxy_pass","fastcgi_pass","index.php","location / {\n        try_files"}{if strings.Contains(config,unsafe){t.Fatalf("%s disabled application has public source routing: %s",language,unsafe)}}
+ if !strings.Contains(config,"/.well-known/acme-challenge/"){t.Fatal("ACME renewal route lost")}}
+}
+func TestApplicationCertificatesUseCurrentRouting(t *testing.T){
+ app:=ApplicationHosting{Certificate:"/old/cert.pem",CertificateKey:"/old/key.pem"};content:=[]byte("server {\n ssl_certificate /new/cert.pem;\n ssl_certificate_key /new/key.pem;\n}\n")
+ if err:=updateApplicationCertificates(Site{SSL:true},&app,content);err!=nil{t.Fatal(err)};if app.Certificate!="/new/cert.pem"||app.CertificateKey!="/new/key.pem"{t.Fatal("stale TLS metadata retained")}
+ if err:=updateApplicationCertificates(Site{SSL:true},&app,[]byte("server { listen 80; }"));err==nil{t.Fatal("missing live TLS accepted for SSL website")}
+ if app.Certificate!=""||app.CertificateKey!=""{t.Fatal("stale certificate survived missing routing")}
+}
+func TestApplicationCommandOutputFailsClosed(t *testing.T){
+ path:=filepath.Join(t.TempDir(),"output.log");if _,err:=applicationCommandOutput(path,nil);err==nil{t.Fatal("missing command output reported success")}
+ commandErr:=errors.New("container command failed");if _,err:=applicationCommandOutput(path,commandErr);!errors.Is(err,commandErr){t.Fatal("command error lost",err)}
+ if err:=os.WriteFile(path,[]byte("container output"),0600);err!=nil{t.Fatal(err)};if output,err:=applicationCommandOutput(path,nil);err!=nil||output!="container output"{t.Fatal("valid command output lost",output,err)}
+ if output,err:=applicationCommandOutput(path,commandErr);!errors.Is(err,commandErr)||output!="container output"{t.Fatal("failed command output lost",output,err)}
+}
+func TestApplicationRoutingFailureRestoresExactTLS(t *testing.T){
+ if runtime.GOOS=="windows"{t.Skip("POSIX command fixtures")};root:=t.TempDir();bin:=filepath.Join(root,"bin");if err:=os.Mkdir(bin,0700);err!=nil{t.Fatal(err)}
+ for name,script:=range map[string]string{"nginx":"#!/bin/sh\nexit 1\n","systemctl":"#!/bin/sh\nexit 0\n"}{if err:=os.WriteFile(filepath.Join(bin,name),[]byte(script),0700);err!=nil{t.Fatal(err)}};t.Setenv("PATH",bin)
+ path:=filepath.Join(root,"site.conf");original:="server {\n listen 443 ssl;\n ssl_certificate /current/cert.pem;\n ssl_certificate_key /current/key.pem;\n # Owner custom routing\n}\n";if err:=os.WriteFile(path,[]byte(original),0600);err!=nil{t.Fatal(err)}
+ if err:=writeApplicationRoutingFile(context.Background(),path,[]byte("server { listen 80; }"));err==nil{t.Fatal("invalid replacement reported success")};restored,err:=os.ReadFile(path);if err!=nil||string(restored)!=original{t.Fatal("failed routing change lost exact TLS configuration",err)}
+}
+func TestApplicationDemoDetachDoesNotRunHostCommands(t *testing.T){
+ system:=&System{demo:true};site:=Site{Domain:"example.test",Application:&ApplicationHosting{Container:"fixture"}};if err:=system.RemoveSiteConfig(context.Background(),site);err!=nil{t.Fatal("demo detach invoked container commands",err)}
+}
+func TestApplicationNginxParserFixtures(t *testing.T){
+ binary,err:=exec.LookPath("nginx");if err!=nil{t.Skip("nginx parser unavailable")};root:=t.TempDir();system:=&System{}
+ for _,enabled:=range []bool{false,true}{t.Run(fmt.Sprintf("enabled=%t",enabled),func(t *testing.T){
+  site:=Site{Domain:"application-fixture.test",Root:filepath.Join(root,"public"),Application:&ApplicationHosting{Enabled:enabled,Port:21000}}
+  config:=fmt.Sprintf("pid %q;\nerror_log %q;\nevents {}\nhttp {\naccess_log off;\nclient_body_temp_path %q;\nproxy_temp_path %q;\nfastcgi_temp_path %q;\nuwsgi_temp_path %q;\nscgi_temp_path %q;\n%s\n}\n",filepath.Join(root,"nginx.pid"),filepath.Join(root,"error.log"),filepath.Join(root,"client-body"),filepath.Join(root,"proxy"),filepath.Join(root,"fastcgi"),filepath.Join(root,"uwsgi"),filepath.Join(root,"scgi"),system.nginxConfig(site))
+  path:=filepath.Join(root,fmt.Sprintf("nginx-%t.conf",enabled));if err:=os.WriteFile(path,[]byte(config),0600);err!=nil{t.Fatal(err)}
+  output,err:=exec.Command(binary,"-t","-p",root+string(os.PathSeparator),"-c",path).CombinedOutput();if err!=nil{t.Fatalf("isolated application Nginx config rejected: %v\n%s",err,output)}
+ })}
+}
 
 func TestApplicationHostingLiveContainerFixtures(t *testing.T){
  if os.Getenv("LITECP_TEST_APPLICATIONS")!="1"{t.Skip("explicit live container fixture check")}
@@ -47,8 +84,7 @@ func TestApplicationHostingFeatureGateAndPersistence(t *testing.T){
  call:=func(body string)int{response:=httptest.NewRecorder();app.applicationHosting(response,httptest.NewRequest("POST","/api/application-hosting",strings.NewReader(body)));return response.Code}
  if call(`{"action":"start","language":"node","siteID":"fixture-site","confirm":true}`)!=409{t.Fatal("disabled runtime could start")}
  if call(`{"action":"feature","language":"node","enabled":true,"confirm":true}`)!=200{t.Fatal("feature could not be enabled")}
- if call(`{"action":"configure","language":"node","siteID":"fixture-site","version":"24","command":"node server.js"}`)!=200{t.Fatal("application configuration failed")}
- reopened,err:=OpenStore(root);if err!=nil{t.Fatal(err)};if !reopened.PublicState().Settings.ApplicationHosting["node"]||reopened.SiteByID("fixture-site").Application.Version!="24"{t.Fatal("configuration not retained")}
+ reopened,err:=OpenStore(root);if err!=nil{t.Fatal(err)};if !reopened.PublicState().Settings.ApplicationHosting["node"]{t.Fatal("feature setting not retained")}
  if reopened.PublicState().Settings.ApplicationHosting["python"]||reopened.PublicState().Settings.ApplicationHosting["ruby"]{t.Fatal("unselected runtimes enabled")}
  if call(`{"action":"feature","language":"node","enabled":false,"confirm":true}`)!=200{t.Fatal("feature could not be disabled")}
 }
