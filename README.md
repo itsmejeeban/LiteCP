@@ -56,11 +56,13 @@ Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13
 
 ## Install
 
-Run this command from a complete LiteCP source checkout on the target server. LiteCP installs MySQL 8.4 LTS and refuses to mix or automatically replace an existing MariaDB installation:
+Run this single command on the target server. It installs the download tools, downloads the latest LiteCP source from GitHub, extracts it into a new directory, and starts the installer. LiteCP installs MySQL 8.4 LTS and refuses to mix or automatically replace an existing MariaDB installation:
 
 ```bash
-sudo bash scripts/install.sh
+sudo bash -c 'set -e; if command -v apt-get >/dev/null; then apt-get update && apt-get install -y ca-certificates curl tar; elif command -v dnf >/dev/null; then dnf install -y ca-certificates curl tar; else echo "Ubuntu or AlmaLinux is required." >&2; exit 1; fi; workdir=$(mktemp -d /opt/litecp-install.XXXXXX); read -r -s -p "GitHub token (leave empty for a public repository): " token; printf "\n"; if [ -n "$token" ]; then printf "header = \"Authorization: Bearer %s\"\n" "$token" | curl --config - --fail --location --proto "=https" --proto-redir "=https" https://api.github.com/repos/itsmejeeban/LiteCP/tarball/main --output "$workdir/litecp.tar.gz"; else curl --fail --location --proto "=https" --proto-redir "=https" https://api.github.com/repos/itsmejeeban/LiteCP/tarball/main --output "$workdir/litecp.tar.gz"; fi; unset token; mkdir "$workdir/source"; tar -xzf "$workdir/litecp.tar.gz" -C "$workdir/source" --strip-components=1; cd "$workdir/source"; bash scripts/install.sh'
 ```
+
+For the private GitHub repository, enter a GitHub token with read access to this repository when prompted. The token is hidden while typing and is not saved. For a public repository, press Enter. The downloaded archive and extracted source remain in `/opt/litecp-install.*`; the command does not delete an existing source checkout. Run it in an interactive SSH terminal so the installer can ask for the panel administrator credentials.
 
 On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository and binds MySQL to localhost. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
@@ -70,7 +72,7 @@ The installer asks for an administrator username and password, installs the requ
 https://SERVER_IP:8443
 ```
 
-For automated provisioning, provide credentials through the process environment. The password is used only for first-time initialization and is not written to the service environment file.
+For automated provisioning from an already downloaded source checkout, provide credentials through the process environment. The password is used only for first-time initialization and is not written to the service environment file.
 
 ```bash
 sudo LITECP_ADMIN_USERNAME=admin \
