@@ -13,6 +13,9 @@
 [data-theme="dark"] .warning-callout,[data-theme="dark"] .form-error { background:#442a28; color:#ffcac3; border-color:#77504b; }
 .theme-control select,.file-filters input[type="search"],.file-filters select,.editor-tools select,[data-waf] { min-height:38px; border:1px solid var(--line); border-radius:7px; padding:0 9px; background-color:var(--paper); color:var(--ink); font-size:14px; }
 .theme-control { margin-right:12px; }.sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+#databasesTable td:last-child { width:1%;white-space:nowrap; }
+#databasesTable .row-actions { flex-wrap:nowrap; }
+#databasesTable .row-actions button { flex-shrink:0; }
 .feature-actions,.pagination,.file-filters,.editor-tools { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .pagination { justify-content:space-between;padding:12px 18px;border-top:1px solid var(--line);font-size:14px; }
 .feature-note { font-size:14px;line-height:1.6;color:var(--muted);padding:0 18px;overflow-wrap:anywhere; }
