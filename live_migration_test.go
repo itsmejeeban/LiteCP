@@ -65,3 +65,5 @@ func TestLivePasswordCredentialPipe(t *testing.T){
  content,err:=io.ReadAll(command.ExtraFiles[0]);if err!=nil||string(content)!=password+"\n"{t.Fatal("credential pipe incorrect")}
  for _,invalid:=range []string{"","secret\nline","secret\x00line",strings.Repeat("a",1025)}{if validLiveRootPassword(invalid){t.Fatal("invalid password accepted")}}
 }
+
+func TestLiveAutomaticFingerprintPrefersEd25519(t *testing.T){key:=[]byte("fixture-ed25519");digest:=sha256.Sum256(key);scan:="host ssh-rsa "+base64.StdEncoding.EncodeToString([]byte("rsa"))+"\n"+"host ssh-ed25519 "+base64.StdEncoding.EncodeToString(key)+"\n";fingerprint,err:=discoveredLiveFingerprint(scan);if err!=nil||fingerprint!="SHA256:"+base64.RawStdEncoding.EncodeToString(digest[:]){t.Fatal("automatic host identity incorrect")};if _,err=discoveredLiveFingerprint("# no host key");err==nil{t.Fatal("missing host key accepted")}}

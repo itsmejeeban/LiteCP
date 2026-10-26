@@ -151,6 +151,16 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	if a.system.demo {writeError(w,400,"Live migration requires the installed Linux server.");return}
 	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Password string `json:"password"`;Account string `json:"account"`;Confirm bool `json:"confirm"`}
 	if err:=decodeJSONWithLimit(r,&input,80<<10);err!=nil{writeError(w,400,err.Error());return}
+ if input.Action=="fingerprint" {
+  source:=input.Source
+  if source.AuthMethod!="password"{writeError(w,400,"Automatic host-key discovery is for password authentication");return}
+  source.Fingerprint="SHA256:"+base64.RawStdEncoding.EncodeToString(make([]byte,32))
+  if err:=validateLiveSource(source);err!=nil{writeError(w,400,err.Error());return}
+  scan,err:=runCommand(r.Context(),15*time.Second,"ssh-keyscan","-T","10","-p",strconv.Itoa(source.Port),"-t","ed25519,ecdsa,rsa",source.Host)
+  if err!=nil{writeError(w,502,"Could not retrieve the SSH host key; verify the source address and SSH port");return}
+  fingerprint,err:=discoveredLiveFingerprint(scan);if err!=nil{writeError(w,502,err.Error());return}
+  writeJSON(w,200,map[string]string{"fingerprint":fingerprint});return
+ }
 	if input.Action=="connect" {
 		if err:=validateLiveSource(input.Source);err!=nil{writeError(w,400,err.Error());return}
 		if input.Source.AuthMethod=="password" {if !validLiveRootPassword(input.Password){writeError(w,400,"Enter a root password of 1–1024 characters without line breaks.");return};if _,err:=exec.LookPath("sshpass");err!=nil{writeError(w,503,"Password migration requires sshpass; update the LiteCP installer dependencies.");return}}else if len(input.PrivateKey)<100||len(input.PrivateKey)>64<<10||!strings.Contains(input.PrivateKey,"PRIVATE KEY") {writeError(w,400,"Provide an unencrypted root SSH private key.");return}
@@ -281,4 +291,9 @@ func(a *App) liveSSHCommand(ctx context.Context,source LiveSource,root string,ar
  if _,err=writer.Write([]byte(password+"\n"));err!=nil{reader.Close();writer.Close();return nil,nil,err};writer.Close()
  cmd:=exec.CommandContext(ctx,"sshpass",append([]string{"-d","3","ssh"},args...)...);cmd.ExtraFiles=[]*os.File{reader}
  return cmd,func(){reader.Close()},nil
+}
+
+func discoveredLiveFingerprint(scan string)(string,error){
+ for _,algorithm:=range []string{"ssh-ed25519","ecdsa-sha2-nistp256","ssh-rsa"}{for _,line:=range strings.Split(scan,"\n"){fields:=strings.Fields(line);if len(fields)!=3||fields[1]!=algorithm{continue};key,err:=base64.StdEncoding.DecodeString(fields[2]);if err!=nil||len(key)==0{continue};hash:=sha256.Sum256(key);return "SHA256:"+base64.RawStdEncoding.EncodeToString(hash[:]),nil}}
+ return "",errors.New("source did not return a supported SSH host key")
 }
