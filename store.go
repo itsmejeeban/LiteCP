@@ -114,6 +114,7 @@ type Activity struct {
 }
 
 type Settings struct {
+ ActivityRetentionDays int `json:"activityRetentionDays"`
 	Email               string   `json:"email"`
 	Timezone            string   `json:"timezone"`
 	BackupRetention     int      `json:"backupRetention"`
@@ -521,9 +522,12 @@ func (s *Store) AddActivity(title, detail, kind string) error {
 	original := append([]Activity{}, s.cfg.Activities...)
 	activity := Activity{ID: id, Title: title, Detail: detail, Kind: kind, CreatedAt: time.Now().UTC()}
 	s.cfg.Activities = append([]Activity{activity}, s.cfg.Activities...)
-	if len(s.cfg.Activities) > 2000 {
-		s.cfg.Activities = s.cfg.Activities[:2000]
-	}
+	if days := s.cfg.Settings.ActivityRetentionDays; days > 0 {
+ cutoff := time.Now().UTC().AddDate(0,0,-days)
+ kept := make([]Activity,0,len(s.cfg.Activities))
+ for _,item := range s.cfg.Activities { if !item.CreatedAt.Before(cutoff) { kept=append(kept,item) } }
+ s.cfg.Activities=kept
+ }
 	if err := s.saveLocked(); err != nil {
 		s.cfg.Activities = original
 		return err

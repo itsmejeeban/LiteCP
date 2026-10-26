@@ -154,6 +154,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))
+	mux.HandleFunc("/api/activity-policy", a.withAuth(a.activityPolicy))
 	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
 	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
