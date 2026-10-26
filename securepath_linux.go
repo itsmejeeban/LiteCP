@@ -43,12 +43,20 @@ func secureOpenManaged(root, relative string, flags int, mode os.FileMode) (*os.
 		return nil, fmt.Errorf("open website root: %w", err)
 	}
 	defer unix.Close(rootFD)
+	// A website can create a FIFO. Do not block before inspecting its type.
+	flags |= unix.O_NONBLOCK
 	how := &unix.OpenHow{Flags: uint64(flags | unix.O_CLOEXEC | unix.O_NOFOLLOW), Mode: uint64(mode.Perm()), Resolve: managedResolveFlags}
 	fd, err := unix.Openat2(rootFD, clean, how)
 	if err != nil {
 		return nil, fmt.Errorf("open managed path: %w", err)
 	}
-	return os.NewFile(uintptr(fd), filepath.Base(clean)), nil
+	file := os.NewFile(uintptr(fd), filepath.Base(clean))
+	info, err := file.Stat()
+	if err != nil || (!info.IsDir() && !info.Mode().IsRegular()) {
+		_ = file.Close()
+		return nil, errors.New("only regular files and directories are supported")
+	}
+	return file, nil
 }
 
 func secureParent(root, relative string) (int, string, error) {

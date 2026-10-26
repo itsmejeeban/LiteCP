@@ -313,6 +313,7 @@ server {
     location / {
         proxy_pass http://127.0.0.1:9090;
         proxy_http_version 1.1;
+        proxy_request_buffering off;
         proxy_set_header Host $host:$server_port;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -341,6 +342,13 @@ else
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
   semanage fcontext -a -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1
   restorecon -R /var/www/litecp /etc/litecp/tls
+fi
+
+# Let the panel reject unauthenticated uploads before Nginx spools their bodies.
+if grep -q 'proxy_request_buffering' "${PANEL_CONFIG}"; then
+  sed -i -E 's/[[:space:]]*proxy_request_buffering[[:space:]]+[^;]+;/        proxy_request_buffering off;/' "${PANEL_CONFIG}"
+else
+  sed -i '/proxy_pass/a\        proxy_request_buffering off;' "${PANEL_CONFIG}"
 fi
 
 # Preserve an existing trusted panel certificate while raising upload/time limits for the file manager.

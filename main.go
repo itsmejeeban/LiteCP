@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -49,6 +50,7 @@ type App struct {
 	attempts   map[string]loginAttempt
 	mu         sync.Mutex
 	mutationMu sync.Mutex
+	loginMu    sync.Mutex
 }
 
 func main() {
@@ -277,20 +279,26 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := clientIP(r)
-	if a.rateLimited(ip) {
-		writeError(w, http.StatusTooManyRequests, "Too many sign-in attempts. Try again in 15 minutes.")
-		return
-	}
 	var input struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := decodeJSON(r, &input); err != nil {
+	if err := decodeJSONWithLimit(r, &input, 16<<10); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Bound expensive password work and reserve attempts before checking them.
+	// Concurrent requests must not bypass the per-address failure limit.
+	if !a.loginMu.TryLock() {
+		writeError(w, http.StatusTooManyRequests, "Another sign-in is being checked. Please retry shortly.")
+		return
+	}
+	defer a.loginMu.Unlock()
+	if !a.reserveLoginAttempt(ip) {
+		writeError(w, http.StatusTooManyRequests, "Too many sign-in attempts. Try again in 15 minutes.")
+		return
+	}
 	if !a.store.CheckPassword(input.Username, input.Password) {
-		a.noteLoginFailure(ip)
 		time.Sleep(350 * time.Millisecond)
 		writeError(w, http.StatusUnauthorized, "The username or password is incorrect.")
 		return
@@ -302,10 +310,8 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expires := time.Now().Add(12 * time.Hour)
-	a.mu.Lock()
-	a.sessions[token] = session{Expires: expires}
-	a.mu.Unlock()
-	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	a.rememberSession(token, expires)
+	secure := requestIsHTTPS(r)
 	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	http.SetCookie(w, &http.Cookie{
 		Name: "litecp_session", Value: token, Path: "/api/", Expires: expires,
@@ -321,7 +327,7 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 		delete(a.sessions, cookie.Value)
 		a.mu.Unlock()
 	}
-	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	secure := requestIsHTTPS(r)
 	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Value: "", Path: "/api/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -342,26 +348,54 @@ func (a *App) validSession(token string) bool {
 	return true
 }
 
-func (a *App) rateLimited(ip string) bool {
+func (a *App) reserveLoginAttempt(ip string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	attempt := a.attempts[ip]
-	if time.Since(attempt.Since) > 15*time.Minute {
-		delete(a.attempts, ip)
-		return false
+	now := time.Now()
+	for address, attempt := range a.attempts {
+		if now.Sub(attempt.Since) >= 15*time.Minute {
+			delete(a.attempts, address)
+		}
 	}
-	return attempt.Count >= 5
-}
-
-func (a *App) noteLoginFailure(ip string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	attempt := a.attempts[ip]
-	if attempt.Since.IsZero() || time.Since(attempt.Since) > 15*time.Minute {
-		attempt = loginAttempt{Since: time.Now()}
+	attempt, exists := a.attempts[ip]
+	if !exists {
+		if len(a.attempts) >= 4096 {
+			return false
+		}
+		if a.attempts == nil {
+			a.attempts = make(map[string]loginAttempt)
+		}
+		attempt = loginAttempt{Since: now}
+	}
+	if attempt.Count >= 5 {
+		return false
 	}
 	attempt.Count++
 	a.attempts[ip] = attempt
+	return true
+}
+
+func (a *App) rememberSession(token string, expires time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	now := time.Now()
+	oldest := ""
+	for key, current := range a.sessions {
+		if !current.Expires.After(now) {
+			delete(a.sessions, key)
+			continue
+		}
+		if oldest == "" || current.Expires.Before(a.sessions[oldest].Expires) {
+			oldest = key
+		}
+	}
+	if len(a.sessions) >= 128 {
+		delete(a.sessions, oldest)
+	}
+	if a.sessions == nil {
+		a.sessions = make(map[string]session)
+	}
+	a.sessions[token] = session{Expires: expires}
 }
 
 func (a *App) clearLoginFailures(ip string) {
@@ -828,13 +862,41 @@ func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "signedOut": true})
 }
 
-func validOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
+func requestIsHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
 		return true
 	}
-	host := r.Host
-	return origin == "https://"+host || origin == "http://"+host
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback() && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func validOrigin(r *http.Request) bool {
+	// Same-site subdomains are not the same origin as the administrator panel.
+	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || site == "same-site" {
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		if referer := r.Referer(); referer != "" {
+			parsed, err := url.Parse(referer)
+			if err != nil || parsed.User != nil {
+				return false
+			}
+			origin = parsed.Scheme + "://" + parsed.Host
+		} else {
+			// Preserve non-browser API clients without browser-origin headers.
+			return true
+		}
+	}
+	scheme := "http"
+	if requestIsHTTPS(r) {
+		scheme = "https"
+	}
+	return origin == scheme+"://"+r.Host
 }
 
 func decodeJSON(r *http.Request, dst any) error {
