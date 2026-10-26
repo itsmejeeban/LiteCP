@@ -2,6 +2,8 @@ package main
 
 import (
 	"crypto/sha256"
+ "context"
+ "io"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -51,4 +53,15 @@ func TestLiveMigrationInterruptedJobAndNoSecrets(t *testing.T) {
 	response:=httptest.NewRecorder();app.routes().ServeHTTP(response,request)
 	var result LiveMigrationJob;if json.Unmarshal(response.Body.Bytes(),&result)!=nil||result.Status!="interrupted"{t.Fatal("interrupted job was not identified")}
 	if strings.Contains(response.Body.String(),"privateKey")||strings.Contains(response.Body.String(),filepath.Join(root,"identity")){t.Fatal("credential material leaked into public job state")}
+}
+
+func TestLivePasswordCredentialPipe(t *testing.T){
+ app:=&App{system:&System{dataDir:t.TempDir()}};root:=t.TempDir();password:="root-secret-fixture-28"
+ encrypted,err:=app.system.EncryptSecret(password);if err!=nil{t.Fatal(err)};if strings.Contains(encrypted,password){t.Fatal("password not encrypted")};if err=os.WriteFile(filepath.Join(root,"password.enc"),[]byte(encrypted),0600);err!=nil{t.Fatal(err)}
+ source:=LiveSource{AuthMethod:"password",Host:"source.example.com",Port:22};args:=liveSSHArgs(source,root);joined:=strings.Join(args," ")
+ if !strings.Contains(joined,"StrictHostKeyChecking=yes")||!strings.Contains(joined,"PasswordAuthentication=yes")||!strings.Contains(joined,"PubkeyAuthentication=no"){t.Fatal("password authentication protection missing")}
+ command,cleanup,err:=app.liveSSHCommand(context.Background(),source,root,args);if err!=nil{t.Fatal(err)};defer cleanup()
+ if strings.Contains(strings.Join(command.Args," "),password)||len(command.Env)>0{t.Fatal("password exposed in command arguments/environment")}
+ content,err:=io.ReadAll(command.ExtraFiles[0]);if err!=nil||string(content)!=password+"\n"{t.Fatal("credential pipe incorrect")}
+ for _,invalid:=range []string{"","secret\nline","secret\x00line",strings.Repeat("a",1025)}{if validLiveRootPassword(invalid){t.Fatal("invalid password accepted")}}
 }

@@ -34,6 +34,7 @@ var liveJobMu sync.Mutex
 var liveRunning = map[string]bool{}
 
 type LiveSource struct {
+ AuthMethod string `json:"authMethod,omitempty"`
 	Platform string `json:"platform"`
 	Host string `json:"host"`
 	Port int `json:"port"`
@@ -75,6 +76,7 @@ type LiveMigrationJob struct {
 }
 
 func validateLiveSource(source LiveSource) error {
+ if source.AuthMethod!=""&&source.AuthMethod!="key"&&source.AuthMethod!="password" {return errors.New("select SSH key or root password authentication")}
 	if source.Platform != "cpanel" && source.Platform != "plesk" { return errors.New("select cPanel or Plesk") }
 	if source.Port < 1 || source.Port > 65535 { return errors.New("SSH port must be between 1 and 65535") }
 	if ip := net.ParseIP(source.Host); ip != nil {
@@ -112,17 +114,19 @@ func (a *App) loadLiveJob(id string) (LiveMigrationJob,error) {
 	return job,nil
 }
 func liveSSHArgs(source LiveSource, root string) []string {
-	return []string{"-F","/dev/null","-p",strconv.Itoa(source.Port),"-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","GlobalKnownHostsFile=/dev/null","-o","UserKnownHostsFile="+filepath.Join(root,"known_hosts"),"-o","IdentitiesOnly=yes","-o","IdentityAgent=none","-o","ForwardAgent=no","-o","ClearAllForwardings=yes","-o","RequestTTY=no","-o","PasswordAuthentication=no","-o","KbdInteractiveAuthentication=no","-o","ConnectTimeout=15","-o","ServerAliveInterval=15","-o","ServerAliveCountMax=3","-i",filepath.Join(root,"identity"),"root@"+source.Host}
+	args := []string{"-F","/dev/null","-p",strconv.Itoa(source.Port),"-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","GlobalKnownHostsFile=/dev/null","-o","UserKnownHostsFile="+filepath.Join(root,"known_hosts"),"-o","IdentitiesOnly=yes","-o","IdentityAgent=none","-o","ForwardAgent=no","-o","ClearAllForwardings=yes","-o","RequestTTY=no","-o","PasswordAuthentication=no","-o","KbdInteractiveAuthentication=no","-o","ConnectTimeout=15","-o","ServerAliveInterval=15","-o","ServerAliveCountMax=3","-i",filepath.Join(root,"identity"),"root@"+source.Host}
+ if source.AuthMethod=="password" { for i:=range args {switch args[i]{case "BatchMode=yes":args[i]="BatchMode=no";case "PasswordAuthentication=no":args[i]="PasswordAuthentication=yes"}};args=append([]string{"-o","PreferredAuthentications=password","-o","PubkeyAuthentication=no","-o","NumberOfPasswordPrompts=1"},args...) }
+ return args
 }
-func liveRemote(ctx context.Context, source LiveSource, root, mode, account, id string) (liveExportResult,error) {
+func (a *App) liveRemote(ctx context.Context, source LiveSource, root, mode, account, id string) (liveExportResult,error) {
 	var result liveExportResult
 	request,_:=json.Marshal(map[string]string{"platform":source.Platform,"mode":mode,"account":account,"job":id})
 	// The shell command contains only a base64 JSON token and fixed executable.
 	command:="LITECP_EXPORT_REQUEST="+base64.StdEncoding.EncodeToString(request)+" python3 -"
 	args:=append(liveSSHArgs(source,root),command)
-	cmd:=exec.CommandContext(ctx,"ssh",args...);cmd.Stdin=strings.NewReader(liveSourceExporter)
+	cmd,cleanup,err:=a.liveSSHCommand(ctx,source,root,args);if err!=nil{return result,err};defer cleanup();cmd.Stdin=strings.NewReader(liveSourceExporter)
 	var stdout,stderr limitedBuffer;cmd.Stdout=&stdout;cmd.Stderr=&stderr
-	err:=cmd.Run()
+	err=cmd.Run()
 	if json.Unmarshal(stdout.Bytes(),&result)!=nil {return result,errors.New("source SSH/export command failed; verify the root key, source platform and Python 3 availability")}
 	if result.Error!="" {return result,errors.New(result.Error)}
 	if err!=nil {return result,errors.New("source SSH/export command did not complete successfully")}
@@ -145,24 +149,24 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	}
 	if r.Method!=http.MethodPost{writeError(w,405,"Use GET or POST.");return}
 	if a.system.demo {writeError(w,400,"Live migration requires the installed Linux server.");return}
-	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Account string `json:"account"`;Confirm bool `json:"confirm"`}
+	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Password string `json:"password"`;Account string `json:"account"`;Confirm bool `json:"confirm"`}
 	if err:=decodeJSONWithLimit(r,&input,80<<10);err!=nil{writeError(w,400,err.Error());return}
 	if input.Action=="connect" {
 		if err:=validateLiveSource(input.Source);err!=nil{writeError(w,400,err.Error());return}
-		if len(input.PrivateKey)<100||len(input.PrivateKey)>64<<10||!strings.Contains(input.PrivateKey,"PRIVATE KEY") {writeError(w,400,"Provide an unencrypted root SSH private key; password and interactive authentication are not supported.");return}
+		if input.Source.AuthMethod=="password" {if !validLiveRootPassword(input.Password){writeError(w,400,"Enter a root password of 1–1024 characters without line breaks.");return};if _,err:=exec.LookPath("sshpass");err!=nil{writeError(w,503,"Password migration requires sshpass; update the LiteCP installer dependencies.");return}}else if len(input.PrivateKey)<100||len(input.PrivateKey)>64<<10||!strings.Contains(input.PrivateKey,"PRIVATE KEY") {writeError(w,400,"Provide an unencrypted root SSH private key.");return}
 		entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));retained:=0
 		for _,entry:=range entries{if existing,err:=a.loadLiveJob(entry.Name());err!=nil||existing.CredentialsRetained||existing.NativeReady{retained++}}
 		if retained>=3||len(entries)>=64 {writeError(w,409,"Migration retention limit reached. Forget credentials for failed connections, or have the server owner review retained native backups before another capture.");return}
 		id,err:=randomToken(18);if err!=nil{writeError(w,500,"Could not allocate job");return};id=safeSiteID(id)
 		root,_:=a.liveJobRoot(id);if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,"Cannot create private migration directory");return}
 		job:=LiveMigrationJob{ID:id,Source:input.Source,Status:"connecting",Message:"Verifying SSH host identity",Accounts:[]LiveAccount{},Warnings:[]string{},CredentialsRetained:true,CreatedAt:time.Now().UTC()}
-		if err:=os.WriteFile(filepath.Join(root,"identity"),[]byte(input.PrivateKey+"\n"),0600);err!=nil{writeError(w,500,"Cannot store root-only source credential");return}
+		if input.Source.AuthMethod=="password" {cipher,err:=a.system.EncryptSecret(input.Password);if err!=nil{writeError(w,500,"Cannot protect source password");return};if err=os.WriteFile(filepath.Join(root,"password.enc"),[]byte(cipher),0600);err!=nil{writeError(w,500,"Cannot store source credential");return}}else {if err:=os.WriteFile(filepath.Join(root,"identity"),[]byte(input.PrivateKey+"\n"),0600);err!=nil{writeError(w,500,"Cannot store root-only source credential");return}}
 		_ = a.saveLiveJob(&job)
 		ctx,cancel:=context.WithTimeout(r.Context(),45*time.Second);defer cancel()
-		if _,err:=runCommand(ctx,5*time.Second,"ssh-keygen","-y","-P","","-f",filepath.Join(root,"identity"));err!=nil{job.Status="failed";job.Message="The SSH key is invalid or needs a passphrase. Use a dedicated migration key without a passphrase.";_ = a.saveLiveJob(&job);writeError(w,400,job.Message);return}
+		if input.Source.AuthMethod!="password" { if _,err:=runCommand(ctx,5*time.Second,"ssh-keygen","-y","-P","","-f",filepath.Join(root,"identity"));err!=nil{job.Status="failed";job.Message="The SSH key is invalid or needs a passphrase. Use a dedicated migration key without a passphrase.";_ = a.saveLiveJob(&job);writeError(w,400,job.Message);return} }
 		scan,err:=runCommand(ctx,15*time.Second,"ssh-keyscan","-T","10","-p",strconv.Itoa(input.Source.Port),"-t","ed25519,ecdsa,rsa",input.Source.Host)
 		if err==nil {var known string;known,err=pinnedKnownHost(scan,input.Source.Fingerprint);if err==nil{err=os.WriteFile(filepath.Join(root,"known_hosts"),[]byte(known),0600)}}
-		if err==nil {var result liveExportResult;result,err=liveRemote(ctx,input.Source,root,"discover","",id);if err==nil{job.Accounts=result.Accounts}}
+		if err==nil {var result liveExportResult;result,err=a.liveRemote(ctx,input.Source,root,"discover","",id);if err==nil{job.Accounts=result.Accounts}}
 		if err!=nil{job.Status="failed";job.Message=err.Error();_ = a.saveLiveJob(&job);writeError(w,502,job.Message);return}
 		job.Status="connected";job.Message="Host key verified. Select a source account or subscription.";if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Could not save discovery state");return}
 		writeJSON(w,201,job);return
@@ -182,7 +186,7 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 		liveJobMu.Lock();running:=liveRunning[job.ID];liveJobMu.Unlock()
 		if running||!input.Confirm{writeError(w,409,"Confirm credential removal after the capture has stopped.");return}
 		root,_:=a.liveJobRoot(job.ID)
-		for _,name:=range []string{"identity","known_hosts"}{if err:=os.Remove(filepath.Join(root,name));err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Could not remove source credentials");return}}
+		for _,name:=range []string{"identity","known_hosts","password.enc"}{if err:=os.Remove(filepath.Join(root,name));err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Could not remove source credentials");return}}
 		job.CredentialsRetained=false;if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Credential removal completed but job state could not be saved");return}
 		writeJSON(w,200,job);return
 	}
@@ -195,10 +199,10 @@ func validateLiveFile(file *liveSourceFile, jobID string) error {
 	if !strings.HasPrefix(file.Path,prefix)||filepath.Clean(file.Path)!=file.Path||strings.ContainsAny(file.Path,"'\"\r\n\x00") {return errors.New("source returned an unexpected archive path")}
 	digest,err:=hex.DecodeString(file.SHA256);if err!=nil||len(digest)!=32{return errors.New("source archive checksum is invalid")};return nil
 }
-func transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile) error {
+func (a *App) transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile) error {
 	available,err:=migrationFreeBytes(ctx,root);if err!=nil{return err};if available<file.Size*2+(1<<30){return errors.New("not enough local disk space to retain and inspect the source archive safely")}
 	output,err:=os.OpenFile(destination,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600);if err!=nil{return err};defer output.Close()
-	cmd:=exec.CommandContext(ctx,"ssh",append(liveSSHArgs(source,root),"cat -- '"+file.Path+"'")...)
+	cmd,cleanup,err:=a.liveSSHCommand(ctx,source,root,append(liveSSHArgs(source,root),"cat -- '"+file.Path+"'"));if err!=nil{return err};defer cleanup()
 	pipe,err:=cmd.StdoutPipe();if err!=nil{return err};var stderr limitedBuffer;cmd.Stderr=&stderr
 	if err:=cmd.Start();err!=nil{return err}
 	hash:=sha256.New();written,copyErr:=io.Copy(io.MultiWriter(output,hash),io.LimitReader(pipe,file.Size+1))
@@ -213,18 +217,18 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	ctx,cancel:=context.WithTimeout(context.Background(),2*time.Hour);defer cancel()
 	root,_:=a.liveJobRoot(job.ID)
 	fail:=func(err error){job.Status="failed";job.Message=err.Error();_ = a.saveLiveJob(&job)}
-	result,err:=liveRemote(ctx,job.Source,root,"capture",job.Account,job.ID);if err!=nil{fail(err);return}
+	result,err:=a.liveRemote(ctx,job.Source,root,"capture",job.Account,job.ID);if err!=nil{fail(err);return}
 	job.SourceExport=result.SourceExport;job.Warnings=result.Warnings
 	if err:=validateLiveFile(result.Native,job.ID);err!=nil{fail(err);return}
 	job.Message="Source backup finished. Transferring and verifying the native archive.";_ = a.saveLiveJob(&job)
-	if err:=transferLiveFile(ctx,job.Source,root,filepath.Join(root,"native-backup"),result.Native);err!=nil{fail(err);return}
+	if err:=a.transferLiveFile(ctx,job.Source,root,filepath.Join(root,"native-backup"),result.Native);err!=nil{fail(err);return}
 	job.NativeReady=true;job.NativeBytes=result.Native.Size;job.NativeSHA256=result.Native.SHA256
 	job.Message="Full native backup captured and verified. Preparing the compatible website review.";_ = a.saveLiveJob(&job)
 	archive:=filepath.Join(root,"native-backup")
 	{
 		if result.Portable==nil{job.Status="captured";job.Message="Native backup verified. This source layout needs manual compatibility review before website import.";_ = a.saveLiveJob(&job);return}
 		if err:=validateLiveFile(result.Portable,job.ID);err!=nil{fail(err);return}
-		archive=filepath.Join(root,"portable-backup");if err:=transferLiveFile(ctx,job.Source,root,archive,result.Portable);err!=nil{fail(err);return}
+		archive=filepath.Join(root,"portable-backup");if err:=a.transferLiveFile(ctx,job.Source,root,archive,result.Portable);err!=nil{fail(err);return}
 	}
 	stage:=filepath.Join(a.system.dataDir,"migrations",job.ID)
 	if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<migrationExtractLimit+(1<<30){job.Status="captured";job.Message="Native backup verified. Website extraction needs at least 9 GiB free disk space; no target data was changed.";_ = a.saveLiveJob(&job);return}
@@ -264,4 +268,17 @@ func (a *App) liveMigrationDownload(w http.ResponseWriter,r *http.Request) {
 	info,err:=file.Stat();if err!=nil||!info.Mode().IsRegular(){writeError(w,400,"Invalid backup file");return}
 	extension:=".tar";if job.Source.Platform=="cpanel"{extension=".tar.gz"}
 	w.Header().Set("Content-Type","application/octet-stream");w.Header().Set("Content-Disposition",fmt.Sprintf(`attachment; filename="%s-%s-native%s"`,job.Source.Platform,job.ID,extension));http.ServeContent(w,r,"native"+extension,info.ModTime(),file)
+}
+
+func validLiveRootPassword(password string)bool{return len(password)>0&&len(password)<=1024&&!strings.ContainsAny(password,"\r\n\x00")}
+// Pass passwords through an inherited pipe, never command arguments or env.
+func(a *App) liveSSHCommand(ctx context.Context,source LiveSource,root string,args []string)(*exec.Cmd,func(),error){
+ if source.AuthMethod!="password" {return exec.CommandContext(ctx,"ssh",args...),func(){},nil}
+ cipher,err:=os.ReadFile(filepath.Join(root,"password.enc"));if err!=nil{return nil,nil,errors.New("source password is unavailable")}
+ password,err:=a.system.DecryptSecret(string(cipher));if err!=nil{return nil,nil,errors.New("source password could not be decrypted")}
+ if !validLiveRootPassword(password){return nil,nil,errors.New("invalid stored source credential")}
+ reader,writer,err:=os.Pipe();if err!=nil{return nil,nil,err}
+ if _,err=writer.Write([]byte(password+"\n"));err!=nil{reader.Close();writer.Close();return nil,nil,err};writer.Close()
+ cmd:=exec.CommandContext(ctx,"sshpass",append([]string{"-d","3","ssh"},args...)...);cmd.ExtraFiles=[]*os.File{reader}
+ return cmd,func(){reader.Close()},nil
 }

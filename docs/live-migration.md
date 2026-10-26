@@ -5,7 +5,7 @@ The Migration page supports root SSH account discovery, native backup capture, S
 ## Requirements
 
 - Linux cPanel/WHM or Plesk source, root SSH, Python 3, and working native panel backup tools.
-- A dedicated unencrypted SSH private key and independently verified SHA256 host-key fingerprint. Password-only SSH and Plesk for Windows are unsupported.
+- A dedicated unencrypted SSH private key OR a root password, plus an independently verified SHA256 host-key fingerprint. Password login requires sshpass on LiteCP and root password authentication enabled on the source. Interactive MFA and Plesk for Windows are unsupported. Passwords are encrypted with the LiteCP secret key and sent to sshpass through a private inherited pipe, never command arguments or environment variables.
 - Enough free source space for both native and portable exports. LiteCP retains source exports under `/root/litecp-export-JOB_ID` and local exports under its private `live-migrations/JOB_ID` directory.
 - Each transferred archive must be at most 8 GiB. Extraction is capped at 8 GiB / 100,000 entries and requires 9 GiB free before starting. Local transfer also reserves twice the archive size plus 1 GiB.
 - At most three retained native backups or credential-bearing connections. Failed credentials can be explicitly forgotten. No automatic native-backup cleanup is provided.
