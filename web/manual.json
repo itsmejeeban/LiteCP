@@ -1,0 +1,309 @@
+[
+  {
+    "title": "Getting started",
+    "page": "dashboard",
+    "topics": [
+      {
+        "title": "First steps",
+        "steps": [
+          "Sign in with your administrator account. Open Overview to check CPU, memory, storage, uptime and service health.",
+          "Use Websites → Add website to create a WordPress, WHMCS or regular PHP/HTML host. Select a compatible PHP version.",
+          "Point the domain A record to the server IP. Upload or install your application, then enable SSL when DNS resolves correctly.",
+          "Save credentials when first displayed. Keep an off-server backup before making major changes."
+        ]
+      },
+      {
+        "title": "Navigation and appearance",
+        "steps": [
+          "Use the menu button to hide or show navigation. Choose System, Light or Dark theme in the top bar.",
+          "The top bar shows the OS, hostname and server IP. Refresh server data with the refresh icon.",
+          "Use the Documentation tab at any time. Search this manual by feature name or task."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Websites and applications",
+    "page": "websites",
+    "topics": [
+      {
+        "title": "Create and manage a website",
+        "steps": [
+          "Click Add website, choose the application type, enter the domain and select PHP. Database and application cron options depend on the application.",
+          "WHMCS release selection restricts PHP choices. Application provisioning prepares hosting resources; it does not upload a licensed WHMCS distribution.",
+          "Click the domain name to open the live website in a new tab. Use the file-manager icon to manage its public directory.",
+          "Changing PHP restarts that site runtime. Verify the application afterwards. Cron runs only when enabled and supported for that application."
+        ]
+      },
+      {
+        "title": "SSL and detaching",
+        "steps": [
+          "Enable SSL after the domain points to this server and public HTTP validation is reachable. Review any error instead of repeatedly requesting certificates.",
+          "Detaching removes the managed hosting configuration but preserves website files and databases. Confirm the displayed scope before continuing."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "File manager",
+    "page": "files",
+    "topics": [
+      {
+        "title": "Browse and edit files",
+        "steps": [
+          "Select the website. Use the folder tree, breadcrumb, back/forward/up buttons or address field to navigate inside its public root.",
+          "Search filters the current folder. Toggle hidden files, sorting, and list/grid view as needed. Select files to see details and actions.",
+          "Use New file, New folder or Upload. Open text files in the editor and save changes. Binary files require download and an appropriate local editor.",
+          "Select items to copy, move, rename, change permissions, compress, extract or download. Existing-path conflicts and unsafe archive paths may be rejected."
+        ]
+      },
+      {
+        "title": "Trash and fullscreen",
+        "steps": [
+          "Trash allows recovery before permanent deletion. Restore items from View trash. Emptying Trash or permanently removing items is irreversible and requires confirmation.",
+          "Full screen expands only the file-manager workspace. Use Exit full screen or Escape to leave. Open dialogs may consume Escape first.",
+          "Use the least permissions your application needs. Do not grant world-writable permissions to resolve an ownership issue."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Website ZIP backups",
+    "page": "websites",
+    "topics": [
+      {
+        "title": "Create, download or delete",
+        "steps": [
+          "Click the website backup icon to open its popup. Choose Create backup and keep the page open until completion.",
+          "The outer website.zip contains public_html.zip and databases.zip. Hidden files and empty directories are included; SQL dumps cover databases registered to that website.",
+          "Download the completed backup. Delete removes only the selected generated backup and intermediate files after confirmation, preserving the live website and databases.",
+          "Links or special files stop backup generation. External/unregistered databases are not included. Use a maintenance window for a consistent snapshot of a busy application.",
+          "Manual ZIP backups are separate from the Backups page archives. Automatic restore of the nested ZIP format is not provided; extract and review files and SQL before a manual restore."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "FTP accounts",
+    "page": "websites",
+    "topics": [
+      {
+        "title": "Connect to a website with FTPS",
+        "steps": [
+          "Click the FTP accounts icon beside the website. Enter a unique lowercase username and strong password, then Create account.",
+          "In your FTP client choose explicit FTP over TLS, server IP or configured FTP hostname, port 21, the account username and password, and passive mode.",
+          "Each login is confined to the selected website public directory. It does not create a shell or SSH account.",
+          "Edit password changes credentials; usernames are not renamed. Remove blocks future logins while preserving files. Existing connections may last until disconnected.",
+          "The FTP service must be installed. TCP 21 and passive ports 50000–50049 must be permitted by server and cloud firewalls. A trusted certificate matching the FTP hostname is required for normal production certificate validation."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Databases and phpMyAdmin",
+    "page": "databases",
+    "topics": [
+      {
+        "title": "Create and manage databases",
+        "steps": [
+          "Create a database with a unique database name, username and strong password. Copy icons copy database names and usernames individually.",
+          "Password resets require updating every application that uses that account. Deleting a database and user is permanent; back up and confirm the displayed scope.",
+          "A website may have an associated managed database; standalone databases can be created independently."
+        ]
+      },
+      {
+        "title": "Open phpMyAdmin",
+        "steps": [
+          "Click the database name. A new tab opens and signs into that selected database automatically using a dedicated restricted account.",
+          "Use Structure or Browse to inspect tables; SQL, Search, Import and Export provide standard database tools within the selected database privileges.",
+          "Application database passwords are not read or changed. Launch tickets work once and expire quickly. If launch expires or a tab is blocked, return to LiteCP and click again.",
+          "An active LiteCP session is required for subsequent requests. Large imports may exceed phpMyAdmin upload or execution limits; use supported server import tools.",
+          "Editing or dropping data in phpMyAdmin affects the live application immediately. Export before changes."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Email domains and mailboxes",
+    "page": "email",
+    "topics": [
+      {
+        "title": "Create a mailbox or alias",
+        "steps": [
+          "Hosted website domains appear automatically in the mailbox domain selector. Creating the first mailbox enables local mail routing for that domain.",
+          "Use Add mail domain for an email-only domain with no website hosted here.",
+          "Choose the domain, local part, strong password and quota, then Create mailbox. Use the full email address as the mail-client username.",
+          "Aliases forward a locally hosted source address to a destination address. An alias is not a separate IMAP mailbox.",
+          "Password resets require updating mail clients. Removing a mailbox disables login while retaining stored Maildir messages. Disabling email hosting stops mail services, preserving accounts and messages."
+        ]
+      },
+      {
+        "title": "Mailbox login and configuration",
+        "steps": [
+          "Use Log in beside the mailbox to open configured webmail in a new tab. Enter the mailbox password; panel sign-in is not automatic mailbox sign-in.",
+          "If webmail is unavailable, configure a public mail hostname with matching TLS and install the webmail component first.",
+          "Configuration shows the domain DNS records and mail client settings. Incoming IMAP uses 993 with SSL/TLS; outgoing SMTP uses 465 with SSL/TLS or 587 with STARTTLS and authentication."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Email DNS and delivery",
+    "page": "email",
+    "topics": [
+      {
+        "title": "Publish the records",
+        "steps": [
+          "Open DNS records beside a mail domain, or Configuration beside a mailbox. Copy the actual generated record values to your DNS provider. LiteCP does not edit public DNS.",
+          "Publish the mail-host A record and domain MX record. Merge authorized senders into one SPF TXT record; do not create two SPF records.",
+          "Publish the generated default._domainkey DKIM TXT record. A missing key or DKIM service must be corrected before signing can work.",
+          "Begin DMARC in monitoring mode. Create the report mailbox before enabling reports; review results before choosing quarantine or reject.",
+          "Ask the server provider to set PTR/reverse DNS to the public mail hostname. Verify forward/reverse DNS, trusted TLS and outbound TCP 25.",
+          "Authentication records improve deliverability but do not guarantee inbox placement. Reputation, message content, recipient policy and blocked ports also matter."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Services and logs",
+    "page": "services",
+    "topics": [
+      {
+        "title": "Check and restart services",
+        "steps": [
+          "Services shows the managed hosting stack status. Restart a selected service only when necessary; websites or mail clients may briefly disconnect.",
+          "Use Logs to inspect the offered service/application log targets. Refresh to read new entries and use the exact error message when investigating a failure.",
+          "A green service state is a point-in-time health result, not proof that every application or external connection is working."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Local and remote backups",
+    "page": "backups",
+    "topics": [
+      {
+        "title": "Run a standard backup",
+        "steps": [
+          "Select a website and choose local storage or a configured remote destination. Create backup and wait for completion.",
+          "Standard backups use a different TAR archive format from website manual ZIP backups. Keep an independent off-server copy and test your restore procedure.",
+          "Add a remote destination with its host, port, protocol, account, remote path and password. Prefer FTPS or SFTP over unencrypted FTP.",
+          "SFTP requires a verified SSH host-key fingerprint. Verify it through a trusted channel before saving it. Remote destination passwords are encrypted in panel storage.",
+          "Local backup retention applies to standard archives according to Settings. Remote retention is managed at the destination. Review a backup status before relying on a remote copy."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Migration",
+    "page": "migrations",
+    "topics": [
+      {
+        "title": "Move a website from an archive",
+        "steps": [
+          "Create an empty unused target website with a compatible PHP version.",
+          "Upload a compatible cPanel archive containing public_html or Plesk export containing httpdocs, then inspect it. Select the website root and optional SQL dump.",
+          "Import only into an empty target. SQL uses a restricted target user and an empty managed database. Update application paths and database credentials afterwards.",
+          "Verify the website before changing DNS. Files, databases and active applications require consistency planning."
+        ]
+      },
+      {
+        "title": "Capture a live cPanel or Plesk source",
+        "steps": [
+          "Connect with Linux root SSH, a dedicated unencrypted private key and an independently verified SHA256 host-key fingerprint. Password-only SSH and Plesk for Windows are unsupported.",
+          "Discover and select a source account or subscription. Confirm native backup creation; source and destination require enough free disk space.",
+          "LiteCP retains the native archive, verifies the transfer checksum and stages compatible primary website files and SQL for review. Additional databases need separate target mapping.",
+          "Capture is not a complete account restore. Mail, DNS, SSL, addon sites, packages, reseller settings and arbitrary cron jobs are not automatically activated.",
+          "Archive size and extraction limits apply. Unsupported links/layouts need manual review. Source exports and retained backups are not automatically cleaned up.",
+          "Forget source credentials after capture and revoke the dedicated source key independently. Keep the source authoritative until all services are verified."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "PHP extensions",
+    "page": "extensions",
+    "topics": [
+      {
+        "title": "Find and install modules",
+        "steps": [
+          "Use Search extensions, select a PHP version, and filter by application baseline, optional, installed or available entries.",
+          "The list combines loaded modules and extension packages from configured repositories for installed runtimes. A package may provide several modules.",
+          "Baseline labels identify common WordPress/WHMCS support. Requirements depend on the actual application release and plugins. Do not install every optional extension.",
+          "Choose Install only for a required compatible package. The selected PHP-FPM version restarts, affecting its websites. Confirm and verify the application afterwards.",
+          "Core modules and installed baseline packages are protected. PHP 7.3 container modules require an image rebuild. Source-only extensions outside configured repositories are not listed."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Website security",
+    "page": "security",
+    "topics": [
+      {
+        "title": "WAF and malware scanning",
+        "steps": [
+          "Optional security engines must be installed before their controls can work.",
+          "Start the WAF in Detect mode for a website. Check legitimate traffic and tune false positives before enabling Block.",
+          "Run a malware scan for the chosen website/path. Scans report findings; they do not automatically clean or repair application files.",
+          "Keep PHP, the OS, WordPress/WHMCS, themes and plugins updated. Security features cannot guarantee a server is unhackable."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Firewall",
+    "page": "firewall",
+    "topics": [
+      {
+        "title": "Manage network rules",
+        "steps": [
+          "Review existing rules before creating or removing a rule. Enter the exact port, protocol, direction, action and source required.",
+          "Keep your administrator connection and panel access allowed. Confirm provider/cloud firewalls separately; a panel rule does not change those.",
+          "Expose only the services you use. FTP passive ranges and mail ports have separate requirements. Incorrect rules can lock out clients or administrators."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Settings and activity history",
+    "page": "settings",
+    "topics": [
+      {
+        "title": "Server settings",
+        "steps": [
+          "Set the administrator contact email, time zone and standard-backup retention in Settings. Search the global time-zone list to find the correct region.",
+          "The DNS resolver section shows detected current resolvers. Enter primary/secondary resolver IPs only when you intend to change system DNS. Invalid resolvers can break connections.",
+          "Changing the hostname does not update public DNS, mail identity or certificates. Reboot disconnects all hosted services until the server returns.",
+          "Change the administrator password using the current password and matching new-password fields. Keep recovery access to the server."
+        ]
+      },
+      {
+        "title": "Recent Activities",
+        "steps": [
+          "Open System → Recent Activities to see retained event details with pagination. The dashboard also provides recent-event pages.",
+          "Forever is the default. Optional retention is 7, 15, 30, 60 or 365 days. Saving a limited period permanently removes older events after confirmation, then applies as new events are recorded.",
+          "Delete everything removes recorded activity after confirmation. New activity continues to be recorded. Previously discarded events cannot be recovered."
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Troubleshooting",
+    "page": "logs",
+    "topics": [
+      {
+        "title": "Common problems",
+        "steps": [
+          "Session expired: sign into LiteCP again, then reopen the tool. Panel updates/restarts may end the administrator session.",
+          "A new tab did not open: permit new tabs/popups for your LiteCP address, then retry the user action.",
+          "SSL request failed: confirm domain DNS points here and HTTP validation can reach this server. Use a certificate matching the hostname; do not disable verification.",
+          "Backup/import failed: read the error and verify free space, archive limits, file types and target emptiness. Partial backup/export files may be retained for review.",
+          "Website error after a runtime change: check PHP compatibility, required extensions, application configuration and relevant logs.",
+          "Mail cannot send/receive: verify MX/A/SPF/DKIM/DMARC/PTR, credentials, TLS, service state, port reachability and provider restrictions.",
+          "This manual describes panel capabilities. Optional components may be unavailable until installed; always follow the status and confirmation shown by the live panel."
+        ]
+      }
+    ]
+  }
+]

@@ -480,7 +480,7 @@
   }
 
   function navigate(page, updateHash = true) {
-    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "activities"];
+    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "activities", "documentation"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {

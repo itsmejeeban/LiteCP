@@ -1,0 +1,12 @@
+.documentation-tab {white-space:nowrap;}
+.manual-contents {display:flex;flex-wrap:wrap;gap:8px 16px;}
+.manual-contents a {color:var(--teal);padding:5px 0;}
+.manual-sections {display:grid;gap:18px;margin-top:18px;}
+.manual-section {scroll-margin-top:100px;}
+.manual-section .panel-head {gap:16px;flex-wrap:wrap;}
+.manual-section h3 {font-size:16px;color:var(--ink);margin:0 0 12px;}
+.manual-section section+section {margin-top:24px;}
+.manual-section ol {margin:0;padding-left:22px;}
+.manual-section li {font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:10px;overflow-wrap:anywhere;}
+.manual-contents a:focus-visible {outline:2px solid var(--teal);outline-offset:3px;}
+@media(max-width:720px){.documentation-tab{padding:8px;font-size:11px;}.manual-section .panel-head .button{font-size:12px;}}
