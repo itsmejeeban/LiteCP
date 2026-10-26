@@ -9,6 +9,8 @@
   let credentialText = "";
   let logTimer = null;
   let currentFilePath = "";
+  let fileListingRequest = 0;
+  let lastFileListing = null;
   let editorFilePath = "";
   let editorOriginal = "";
 
@@ -721,18 +723,29 @@
   }
 
   async function loadFiles() {
+    const request = ++fileListingRequest;
     const siteId = $("#fileSiteSelect").value;
     if (!siteId) { $("#fileTable").innerHTML = '<div class="empty-state"><p>Add a website before using the file manager.</p></div>'; return; }
+    window.LiteCPFileManager?.loading();
     $("#fileTable").innerHTML = '<div class="loading-lines"><i></i><i></i><i></i></div>';
     try {
       const listing = await api(`/api/files?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(currentFilePath)}`);
+      if (request !== fileListingRequest || siteId !== $("#fileSiteSelect").value) return;
       currentFilePath = listing.path || "";
+      lastFileListing = listing;
       window.LiteCPFeatures?.rememberListing(listing);
       renderFileListing(listing);
-    } catch (error) { $("#fileTable").innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message)}</p></div>`; }
+    } catch (error) {
+      if (request !== fileListingRequest) return;
+      if (window.LiteCPFileManager && lastFileListing?.siteId === siteId) {
+        currentFilePath = lastFileListing.path || "";
+        renderFileListing(lastFileListing); handleError(error);
+      } else $("#fileTable").innerHTML = `<div class="empty-state"><p>${escapeHTML(error.message)}</p></div>`;
+    }
   }
 
   function renderFileListing(listing) {
+    if (window.LiteCPFileManager) { window.LiteCPFileManager.render(listing); return; }
     const parts = currentFilePath ? currentFilePath.split("/") : [];
     $("#fileBreadcrumb").innerHTML = '<button data-file-path="">public</button>' + parts.map((part, index) => `<button data-file-path="${escapeHTML(parts.slice(0, index + 1).join("/"))}">${escapeHTML(part)}</button>`).join("");
     $("#fileUpButton").disabled = !currentFilePath;
@@ -986,6 +999,7 @@
   function relativeTime(value) { const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86400)}d ago`; }
 
   window.LiteCP = { api, escapeHTML, showToast, handleError, navigate, renderAll, loadFiles, renderFileListing, openEditor,
+    goToFilePath: path => { currentFilePath = path; return loadFiles(); },
     state: () => currentState, path: () => currentFilePath, demo: demoMode,
     refresh: async () => { currentState = await api("/api/state"); renderAll(); },
     showOneTimeCredentials, formatBytes, formatDateTime };
