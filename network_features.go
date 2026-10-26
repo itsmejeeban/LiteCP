@@ -66,7 +66,7 @@ func (s *System) applyHostResolvers(ctx context.Context, values []string) error 
 		if err := os.MkdirAll("/etc/systemd/resolved.conf.d", 0755); err != nil {
 			return err
 		}
-		if err := writeAtomic(target, []byte("[Resolve]\nDNS="+strings.Join(resolvers, " ")+"\nFallbackDNS=\n"), 0644); err != nil {
+		if err := writeAtomic(target, []byte("[Resolve]\nDNS="+strings.Join(resolvers, " ")+"\nFallbackDNS=\nDomains=~.\n"), 0644); err != nil {
 			return err
 		}
 		if _, err := runCommand(ctx, 30*time.Second, "systemctl", "restart", "systemd-resolved"); err != nil {
@@ -132,3 +132,5 @@ func (s *System) applyHostResolvers(ctx context.Context, values []string) error 
 	}
 	return nil
 }
+
+func defaultResolversMatch(values []string)bool{return len(values)==2&&values[0]=="8.8.8.8"&&values[1]=="8.8.4.4"}

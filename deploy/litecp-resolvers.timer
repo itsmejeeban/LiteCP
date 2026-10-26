@@ -1,0 +1,11 @@
+[Unit]
+Description=Check LiteCP DNS resolvers after boot and periodically
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=5min
+AccuracySec=10s
+Unit=litecp-resolvers.service
+
+[Install]
+WantedBy=timers.target

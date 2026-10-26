@@ -273,7 +273,7 @@
         "title": "Server settings",
         "steps": [
           "Set the administrator contact email, time zone and standard-backup retention in Settings. Search the global time-zone list to find the correct region.",
-          "The DNS resolver section shows detected current resolvers. Enter primary/secondary resolver IPs only when you intend to change system DNS. Invalid resolvers can break connections.",
+          "The DNS resolver section shows detected current resolvers. The installer enforces 8.8.8.8 and 8.8.4.4. A system check runs after boot and every five minutes; changes to other resolvers will be restored to these defaults.",
           "Changing the hostname does not update public DNS, mail identity or certificates. Reboot disconnects all hosted services until the server returns.",
           "Change the administrator password using the current password and matching new-password fields. Keep recovery access to the server."
         ]

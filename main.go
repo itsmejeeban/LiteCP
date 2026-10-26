@@ -57,6 +57,18 @@ type App struct {
 func main() {
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
+ if len(os.Args)>1 && os.Args[1]=="ensure-default-resolvers" {
+  if os.Geteuid()!=0 {log.Fatal("ensure-default-resolvers requires root")}
+  ctx,cancel:=context.WithTimeout(context.Background(),2*time.Minute);defer cancel()
+  wanted:=[]string{"8.8.8.8","8.8.4.4"}
+  if !defaultResolversMatch(currentSystemResolvers()) {
+   if err:=NewSystem(dataDir).applyHostResolvers(ctx,wanted);err!=nil{log.Fatal(err)}
+   if !defaultResolversMatch(currentSystemResolvers()){log.Fatal("default DNS resolver verification failed")}
+   log.Print("Restored Google DNS resolvers: 8.8.8.8, 8.8.4.4")
+  }
+
+  return
+ }
 	if len(os.Args) > 1 && os.Args[1] == "host-resolvers" {
 		if os.Geteuid() != 0 {
 			log.Fatal("host-resolvers requires root")
@@ -82,11 +94,7 @@ func main() {
 		if err := store.Initialize(*username, password); err != nil {
 			log.Fatal(err)
 		}
-		if os.Getenv("LITECP_CONFIGURE_RESOLVERS") == "0" {
-			if err := store.UpdateSettings(func(settings *Settings) { settings.Resolvers = []string{} }); err != nil {
-				log.Fatal(err)
-			}
-		}
+
 		fmt.Println("LiteCP administrator created.")
 		return
 	}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Verify and restore LiteCP Google DNS resolvers
+Wants=network-online.target
+After=network-online.target NetworkManager.service systemd-resolved.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/litecp ensure-default-resolvers
+TimeoutStartSec=150

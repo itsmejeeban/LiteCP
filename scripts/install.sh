@@ -256,10 +256,13 @@ cd "${SOURCE_DIR}"
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
 chmod 0755 /usr/local/bin/litecp
 command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || true
-if [[ "${FRESH_INSTALL}" -eq 1 && "${LITECP_CONFIGURE_RESOLVERS:-1}" == 1 ]]; then
-  info "Setting default resolvers to 8.8.8.8 and 8.8.4.4 (upgrades preserve current DNS)"
-  /usr/local/bin/litecp host-resolvers 8.8.8.8 8.8.4.4
-fi
+info "Enforcing default resolvers: 8.8.8.8 and 8.8.4.4"
+/usr/local/bin/litecp ensure-default-resolvers
+cp "${SOURCE_DIR}/deploy/litecp-resolvers.service" /etc/systemd/system/litecp-resolvers.service
+cp "${SOURCE_DIR}/deploy/litecp-resolvers.timer" /etc/systemd/system/litecp-resolvers.timer
+systemctl daemon-reload
+systemctl enable --now litecp-resolvers.timer
+
 
 ADMIN_USERNAME="${LITECP_ADMIN_USERNAME:-admin}"
 ADMIN_PASSWORD="${LITECP_ADMIN_PASSWORD:-}"
