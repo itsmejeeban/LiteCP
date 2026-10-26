@@ -77,3 +77,7 @@
 #databasesTable td:last-child {vertical-align:middle;}
 #databasesTable .row-actions {align-items:center;justify-content:center;}
 #databasesTable .row-actions .text-action {display:inline-flex;align-items:center;justify-content:center;text-align:center;}
+
+[data-page-view="databases"] .management-grid.database-list-layout {grid-template-columns:minmax(0,1fr);}
+.database-create-dialog .panel-head {gap:16px;}
+.database-create-dialog [data-database-form-error]:empty {display:none;}

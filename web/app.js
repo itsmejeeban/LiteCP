@@ -848,12 +848,13 @@
   }
 
   async function createDatabase(event) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const submit = $('button[type="submit"]', form); submit.disabled = true;
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const submit = $('button[type="submit"]', form); submit.disabled = true; const inlineError=form.querySelector('[data-database-form-error]'); if(inlineError)inlineError.textContent="";
     try {
       const result = await api("/api/databases", { method: "POST", body: { name: String(data.get("name")).trim(), username: String(data.get("username")).trim(), password: data.get("password") } });
       form.reset(); currentState = await api("/api/state"); renderAll();
+      form.dispatchEvent(new Event("database-created"));
       showOneTimeCredentials("Database created", "Save this password now. LiteCP does not store database passwords.", [["Host", result.host], ["Database", result.database.name], ["Username", result.database.username], ["Password", result.password]]);
-    } catch (error) { handleError(error); }
+    } catch (error) { if(inlineError)inlineError.textContent=error.message; handleError(error); }
     finally { submit.disabled = false; }
   }
 
