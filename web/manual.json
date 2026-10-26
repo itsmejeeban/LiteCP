@@ -108,7 +108,7 @@
           "The outer website.zip contains public_html.zip and databases.zip. Hidden files and empty directories are included; SQL dumps cover databases registered to that website.",
           "Download the completed backup. Delete removes only the selected generated backup and intermediate files after confirmation, preserving the live website and databases.",
           "Links or special files stop backup generation. External/unregistered databases are not included. Use a maintenance window for a consistent snapshot of a busy application.",
-          "Manual ZIP backups are separate from the Backups page archives. Automatic restore of the nested ZIP format is not provided; extract and review files and SQL before a manual restore."
+          "Manual ZIP backups are separate from Backups page TAR archives. In the website backup popup, use Upload and inspect for a downloaded manual ZIP, or Restore beside a saved backup. Select an empty target website for files and an empty managed database for each SQL dump. Restore the files and required databases separately, then update application credentials if target names differ. Only trusted LiteCP nested ZIPs are supported, up to 2 GiB uploaded and 8 GiB extracted. Existing live data is rejected rather than overwritten. Inspected stages are retained under Migration until explicitly removed."
         ]
       }
     ]

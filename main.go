@@ -180,6 +180,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
 	mux.HandleFunc("/api/website-ftp", a.withAuth(a.websiteFTP))
 	mux.HandleFunc("/api/website-backups", a.withAuth(a.websiteBackups))
+	mux.HandleFunc("/api/website-backups/upload", only(http.MethodPost,a.withAuth(a.websiteBackupUpload)))
+	mux.HandleFunc("/api/website-backups/restore", only(http.MethodPost,a.withAuth(a.websiteBackupRestore)))
 	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
