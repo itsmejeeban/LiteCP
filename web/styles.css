@@ -335,7 +335,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .modal-head { padding: 25px 26px 20px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .modal-head h2 { font-family: Georgia,"Times New Roman",serif; font-size: 26px; font-weight: 500; letter-spacing: -.6px; margin: 0; }
 .modal-head p { color: var(--muted); font-size: 10px; margin: 7px 0 0; line-height: 1.5; }
-.modal-close { width: 34px; height: 34px; color: #789092; background: #f3f7f6; }
+.modal-head .modal-close { width: 34px; height: 34px; color: var(--muted); background: var(--surface-soft); }
 .modal-close svg { width: 17px; }
 .modal-body { padding: 23px 26px; }
 .modal-actions { padding: 16px 26px 22px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); }
