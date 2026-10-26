@@ -1,0 +1,267 @@
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	_ "embed"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+//go:embed scripts/live-source.py
+var liveSourceExporter string
+
+const liveNativeLimit = int64(8 << 30)
+
+var liveJobIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
+var liveAccountPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,252}$`)
+var liveJobMu sync.Mutex
+var liveRunning = map[string]bool{}
+
+type LiveSource struct {
+	Platform string `json:"platform"`
+	Host string `json:"host"`
+	Port int `json:"port"`
+	Fingerprint string `json:"fingerprint"`
+}
+type LiveAccount struct {
+	ID string `json:"id"`
+	Domain string `json:"domain"`
+}
+type liveSourceFile struct {
+	Path string `json:"path"`
+	Size int64 `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+type liveExportResult struct {
+	Accounts []LiveAccount `json:"accounts"`
+	Native *liveSourceFile `json:"native"`
+	Portable *liveSourceFile `json:"portable"`
+	SourceExport string `json:"sourceExport"`
+	Warnings []string `json:"warnings"`
+	Error string `json:"error"`
+}
+type LiveMigrationJob struct {
+	ID string `json:"id"`
+	Source LiveSource `json:"source"`
+	Accounts []LiveAccount `json:"accounts"`
+	Account string `json:"account"`
+	Status string `json:"status"`
+	Message string `json:"message"`
+	SourceExport string `json:"sourceExport,omitempty"`
+	NativeBytes int64 `json:"nativeBytes"`
+	NativeSHA256 string `json:"nativeSha256,omitempty"`
+	NativeReady bool `json:"nativeReady"`
+	CredentialsRetained bool `json:"credentialsRetained"`
+	Preview *MigrationPreview `json:"preview,omitempty"`
+	Warnings []string `json:"warnings"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func validateLiveSource(source LiveSource) error {
+	if source.Platform != "cpanel" && source.Platform != "plesk" { return errors.New("select cPanel or Plesk") }
+	if source.Port < 1 || source.Port > 65535 { return errors.New("SSH port must be between 1 and 65535") }
+	if ip := net.ParseIP(source.Host); ip != nil {
+		if ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() { return errors.New("select the source hosting server, not a local or link-local address") }
+	} else if !domainPattern.MatchString(source.Host) || len(source.Host)>253 { return errors.New("enter a valid source IP or hostname") }
+	value, err := base64.RawStdEncoding.DecodeString(strings.TrimSuffix(strings.TrimPrefix(source.Fingerprint,"SHA256:"),"="))
+	if !strings.HasPrefix(source.Fingerprint,"SHA256:") || err != nil || len(value)!=32 { return errors.New("enter the independently verified SHA256 SSH host-key fingerprint") }
+	return nil
+}
+
+func pinnedKnownHost(scan, fingerprint string) (string,error) {
+	for _, line := range strings.Split(scan,"\n") {
+		fields:=strings.Fields(line)
+		if len(fields)!=3 || strings.HasPrefix(fields[0],"#") { continue }
+		key,err:=base64.StdEncoding.DecodeString(fields[2]); if err!=nil {continue}
+		digest:=sha256.Sum256(key)
+		if "SHA256:"+base64.RawStdEncoding.EncodeToString(digest[:])==strings.TrimSuffix(fingerprint,"=") {return line+"\n",nil}
+	}
+	return "",errors.New("source SSH host-key fingerprint does not match; connection rejected")
+}
+
+func (a *App) liveJobRoot(id string) (string,error) {
+	if !liveJobIDPattern.MatchString(id) {return "",errors.New("invalid live migration ID")}
+	return filepath.Join(a.system.dataDir,"live-migrations",id),nil
+}
+func (a *App) saveLiveJob(job *LiveMigrationJob) error {
+	root,err:=a.liveJobRoot(job.ID);if err!=nil{return err}
+	job.UpdatedAt=time.Now().UTC();content,err:=json.Marshal(job);if err!=nil{return err}
+	return writeAtomic(filepath.Join(root,"status.json"),content,0600)
+}
+func (a *App) loadLiveJob(id string) (LiveMigrationJob,error) {
+	var job LiveMigrationJob;root,err:=a.liveJobRoot(id);if err!=nil{return job,err}
+	content,err:=os.ReadFile(filepath.Join(root,"status.json"));if err!=nil{return job,errors.New("live migration job not found")}
+	if json.Unmarshal(content,&job)!=nil || job.ID!=id{return job,errors.New("invalid live migration state")}
+	return job,nil
+}
+func liveSSHArgs(source LiveSource, root string) []string {
+	return []string{"-F","/dev/null","-p",strconv.Itoa(source.Port),"-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","GlobalKnownHostsFile=/dev/null","-o","UserKnownHostsFile="+filepath.Join(root,"known_hosts"),"-o","IdentitiesOnly=yes","-o","IdentityAgent=none","-o","ForwardAgent=no","-o","ClearAllForwardings=yes","-o","RequestTTY=no","-o","PasswordAuthentication=no","-o","KbdInteractiveAuthentication=no","-o","ConnectTimeout=15","-o","ServerAliveInterval=15","-o","ServerAliveCountMax=3","-i",filepath.Join(root,"identity"),"root@"+source.Host}
+}
+func liveRemote(ctx context.Context, source LiveSource, root, mode, account, id string) (liveExportResult,error) {
+	var result liveExportResult
+	request,_:=json.Marshal(map[string]string{"platform":source.Platform,"mode":mode,"account":account,"job":id})
+	// The shell command contains only a base64 JSON token and fixed executable.
+	command:="LITECP_EXPORT_REQUEST="+base64.StdEncoding.EncodeToString(request)+" python3 -"
+	args:=append(liveSSHArgs(source,root),command)
+	cmd:=exec.CommandContext(ctx,"ssh",args...);cmd.Stdin=strings.NewReader(liveSourceExporter)
+	var stdout,stderr limitedBuffer;cmd.Stdout=&stdout;cmd.Stderr=&stderr
+	err:=cmd.Run()
+	if json.Unmarshal(stdout.Bytes(),&result)!=nil {return result,errors.New("source SSH/export command failed; verify the root key, source platform and Python 3 availability")}
+	if result.Error!="" {return result,errors.New(result.Error)}
+	if err!=nil {return result,errors.New("source SSH/export command did not complete successfully")}
+	return result,nil
+}
+
+func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
+	if r.Method==http.MethodGet {
+		if id:=r.URL.Query().Get("id");id!="" {
+			job,err:=a.loadLiveJob(id);if err!=nil{writeError(w,404,err.Error());return}
+			liveJobMu.Lock();running:=liveRunning[id];liveJobMu.Unlock()
+			if job.Status=="running"&&!running {job.Status="interrupted";job.Message="The panel restarted during capture. Retained files need review; no destination was activated."}
+			writeJSON(w,200,job);return
+		}
+		items:=[]LiveMigrationJob{};entries,err:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"))
+		if err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Cannot read live migration jobs");return}
+		for _,entry:=range entries{if entry.IsDir(){if job,err:=a.loadLiveJob(entry.Name());err==nil{items=append(items,job)}}}
+		sort.Slice(items,func(i,j int)bool{return items[i].CreatedAt.After(items[j].CreatedAt)})
+		writeJSON(w,200,map[string]any{"items":items});return
+	}
+	if r.Method!=http.MethodPost{writeError(w,405,"Use GET or POST.");return}
+	if a.system.demo {writeError(w,400,"Live migration requires the installed Linux server.");return}
+	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Account string `json:"account"`;Confirm bool `json:"confirm"`}
+	if err:=decodeJSONWithLimit(r,&input,80<<10);err!=nil{writeError(w,400,err.Error());return}
+	if input.Action=="connect" {
+		if err:=validateLiveSource(input.Source);err!=nil{writeError(w,400,err.Error());return}
+		if len(input.PrivateKey)<100||len(input.PrivateKey)>64<<10||!strings.Contains(input.PrivateKey,"PRIVATE KEY") {writeError(w,400,"Provide an unencrypted root SSH private key; password and interactive authentication are not supported.");return}
+		entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));retained:=0
+		for _,entry:=range entries{if existing,err:=a.loadLiveJob(entry.Name());err!=nil||existing.CredentialsRetained||existing.NativeReady{retained++}}
+		if retained>=3||len(entries)>=64 {writeError(w,409,"Migration retention limit reached. Forget credentials for failed connections, or have the server owner review retained native backups before another capture.");return}
+		id,err:=randomToken(18);if err!=nil{writeError(w,500,"Could not allocate job");return};id=safeSiteID(id)
+		root,_:=a.liveJobRoot(id);if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,"Cannot create private migration directory");return}
+		job:=LiveMigrationJob{ID:id,Source:input.Source,Status:"connecting",Message:"Verifying SSH host identity",Accounts:[]LiveAccount{},Warnings:[]string{},CredentialsRetained:true,CreatedAt:time.Now().UTC()}
+		if err:=os.WriteFile(filepath.Join(root,"identity"),[]byte(input.PrivateKey+"\n"),0600);err!=nil{writeError(w,500,"Cannot store root-only source credential");return}
+		_ = a.saveLiveJob(&job)
+		ctx,cancel:=context.WithTimeout(r.Context(),45*time.Second);defer cancel()
+		if _,err:=runCommand(ctx,5*time.Second,"ssh-keygen","-y","-P","","-f",filepath.Join(root,"identity"));err!=nil{job.Status="failed";job.Message="The SSH key is invalid or needs a passphrase. Use a dedicated migration key without a passphrase.";_ = a.saveLiveJob(&job);writeError(w,400,job.Message);return}
+		scan,err:=runCommand(ctx,15*time.Second,"ssh-keyscan","-T","10","-p",strconv.Itoa(input.Source.Port),"-t","ed25519,ecdsa,rsa",input.Source.Host)
+		if err==nil {var known string;known,err=pinnedKnownHost(scan,input.Source.Fingerprint);if err==nil{err=os.WriteFile(filepath.Join(root,"known_hosts"),[]byte(known),0600)}}
+		if err==nil {var result liveExportResult;result,err=liveRemote(ctx,input.Source,root,"discover","",id);if err==nil{job.Accounts=result.Accounts}}
+		if err!=nil{job.Status="failed";job.Message=err.Error();_ = a.saveLiveJob(&job);writeError(w,502,job.Message);return}
+		job.Status="connected";job.Message="Host key verified. Select a source account or subscription.";if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Could not save discovery state");return}
+		writeJSON(w,201,job);return
+	}
+	if input.Action=="capture" {
+		job,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
+		if job.Status!="connected"||!job.CredentialsRetained||!input.Confirm {writeError(w,409,"Review and confirm native source backup creation before capture; source credentials must still be available.");return}
+		found:=false;for _,account:=range job.Accounts{if account.ID==input.Account{found=true}}
+		if !found||!liveAccountPattern.MatchString(input.Account){writeError(w,400,"Select a discovered source account");return}
+		liveJobMu.Lock();if len(liveRunning)>0{liveJobMu.Unlock();writeError(w,409,"Another live capture is already running.");return};liveRunning[job.ID]=true;liveJobMu.Unlock()
+		job.Account=input.Account;job.Status="running";job.Message="Creating source native backup. This can take time; no target website is being changed."
+		if err:=a.saveLiveJob(&job);err!=nil{liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock();writeError(w,500,"Could not save capture job");return}
+		go a.captureLiveMigration(job);writeJSON(w,202,job);return
+	}
+	if input.Action=="forget" {
+		job,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
+		liveJobMu.Lock();running:=liveRunning[job.ID];liveJobMu.Unlock()
+		if running||!input.Confirm{writeError(w,409,"Confirm credential removal after the capture has stopped.");return}
+		root,_:=a.liveJobRoot(job.ID)
+		for _,name:=range []string{"identity","known_hosts"}{if err:=os.Remove(filepath.Join(root,name));err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Could not remove source credentials");return}}
+		job.CredentialsRetained=false;if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Credential removal completed but job state could not be saved");return}
+		writeJSON(w,200,job);return
+	}
+	writeError(w,400,"Unknown live migration action")
+}
+
+func validateLiveFile(file *liveSourceFile, jobID string) error {
+	if file==nil||file.Size<=0||file.Size>liveNativeLimit{return errors.New("source archive is absent, empty, or exceeds the 8 GiB direct-transfer limit")}
+	prefix:="/root/litecp-export-"+jobID+"/"
+	if !strings.HasPrefix(file.Path,prefix)||filepath.Clean(file.Path)!=file.Path||strings.ContainsAny(file.Path,"'\"\r\n\x00") {return errors.New("source returned an unexpected archive path")}
+	digest,err:=hex.DecodeString(file.SHA256);if err!=nil||len(digest)!=32{return errors.New("source archive checksum is invalid")};return nil
+}
+func transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile) error {
+	available,err:=migrationFreeBytes(ctx,root);if err!=nil{return err};if available<file.Size*2+(1<<30){return errors.New("not enough local disk space to retain and inspect the source archive safely")}
+	output,err:=os.OpenFile(destination,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600);if err!=nil{return err};defer output.Close()
+	cmd:=exec.CommandContext(ctx,"ssh",append(liveSSHArgs(source,root),"cat -- '"+file.Path+"'")...)
+	pipe,err:=cmd.StdoutPipe();if err!=nil{return err};var stderr limitedBuffer;cmd.Stderr=&stderr
+	if err:=cmd.Start();err!=nil{return err}
+	hash:=sha256.New();written,copyErr:=io.Copy(io.MultiWriter(output,hash),io.LimitReader(pipe,file.Size+1))
+	if copyErr!=nil||written!=file.Size{_ = cmd.Process.Kill();_ = cmd.Wait();return errors.New("archive transfer was interrupted or its size changed; retained partial data was not imported")}
+	if err:=cmd.Wait();err!=nil{return errors.New("SSH archive stream failed; retained data was not imported")}
+	if hex.EncodeToString(hash.Sum(nil))!=file.SHA256{return errors.New("archive SHA256 verification failed; data was not imported")}
+	return output.Sync()
+}
+func (a *App) captureLiveMigration(job LiveMigrationJob) {
+	defer func(){liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock()}()
+	defer func(){if recover()!=nil{job.Status="failed";job.Message="Capture stopped unexpectedly. Retained files and source export need review; no destination was activated.";_ = a.saveLiveJob(&job)}}()
+	ctx,cancel:=context.WithTimeout(context.Background(),2*time.Hour);defer cancel()
+	root,_:=a.liveJobRoot(job.ID)
+	fail:=func(err error){job.Status="failed";job.Message=err.Error();_ = a.saveLiveJob(&job)}
+	result,err:=liveRemote(ctx,job.Source,root,"capture",job.Account,job.ID);if err!=nil{fail(err);return}
+	job.SourceExport=result.SourceExport;job.Warnings=result.Warnings
+	if err:=validateLiveFile(result.Native,job.ID);err!=nil{fail(err);return}
+	job.Message="Source backup finished. Transferring and verifying the native archive.";_ = a.saveLiveJob(&job)
+	if err:=transferLiveFile(ctx,job.Source,root,filepath.Join(root,"native-backup"),result.Native);err!=nil{fail(err);return}
+	job.NativeReady=true;job.NativeBytes=result.Native.Size;job.NativeSHA256=result.Native.SHA256
+	job.Message="Full native backup captured and verified. Preparing the compatible website review.";_ = a.saveLiveJob(&job)
+	archive:=filepath.Join(root,"native-backup")
+	{
+		if result.Portable==nil{job.Status="captured";job.Message="Native backup verified. This source layout needs manual compatibility review before website import.";_ = a.saveLiveJob(&job);return}
+		if err:=validateLiveFile(result.Portable,job.ID);err!=nil{fail(err);return}
+		archive=filepath.Join(root,"portable-backup");if err:=transferLiveFile(ctx,job.Source,root,archive,result.Portable);err!=nil{fail(err);return}
+	}
+	stage:=filepath.Join(a.system.dataDir,"migrations",job.ID)
+	if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<migrationExtractLimit+(1<<30){job.Status="captured";job.Message="Native backup verified. Website extraction needs at least 9 GiB free disk space; no target data was changed.";_ = a.saveLiveJob(&job);return}
+	stages,_:=os.ReadDir(filepath.Dir(stage));if len(stages)>=3{job.Status="captured";job.Message="Native backup verified. Three website stages already exist; review them before staging this capture.";_ = a.saveLiveJob(&job);return}
+	if err:=os.MkdirAll(filepath.Join(stage,"files"),0700);err!=nil{fail(err);return}
+	preview,err:=extractMigration(ctx,archive,filepath.Join(stage,"files"),job.Source.Platform)
+	if err!=nil{job.Status="captured";job.Message="Native backup verified; website staging could not complete: "+err.Error();_ = a.saveLiveJob(&job);return}
+	preview.ID=job.ID;content,_:=json.Marshal(preview)
+	if err:=writeAtomic(filepath.Join(stage,"manifest.json"),content,0600);err!=nil{fail(err);return}
+	job.Preview=&preview;job.Status="review";job.Message="Native backup verified and website data staged. Select the website root/database and an empty target below. Capture is not a completed account restore."
+	_ = a.saveLiveJob(&job)
+	a.store.AddActivity("Live source captured",job.Source.Platform+": "+job.Account+"; verified backup and review required","success")
+}
+
+func migrationFreeBytes(ctx context.Context, path string) (int64,error) {
+	space,err:=runCommand(ctx,5*time.Second,"df","-Pk",path);if err!=nil{return 0,errors.New("cannot verify free migration disk space")}
+	lines:=strings.Split(strings.TrimSpace(space),"\n");fields:=strings.Fields(lines[len(lines)-1]);if len(fields)<6{return 0,errors.New("cannot parse free migration disk space")}
+	available,err:=strconv.ParseInt(fields[3],10,64);if err!=nil||available<0{return 0,errors.New("invalid migration disk-space result")}
+	return available*1024,nil
+}
+
+func (a *App) migrationDatabaseImport(w http.ResponseWriter,r *http.Request) {
+	var input struct{ID,SQL,DatabaseID,Password string;Confirm bool}
+	if err:=decodeJSON(r,&input);err!=nil{writeError(w,400,err.Error());return}
+	if !input.Confirm{writeError(w,400,"Confirm restore into an empty managed database; a failed import resets only that empty target.");return}
+	preview,root,err:=a.loadMigration(input.ID);if err!=nil{writeError(w,404,err.Error());return}
+	if !containsString(preview.Databases,input.SQL){writeError(w,400,"Select a SQL dump from the inspected migration");return}
+	database:=a.store.DatabaseByID(input.DatabaseID);if database==nil{writeError(w,404,"Managed target database not found");return}
+	if err:=a.system.importScopedSQL(r.Context(),filepath.Join(root,"files",filepath.FromSlash(input.SQL)),*database,input.Password);err!=nil{writeError(w,502,err.Error());return}
+	a.store.AddActivity("Migration database restored",database.Name+": from inspected SQL; application credentials still need review","success")
+	writeJSON(w,200,map[string]bool{"ok":true})
+}
+
+func (a *App) liveMigrationDownload(w http.ResponseWriter,r *http.Request) {
+	job,err:=a.loadLiveJob(r.URL.Query().Get("id"));if err!=nil||!job.NativeReady{writeError(w,404,"Verified native backup not found");return}
+	root,_:=a.liveJobRoot(job.ID);file,err:=os.Open(filepath.Join(root,"native-backup"));if err!=nil{writeError(w,404,"Native backup file is unavailable");return};defer file.Close()
+	info,err:=file.Stat();if err!=nil||!info.Mode().IsRegular(){writeError(w,400,"Invalid backup file");return}
+	extension:=".tar";if job.Source.Platform=="cpanel"{extension=".tar.gz"}
+	w.Header().Set("Content-Type","application/octet-stream");w.Header().Set("Content-Disposition",fmt.Sprintf(`attachment; filename="%s-%s-native%s"`,job.Source.Platform,job.ID,extension));http.ServeContent(w,r,"native"+extension,info.ModTime(),file)
+}

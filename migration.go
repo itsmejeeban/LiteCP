@@ -370,6 +370,10 @@ func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, err.Error())
 		return
 	}
+	if available, err := migrationFreeBytes(r.Context(), filepath.Dir(site.Root)); err != nil || available < preview.Bytes+(1<<30) {
+		writeError(w, 409, "Not enough free disk space to stage this website safely; target files were not changed.")
+		return
+	}
 	staging, err := os.MkdirTemp(filepath.Dir(site.Root), ".litecp-migration-"+safeSiteID(input.ID)+"-")
 	if err != nil {
 		writeError(w, 500, "Create migration staging directory: "+err.Error())

@@ -223,6 +223,7 @@
     if(document.activeElement!==$("#resolversInput"))$("#resolversInput").value=(state.settings.resolvers||[]).join(", ");
   }
   window.LiteCPFeatures={render,activity,saveFirewall,firewallAction,askPassword,openEditor,editorValue:()=>editor?editor.getValue():$("#editorContent").value,
+    reviewMigration:value=>{preview=value;$("#migrationSummary").textContent=`${value.files} files · ${cp.formatBytes(value.bytes)} · ${value.skipped} skipped links/special entries`;$("#migrationRoot").innerHTML=value.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+value.databases.map(file=>`<option>${esc(file)}</option>`).join("");$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput","Live capture staged for website review. Native backup remains retained. Importing this website does not activate email, DNS, SSL or arbitrary source cron jobs.");},
     rememberListing:value=>{listing=value;},filterFiles:values=>{const query=$("#fileSearch").value.toLowerCase();const items=values.filter(item=>(!query||item.name.toLowerCase().includes(query))&&($("#showHidden").checked||!item.name.startsWith(".")));const sort=$("#fileSort").value;return items.sort((a,b)=>a.type!==b.type?(a.type==="directory"?-1:1):sort==="size"?b.size-a.size:sort==="modified"?new Date(b.modified)-new Date(a.modified):a.name.localeCompare(b.name));},
     navigate:id=>{if(id==="extensions")extensions();}
   };

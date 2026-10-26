@@ -1,0 +1,55 @@
+(() => {
+  "use strict";
+  const cp=window.LiteCP,$=s=>document.querySelector(s),esc=cp.escapeHTML;
+  const page=$('[data-page-view="migrations"]');
+  page.querySelector('.page-heading p').textContent='Connect to a live cPanel/Plesk Linux server with root SSH, or upload an archive. Review every restore before changing DNS.';
+  page.querySelector('.page-heading').insertAdjacentHTML('afterend',`<div class="info-callout"><div><strong>Full backup capture is separate from activating services.</strong><p>Native backups retain source account data. Website files and compatible SQL can be restored below. Email, DNS, SSL, reseller/package settings and arbitrary cron jobs are not automatically activated in LiteCP. Keep the source online until every required service is verified.</p></div></div>
+    <form class="panel live-source-form" id="liveSourceForm"><div class="panel-head"><div><h2>Connect to live source</h2><p>Linux root SSH · dedicated private key · verified host fingerprint</p></div></div><div class="settings-body"><div class="live-source-fields">
+    <label class="field"><span>Source panel</span><select name="platform"><option value="cpanel">cPanel / WHM</option><option value="plesk">Plesk for Linux</option></select></label>
+    <label class="field"><span>Source IP or hostname</span><input name="host" required autocomplete="off" placeholder="source.example.com"></label>
+    <label class="field"><span>SSH port</span><input name="port" type="number" min="1" max="65535" value="22" required></label>
+    <label class="field"><span>SSH host-key fingerprint</span><input name="fingerprint" required autocomplete="off" placeholder="SHA256:…"><small>Verify independently on the source: ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</small></label>
+    <label class="field"><span>Root SSH private key file</span><input id="livePrivateKey" type="file" required><small>Use an unencrypted, dedicated migration key. Password-only SSH and Plesk for Windows are not supported.</small></label></div>
+    <p class="feature-note">The key is stored with root-only permissions on LiteCP, never in the browser’s saved settings. Use “Forget source credentials” after capture. Python 3 and the panel’s native backup CLI must be installed on the source. Direct transfer is capped at 8 GiB per archive and checked against available disk space.</p>
+    <button class="button button-primary" type="submit">Verify connection and discover accounts</button><p id="liveConnectStatus" role="status"></p></div></form>
+    <article class="panel live-jobs-panel"><div class="panel-head"><div><h2>Live migration jobs</h2><p>Native backup, checksum verification and compatible restore review</p></div><button class="button button-secondary" id="liveJobsRefresh">Refresh jobs</button></div><div id="liveJobs"><div class="empty-state"><p>No source connected yet.</p></div></div></article>
+    <form class="panel hidden live-database-form" id="liveDatabaseForm"><div class="panel-head"><div><h2>Restore additional databases</h2><p>Use one empty managed target per source database. Application credentials must be updated separately.</p></div></div><div class="settings-body"><div class="live-source-fields"><label class="field"><span>Source SQL dump</span><select name="sql" id="liveSQL" required></select></label><label class="field"><span>Empty target database</span><select name="databaseID" id="liveTargetDatabase" required></select></label><label class="field"><span>Target database password</span><input name="password" type="password" autocomplete="off" required></label></div><label class="live-ack"><input type="checkbox" name="confirm" required> I confirm this target database is empty. If import fails, only that previously empty target may be reset.</label><button class="button button-secondary" type="submit">Restore selected database</button><p id="liveDatabaseStatus" role="status"></p></div></form>`);
+  let jobs=[],selectedJob=null,initialized=false,pollTimer=null;
+  const active=job=>job.status==='running'||job.status==='connecting';
+  function renderJobs(){
+    $('#liveJobs').innerHTML=jobs.length?jobs.map(job=>`<section class="live-job"><div class="live-job-heading"><strong>${esc(job.source.platform)} · ${esc(job.account||job.source.host)}</strong><span class="badge ${job.status==='review'?'success':''}">${esc(job.status)}</span></div><p>${esc(job.message)}</p>${job.sourceExport?`<small>Source export retained at <code>${esc(job.sourceExport)}</code></small>`:''}${job.nativeReady?`<small>Verified native archive · ${cp.formatBytes(job.nativeBytes)}<br>SHA256: <code>${esc(job.nativeSha256)}</code></small>`:''}${job.warnings?.length?`<ul class="live-warnings">${job.warnings.map(message=>`<li>${esc(message)}</li>`).join('')}</ul>`:''}${job.status==='connected'&&job.credentialsRetained?`<form class="live-capture-form" data-live-capture="${esc(job.id)}"><label class="field"><span>Source account / subscription</span><select name="account" required>${job.accounts.map(account=>`<option value="${esc(account.id)}">${esc(account.id)}${account.domain&&account.domain!==account.id?' — '+esc(account.domain):''}</option>`).join('')}</select></label><label class="live-ack"><input type="checkbox" name="confirm" required> Create and retain a complete native backup on the source. Source backups consume disk space; no source files or DNS will be deleted by LiteCP.</label><button class="button button-primary" type="submit">Capture selected account</button></form>`:''}<div class="feature-actions">${job.nativeReady?`<a class="button button-secondary" href="/api/live-migrations/download?id=${encodeURIComponent(job.id)}">Download native backup</a>`:''}${job.preview?`<button class="button button-secondary" data-live-review="${esc(job.id)}">Review website and database restore</button>`:''}${job.credentialsRetained&&!active(job)?`<button class="button button-ghost" data-live-forget="${esc(job.id)}">Forget source credentials</button>`:''}</div><small>Job ${esc(job.id)}</small></section>`).join(''):'<div class="empty-state"><p>No live migration jobs. Connect a source server to begin.</p></div>';
+  }
+  async function loadJobs(){
+    if(cp.demo){$('#liveJobs').innerHTML='<div class="empty-state"><p>Live migration requires the installed Linux server.</p></div>';return;}
+    try{const result=await cp.api('/api/live-migrations');jobs=result.items;for(const job of jobs){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));Object.assign(job,current);}}renderJobs();clearTimeout(pollTimer);if(jobs.some(active))pollTimer=setTimeout(loadJobs,5000);}
+    catch(error){$('#liveJobs').textContent=error.message;}
+  }
+  $('#liveJobsRefresh').onclick=loadJobs;
+  $('#liveSourceForm').onsubmit=async event=>{
+    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),status=$('#liveConnectStatus');
+    if(cp.demo){status.textContent='Live migration requires the installed Linux server.';return;}
+    const key=$('#livePrivateKey').files[0];if(!key||key.size>65536){status.textContent='Choose a private key file up to 64 KiB.';return;}
+    button.disabled=true;status.textContent='Verifying host identity and discovering accounts…';
+    try{const values=new FormData(form);await cp.api('/api/live-migrations',{method:'POST',body:{action:'connect',source:{platform:values.get('platform'),host:String(values.get('host')).trim(),port:Number(values.get('port')),fingerprint:String(values.get('fingerprint')).trim()},privateKey:await key.text()}});$('#livePrivateKey').value='';status.textContent='Connection verified. Review the discovered account below.';await loadJobs();}
+    catch(error){status.textContent=error.message;await loadJobs();}finally{button.disabled=false;}
+  };
+  $('#liveJobs').addEventListener('submit',async event=>{
+    const form=event.target.closest('[data-live-capture]');if(!form)return;event.preventDefault();if(!form.reportValidity())return;
+    const button=form.querySelector('button');button.disabled=true;
+    try{await cp.api('/api/live-migrations',{method:'POST',body:{action:'capture',id:form.dataset.liveCapture,account:new FormData(form).get('account'),confirm:true}});await loadJobs();}
+    catch(error){cp.handleError(error);button.disabled=false;}
+  });
+  $('#liveJobs').addEventListener('click',async event=>{
+    const review=event.target.closest('[data-live-review]'),forget=event.target.closest('[data-live-forget]');
+    if(review){selectedJob=jobs.find(job=>job.id===review.dataset.liveReview);if(!selectedJob?.preview)return;window.LiteCPFeatures.reviewMigration(selectedJob.preview);$('#liveSQL').innerHTML=selectedJob.preview.databases.map(value=>`<option>${esc(value)}</option>`).join('');$('#liveTargetDatabase').innerHTML=(cp.state().databases||[]).map(value=>`<option value="${esc(value.id)}">${esc(value.name)}</option>`).join('');$('#liveDatabaseForm').classList.toggle('hidden',!selectedJob.preview.databases.length);$('#liveDatabaseForm').reset();$('#migrationImportForm').scrollIntoView({behavior:'smooth',block:'start'});}
+    if(forget){if(!confirm('Remove this job’s stored SSH private key and pinned-host file from LiteCP? Native backups and source data will be kept.'))return;try{await cp.api('/api/live-migrations',{method:'POST',body:{action:'forget',id:forget.dataset.liveForget,confirm:true}});await loadJobs();}catch(error){cp.handleError(error);}}
+  });
+  $('#liveDatabaseForm').onsubmit=async event=>{
+    event.preventDefault();const form=event.currentTarget;if(!selectedJob||!form.reportValidity())return;const data=new FormData(form),button=form.querySelector('button[type="submit"]');button.disabled=true;$('#liveDatabaseStatus').textContent='Restoring the selected database…';
+    try{await cp.api('/api/migrations/database',{method:'POST',body:{id:selectedJob.preview.id,sql:data.get('sql'),databaseID:data.get('databaseID'),password:data.get('password'),confirm:data.has('confirm')}});form.elements.password.value='';$('#liveDatabaseStatus').textContent='Database restored. Verify its application configuration before cutover.';await cp.refresh();}
+    catch(error){$('#liveDatabaseStatus').textContent=error.message;}finally{button.disabled=false;}
+  };
+  const previous=window.LiteCPFeatures.render;
+  window.LiteCPFeatures.render=state=>{previous(state);if(!initialized){initialized=true;loadJobs();}};
+  if(cp.state()){initialized=true;loadJobs();}
+})();
