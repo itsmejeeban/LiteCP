@@ -27,6 +27,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 )
 
 var version = "0.5.1-dev"

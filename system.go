@@ -57,6 +57,7 @@ type SystemSnapshot struct {
 	OSID               string          `json:"osId"`
 	Hostname           string          `json:"hostname"`
 	IPAddress          string          `json:"ipAddress"`
+	CurrentResolvers   []string        `json:"currentResolvers"`
 	UptimeSeconds      uint64          `json:"uptimeSeconds"`
 	CPUPercent         float64         `json:"cpuPercent"`
 	LoadAverage        float64         `json:"loadAverage"`
@@ -111,6 +112,7 @@ func (s *System) Snapshot(ctx context.Context, sites []Site) SystemSnapshot {
 	hostname, _ := os.Hostname()
 	snapshot := SystemSnapshot{
 		OS: s.os.Name, OSID: s.os.ID, Hostname: hostname, IPAddress: primaryIP(), Demo: s.demo,
+		CurrentResolvers: currentSystemResolvers(),
 		Memory: memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
 		DatabaseEngine: s.DatabaseEngine(), FirewallBackend: s.FirewallBackend(),
 		WAFEngine: s.WAFEngine(), AntivirusAvailable: s.AntivirusAvailable(), WebmailAvailable: s.WebmailAvailable(), WebmailURL: s.WebmailURL(),

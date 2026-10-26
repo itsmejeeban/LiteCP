@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,42 @@ import (
 	"strings"
 	"time"
 )
+
+func parseSystemResolvers(content string) []string {
+	values := []string{}
+	seen := map[string]bool{}
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		fields := strings.Fields(strings.SplitN(scanner.Text(), "#", 2)[0])
+		if len(fields) < 2 || fields[0] != "nameserver" {
+			continue
+		}
+		ip := net.ParseIP(fields[1])
+		if ip != nil && !seen[ip.String()] {
+			values = append(values, ip.String())
+			seen[ip.String()] = true
+		}
+	}
+	return values
+}
+
+func currentSystemResolvers() []string {
+	content, err := os.ReadFile("/etc/resolv.conf")
+	if err != nil {
+		return []string{}
+	}
+	values := parseSystemResolvers(string(content))
+	for _, value := range values {
+		if value == "127.0.0.53" || value == "127.0.0.54" {
+			if upstream, readErr := os.ReadFile("/run/systemd/resolve/resolv.conf"); readErr == nil {
+				if actual := parseSystemResolvers(string(upstream)); len(actual) > 0 {
+					return actual
+				}
+			}
+		}
+	}
+	return values
+}
 
 // Called only by the root-only host-resolvers CLI in a transient systemd unit.
 // Never replace resolv.conf or bounce the network connection (and SSH).
