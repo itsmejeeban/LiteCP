@@ -173,6 +173,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
 	mux.HandleFunc("/api/files/trash", a.withAuth(a.trash))
 	mux.HandleFunc("/api/migrations", a.withAuth(a.migrations))
+	mux.HandleFunc("/api/phpmyadmin/", a.withAuth(a.phpMyAdmin))
 	mux.HandleFunc("/api/live-migrations", a.withAuth(a.liveMigrations))
 	mux.HandleFunc("/api/live-migrations/download", only(http.MethodGet, a.withAuth(a.liveMigrationDownload)))
 	mux.HandleFunc("/api/migrations/database", only(http.MethodPost, a.withAuth(a.migrationDatabaseImport)))

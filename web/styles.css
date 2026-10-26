@@ -459,3 +459,11 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.database-value { display: inline-flex; align-items: center; gap: 7px; }
+.database-link { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
+.database-link:hover { color: var(--teal); text-decoration: underline; }
+.database-copy { display: inline-grid; place-items: center; padding: 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); color: var(--muted); cursor: pointer; }
+.database-copy svg { width: 14px; height: 14px; }
+.database-copy:hover { color: var(--teal); border-color: var(--teal); }
+.database-link:focus-visible,.database-copy:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }

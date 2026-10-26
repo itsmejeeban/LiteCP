@@ -526,6 +526,8 @@ EOF
 fail2ban-client -t
 systemctl enable --now fail2ban
 
+bash "${SCRIPT_DIR}/install-phpmyadmin.sh"
+
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)

@@ -15,6 +15,7 @@
   let editorOriginal = "";
 
   const icons = {
+    copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>',
     globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg>',
     shield: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-5"/></svg>',
     clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -444,7 +445,7 @@
 
   function renderDatabases() {
     const databases = currentState.databases || [];
-    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>AUTH</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><strong>${escapeHTML(database.name)}</strong></td><td><code>${escapeHTML(database.username)}</code></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${database.legacyAuth ? '<span class="badge">Legacy PHP</span>' : '<span class="badge success">Modern</span>'}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database" aria-label="Delete database ${escapeHTML(database.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
+    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>AUTH</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><span class="database-value"><button class="database-link" data-database-action="open" data-id="${escapeHTML(database.id)}" title="Open ${escapeHTML(database.name)} in phpMyAdmin">${escapeHTML(database.name)}</button><button class="database-copy" data-database-action="copy-name" data-id="${escapeHTML(database.id)}" aria-label="Copy database name ${escapeHTML(database.name)}" title="Copy database name">${icons.copy}</button></span></td><td><span class="database-value"><code>${escapeHTML(database.username)}</code><button class="database-copy" data-database-action="copy-user" data-id="${escapeHTML(database.id)}" aria-label="Copy username ${escapeHTML(database.username)}" title="Copy username">${icons.copy}</button></span></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${database.legacyAuth ? '<span class="badge">Legacy PHP</span>' : '<span class="badge success">Modern</span>'}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database" aria-label="Delete database ${escapeHTML(database.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
   }
 
   function renderFirewall() {
@@ -857,6 +858,19 @@
     const button = event.target.closest("[data-database-action]"); if (!button) return;
     const database = (currentState.databases || []).find(item => item.id === button.dataset.id); if (!database) return;
     try {
+      if (button.dataset.databaseAction === "copy-name" || button.dataset.databaseAction === "copy-user") {
+        await navigator.clipboard.writeText(button.dataset.databaseAction === "copy-name" ? database.name : database.username);
+        showToast("Copied", button.dataset.databaseAction === "copy-name" ? "Database name copied." : "Database username copied.");
+        return;
+      }
+      if (button.dataset.databaseAction === "open") {
+        if (demoMode) { showToast("Server required", "phpMyAdmin is available on the installed server."); return; }
+        const url = `/api/phpmyadmin/index.php?route=/database/structure&db=${encodeURIComponent(database.name)}`;
+        const tab = window.open(url, "_blank");
+        if (!tab) showToast("Tab blocked", "Allow new tabs for LiteCP, then click the database again.", "error");
+        else { tab.opener = null; tab.focus(); }
+        return;
+      }
       if (button.dataset.databaseAction === "delete") {
         if (!confirm(`Permanently delete database ${database.name} and user ${database.username}? This cannot be undone.`)) return;
         await api(`/api/databases/${encodeURIComponent(database.id)}`, { method: "DELETE" });
