@@ -56,3 +56,14 @@
 #databasesTable .row-actions .text-action { width:auto; min-width:90px; }
 [data-page-view="databases"] .management-table { min-width:0; }
 @media(max-width:1400px) { [data-page-view="databases"] .management-grid { grid-template-columns:minmax(0,1fr); } }
+
+/* Keep the full activity history aligned inside its panel. */
+#allActivityRows {padding:0 24px 12px;}
+#allActivityRows .activity-row {display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:14px;padding:16px 4px;border-bottom-color:var(--line);}
+#allActivityRows .activity-row>div {min-width:0;}
+#allActivityRows .activity-row strong {font-size:13px;line-height:1.5;}
+#allActivityRows .activity-row small {font-size:12px;line-height:1.6;}
+#allActivityRows .activity-time {margin-left:16px;min-width:0;font-size:11px;line-height:1.6;}
+#activityPolicyStatus {font-size:13px;line-height:1.5;margin:12px 0 0;color:var(--muted);}
+#activityPolicyStatus:empty {display:none;}
+@media(max-width:700px){#allActivityRows{padding:0 16px 8px;}#allActivityRows .activity-row{grid-template-columns:8px minmax(0,1fr);gap:8px 12px;}#allActivityRows .activity-time{grid-column:2;margin:0;text-align:left;}}
