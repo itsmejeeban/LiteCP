@@ -99,6 +99,7 @@
 #sitesTable {overflow-x:auto;}
 #sitesTable .data-table {table-layout:fixed;min-width:850px;}
 #sitesTable th,#sitesTable td {padding-left:12px;padding-right:12px;}
+#sitesTable th:not(:first-child),#sitesTable td:not(:first-child) {text-align:center;vertical-align:middle;}
 #sitesTable th:nth-child(1) {width:300px;}
 #sitesTable th:nth-child(2) {width:140px;}
 #sitesTable th:nth-child(3) {width:120px;}
@@ -114,7 +115,7 @@
 #sitesTable .domain-copy {flex:1;}
 #sitesTable .domain-copy strong,#sitesTable .domain-copy small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #sitesTable .badge {white-space:nowrap;}
-#sitesTable .row-actions {justify-content:flex-start;flex-wrap:nowrap;gap:7px;}
+#sitesTable .row-actions {justify-content:center;align-items:center;flex-wrap:nowrap;gap:7px;}
 #sitesTable .row-actions button {flex-shrink:0;}
 #sitesTable .application-logo {display:inline-flex;align-items:center;height:28px;max-width:92px;}
 #sitesTable .application-logo img {display:block;width:auto;height:25px;max-width:92px;object-fit:contain;}
