@@ -8,8 +8,8 @@
 :root[data-theme] #sidebar .nav-item[data-page="files"] { --sidebar-feature-image:url("assets/sidebar/files.svg"); }
 :root[data-theme] #sidebar .nav-item[data-page="databases"] { --sidebar-feature-image:url("assets/sidebar/databases.svg"); }
 :root[data-theme] #sidebar .nav-item[data-page="email"] { --sidebar-feature-image:url("assets/sidebar/email.svg"); }
-:root[data-theme] #sidebar .nav-item[data-page="services"] { --sidebar-feature-image:url("assets/sidebar/services.svg"); }
-:root[data-theme] #sidebar .nav-item[data-page="backups"] { --sidebar-feature-image:url("assets/sidebar/backups.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="services"] { --sidebar-feature-image:url("assets/sidebar/services-control.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="backups"] { --sidebar-feature-image:url("assets/sidebar/backup-vault.svg"); }
 :root[data-theme] #sidebar .nav-item[data-page="logs"] { --sidebar-feature-image:url("assets/sidebar/logs.svg"); }
 :root[data-theme] #sidebar .nav-item[data-page="migrations"] { --sidebar-feature-image:url("assets/sidebar/migrations.svg"); }
 :root[data-theme] #sidebar .nav-item[data-page="extensions"] { --sidebar-feature-image:url("assets/sidebar/extensions.svg"); }
