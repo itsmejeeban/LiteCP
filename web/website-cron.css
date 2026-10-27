@@ -32,3 +32,5 @@
 .website-cron-options {margin:10px 0 16px;font-size:12px;}
 .website-cron-options summary {cursor:pointer;color:var(--muted);}
 .website-cron-dialog [data-cron-status]:empty {display:none;}
+
+.website-cron-dialog [data-cron-output] {max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-soft);padding:12px;border-radius:6px;font:12px/1.6 monospace;}

@@ -144,3 +144,15 @@ test('beginner schedules hide custom timing fields and Custom reveals them', asy
  await ui.preset('daily');assert.equal(ui.dialog.querySelector('[data-cron-custom]').hidden,true);
  assert.equal(ui.dialog.querySelector('[data-cron-expression]').textContent,'0 0 * * *');
 });
+
+test('Run test executes the saved job and displays output as plain text',async()=>{
+ const writes=[];const ui=panel(async(url,options)=>{if(!options)return list('A',[job('saved')]);writes.push({url,...options});return {success:true,message:'Completed successfully',output:'<script>example</script>',durationMs:120};});
+ await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});
+ assert.equal(writes.length,1);assert.equal(writes[0].url,'/api/website-cron/run?siteId=A');assert.equal(writes[0].body.id,'saved');
+ assert.equal(ui.dialog.querySelector('[data-cron-output]').textContent,'<script>example</script>');
+ assert.equal(ui.dialog.querySelector('[data-cron-result]').hidden,false);
+});
+test('cancelling Run test does not execute the command',async()=>{
+ let writes=0;const ui=panel(async(url,options)=>{if(options)writes++;return list('A',[job('saved')]);},async()=>false);
+ await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});assert.equal(writes,0);
+});

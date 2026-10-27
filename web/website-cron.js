@@ -57,7 +57,7 @@
     find("[data-cron-list]").innerHTML = items.length ? items.map(item => `
       <article class="website-cron-job"><div class="website-cron-job-head"><strong>${esc(item.name || "Scheduled command")}</strong><span class="badge ${item.enabled ? "success" : ""}">${item.enabled ? "Enabled" : "Disabled"}</span></div>
       <code class="website-cron-schedule">${esc(item.schedule)}</code><pre>${esc(item.command)}</pre>
-      <div class="feature-actions"><button type="button" class="button button-secondary" data-cron-edit="${esc(item.id)}">Edit</button><button type="button" class="button button-secondary" data-cron-toggle="${esc(item.id)}">${item.enabled ? "Disable" : "Enable"}</button><button type="button" class="button button-ghost danger" data-cron-remove="${esc(item.id)}">Remove</button></div></article>`).join("") : '<div class="website-cron-empty">No custom cron jobs yet. Choose a schedule and command to create one.</div>';
+      <div class="feature-actions"><button type="button" class="button button-primary" data-cron-run="${esc(item.id)}">Run test</button><button type="button" class="button button-secondary" data-cron-edit="${esc(item.id)}">Edit</button><button type="button" class="button button-secondary" data-cron-toggle="${esc(item.id)}">${item.enabled ? "Disable" : "Enable"}</button><button type="button" class="button button-ghost danger" data-cron-remove="${esc(item.id)}">Remove</button></div></article>`).join("") : '<div class="website-cron-empty">No custom cron jobs yet. Choose a schedule and command to create one.</div>';
   }
   async function load(active) {
     if (!current(active)) return;
@@ -104,7 +104,7 @@
       <label class="field"><span>Command</span><textarea name="command" rows="2" maxlength="4096" spellcheck="false" required placeholder="Example: /usr/bin/php /path/to/script.php"></textarea><small>Paste the command provided by your application.</small></label>
       <details class="website-cron-options"><summary>More options</summary><label class="field"><span>Job name (optional)</span><input name="name" maxlength="100" placeholder="Daily report"></label><p class="website-cron-php">PHP command: <code data-cron-php></code></p></details>
       <div class="feature-actions"><button type="submit" class="button button-primary" data-cron-save>Create cron job</button><button type="button" class="button button-secondary" data-cron-cancel-edit hidden>Cancel edit</button></div></form>
-      <p data-cron-status role="status" aria-live="polite"></p><div class="website-cron-list-head"><h3>Custom cron jobs</h3><button type="button" class="button button-secondary" data-cron-refresh>Refresh</button></div><div data-cron-list></div></div>`;
+      <p data-cron-status role="status" aria-live="polite"></p><div class="website-cron-list-head"><h3>Custom cron jobs</h3><button type="button" class="button button-secondary" data-cron-refresh>Refresh</button></div><div data-cron-list></div><section data-cron-result hidden><h3>Test result</h3><p data-cron-result-message role="status"></p><pre data-cron-output></pre></section></div>`;
     resetForm(); dialog.showModal(); setControls();
     try { await load(active); }
     catch (error) { if (current(active)) status(error.message); }
@@ -135,6 +135,23 @@
     if (event.target.closest("[data-cron-refresh]")) { const active = context(); status("Loading cron jobs…"); try { await load(active); if (current(active)) status(""); } catch (error) { if (current(active)) status(error.message); } return; }
     if (!ready) return;
     if (event.target.closest("[data-cron-cancel-edit]")) { resetForm(); status(""); return; }
+    const run = event.target.closest("[data-cron-run]");
+    if (run) {
+      const active = context(), job = items.find(value => value.id === run.dataset.cronRun);
+      if (!job) return;
+      if (!await window.LiteCPDialogs.confirm("Run this command now? It can change website data or send messages, just like its scheduled run.", {title:"Test cron job",confirmText:"Run test"}) || !current(active) || busy) return;
+      busy=true;setControls();status("Running test (up to 30 seconds)…");
+      try {
+        const result=await cp.api('/api/website-cron/run?siteId='+encodeURIComponent(active.siteID),{method:'POST',body:{id:job.id}});
+        if(!current(active))return;
+        find('[data-cron-result]').hidden=false;
+        find('[data-cron-result-message]').textContent=result.message+` (${(result.durationMs/1000).toFixed(1)} seconds)`;
+        find('[data-cron-output]').textContent=result.output||'No output returned.';
+        status(result.success?'Test completed successfully.':'Test failed. Check the output below.');
+      }catch(error){if(current(active))status(error.message);}
+      finally{if(current(active)){busy=false;setControls();}}
+      return;
+    }
     const edit = event.target.closest("[data-cron-edit]"), toggle = event.target.closest("[data-cron-toggle]"), remove = event.target.closest("[data-cron-remove]");
     const item = items.find(value => value.id === (edit?.dataset.cronEdit || toggle?.dataset.cronToggle || remove?.dataset.cronRemove));
     if (!item) return;
