@@ -401,9 +401,6 @@
   function renderSites() {
     const query = $("#siteSearch").value.trim().toLowerCase();
     const sites = currentState.sites.filter(site => site.domain.includes(query));
-    $("#siteCount").textContent = currentState.sites.length;
-    $("#sslCount").textContent = currentState.sites.filter(site => site.ssl).length;
-    $("#cronCount").textContent = currentState.sites.filter(site => site.cron).length;
     if (!sites.length) {
       const copy = currentState.sites.length ? "No domains match your search." : "Provision WHMCS, WordPress or a regular PHP/HTML website with an isolated runtime in one short step.";
       $("#sitesTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.globe}</span><h3>${currentState.sites.length ? "Nothing found" : "No websites yet"}</h3><p>${copy}</p>${currentState.sites.length ? "" : '<button class="button button-primary" data-empty-add>Add your first website</button>'}</div>`;
