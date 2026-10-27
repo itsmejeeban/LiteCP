@@ -1,9 +1,12 @@
 /* Keep desktop navigation available as an icon rail when collapsed. */
-.sidebar-toggle-bar #sidebarBottomToggle {align-self:flex-end;}
+.sidebar-toggle-bar #sidebarBottomToggle {position:absolute;right:10px;bottom:8px;width:40px;height:40px;align-self:flex-end;}
+.sidebar-toggle-bar #sidebarBottomToggle svg {width:25px;height:25px;}
+.sidebar-toggle-bar {justify-content:flex-end;min-height:58px;}
+.sidebar-toggle-bar .sidebar-copyright {align-self:flex-start;margin-bottom:6px;max-width:calc(100% - 45px);font-size:9px;}
 @media(min-width:901px){
   :root[data-theme] body.sidebar-collapsed #sidebar {width:60px;transform:none;padding-bottom:50px;overflow-x:hidden;}
   body.sidebar-collapsed .workspace {margin-left:60px;}
-  body.sidebar-collapsed .sidebar-toggle-bar {width:60px;padding:0 15px;}
+  body.sidebar-collapsed .sidebar-toggle-bar {width:60px;height:58px;padding:0 10px;}
   :root[data-theme] body.sidebar-collapsed #sidebar .sidebar-brand {padding:12px 4px;min-height:58px;justify-content:center;}
   :root[data-theme] body.sidebar-collapsed #sidebar .sidebar-brand .litecp-logo {width:52px;}
   body.sidebar-collapsed #sidebar :is(.sidebar-version,.nav-label,.settings-submenu,.panel-search) {display:none!important;}
