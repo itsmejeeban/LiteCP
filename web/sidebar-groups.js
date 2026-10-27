@@ -1,11 +1,13 @@
 (() => {
   "use strict";
   const groups = [
-    {id:"security", title:"Security", icon:"security", pages:["firewall","security"]},
+    {id:"website-tools", title:"Website Tools", icon:"files", after:"websites", pages:["files","databases"]},
+    {id:"security", title:"Security", icon:"security", after:"email", pages:["firewall","security"]},
     {id:"environment", title:"Server Environment", icon:"services", pages:["applications","extensions"]}
   ];
   let anchor = document.querySelector('.nav-item[data-page="email"]');
   for (const group of groups) {
+    if(group.after)anchor=document.querySelector(`.nav-item[data-page="${group.after}"]`);
     const wrapper=document.createElement("div"),button=document.createElement("button"),submenu=document.createElement("nav");
     wrapper.className="sidebar-feature-group";
     button.type="button";button.className="nav-item sidebar-group-toggle";
