@@ -327,6 +327,15 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #developerModePanel .settings-body>p {font-size:12px;line-height:1.6;color:var(--muted);}
 
 /* Website action images stay visible without button tiles behind them. */
+:root[data-theme] #databasesTable .row-actions button[data-database-action="delete"] {
+  display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;min-width:38px;padding:0;line-height:1;
+  background:#dc2626!important;color:#fff!important;
+}
+:root[data-theme] #databasesTable .row-actions button[data-database-action="delete"]>svg,
+:root[data-theme] #databasesTable .row-actions button[data-database-action="delete"]>svg>* {
+  color:#fff!important;stroke:#fff!important;opacity:1;
+}
 :root[data-theme] .row-actions button.danger>svg {
   display:block;width:20px;height:20px;min-width:20px;flex:0 0 20px;
   fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
