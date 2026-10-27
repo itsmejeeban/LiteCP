@@ -227,3 +227,10 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 #siteModal .site-review {margin:0 0 14px;color:var(--muted);overflow-wrap:anywhere;}
 #siteModal .provision-summary {margin-top:12px;padding:12px;}
 @media(max-width:480px){#siteModal .site-step-grid{grid-template-columns:minmax(0,1fr);gap:10px;}#siteModal .modal-head,#siteModal .modal-body,#siteModal .modal-actions{padding:12px 14px;}}
+
+/* Borderless website action icons with consistent rounded strokes. */
+:root[data-theme] #sitesTable .row-actions button {width:32px;height:34px;border:0;background:transparent;box-shadow:none;border-radius:5px;}
+:root[data-theme] #sitesTable .row-actions button:hover {border:0;background:transparent;color:var(--ink);box-shadow:none;}
+:root[data-theme] #sitesTable .row-actions button.danger:hover {background:transparent;color:var(--red);}
+:root[data-theme] #sitesTable .row-actions button:focus-visible {outline:2px solid var(--teal);outline-offset:1px;}
+:root[data-theme] #sitesTable .row-actions svg {width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}

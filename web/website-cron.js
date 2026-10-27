@@ -156,7 +156,7 @@
       const cron = document.createElement("button");
       cron.type = "button"; cron.dataset.siteCronJobs = button.dataset.id; cron.title = "Cron jobs";
       cron.setAttribute("aria-label", "Manage cron jobs for " + (state.sites.find(site => site.id === button.dataset.id)?.domain || "website"));
-      cron.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M18 3v4m-2-2h4"/></svg>';
+      cron.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 10a8.5 8.5 0 1 1-5-6M12 7v5l3 2M19 2v6m-3-3h6"/></svg>';
       button.parentElement.prepend(cron);
     });
   };
