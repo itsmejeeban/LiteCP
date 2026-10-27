@@ -81,3 +81,22 @@
 [data-page-view="databases"] .management-grid.database-list-layout {grid-template-columns:minmax(0,1fr);}
 .database-create-dialog .panel-head {gap:16px;}
 .database-create-dialog [data-database-form-error]:empty {display:none;}
+
+/* Reserve room for dates and the website action buttons. */
+#sitesTable {overflow-x:auto;}
+#sitesTable .data-table {table-layout:fixed;min-width:1140px;}
+#sitesTable th,#sitesTable td {padding-left:12px;padding-right:12px;}
+#sitesTable th:nth-child(1) {width:235px;}
+#sitesTable th:nth-child(2) {width:130px;}
+#sitesTable th:nth-child(3) {width:110px;}
+#sitesTable th:nth-child(4) {width:120px;}
+#sitesTable th:nth-child(5) {width:132px;}
+#sitesTable th:nth-child(6) {width:106px;}
+#sitesTable th:last-child {width:292px;}
+#sitesTable .domain-cell,#sitesTable .domain-copy {min-width:0;}
+#sitesTable .domain-favicon {flex-shrink:0;}
+#sitesTable .domain-copy {flex:1;}
+#sitesTable .domain-copy strong,#sitesTable .domain-copy small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#sitesTable td:nth-child(6),#sitesTable .badge {white-space:nowrap;}
+#sitesTable .row-actions {flex-wrap:nowrap;gap:7px;}
+#sitesTable .row-actions button {flex-shrink:0;}
