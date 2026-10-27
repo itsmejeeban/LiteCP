@@ -188,6 +188,7 @@
 
   async function initialize() {
     bindEvents();
+    new MutationObserver(clearSiteActionBackgrounds).observe($("#sitesTable"), { childList: true, subtree: true });
     setGreeting();
     if (demoMode) {
       currentState = await api("/api/state");
@@ -348,6 +349,7 @@
     renderFirewall();
     renderMail();
     window.LiteCPFeatures?.render(currentState);
+    clearSiteActionBackgrounds();
     fillSettings(settings);
     const healthy = system.services.every(service => ["running", "disabled"].includes(service.state));
     $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your hosting stack is healthy" : "One or more services need attention";
@@ -1056,6 +1058,15 @@
   }
 
   function applicationLabel(appType) { return appType === "wordpress" ? "WordPress" : appType === "regular" ? "Regular Website" : "WHMCS"; }
+
+  function clearSiteActionBackgrounds() {
+    $$("#sitesTable .row-actions button").forEach(button => {
+      button.style.setProperty("background-color", "transparent", "important");
+      button.style.setProperty("background-image", "none", "important");
+      button.style.setProperty("border-color", "transparent", "important");
+      button.style.setProperty("box-shadow", "none", "important");
+    });
+  }
 
   function renderApplicationLogo(site) {
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";
