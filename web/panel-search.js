@@ -25,6 +25,7 @@
     ["applications", "Ruby hosting", "Enable Ruby and select an application runtime", "#applicationFeatures", "ruby rails gem version selector"],
     ["services", "Services", "View and restart hosting services", "", "nginx php fpm mysql mail cron start stop restart"],
     ["extensions", "PHP extensions", "Search extension packages and filter by PHP version", "#extensionsTable", "install remove modules ioncube redis imagick mbstring curl zip"],
+    ["analytics", "Usage graphs", "Live and historical CPU, memory and disk usage", "#usageView", "analytics graph cpu ram memory disk hourly daily weekly monthly"],
     ["security", "Malware scan", "Scan a website with the antivirus service", "#scanForm", "virus clamav antivirus infected files"],
     ["waf", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
     ["firewall", "Firewall rules", "Manage inbound and outbound network access", "#firewallForm", "port ip tcp udp allow deny block network"],
