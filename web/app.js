@@ -337,6 +337,7 @@
     $("#detailIP").textContent = system.ipAddress;
     $("#modalServerIP").textContent = system.ipAddress;
     $("#siteNavCount").textContent = currentState.sites.length;
+    $("#totalWebsitesValue").textContent = currentState.sites.length;
     renderMetrics();
     renderServices();
     renderActivity();
