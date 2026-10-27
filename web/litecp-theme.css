@@ -46,6 +46,7 @@
 :root[data-theme] .topbar {min-height:56px;height:56px;padding-left:20px;padding-right:20px;background:var(--canvas);border-bottom:1px solid var(--line);backdrop-filter:none;}
 :root[data-theme] .server-identity small {color:var(--muted);font-size:8px;}
 :root[data-theme] .server-identity strong {color:var(--ink);font-size:13px;}
+:root[data-theme] .topbar .server-identity {display:none;}
 :root[data-theme] :is(.top-status,.profile-copy small) {color:var(--muted);}
 :root[data-theme] .avatar {border:1px solid var(--line);background:var(--surface-soft);color:var(--ink);box-shadow:none;border-radius:6px;font-weight:600;}
 :root[data-theme] .profile-button:hover,:root[data-theme] .icon-button:hover {background:var(--cf-hover);color:var(--ink);}
