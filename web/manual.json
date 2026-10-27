@@ -6,7 +6,7 @@
       {
         "title": "First steps",
         "steps": [
-          "Sign in with your administrator account. Open Overview to check CPU, memory, storage, uptime and service health.",
+          "Sign in with your administrator account. Open Overview to check CPU, memory, storage and uptime. Open Services to check hosting service health.",
           "Use Websites → Add website to create a WordPress, WHMCS or regular PHP/HTML host. Select a compatible PHP version.",
           "Point the domain A record to the server IP. Upload or install your application, then enable SSL when DNS resolves correctly.",
           "Save credentials when first displayed. Keep an off-server backup before making major changes."

@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=1">
   <link rel="stylesheet" href="panel-search.css?v=sidebar-2">
-  <link rel="stylesheet" href="litecp-theme.css?v=header-clean-4">
+  <link rel="stylesheet" href="litecp-theme.css?v=dashboard-clean-5">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
 <body>
@@ -111,7 +111,7 @@
         <button class="icon-button mobile-menu" id="mobileMenu" aria-label="Open navigation"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
         <div class="server-identity"><span><small id="topOS">SERVER</small><strong id="topHostname">Loading…</strong></span></div>
         <div class="topbar-actions">
-          <span class="top-status"><span class="pulse-dot"></span>System healthy</span>
+          <span class="top-status hidden"><span class="pulse-dot"></span>System healthy</span>
           <button class="icon-button refresh-button" id="refreshButton" aria-label="Refresh server data"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></button>
           <span class="topbar-divider"></span>
           <button class="profile-button" id="profileButton"><span class="avatar" id="avatar">A</span><span class="profile-copy"><strong id="profileName">Admin</strong><small>Administrator</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
@@ -120,13 +120,13 @@
       </header>
 
       <main class="main-content">
-        <section class="page active" data-page-view="dashboard">
+        <section class="page active" data-page-view="dashboard" aria-label="Server overview">
           <div class="page-heading dashboard-heading">
-            <div><span class="eyebrow">SERVER OVERVIEW</span><h1>Good <span id="greetingTime">morning</span>, <span id="greetingName">Admin</span>.</h1><p>Here’s how your hosting server is performing right now.</p></div>
+            <div class="hidden"><span class="eyebrow">SERVER OVERVIEW</span><h1>Good <span id="greetingTime">morning</span>, <span id="greetingName">Admin</span>.</h1><p>Here’s how your hosting server is performing right now.</p></div>
             <button class="button button-primary" data-open-site-modal><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add website</button>
           </div>
 
-          <div class="notice-banner" id="noticeBanner">
+          <div class="notice-banner hidden" id="noticeBanner">
             <span class="notice-icon"><svg viewBox="0 0 24 24"><path d="m12 3 9 4.8v5.5c0 4.2-3.8 7.2-9 8.7-5.2-1.5-9-4.5-9-8.7V7.8L12 3Z"/><path d="m8.5 12.5 2.2 2.1 4.8-5"/></svg></span>
             <span><strong>Your hosting stack is healthy</strong><small>All required services are online and responding normally.</small></span>
             <span class="notice-meta"><span class="pulse-dot"></span>Checked just now</span>
@@ -139,7 +139,7 @@
             <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">—</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
           </div>
 
-          <div class="dashboard-grid">
+          <div class="dashboard-grid hidden">
             <article class="panel services-panel"><div class="panel-head"><div><h2>Essential services</h2><p>The core stack powering your hosted applications.</p></div><button class="text-button" data-page-target="services">Manage all <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div><div class="service-list" id="dashboardServices"></div></article>
             <article class="panel quick-panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Common tasks, one click away.</p></div></div><div class="quick-grid"><button data-open-site-modal><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span><strong>Add website</strong><small>Provision an app vhost</small></span></button><button data-quick-backup><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></span><span><strong>Run backup</strong><small>Files and database</small></span></button><button data-page-target="logs"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span><strong>View logs</strong><small>Inspect recent activity</small></span></button><button data-page-target="settings"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/></svg></span><span><strong>Panel settings</strong><small>Security and defaults</small></span></button></div></article>
             <article class="panel activity-panel"><div class="panel-head"><div><h2>Recent activity</h2><p>Important changes made through LiteCP.</p></div></div><div class="activity-list" id="activityList"></div></article>
@@ -256,6 +256,6 @@
   <script src="documentation.js?v=3" defer></script>
   <script src="application-hosting.js?v=dialogs-1" defer></script>
   <script src="database-popup.js?v=1" defer></script>
-  <script src="panel-search.js?v=dark-only-1" defer></script>
+  <script src="panel-search.js?v=dashboard-clean-1" defer></script>
 </body>
 </html>

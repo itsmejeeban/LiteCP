@@ -55,6 +55,7 @@
 :root[data-theme] .documentation-tab {min-height:32px;padding:5px 9px;font-size:12px;font-weight:500;color:var(--ink);}
 :root[data-theme] .main-content {max-width:none;padding:24px;}
 :root[data-theme] .page-heading {margin-bottom:20px;align-items:center;}
+:root[data-theme] .dashboard-heading {justify-content:flex-end;margin-bottom:12px;}
 :root[data-theme] .page-heading .eyebrow {display:none;}
 :root[data-theme] :is(.page-heading h1,.login-heading h2,.login-promise h1,.panel-head h2,.metric-value strong) {font-family:inherit;font-weight:600;letter-spacing:-.6px;}
 :root[data-theme] .page-heading h1 {font-size:24px;line-height:1.3;}

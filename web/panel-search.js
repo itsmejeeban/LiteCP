@@ -3,7 +3,7 @@
   const cp = window.LiteCP;
   const normalize = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const features = [
-    ["dashboard", "Overview", "Server health, CPU, memory, disk and uptime", "", "dashboard resources monitoring status"],
+    ["dashboard", "Overview", "CPU, memory, disk and uptime", "", "dashboard resources monitoring status"],
     ["websites", "Websites", "Add and manage WordPress, WHMCS and regular websites", "#sitesTable", "domain hosting php version"],
     ["websites", "Add website", "Create hosting for a domain", "", "create new wordpress whmcs install"],
     ["websites", "SSL certificates", "Enable HTTPS using the shield beside a website", "#sitesTable", "letsencrypt tls certificate renewal security"],
@@ -64,6 +64,7 @@
     for (const page of document.querySelectorAll("[data-page-view]")) {
       const name = page.dataset.pageView, heading = page.querySelector("h1")?.textContent || name;
       for (const node of page.querySelectorAll("h2, label.field > span:first-child")) {
+        if(node.closest(".hidden,[hidden]"))continue;
         const title = node.textContent.trim(); if (!title || title.length>100) continue;
         const key = name+":"+normalize(title); if (seen.has(key)) continue; seen.add(key);
         const target = node.closest("label")?.querySelector("input:not([type=hidden]),select,textarea") || node.closest(".panel") || node;
