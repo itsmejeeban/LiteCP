@@ -275,12 +275,12 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 /* Generated multicolor website action image sprite. */
 :root[data-theme] #sitesTable .row-actions button svg {display:none;}
 :root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
-:root[data-theme] #sitesTable [data-site-ftp]::before {background-position:16.6667% center;}
-:root[data-theme] #sitesTable [data-site-backup]::before {background-position:33.3333% center;}
-:root[data-theme] #sitesTable [data-site-action="cron"]::before {background-position:50% center;}
-:root[data-theme] #sitesTable [data-site-action="files"]::before {background-position:66.6667% center;}
-:root[data-theme] #sitesTable [data-site-action="delete"]::before {background-position:83.3333% center;}
-:root[data-theme] #sitesTable [data-site-action="ssl"]::before {background-position:100% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-ftp]::before {background-position:16.6667% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-backup]::before {background-position:33.3333% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="cron"]::before {background-position:50% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="files"]::before {background-position:66.6667% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-position:83.3333% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="ssl"]::before {background-position:100% center;}
 
 /* Developer preferences use compact checkbox rows, not text-input sizing. */
 :root[data-theme] #developerModePanel .field>span {display:flex;align-items:center;gap:10px;min-height:30px;font-size:13px;font-weight:600;}
