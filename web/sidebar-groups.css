@@ -5,6 +5,7 @@
 :root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item {min-height:34px;height:auto;padding:8px 9px;font-size:12px;gap:9px;}
 :root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item>svg {width:18px;height:18px;flex-basis:18px;}
 .sidebar-group-toggle:focus-visible {outline:2px solid var(--teal);outline-offset:-2px;}
+:root[data-theme] #sidebar .settings-submenu .submenu-feature-icon {width:20px;height:20px;flex:0 0 20px;object-fit:contain;}
 :root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle,
 :root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle:hover,
 :root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle.active,
