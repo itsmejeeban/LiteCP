@@ -26,7 +26,7 @@
     ["services", "Services", "View and restart hosting services", "", "nginx php fpm mysql mail cron start stop restart"],
     ["extensions", "PHP extensions", "Search extension packages and filter by PHP version", "#extensionsTable", "install remove modules ioncube redis imagick mbstring curl zip"],
     ["security", "Malware scan", "Scan a website with the antivirus service", "#scanForm", "virus clamav antivirus infected files"],
-    ["security", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
+    ["waf", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
     ["firewall", "Firewall rules", "Manage inbound and outbound network access", "#firewallForm", "port ip tcp udp allow deny block network"],
     ["backups", "Server backups", "Create a backup and review backup history", "#backupRunForm", "backup retention archive restore"],
     ["settings/backups", "Remote backup destinations", "Configure an off-server FTP, FTPS or SFTP destination", "#backupDestinationForm", "remote storage offsite upload password fingerprint"],
