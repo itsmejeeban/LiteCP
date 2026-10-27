@@ -88,7 +88,7 @@ The included panel certificate is self-signed so the first browser visit will sh
 1. Point the billing domain's A/AAAA records to the server.
 2. In LiteCP, choose **Add website**, select WHMCS, WordPress, or Regular PHP/HTML Website, select a compatible installed PHP version, and enter a name such as `billing.example.com`.
 3. Save the generated database credentials immediately; the password is shown once.
-4. Upload the licensed WHMCS files or official WordPress files to `/var/www/litecp/billing.example.com/public` and remove the placeholder `index.html`.
+4. Upload the licensed WHMCS files or official WordPress files to `/home/litecp/billing.example.com/public_html` and remove the placeholder `index.html`.
 5. Complete the application web installer using the generated database values.
 6. Enable SSL after DNS resolves to the server.
 7. Confirm the application sees its five-minute system cron. For WordPress, define `DISABLE_WP_CRON` as `true` after the system cron is enabled.
@@ -149,7 +149,9 @@ go test ./...
 ## Data and recovery
 
 - Panel configuration: `/var/lib/litecp/config.json` (`0600`)
-- Website roots: `/var/www/litecp/<domain>/public`
+- Website homes: `/home/litecp/<domain>`; only `public_html/` is served publicly.
+- Private website folders: `backups/manual/`, `backups/scheduled/`, `.trash/`, `tmp/`, `logs/`, `ssl/`, `etc/`, and `whmcsdata/`.
+- Existing installations keep their saved paths until explicitly migrated. Run `python3 scripts/migrate-site-storage.py` to preview; stop LiteCP, Nginx, cron and FTP before running with `--apply`. Use the updated service units and restart LiteCP afterwards to reconcile PHP pools. Migration copies data and retains original directories plus configuration recovery snapshots under `/var/lib/litecp/storage-migrations/`. Custom application configuration containing absolute paths may need updating. DNS, databases, domain names, and certificates remain unchanged.
 - Nginx configs: `/etc/nginx/sites-available/litecp-*.conf` on Ubuntu or `/etc/nginx/conf.d/litecp-*.conf` on AlmaLinux
 - Application cron files: `/etc/cron.d/litecp-*`
 - Backups: `/var/backups/litecp/*.tar.gz`

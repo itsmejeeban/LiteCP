@@ -338,7 +338,7 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	file, err := secureOpenManaged(site.Root, r.URL.Query().Get("path"), os.O_RDONLY, 0)
+	file, err := secureOpenManaged(managedSiteRoot(*site), r.URL.Query().Get("path"), os.O_RDONLY, 0)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "File not found.")
 		return

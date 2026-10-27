@@ -178,6 +178,7 @@ FRESH_INSTALL=0
 [[ -f /var/lib/litecp/config.json ]] || FRESH_INSTALL=1
 install -d -m 0700 /var/lib/litecp /var/backups/litecp
 install -d -m 0755 /var/www/litecp
+install -d -m 0755 /home/litecp
 install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail /etc/litecp/php73-pools
 touch /etc/litecp/php73-pools.conf
 chmod 0640 /etc/litecp/php73-pools.conf
@@ -256,6 +257,7 @@ cd "${SOURCE_DIR}"
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
 chmod 0755 /usr/local/bin/litecp
 command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || true
+install -m 0644 "${SOURCE_DIR}/deploy/litecp-website-logs" /etc/logrotate.d/litecp-websites
 info "Enforcing default resolvers: 8.8.8.8 and 8.8.4.4"
 /usr/local/bin/litecp ensure-default-resolvers
 cp "${SOURCE_DIR}/deploy/litecp-resolvers.service" /etc/systemd/system/litecp-resolvers.service
@@ -356,6 +358,12 @@ else
   setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true
   semanage port -a -t http_port_t -p tcp 8443 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 8443 >/dev/null 2>&1 || true
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
+  semanage fcontext -a -t httpd_sys_content_t '/home/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_content_t '/home/litecp(/.*)?'
+  for folder in public_html tmp whmcsdata; do
+    semanage fcontext -a -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?" >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?"
+  done
+  semanage fcontext -a -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?'
+  restorecon -R /home/litecp
   semanage fcontext -a -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1
   restorecon -R /var/www/litecp /etc/litecp/tls
 fi

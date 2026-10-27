@@ -315,7 +315,7 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		return Site{}, nil, err
 	}
 	site := Site{
-		ID: id, Domain: domain, Root: filepath.Join("/var/www/litecp", domain, "public"),
+		ID: id, Domain: domain, Root: defaultSiteRoot(domain),
 		AppType: appType, AppVersion: appVersion, PHPVersion: phpVersion,
 		RuntimeUID: siteRuntimeID(id), RuntimeGID: siteRuntimeID(id), CreatedAt: time.Now().UTC(),
 	}
@@ -346,15 +346,14 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 			_ = os.Remove(filepath.Join(site.Root, "index.html"))
 		}
 	}()
+	if err := s.ensureSiteHome(site); err != nil { return Site{},nil,err }
 	if err := os.MkdirAll(site.Root, 0750); err != nil {
 		return Site{}, nil, fmt.Errorf("create website root: %w", err)
-	}
-	if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
-		return Site{}, nil, err
 	}
 	if err := chownSitePath(site.Root, site, 0750, s.webUser()); err != nil {
 		return Site{}, nil, err
 	}
+	if err := s.labelSiteHome(ctx,site); err != nil { return Site{},nil,err }
 	placeholder := filepath.Join(site.Root, "index.html")
 	if _, err := os.Stat(placeholder); errors.Is(err, os.ErrNotExist) {
 		appName := applicationName(site.AppType)
@@ -433,7 +432,7 @@ func (s *System) CleanupFailedSiteFiles(site Site) error {
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
-	expected := filepath.Clean(filepath.Join("/var/www/litecp", site.Domain, "public"))
+	expected := filepath.Clean(defaultSiteRoot(site.Domain))
 	if filepath.Clean(site.Root) != expected {
 		return errors.New("refusing to clean an unexpected website root")
 	}
@@ -799,7 +798,7 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 	}
 	created := time.Now().UTC()
 	stamp := created.Format("20060102-150405.000000000")
-	backupDir := "/var/backups/litecp"
+	backupDir := siteScheduledBackupRoot(site)
 	finalPath := filepath.Join(backupDir, site.Domain+"-"+stamp+"-"+backupID+".tar.gz")
 	backup := Backup{ID: backupID, SiteID: site.ID, Domain: site.Domain, Path: finalPath, Status: "complete", CreatedAt: created}
 	if s.demo {
@@ -837,9 +836,8 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 }
 
 func (s *System) RemoveBackupFile(path string) error {
-	backupRoot := filepath.Clean("/var/backups/litecp")
 	path = filepath.Clean(path)
-	if filepath.Dir(path) != backupRoot || !strings.HasSuffix(path, ".tar.gz") {
+	if !validScheduledBackupPath(path) {
 		return errors.New("backup path is outside LiteCP storage")
 	}
 	info, err := os.Lstat(path)
@@ -924,6 +922,7 @@ server {
     listen [::]:80;
     server_name %s;
     root %s;
+%s
     index index.php index.html;
 
     client_max_body_size 64m;
@@ -953,7 +952,7 @@ server {
         access_log off;
     }
 }
-`, wafBlock(site, site.WAFMode), site.Domain, site.Root, applicationRules, s.sitePHPSocket(site))
+`, wafBlock(site, site.WAFMode), site.Domain, site.Root, siteLogDirectives(site), applicationRules, s.sitePHPSocket(site))
 }
 
 func siteRuntimeID(id string) int {
@@ -1008,6 +1007,8 @@ func (s *System) phpPoolConfigPath(site Site) string {
 }
 
 func (s *System) phpPoolConfig(site Site) string {
+	allowed, temporary := site.Root, "/tmp"
+	if home:=siteHome(site);home!="" { allowed=home;temporary=filepath.Join(home,"tmp") }
 	webUser := s.webUser()
 	socketOwner, socketGroup := webUser, webUser
 	if s.usesPHP73Container(site.PHPVersion) {
@@ -1032,9 +1033,9 @@ catch_workers_output = yes
 clear_env = yes
 security.limit_extensions = .php
 php_admin_value[open_basedir] = %s:/tmp
-php_admin_value[upload_tmp_dir] = /tmp
-php_admin_value[session.save_path] = /tmp
-`, safeSiteID(site.ID), site.RuntimeUID, site.RuntimeGID, s.sitePHPSocket(site), socketOwner, socketGroup, site.Root)
+php_admin_value[upload_tmp_dir] = %s
+php_admin_value[session.save_path] = %s
+`, safeSiteID(site.ID), site.RuntimeUID, site.RuntimeGID, s.sitePHPSocket(site), socketOwner, socketGroup, allowed, temporary, temporary)
 }
 
 func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
@@ -1125,7 +1126,7 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 }
 
 func (s *System) reconcileSiteRuntime(ctx context.Context, site Site, configPath string) error {
-		if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
+		if siteHome(site)!="" { if err:=s.ensureSiteHome(site);err!=nil{return err} } else if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
 			return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
 		}
 		if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {

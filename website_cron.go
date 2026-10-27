@@ -144,7 +144,7 @@ func (s *System) websiteCronScript(site Site, job WebsiteCronJob) (string, []byt
 	if err := validateWebsiteCronJob(job); err != nil {
 		return "", nil, err
 	}
-	script := []byte("export HOME=" + cronShellQuote(site.Root) + "\ncd " + cronShellQuote(site.Root) + " || exit 1\n" + job.Command + "\n")
+	script := []byte("export HOME=" + cronShellQuote(managedSiteRoot(site)) + "\ncd " + cronShellQuote(site.Root) + " || exit 1\n" + job.Command + "\n")
 	digest := sha256.Sum256(script)
 	path := filepath.Join(s.dataDir, "website-cron", "scripts", site.ID, fmt.Sprintf("%s-%x.sh", job.ID, digest))
 	return path, script, nil

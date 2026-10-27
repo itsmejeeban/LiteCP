@@ -46,13 +46,14 @@ server {
 %s
     server_name %s;
     root %s;
+%s
     client_max_body_size 64m;
 %s
     location ^~ /.well-known/acme-challenge/ { try_files $uri =404; }
     location ~ /\.(?!well-known) { deny all; }
 %s
 }
-`,wafBlock(site,site.WAFMode),tls,site.Domain,site.Root,marker,routing)
+`,wafBlock(site,site.WAFMode),tls,site.Domain,site.Root,siteLogDirectives(site),marker,routing)
 }
 func(s *System) writeApplicationProxy(ctx context.Context,site Site)error{
  if err:=s.writeApplicationRouting(ctx,site,[]byte(s.nginxConfig(site)));err!=nil{return err}

@@ -38,18 +38,20 @@ func (s *System) trashRoot() string {
 }
 
 func (s *System) siteTrashRoot(site Site) string {
+	if home := siteHome(site); home != "" { return filepath.Join(home, ".trash") }
 	return filepath.Join(s.trashRoot(), safeSiteID(site.ID))
 }
 
 func (s *System) MoveManagedPathToTrash(site Site, relative string) (TrashEntry, error) {
-	_, clean, err := resolveManagedPath(site.Root, relative, false)
+ if protectedSitePath(site,relative) {return TrashEntry{},errors.New("managed website folders cannot be moved to trash")}
+	_, clean, err := resolveManagedPath(managedSiteRoot(site), relative, false)
 	if err != nil {
 		return TrashEntry{}, err
 	}
 	if clean == "" {
 		return TrashEntry{}, errors.New("the website root cannot be deleted")
 	}
-	file, err := secureOpenManaged(site.Root, clean, os.O_RDONLY, 0)
+	file, err := secureOpenManaged(managedSiteRoot(site), clean, os.O_RDONLY, 0)
 	if err != nil {
 		return TrashEntry{}, err
 	}
@@ -87,7 +89,7 @@ func (s *System) MoveManagedPathToTrash(site Site, relative string) (TrashEntry,
 		_ = os.RemoveAll(itemRoot)
 		return TrashEntry{}, err
 	}
-	if err := secureMoveBetweenRoots(site.Root, clean, itemRoot, "payload"); err != nil {
+	if err := secureMoveBetweenRoots(managedSiteRoot(site), clean, itemRoot, "payload"); err != nil {
 		_ = os.RemoveAll(itemRoot)
 		return TrashEntry{}, fmt.Errorf("move path to trash: %w", err)
 	}
@@ -164,7 +166,7 @@ func (s *System) RestoreTrashEntry(site Site, id, destination string) (string, e
 	if strings.TrimSpace(destination) == "" {
 		destination = entry.OriginalPath
 	}
-	_, cleanDestination, err := resolveManagedPath(site.Root, destination, true)
+	_, cleanDestination, err := resolveManagedPath(managedSiteRoot(site), destination, true)
 	if err != nil || cleanDestination == "" {
 		return "", errors.New("restore destination is invalid")
 	}
@@ -173,7 +175,7 @@ func (s *System) RestoreTrashEntry(site Site, id, destination string) (string, e
 	} else if exists {
 		return "", errors.New("restore destination already exists")
 	}
-	if err := secureMoveBetweenRoots(itemRoot, "payload", site.Root, cleanDestination); err != nil {
+	if err := secureMoveBetweenRoots(itemRoot, "payload", managedSiteRoot(site), cleanDestination); err != nil {
 		return "", fmt.Errorf("restore trash entry: %w", err)
 	}
 	_ = os.Remove(filepath.Join(itemRoot, "metadata.json"))
@@ -191,7 +193,7 @@ func (s *System) DeleteTrashEntry(site Site, id string) error {
 
 func (s *System) EmptyTrash(site Site) error {
 	root := s.siteTrashRoot(site)
-	if !pathWithinRoot(s.trashRoot(), root) {
+	if siteHome(site)=="" && !pathWithinRoot(s.trashRoot(), root) {
 		return errors.New("invalid trash root")
 	}
 	if err := os.RemoveAll(root); err != nil {
@@ -211,11 +213,11 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 	if len(paths) == 0 || len(paths) > maxBulkFileOperations {
 		return errors.New("select between 1 and 500 files or directories")
 	}
-	_, destinationClean, err := resolveManagedPath(site.Root, destination, false)
+	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destination, false)
 	if err != nil {
 		return err
 	}
-	destinationFile, err := secureOpenManaged(site.Root, destinationClean, os.O_RDONLY, 0)
+	destinationFile, err := secureOpenManaged(managedSiteRoot(site), destinationClean, os.O_RDONLY, 0)
 	if err != nil {
 		return errors.New("copy destination is not a directory")
 	}
@@ -239,7 +241,7 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 		if members > maxArchiveMembers {
 			return errors.New("copy contains too many entries")
 		}
-		input, err := secureOpenManaged(site.Root, source, os.O_RDONLY, 0)
+		input, err := secureOpenManaged(managedSiteRoot(site), source, os.O_RDONLY, 0)
 		if err != nil {
 			return err
 		}
@@ -253,10 +255,10 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 			if target == source || strings.HasPrefix(filepath.ToSlash(target)+"/", filepath.ToSlash(source)+"/") {
 				return errors.New("a directory cannot be copied into itself")
 			}
-			if err := secureEnsureManagedDirectory(site.Root, target, 0750, uid, gid); err != nil {
+			if err := secureEnsureManagedDirectory(managedSiteRoot(site), target, 0750, uid, gid); err != nil {
 				return err
 			}
-			dir, err := secureOpenManaged(site.Root, source, os.O_RDONLY, 0)
+			dir, err := secureOpenManaged(managedSiteRoot(site), source, os.O_RDONLY, 0)
 			if err != nil {
 				return err
 			}
@@ -284,7 +286,7 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 		if mode&0002 != 0 || mode&07000 != 0 {
 			mode = 0640
 		}
-		written, err := secureWriteManagedNoReplace(site.Root, target, io.LimitReader(input, info.Size()), info.Size(), mode, uid, gid)
+		written, err := secureWriteManagedNoReplace(managedSiteRoot(site), target, io.LimitReader(input, info.Size()), info.Size(), mode, uid, gid)
 		closeErr := input.Close()
 		copied += written
 		if err != nil {
@@ -294,7 +296,7 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 	}
 	// Preflight every top-level destination before creating any copy.
 	for _, source := range paths {
-		_, cleanSource, err := resolveManagedPath(site.Root, source, false)
+		_, cleanSource, err := resolveManagedPath(managedSiteRoot(site), source, false)
 		if err != nil || cleanSource == "" {
 			return errors.New("copy source is invalid")
 		}
@@ -309,7 +311,7 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 		}
 	}
 	for _, source := range paths {
-		_, cleanSource, err := resolveManagedPath(site.Root, source, false)
+		_, cleanSource, err := resolveManagedPath(managedSiteRoot(site), source, false)
 		if err != nil || cleanSource == "" {
 			return errors.New("copy source is invalid")
 		}
@@ -333,11 +335,11 @@ func (s *System) MoveManagedPaths(site Site, paths []string, destination string)
 	if len(paths) == 0 || len(paths) > maxBulkFileOperations {
 		return errors.New("select between 1 and 500 files or directories")
 	}
-	_, destinationClean, err := resolveManagedPath(site.Root, destination, false)
+	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destination, false)
 	if err != nil {
 		return err
 	}
-	destinationFile, err := secureOpenManaged(site.Root, destinationClean, os.O_RDONLY, 0)
+	destinationFile, err := secureOpenManaged(managedSiteRoot(site), destinationClean, os.O_RDONLY, 0)
 	if err != nil {
 		return errors.New("move destination is not a directory")
 	}
@@ -349,7 +351,8 @@ func (s *System) MoveManagedPaths(site Site, paths []string, destination string)
 	targets := make([]string, len(paths))
 	cleans := make([]string, len(paths))
 	for i, source := range paths {
-		_, clean, err := resolveManagedPath(site.Root, source, false)
+  if protectedSitePath(site,source) {return errors.New("managed website folders cannot be moved or replaced")}
+		_, clean, err := resolveManagedPath(managedSiteRoot(site), source, false)
 		if err != nil || clean == "" {
 			return errors.New("move source is invalid")
 		}
@@ -365,7 +368,7 @@ func (s *System) MoveManagedPaths(site Site, paths []string, destination string)
 		cleans[i], targets[i] = clean, target
 	}
 	for i := range cleans {
-		if err := secureRenameManaged(site.Root, cleans[i], targets[i]); err != nil {
+		if err := secureRenameManaged(managedSiteRoot(site), cleans[i], targets[i]); err != nil {
 			return fmt.Errorf("move stopped at %s after %d successful moves; refresh the directory before retrying: %w", cleans[i], i, err)
 		}
 	}

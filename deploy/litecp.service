@@ -20,7 +20,8 @@ UMask=0027
 # The panel must update Nginx, cron and website files, but it does not need
 # general write access to the operating system.
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=tmpfs
+BindPaths=/home/litecp
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true
@@ -36,6 +37,7 @@ RuntimeDirectoryMode=0755
 ReadWritePaths=/var/lib/litecp /var/backups/litecp /var/www/litecp /var/vmail /var/log/nginx /run/litecp /run/litecp-php73 /etc/nginx /etc/cron.d /etc/litecp/mail /etc/litecp/php73-pools /etc/litecp/php73-pools.conf
 ReadWritePaths=-/etc/php -/etc/opt/remi -/etc/php-fpm.d
 ReadWritePaths=-/etc/litecp/waf
+ReadWritePaths=/home/litecp
 ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
 
 [Install]

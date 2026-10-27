@@ -42,7 +42,7 @@ func zipBackupParts(destination string,parts map[string]string)error{
 }
 func (a *App) websiteBackups(w http.ResponseWriter,r *http.Request){
  site:=a.store.SiteByID(r.URL.Query().Get("siteId"));if site==nil{writeError(w,404,"Website not found.");return}
- root:=filepath.Join(a.system.dataDir,"website-backups",safeSiteID(site.ID));if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,err.Error());return}
+ root:=a.system.websiteBackupsRoot(*site);if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,err.Error());return}
  if r.Method==http.MethodGet{
   if id:=r.URL.Query().Get("id");id!=""{if !liveJobIDPattern.MatchString(id){writeError(w,400,"Invalid backup ID");return};if _,err:=loadWebsiteZIPBackup(root,id,site.ID);err!=nil{writeError(w,404,"Complete backup not found for this website");return};file,err:=secureOpenManaged(root,id+"/website.zip",os.O_RDONLY,0);if err!=nil{writeError(w,404,"Backup not found");return};defer file.Close();info,err:=file.Stat();if err!=nil{writeError(w,500,"Cannot inspect backup");return};w.Header().Set("Content-Type","application/zip");w.Header().Set("Content-Disposition",fmt.Sprintf(`attachment; filename="%s-%s.zip"`,site.Domain,id));http.ServeContent(w,r,"website.zip",info.ModTime(),file);return}
   items:=[]websiteZIPBackup{};entries,_:=os.ReadDir(root);for _,entry:=range entries{if !entry.IsDir(){continue};if item,err:=loadWebsiteZIPBackup(root,entry.Name(),site.ID);err==nil{items=append(items,item)}};writeJSON(w,200,map[string]any{"items":items});return

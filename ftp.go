@@ -16,7 +16,7 @@ func(s *System) updateFTP(ctx context.Context,site Site,accounts []FTPAccount,ac
  work,err:=os.MkdirTemp(root,"transaction-");if err!=nil{return err}
  source:=filepath.Join(work,"users.passwd");if err=os.WriteFile(source,original,0600);err!=nil{return err}
  args:=[]string{action,account.Username,"-f",source}
- if action=="useradd"{args=append(args,"-u",strconv.Itoa(site.RuntimeUID),"-g",strconv.Itoa(site.RuntimeGID),"-d",site.Root,"-y","3")}
+ if action=="useradd"{args=append(args,"-u",strconv.Itoa(site.RuntimeUID),"-g",strconv.Itoa(site.RuntimeGID),"-d",managedSiteRoot(site),"-y","3")}
  input:="";if action!="userdel"{if !validFTPPassword(password){return errors.New("FTP password must have 12–128 characters without line breaks")};input=password+"\n"+password+"\n"}
  if _,err=runCommandInput(ctx,20*time.Second,input,"pure-pw",args...);err!=nil{return errors.New("FTP account update failed; existing accounts unchanged")}
  db:=filepath.Join(work,"users.pdb")
@@ -34,7 +34,7 @@ func readFTPState(path string,missing []byte)([]byte,error){content,err:=os.Read
 func(a *App) websiteFTP(w http.ResponseWriter,r *http.Request){
  site:=a.store.SiteByID(r.URL.Query().Get("siteId"));if site==nil{writeError(w,404,"Website not found");return}
  accounts,err:=a.system.ftpAccounts();if err!=nil{writeError(w,500,"Cannot read FTP accounts");return}
- if r.Method==http.MethodGet{items:=[]FTPAccount{};for _,account:=range accounts{if account.SiteID==site.ID{items=append(items,account)}};_,err:=os.Stat(filepath.Join(a.system.ftpRoot(),"installed"));writeJSON(w,200,map[string]any{"items":items,"available":err==nil,"host":primaryIP(),"port":21,"protocol":"Explicit FTP over TLS (FTPS)","directory":site.Root});return}
+ if r.Method==http.MethodGet{items:=[]FTPAccount{};for _,account:=range accounts{if account.SiteID==site.ID{items=append(items,account)}};_,err:=os.Stat(filepath.Join(a.system.ftpRoot(),"installed"));writeJSON(w,200,map[string]any{"items":items,"available":err==nil,"host":primaryIP(),"port":21,"protocol":"Explicit FTP over TLS (FTPS)","directory":managedSiteRoot(*site)});return}
  if a.system.demo{writeError(w,400,"FTPS requires the installed Linux server");return}
  var input struct{Username,Password,ID string;Confirm bool};if decodeJSONWithLimit(r,&input,4096)!=nil{writeError(w,400,"Invalid FTP request");return}
  var account FTPAccount;action:="";next:=append([]FTPAccount{},accounts...)

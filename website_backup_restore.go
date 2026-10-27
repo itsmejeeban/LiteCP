@@ -36,7 +36,7 @@ func inspectManualBackup(ctx context.Context,archivePath,stage string)(Migration
 func(a *App) stageWebsiteBackup(ctx context.Context,site Site,backupID string)(MigrationPreview,error){
  var preview MigrationPreview
  if !liveJobIDPattern.MatchString(backupID){return preview,errors.New("invalid backup ID")}
- backupRoot:=filepath.Join(a.system.dataDir,"website-backups",safeSiteID(site.ID),backupID)
+ backupRoot:=filepath.Join(a.system.websiteBackupsRoot(site),backupID)
  if _,err:=loadWebsiteZIPBackup(filepath.Dir(backupRoot),backupID,site.ID);err!=nil{return preview,err}
  return a.prepareManualBackupStage(ctx,site,filepath.Join(backupRoot,"website.zip"))
 }
@@ -53,7 +53,7 @@ func(a *App) websiteBackupUpload(w http.ResponseWriter,r *http.Request){
  if a.system.demo{writeError(w,400,"Backup upload requires the installed Linux server");return}
  r.Body=http.MaxBytesReader(w,r.Body,migrationUploadLimit+(1<<20));if err:=r.ParseMultipartForm(8<<20);err!=nil{writeError(w,400,"Select a valid backup ZIP up to 2 GiB");return};if r.MultipartForm!=nil{defer r.MultipartForm.RemoveAll()}
  input,header,err:=r.FormFile("backup");if err!=nil{writeError(w,400,"Choose a LiteCP manual website ZIP backup");return};defer input.Close();if header.Size<=0||header.Size>migrationUploadLimit{writeError(w,400,"Backup ZIP must be nonempty and no larger than 2 GiB");return}
- id,err:=randomToken(18);if err!=nil{writeError(w,500,err.Error());return};id=safeSiteID(id);root:=filepath.Join(a.system.dataDir,"website-backups",safeSiteID(site.ID),id);if err=os.MkdirAll(root,0700);err!=nil{writeError(w,500,err.Error());return}
+ id,err:=randomToken(18);if err!=nil{writeError(w,500,err.Error());return};id=safeSiteID(id);root:=filepath.Join(a.system.websiteBackupsRoot(*site),id);if err=os.MkdirAll(root,0700);err!=nil{writeError(w,500,err.Error());return}
  file,err:=os.OpenFile(filepath.Join(root,"website.zip"),os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600);if err!=nil{writeError(w,500,err.Error());return};written,err:=io.Copy(file,io.LimitReader(input,migrationUploadLimit+1));closeErr:=file.Close();if err!=nil||closeErr!=nil||written!=header.Size{writeError(w,400,"Backup upload interrupted; partial data retained privately");return}
  preview,err:=a.prepareManualBackupStage(r.Context(),*site,filepath.Join(root,"website.zip"));if err!=nil{writeError(w,400,"Backup inspection failed: "+err.Error()+". Uploaded data retained privately; live website unchanged.");return}
  item:=websiteZIPBackup{ID:id,SiteID:site.ID,Domain:site.Domain,Size:written,CreatedAt:time.Now().UTC()};content,_:=json.Marshal(item);if err=writeAtomic(filepath.Join(root,"manifest.json"),content,0600);err!=nil{writeError(w,500,err.Error());return};a.store.AddActivity("Manual backup uploaded",site.Domain+": inspected and staged; no live data changed","success");writeJSON(w,201,preview)
