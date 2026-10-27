@@ -8,7 +8,7 @@
   };
   const fields = ["minute", "hour", "day", "month", "weekday"];
   const limits = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
-  let siteID = "", generation = 0, listRequest = 0, busy = false, ready = false, editing = "", items = [];
+  let siteID = "", generation = 0, listRequest = 0, busy = false, ready = false, editing = "", items = [], appCron = null;
   const dialog = document.createElement("dialog");
   dialog.className = "fm-dialog website-cron-dialog";
   dialog.setAttribute("aria-labelledby", "websiteCronTitle");
@@ -68,9 +68,20 @@
     catch (error) { if (current(active) && request === listRequest) throw error; return; }
     if (!current(active) || request !== listRequest) return;
     items = result.items;
+    appCron = result.appCron || null;
     find("[data-cron-domain]").textContent = result.domain;
     find("[data-cron-context]").textContent = `Time zone: ${result.timezone}`;
     find("[data-cron-php]").textContent = result.phpCommand || "PHP CLI is not available for this runtime.";
+    const appPanel = find("[data-cron-app]");
+    appPanel.hidden = !appCron?.available;
+    if (appCron?.available) {
+      find("[data-cron-app-title]").textContent = `${appCron.name} default cron`;
+      find("[data-cron-app-schedule]").textContent = appCron.schedule;
+      find("[data-cron-app-command]").textContent = appCron.command;
+      find("[data-cron-app-toggle]").textContent = appCron.enabled ? "Disable" : "Enable";
+      find("[data-cron-app-state]").textContent = appCron.enabled ? "Enabled" : "Disabled";
+      find("[data-cron-app-state]").className = `badge${appCron.enabled ? " success" : ""}`;
+    }
     ready = true;
     renderList();
     setControls();
@@ -92,10 +103,11 @@
   document.querySelector("#sitesTable").addEventListener("click", async event => {
     const button = event.target.closest("[data-site-cron-jobs]");
     if (!button) return;
-    siteID = button.dataset.siteCronJobs; generation++; busy = false; ready = false; items = [];
+    siteID = button.dataset.siteCronJobs; generation++; busy = false; ready = false; items = []; appCron = null;
     const active = context();
     dialog.innerHTML = `<header><div><h2 id="websiteCronTitle">Website cron jobs</h2><p data-cron-domain></p></div><button type="button" class="website-cron-close" data-cron-close aria-label="Close cron jobs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
       <div class="fm-dialog-body"><p data-cron-context>Loading website schedule…</p>
+      <section class="website-cron-app" data-cron-app hidden><div><div><strong data-cron-app-title></strong><small>Runs automatically every 5 minutes</small></div><span class="badge" data-cron-app-state></span></div><p><code data-cron-app-schedule></code><span aria-hidden="true"> · </span><code data-cron-app-command></code></p><button type="button" class="button button-secondary" data-cron-app-toggle></button></section>
       <form novalidate><div class="website-cron-form-head"><h3 data-cron-form-title>Add a cron job</h3><label class="website-cron-enabled"><input name="enabled" type="checkbox" checked> Enabled</label></div>
 
       <label class="field"><span>Run this job</span><select name="preset"><option value="minute">Every minute</option><option value="five" selected>Every 5 minutes</option><option value="fifteen">Every 15 minutes</option><option value="thirty">Every 30 minutes</option><option value="hourly">Once an hour</option><option value="daily">Once a day at midnight</option><option value="weekly">Once a week on Sunday</option><option value="monthly">Once a month</option><option value="custom">Custom schedule</option></select></label>
@@ -134,6 +146,18 @@
     if (event.target.closest("[data-cron-close]")) { dialog.close(); return; }
     if (event.target.closest("[data-cron-refresh]")) { const active = context(); status("Loading cron jobs…"); try { await load(active); if (current(active)) status(""); } catch (error) { if (current(active)) status(error.message); } return; }
     if (!ready) return;
+    if (event.target.closest("[data-cron-app-toggle]") && appCron?.available) {
+      const active = context(), enabled = !appCron.enabled;
+      busy = true; setControls(); status(`${enabled ? "Enabling" : "Disabling"} default application cron…`);
+      try {
+        await cp.api("/api/sites/cron", { method: "POST", body: { id: active.siteID, enabled } });
+        if (!current(active)) return;
+        await load(active);
+        if (current(active)) status(`Default application cron ${enabled ? "enabled" : "disabled"}.`);
+      } catch (error) { if (current(active)) status(error.message); }
+      finally { if (current(active)) { busy = false; setControls(); } }
+      return;
+    }
     if (event.target.closest("[data-cron-cancel-edit]")) { resetForm(); status(""); return; }
     const run = event.target.closest("[data-cron-run]");
     if (run) {

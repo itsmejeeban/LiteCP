@@ -373,7 +373,7 @@ func (a *App) websiteCron(w http.ResponseWriter, r *http.Request) {
 		if site.AppType == "wordpress" {
 			appTarget = filepath.Join(site.Root, "wp-cron.php")
 		}
-		writeJSON(w, 200, map[string]any{"items": items, "domain": site.Domain, "directory": site.Root, "timezone": serverCronTimezone(), "phpCommand": php, "appCron": map[string]any{"available": site.AppType != "regular", "enabled": site.Cron, "schedule": "*/5 * * * *", "command": appTarget}})
+		writeJSON(w, 200, map[string]any{"items": items, "domain": site.Domain, "directory": site.Root, "timezone": serverCronTimezone(), "phpCommand": php, "appCron": map[string]any{"available": site.AppType != "regular", "name": applicationName(site.AppType), "enabled": site.Cron, "schedule": "*/5 * * * *", "command": appTarget}})
 		return
 	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {

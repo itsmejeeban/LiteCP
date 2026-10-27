@@ -145,6 +145,23 @@ test('beginner schedules hide custom timing fields and Custom reveals them', asy
  assert.equal(ui.dialog.querySelector('[data-cron-expression]').textContent,'0 0 * * *');
 });
 
+test('default application cron is managed inside the cron popup', async () => {
+  const writes = [];
+  let enabled = false;
+  const ui = panel(async (url, options) => {
+    if (url === '/api/sites/cron') { writes.push(options); enabled = options.body.enabled; return { ok: true }; }
+    return { ...list('A'), appCron: { available: true, name: 'WordPress', enabled, schedule: '*/5 * * * *', command: '/public/A/wp-cron.php' } };
+  });
+  await ui.open('A');
+  assert.equal(ui.dialog.querySelector('[data-cron-app]').hidden, false);
+  assert.equal(ui.dialog.querySelector('[data-cron-app-title]').textContent, 'WordPress default cron');
+  assert.equal(ui.dialog.querySelector('[data-cron-app-toggle]').textContent, 'Enable');
+  await ui.click('[data-cron-app-toggle]');
+  assert.equal(writes.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(writes[0].body)), { id: 'A', enabled: true });
+  assert.equal(ui.dialog.querySelector('[data-cron-app-toggle]').textContent, 'Disable');
+});
+
 test('Run test executes the saved job and displays output as plain text',async()=>{
  const writes=[];const ui=panel(async(url,options)=>{if(!options)return list('A',[job('saved')]);writes.push({url,...options});return {success:true,message:'Completed successfully',output:'<script>example</script>',durationMs:120};});
  await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});

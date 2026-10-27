@@ -411,7 +411,7 @@
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>ACTIONS</th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}${site.appType === "regular" ? "" : `<button aria-label="${site.cron ? "Disable" : "Enable"} cron for ${escapeHTML(site.domain)}" title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${escapeHTML(site.id)}">${icons.clock}<span class="site-action-label">App cron</span></button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>ACTIONS</th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function renderPHPSelect(site) {
@@ -632,9 +632,6 @@
         if (!email) return;
         await api("/api/sites/ssl", { method: "POST", body: { id: site.id, email } });
         showToast("SSL enabled", `${site.domain} now redirects to HTTPS.`);
-      } else if (button.dataset.siteAction === "cron") {
-        await api("/api/sites/cron", { method: "POST", body: { id: site.id, enabled: !site.cron } });
-        showToast("Schedule updated", `${applicationLabel(site.appType)} cron ${site.cron ? "disabled" : "enabled"} for ${site.domain}.`);
       } else if (button.dataset.siteAction === "delete") {
         const accepted = await window.LiteCPDialogs.confirm(`Remove hosting configuration for ${site.domain}?\n\nIts files and database will be preserved. The website will stop being served through LiteCP.`, { title: "Detach website", confirmText: "Detach website", danger: true });
         if (!accepted) return;

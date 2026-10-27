@@ -37,3 +37,9 @@
 .website-cron-dialog header>.website-cron-close {width:36px;height:36px;min-height:36px;flex:0 0 36px;display:grid;place-items:center;padding:0;border:0!important;border-radius:8px;background:transparent!important;color:var(--muted);box-shadow:none!important;}
 .website-cron-dialog header>.website-cron-close:hover,.website-cron-dialog header>.website-cron-close:focus-visible {background:var(--surface-soft)!important;color:var(--ink);}
 .website-cron-dialog .website-cron-close svg {width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;}
+.website-cron-app {margin:0 0 14px;padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-soft);}
+.website-cron-app>div {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.website-cron-app strong,.website-cron-app small {display:block;}
+.website-cron-app small {margin-top:3px;color:var(--muted);font-size:11px;}
+.website-cron-app p {margin:10px 0;font-size:11px;color:var(--muted);overflow-wrap:anywhere;}
+.website-cron-app code {color:var(--ink);}
