@@ -354,7 +354,10 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("preview") == "1" {
 		dispositionType = "inline"
 		contentType = mime.TypeByExtension(strings.ToLower(filepath.Ext(info.Name())))
-		if contentType == "" {
+		// Browsers download PHP/source MIME types instead of displaying them.
+		// Only passive media keeps its native type; source documents stay text.
+		passive := strings.HasPrefix(contentType, "image/") || strings.HasPrefix(contentType, "audio/") || strings.HasPrefix(contentType, "video/") || contentType == "application/pdf"
+		if !passive {
 			contentType = "text/plain; charset=utf-8"
 		}
 		// Active document formats are rendered as text and every preview is

@@ -120,9 +120,9 @@ def main():
         replacements = {}
         for site, old, home in plan:
             home.mkdir(mode=0o755)
-            for name in ('backups', 'backups/manual', 'backups/scheduled', '.trash', 'tmp', 'logs', 'ssl', 'etc', 'whmcsdata'):
+            for name in ('backups', 'backups/manual', 'backups/scheduled', '.trash', 'tmp', 'logs', 'ssl', 'etc'):
                 (home / name).mkdir(mode=0o700)
-            for name in ('tmp', 'whmcsdata'):
+            for name in ('tmp',):
                 os.chown(home / name, site['runtimeUid'], site['runtimeGid'])
             public = home / 'public_html'
             copy_tree(old, public)

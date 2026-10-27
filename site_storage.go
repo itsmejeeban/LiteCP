@@ -46,7 +46,7 @@ func protectedSitePath(site Site, relative string) bool {
 		return false
 	}
 	clean := filepath.ToSlash(filepath.Clean(relative))
-	for _, name := range []string{".", "public_html", "backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc", "whmcsdata"} {
+	for _, name := range []string{".", "public_html", "backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc"} {
 		if clean == name {
 			return true
 		}
@@ -92,7 +92,7 @@ func (s *System) ensureSiteHome(site Site) error {
 	if err := os.Chmod(home, 0755); err != nil {
 		return err
 	}
-	for _, name := range []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc", "whmcsdata"} {
+	for _, name := range []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc"} {
 		target := filepath.Join(home, name)
 		info, err := os.Lstat(target)
 		if errors.Is(err, os.ErrNotExist) {
@@ -105,7 +105,7 @@ func (s *System) ensureSiteHome(site Site) error {
 			return fmt.Errorf("unsafe private website directory: %s", name)
 		}
 		uid, gid := 0, 0
-		if name == "tmp" || name == "whmcsdata" {
+		if name == "tmp" {
 			uid = site.RuntimeUID
 			gid = site.RuntimeGID
 		}

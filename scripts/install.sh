@@ -359,7 +359,7 @@ else
   semanage port -a -t http_port_t -p tcp 8443 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 8443 >/dev/null 2>&1 || true
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
   semanage fcontext -a -t httpd_sys_content_t '/home/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_content_t '/home/litecp(/.*)?'
-  for folder in public_html tmp whmcsdata; do
+  for folder in public_html tmp; do
     semanage fcontext -a -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?" >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?"
   done
   semanage fcontext -a -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?'

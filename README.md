@@ -150,7 +150,7 @@ go test ./...
 
 - Panel configuration: `/var/lib/litecp/config.json` (`0600`)
 - Website homes: `/home/litecp/<domain>`; only `public_html/` is served publicly.
-- Private website folders: `backups/manual/`, `backups/scheduled/`, `.trash/`, `tmp/`, `logs/`, `ssl/`, `etc/`, and `whmcsdata/`.
+- Private website folders: `backups/manual/`, `backups/scheduled/`, `.trash/`, `tmp/`, `logs/`, `ssl/`, and `etc/`. Application-specific folders such as `whmcsdata/` are not created automatically.
 - Existing installations keep their saved paths until explicitly migrated. Run `python3 scripts/migrate-site-storage.py` to preview; stop LiteCP, Nginx, cron and FTP before running with `--apply`. Use the updated service units and restart LiteCP afterwards to reconcile PHP pools. Migration copies data and retains original directories plus configuration recovery snapshots under `/var/lib/litecp/storage-migrations/`. Custom application configuration containing absolute paths may need updating. DNS, databases, domain names, and certificates remain unchanged.
 - Nginx configs: `/etc/nginx/sites-available/litecp-*.conf` on Ubuntu or `/etc/nginx/conf.d/litecp-*.conf` on AlmaLinux
 - Application cron files: `/etc/cron.d/litecp-*`

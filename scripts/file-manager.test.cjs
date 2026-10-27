@@ -36,3 +36,30 @@ test('file type labels use the final extension and support folders', () => {
   assert.equal(kind({name:'index.php',type:'file'}), 'PHP file');
   assert.equal(kind({name:'LICENSE',type:'file'}), 'File');
 });
+
+test('home-based paths reject other accounts and retain public_html', () => {
+  const home='/home/litecp/example.test';
+  assert.equal(normalizePath(home+'/public_html/index.php',home),'public_html/index.php');
+  assert.equal(normalizePath(home,home),'');
+  assert.equal(normalizePath('public_html',home),'public_html');
+  for(const value of ['/etc/passwd','/home/litecp/other.test',home+'2/public_html',home+'/../other.test'])assert.throws(()=>normalizePath(value,home));
+});
+
+test('permission sorting compares octal modes in both directions', () => {
+  const files=[{name:'b',type:'file',mode:'0750'},{name:'c',type:'file',mode:'0600'},{name:'a',type:'file',mode:'0640'}];
+  assert.deepEqual(prepareEntries(files,'',true,'mode',false).map(x=>x.mode),['0600','0640','0750']);
+  assert.deepEqual(prepareEntries(files,'',true,'mode',true).map(x=>x.mode),['0750','0640','0600']);
+});
+
+test('search discards responses from a previous website and older request', async () => {
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
+  const code=source.slice(source.indexOf('  async function searchFiles()'),source.indexOf('  function editFile('));
+  const pending=[],shown=[],controls={'#cpfmSearchInput':{value:'one'},'#cpfmSearchScope':{value:'all'},'#showHidden':{checked:false}};
+  let current='site1';
+  const search=vm.runInNewContext('let searchRequest=0;'+code+';searchFiles',{URLSearchParams,$:key=>controls[key],siteID:()=>current,cp:{path:()=>'',api:()=>new Promise(resolve=>pending.push(resolve))},showSearchResults:result=>shown.push(result)});
+  const first=search();current='site2';pending.shift()({entries:['wrong site']});await first;assert.equal(shown.length,0);
+  const older=search();controls['#cpfmSearchInput'].value='two';const latest=search();
+  pending[1]({entries:['latest']});await latest;pending[0]({entries:['stale']});await older;
+  assert.equal(shown.length,1);assert.deepEqual(shown[0].entries,['latest']);
+});

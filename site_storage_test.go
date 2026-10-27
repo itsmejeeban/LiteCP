@@ -19,7 +19,7 @@ func TestWebsiteHomeBoundaries(t *testing.T) {
 			t.Fatalf("unexpected home boundary: %s", root)
 		}
 	}
-	for _, path := range []string{"public_html", "backups", ".trash", ".trash/item/payload", "etc", "tmp", "logs", "whmcsdata"} {
+	for _, path := range []string{"public_html", "backups", ".trash", ".trash/item/payload", "etc", "tmp", "logs"} {
 		if !protectedSitePath(site, path) {
 			t.Fatalf("unprotected structure: %s", path)
 		}

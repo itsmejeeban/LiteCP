@@ -218,6 +218,9 @@
 .fm-name>span:last-child {overflow:hidden;text-overflow:ellipsis;}
 .fm-entry-icon {color:#8c9cb3;display:inline-flex;width:26px;align-items:center;justify-content:center;flex-shrink:0;}
 .fm-entry-icon.is-folder {color:#ce9b2d;}
+:root[data-theme] body .fm-page .fm-table .fm-sort-heading{appearance:none!important;display:inline!important;padding:0!important;margin:0!important;min-height:0!important;background:transparent!important;border:0!important;box-shadow:none!important;color:inherit!important;font:inherit!important;text-decoration:none!important;cursor:pointer}
+:root[data-theme] body .fm-page .fm-table .fm-sort-heading:hover{color:#135a93!important;text-decoration:none!important}
+#fmActionDialog .fm-permission-grid input[data-mode-digit]{width:75%;height:30px;padding:4px;background:#fff!important;color:#555!important;border:1px solid #ccc;border-radius:4px;text-align:center;font:14px Arial}
 :root[data-theme] body .fm-page .fm-entry-icon.is-webroot,
 :root[data-theme] body .fm-page .fm-entry-icon.is-webroot .fm-icon {color:#00aeef!important;}
 .fm-entry-icon.is-folder svg {fill:color-mix(in srgb,#e7b344 22%,transparent);}
