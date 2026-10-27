@@ -105,7 +105,8 @@
 #sitesTable th:nth-child(3) {width:120px;}
 
 
-#sitesTable th:last-child {width:350px;}
+#sitesTable th:last-child {width:auto;}
+#sitesTable th:last-child,#sitesTable td:last-child {text-align:left;}
 #sitesTable .domain-cell,#sitesTable .domain-copy {min-width:0;}
 #sitesTable .domain-favicon {flex-shrink:0;}
 #sitesTable .ssl-status-icon {width:32px;height:32px;border:0;background:transparent;display:inline-grid;place-items:center;}
@@ -113,7 +114,7 @@
 #sitesTable .domain-copy {flex:1;}
 #sitesTable .domain-copy strong,#sitesTable .domain-copy small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #sitesTable .badge {white-space:nowrap;}
-#sitesTable .row-actions {justify-content:center;align-items:stretch;flex-wrap:nowrap;gap:4px;}
+#sitesTable .row-actions {justify-content:flex-start;align-items:stretch;flex-wrap:nowrap;gap:4px;}
 #sitesTable .row-actions button {flex:0 0 52px;min-width:52px;height:48px!important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:3px 2px!important;}
 #sitesTable .site-action-label {display:block;font-size:9px;font-weight:600;line-height:1.1;white-space:nowrap;color:var(--muted);}
 #sitesTable .row-actions button:hover .site-action-label {color:var(--ink);}
