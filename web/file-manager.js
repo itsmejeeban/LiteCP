@@ -54,19 +54,25 @@
   };
   const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
   const button = (action,label,name,extra="") => `<button type="button" class="fm-tool ${extra}" data-fm-action="${action}" title="${label}">${icon(name)}<span>${label}</span></button>`;
+  const preferenceKey = "litecpFileManagerPreferences";
+  const readPreferences = () => {
+    try { return {start:"root",hidden:false,skipEncoding:false,...JSON.parse(localStorage.getItem(preferenceKey) || "{}")}; }
+    catch { return {start:"root",hidden:false,skipEncoding:false}; }
+  };
+  let preferences = readPreferences();
   let listing = null, selected = new Set(), folders = new Map(), expanded = new Set([""]), loadingFolders = new Set(), folderErrors = new Map(), site = "", view = "list", descending = false, history = [], historyIndex = -1, historyNavigation = false, lastIndex = -1;
   const siteID = () => $("#fileSiteSelect").value;
   const rows = () => prepareEntries(listing?.entries || [], $("#fileSearch").value, $("#showHidden").checked, $("#fileSort").value, descending);
   const picked = () => (listing?.entries || []).filter(x => selected.has(x.path));
   const join = (a,b) => a ? `${a}/${b}` : b;
   page.classList.add("fm-page");
-  panel.insertAdjacentHTML("afterbegin", `<header class="cpfm-header"><div class="cpfm-brand"><strong>LiteCP</strong> File Manager</div><form id="cpfmSearch"><label>Search</label><select aria-label="Search location"><option>All Your Files</option><option>Current Directory</option></select><span>for</span><input id="cpfmSearchInput" type="search" aria-label="Search files"><button type="submit">Go</button></form><button type="button" class="cpfm-settings" data-fm-action="settings">${icon("settings")} Settings</button></header>`);
+  panel.insertAdjacentHTML("afterbegin", `<header class="cpfm-header"><div class="cpfm-brand"><strong>LiteCP</strong> File Manager</div><form id="cpfmSearch"><label>Search</label><select id="cpfmSearchScope" aria-label="Search location"><option value="all">All Your Files</option><option value="root">Website Root (/public)</option><option value="current">Current Directory</option></select><span>for</span><input id="cpfmSearchInput" type="search" aria-label="Search files" autocomplete="off"><button type="submit">Go</button></form><button type="button" class="cpfm-settings" data-fm-action="settings">${icon("settings")} Settings</button></header>`);
   $(".file-toolbar").innerHTML = `${button("new-file","File","plus")}${button("new-folder","Folder","folder")}${button("copy","Copy","copy")}${button("move","Move","move")}${button("upload","Upload","upload")}${button("download","Download","download")}${button("delete","Delete","trash")}${button("trash","Restore","refresh")}${button("rename","Rename","edit")}${button("edit","Edit","edit")}${button("html-edit","HTML Editor","edit")}${button("chmod","Permissions","lock")}${button("view","View","eye")}${button("extract","Extract","extract")}${button("archive","Compress","archive")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
   fullscreen.innerHTML = `${icon("grid")}<span>Full screen</span>`;
   $(".file-toolbar").append(fullscreen);
   $(".file-breadcrumb").insertAdjacentHTML("beforebegin", `<div class="cpfm-navigation">${button("home","Home","home")}${button("up","Up One Level","up")}${button("back","Back","back")}${button("forward","Forward","next")}${button("refresh","Reload","refresh")}${button("select-all","Select All","select")}${button("unselect-all","Unselect All","unselect")}${button("trash","View Trash","trash")}${button("empty-trash","Empty Trash","trash")}</div><form class="fm-address" id="fmAddressForm"><button type="button" class="fm-home" data-fm-action="home" aria-label="Home">${icon("home")}</button><label><input id="fmAddress" aria-label="Folder path" placeholder="/public" autocomplete="off" spellcheck="false"></label><button class="button button-secondary" type="submit">Go</button></form><button type="button" class="cpfm-collapse" id="cpfmCollapse">Collapse All</button>`);
   const filters = $(".file-filters");
-  filters.innerHTML = `<label class="fm-search">${icon("search")}<input id="fileSearch" type="search" placeholder="Search this folder…" aria-label="Search this folder"></label><label class="fm-hidden"><input type="checkbox" id="showHidden" checked> Hidden files</label><select id="fileSort" aria-label="Sort files"><option value="name">Name</option><option value="type">Type</option><option value="modified">Modified</option><option value="size">Size</option></select><button type="button" class="fm-order" id="fmOrder" aria-label="Reverse sort order">↑</button><div class="fm-view-switch" role="group" aria-label="File view">${button("list","List view","list")}${button("grid","Grid view","grid")}</div>`;
+  filters.innerHTML = `<label class="fm-search">${icon("search")}<input id="fileSearch" type="search" placeholder="Search this folder…" aria-label="Search this folder"></label><label class="fm-hidden"><input type="checkbox" id="showHidden" ${preferences.hidden ? "checked" : ""}> Hidden files</label><select id="fileSort" aria-label="Sort files"><option value="name">Name</option><option value="type">Type</option><option value="modified">Modified</option><option value="size">Size</option></select><button type="button" class="fm-order" id="fmOrder" aria-label="Reverse sort order">↑</button><div class="fm-view-switch" role="group" aria-label="File view">${button("list","List view","list")}${button("grid","Grid view","grid")}</div>`;
   const body = document.createElement("div"); body.className = "fm-body";
   body.innerHTML = `<aside class="fm-folders" aria-label="Folder navigation"><div id="fmTree" role="tree" aria-label="Website folders"></div></aside><div class="fm-resizer" role="separator" aria-orientation="vertical" aria-label="Resize folder panel" aria-valuemin="220" aria-valuemax="720" tabindex="0"><span aria-hidden="true">⋮</span></div><div class="fm-content" tabindex="0" aria-label="Files in current folder"><div class="fm-selection"><label><input id="fmSelectVisible" type="checkbox" aria-label="Select all items in this folder"><span id="fmSelectionLabel">No items selected</span></label></div><div id="fmFileHost"></div><div class="fm-drop-hint">${icon("upload")}Drop files here to upload</div></div><aside class="fm-inspector" aria-label="File details" id="fmInspector"></aside>`;
   panel.append(body); $("#fmFileHost").append($("#fileTable"));
@@ -102,13 +108,17 @@
   }
   function render(value) {
     const changed = !listing || listing.siteId !== value.siteId || listing.path !== value.path;
-    if (site !== value.siteId) { folders.clear(); expanded=new Set([""]); folderErrors.clear(); loadingFolders.clear(); history=[]; historyIndex=-1; site=value.siteId; }
+    const siteChanged=site !== value.siteId;
+    const startupPath=siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}`) || "") : "";
+    if (siteChanged) { folders.clear(); expanded=new Set([""]); folderErrors.clear(); loadingFolders.clear(); history=[]; historyIndex=-1; site=value.siteId; }
     if (changed) { selected.clear(); lastIndex=-1; if (!historyNavigation) { history=history.slice(0,historyIndex+1); history.push(value.path || ""); historyIndex=history.length-1; } historyNavigation=false; }
     listing=value; selected=new Set([...selected].filter(path=>(value.entries || []).some(x=>x.path===path)));
     historyNavigation=false;
     if(history[historyIndex] !== (value.path || "")){const historyMatch=history.lastIndexOf(value.path || "");if(historyMatch>=0)historyIndex=historyMatch;}
     page.querySelectorAll("[data-fm-action]").forEach(button=>button.disabled=false);
     folders.set(value.path || "",(value.entries || []).filter(x=>x.type==="directory"));
+    if(siteChanged && startupPath!==(value.path || "")) setTimeout(()=>cp.goToFilePath(startupPath).catch(cp.handleError),0);
+    else localStorage.setItem(`litecpFileManagerLastPath:${value.siteId}`,value.path || "");
     const visible=rows(), count=(value.entries || []).length;
     $("#fmAddress").value="/public"+(value.path ? "/"+value.path : "");
     const parts=(value.path || "").split("/").filter(Boolean);
@@ -160,6 +170,7 @@
   }
   function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
     if (dialog.open) return;
+    dialog.classList.remove("fm-search-dialog");
     const expectedSite=siteID(), expectedPath=cp.path();
     dialog.innerHTML=`<form><header><div><span class="eyebrow">FILE MANAGER</span><h2 id="fmDialogTitle">${esc(title)}</h2></div><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body"><p>${esc(description)}</p>${fields}<p class="fm-error hidden" role="alert"></p></div><footer><button type="button" class="button button-ghost" data-fm-cancel>Cancel</button><button type="submit" class="button ${danger ? "fm-danger-button" : "button-primary"}">${esc(submit)}</button></footer></form>`;
     dialog.querySelectorAll("[data-fm-cancel]").forEach(b=>b.onclick=()=>dialog.close());
@@ -171,6 +182,33 @@
       finally { buttons.forEach(b=>b.disabled=false); }
     };
     dialog.showModal(); dialog.querySelector("input:not([type=checkbox])")?.focus();
+  }
+  function showSearchResults(result, query) {
+    if (dialog.open) return;
+    dialog.classList.add("fm-search-dialog");
+    const entries=result.entries || [];
+    dialog.innerHTML=`<div class="fm-search-results"><header><div><span class="eyebrow">FILE MANAGER SEARCH</span><h2 id="fmDialogTitle">Search results</h2><p>${entries.length} match${entries.length===1 ? "" : "es"} for “${esc(query)}”${result.root ? ` in /public/${esc(result.root)}` : ""}.</p></div><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body">${result.truncated ? '<p class="fm-search-warning">Only the first 1,000 matches are shown. Refine your search to see fewer results.</p>' : ""}${entries.length ? `<div class="fm-search-table"><table class="fm-table"><thead><tr><th>Name</th><th>Location</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody>${entries.map(entry=>`<tr><td>${icon(entry.type==="directory" ? "folder" : "file")} ${esc(entry.name)}</td><td>/public/${esc(entry.path)}</td><td>${entry.type==="directory" ? "—" : cp.formatBytes(entry.size)}</td><td>${esc(cp.formatDateTime(entry.modified))}</td><td><button type="button" class="button button-secondary" data-fm-search-path="${esc(entry.path)}" data-fm-search-type="${esc(entry.type)}">Open</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="fm-empty"><h3>No matching files or folders</h3><p>Try a different name, location, or enable hidden files in Settings.</p></div>'}</div><footer><button type="button" class="button button-secondary" data-fm-cancel>Close</button></footer></div>`;
+    dialog.querySelectorAll("[data-fm-cancel]").forEach(button=>button.onclick=()=>dialog.close());
+    dialog.querySelectorAll("[data-fm-search-path]").forEach(button=>button.onclick=async()=>{
+      const path=button.dataset.fmSearchPath, folder=button.dataset.fmSearchType==="directory" ? path : path.split("/").slice(0,-1).join("/");
+      dialog.close();
+      await cp.goToFilePath(folder);
+      if(button.dataset.fmSearchType!=="directory") { selected=new Set([path]); syncSelection(); }
+    });
+    dialog.showModal();
+  }
+  async function searchFiles() {
+    const query=$("#cpfmSearchInput").value.trim();
+    if(!query) { $("#cpfmSearchInput").focus(); return; }
+    const scope=$("#cpfmSearchScope").value;
+    const root=scope==="current" ? cp.path() : "";
+    const params=new URLSearchParams({siteId:siteID(),root,query,hidden:$("#showHidden").checked ? "1" : "0"});
+    const result=await cp.api(`/api/files/search?${params}`);
+    showSearchResults(result,query);
+  }
+  function editFile(item) {
+    if(preferences.skipEncoding) { cp.openEditor(item.path); return; }
+    openDialog({title:"Select character encoding",description:`Open ${item.name} in the browser editor.`,fields:'<label class="fm-field"><span>Character encoding</span><select name="encoding"><option value="utf-8">UTF-8</option></select><small>LiteCP safely edits UTF-8 text files up to 4 MiB.</small></label>',submit:"Edit file",perform:async()=>cp.openEditor(item.path)});
   }
   const field = (label,name,value="",help="") => `<label class="fm-field"><span>${esc(label)}</span><input name="${name}" value="${esc(value)}" autocomplete="off" ${["name","mode"].includes(name) ? "required" : ""}>${help ? `<small>${esc(help)}</small>` : ""}</label>`;
   function filename(value) { const name=String(value).trim(); if (!name || name==="." || name===".." || /[/\\\x00-\x1f]/.test(name)) throw new Error("Enter a file name without slashes or control characters."); return name; }
@@ -189,13 +227,20 @@
     if (name==="unselect-all") { selected.clear(); syncSelection(); return; }
     if (name==="up") { await cp.goToFilePath(currentPath.split("/").slice(0,-1).join("/")); return; }
     if (name==="back" || name==="forward") { const next=historyIndex+(name==="back" ? -1 : 1); if (next<0 || next>=history.length) return; historyIndex=next; historyNavigation=true; await cp.goToFilePath(history[next]); return; }
-    if (name==="edit" || name==="html-edit") { if (item.type==="file") cp.openEditor(item.path); return; }
-    if (name==="view") { if (!cp.demo && item.type==="file") window.open(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`,"_blank","noopener"); return; }
+    if (name==="edit" || name==="html-edit") { if (item.type==="file") editFile(item); return; }
+    if (name==="view") { if (!cp.demo && item.type==="file") window.open(`/api/files/download?preview=1&siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`,"_blank","noopener"); return; }
     if (name==="download") { if (!cp.demo && item.type==="file") window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`); return; }
     if (name==="upload") { $("#fileUploadInput").click(); return; }
     if (name==="trash") { await showTrash(); return; }
     if (name==="close-trash") { trashPanel.classList.add("hidden"); return; }
-    if (name==="settings") { document.querySelector(".cpfm-settings-menu")?.remove(); const box=document.createElement("div"); box.className="cpfm-settings-menu"; box.innerHTML=`<strong>File Manager Settings</strong><label><input type="checkbox" ${$("#showHidden").checked ? "checked" : ""}> Show hidden files</label><button type="button">Close</button>`; box.querySelector("input").onchange=e=>{$("#showHidden").checked=e.target.checked; $("#showHidden").dispatchEvent(new Event("change"));}; box.querySelector("button").onclick=()=>box.remove(); panel.append(box); return; }
+    if (name==="settings") {
+      document.querySelector(".cpfm-settings-menu")?.remove();
+      const box=document.createElement("form");box.className="cpfm-settings-menu";
+      box.innerHTML=`<header><strong>Preferences</strong><button type="button" class="cpfm-settings-close" aria-label="Close">${icon("close")}</button></header><fieldset><legend>Always open this directory</legend><label><input type="radio" name="start" value="root" ${preferences.start!=="last" ? "checked" : ""}> Website root (/public)</label><label><input type="radio" name="start" value="last" ${preferences.start==="last" ? "checked" : ""}> Last opened folder</label></fieldset><label><input type="checkbox" name="hidden" ${$("#showHidden").checked ? "checked" : ""}> Show hidden files (dotfiles)</label><label><input type="checkbox" name="skipEncoding" ${preferences.skipEncoding ? "checked" : ""}> Disable character encoding verification dialogs</label><footer><button type="button" class="button button-secondary" data-settings-cancel>Cancel</button><button type="submit" class="button button-primary">Save</button></footer>`;
+      const close=()=>box.remove();box.querySelector(".cpfm-settings-close").onclick=close;box.querySelector("[data-settings-cancel]").onclick=close;
+      box.onsubmit=event=>{event.preventDefault();const data=new FormData(box);preferences={start:String(data.get("start")||"root"),hidden:data.has("hidden"),skipEncoding:data.has("skipEncoding")};localStorage.setItem(preferenceKey,JSON.stringify(preferences));$("#showHidden").checked=preferences.hidden;$("#showHidden").dispatchEvent(new Event("change"));close();cp.showToast("File Manager preferences saved","Your display and startup choices were updated.","success");};
+      panel.append(box);return;
+    }
     if (name==="new-folder" || name==="new-file") {
       const isFolder=name==="new-folder";
       openDialog({title:isFolder ? "New folder" : "New file",description:`Create inside /public${currentPath ? "/"+currentPath : ""}.`,fields:field("Name","name",isFolder ? "new-folder" : "new-file.txt"),submit:"Create",perform:async form=>{const result=await api(isFolder ? "/api/files/directory" : "/api/files/create","POST",{path:currentPath,name:filename(form.get("name"))}); await refresh(); cp.showToast(isFolder ? "Folder created" : "File created",result.path || String(form.get("name")));}}); return;
@@ -259,8 +304,7 @@
   $("#fileTable").addEventListener("change",event=>{if(event.target.id==="fmSelectAll"){selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();}});
   $("#fmSelectVisible").onchange=event=>{selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();};
   $("#fmAddressForm").onsubmit=event=>{event.preventDefault();try{cp.goToFilePath(normalizePath($("#fmAddress").value));}catch(error){cp.handleError(error);}};
-  $("#cpfmSearch").onsubmit=event=>{event.preventDefault();$("#fileSearch").value=$("#cpfmSearchInput").value;$("#fileSearch").dispatchEvent(new Event("input"));};
-  $("#cpfmSearchInput").oninput=event=>{$("#fileSearch").value=event.target.value;$("#fileSearch").dispatchEvent(new Event("input"));};
+  $("#cpfmSearch").onsubmit=event=>{event.preventDefault();searchFiles().catch(cp.handleError);};
   $("#cpfmCollapse").onclick=()=>{expanded=new Set();renderTree();};
   ["fileSearch","showHidden","fileSort"].forEach(id=>$("#"+id).addEventListener(id==="fileSearch" ? "input" : "change",()=>{selected.clear();lastIndex=-1;if(id==="fileSort")descending=["size","modified"].includes($("#fileSort").value);if(listing)render(listing);}));
   $("#fmOrder").onclick=()=>{descending=!descending;$("#fmOrder").textContent=descending ? "↓" : "↑";if(listing)render(listing);};

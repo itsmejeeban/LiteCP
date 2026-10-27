@@ -39,6 +39,19 @@ type FileListing struct {
 	Entries []FileEntry `json:"entries"`
 }
 
+type FileSearchResult struct {
+	SiteID    string      `json:"siteId"`
+	Domain    string      `json:"domain"`
+	Root      string      `json:"root"`
+	Entries   []FileEntry `json:"entries"`
+	Truncated bool        `json:"truncated"`
+}
+
+const (
+	maxFileSearchDirectories = 10000
+	maxFileSearchResults     = 1000
+)
+
 type cappedArchiveWriter struct {
 	destination io.Writer
 	written     int64
@@ -105,6 +118,63 @@ func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
 		return listing.Entries[i].Type == "directory"
 	})
 	return listing, nil
+}
+
+// SearchManagedFiles performs a bounded recursive name search without ever
+// leaving the selected website root. ListFiles deliberately re-opens every
+// directory through secureOpenManaged, so symlinks and concurrent path swaps
+// receive the same protection as normal File Manager navigation.
+func (s *System) SearchManagedFiles(site Site, root, query string, includeHidden bool) (FileSearchResult, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return FileSearchResult{}, errors.New("enter a file or folder name to search")
+	}
+	if len(query) > 200 {
+		return FileSearchResult{}, errors.New("search text is too long")
+	}
+	_, cleanRoot, err := resolveManagedPath(site.Root, root, false)
+	if err != nil {
+		return FileSearchResult{}, err
+	}
+	result := FileSearchResult{SiteID: site.ID, Domain: site.Domain, Root: cleanRoot, Entries: []FileEntry{}}
+	queue := []string{cleanRoot}
+	needle := strings.ToLower(query)
+	visited := 0
+	for len(queue) > 0 {
+		if visited >= maxFileSearchDirectories || len(result.Entries) >= maxFileSearchResults {
+			result.Truncated = true
+			break
+		}
+		current := queue[0]
+		queue = queue[1:]
+		visited++
+		listing, listErr := s.ListFiles(site, current)
+		if listErr != nil {
+			if current == cleanRoot {
+				return FileSearchResult{}, listErr
+			}
+			continue
+		}
+		for _, entry := range listing.Entries {
+			if !includeHidden && strings.HasPrefix(entry.Name, ".") {
+				continue
+			}
+			if strings.Contains(strings.ToLower(entry.Name), needle) {
+				result.Entries = append(result.Entries, entry)
+				if len(result.Entries) >= maxFileSearchResults {
+					result.Truncated = true
+					break
+				}
+			}
+			if entry.Type == "directory" {
+				queue = append(queue, entry.Path)
+			}
+		}
+	}
+	sort.Slice(result.Entries, func(i, j int) bool {
+		return strings.ToLower(result.Entries[i].Path) < strings.ToLower(result.Entries[j].Path)
+	})
+	return result, nil
 }
 
 func (s *System) ManagedPathExists(site Site, relative string) (bool, error) {
@@ -205,7 +275,9 @@ func (s *System) saveUpload(site Site, directory, name string, source io.Reader,
 		write = secureWriteManagedNoReplace
 	}
 	_, err = write(site.Root, relative, source, maxUploadSize, 0640, ownerID, groupID)
- if err != nil { return FileEntry{}, fmt.Errorf("receive upload: %w",err) }
+	if err != nil {
+		return FileEntry{}, fmt.Errorf("receive upload: %w", err)
+	}
 	storedFile, err := secureOpenManaged(site.Root, relative, os.O_RDONLY, 0)
 	if err != nil {
 		return FileEntry{}, err
@@ -764,4 +836,9 @@ func parseSafeFileMode(value string) (os.FileMode, error) {
 	return mode, nil
 }
 
-func managedWriteReader(source io.Reader,maximum int64)io.Reader{if maximum<0{return source};return io.LimitReader(source,maximum+1)}
+func managedWriteReader(source io.Reader, maximum int64) io.Reader {
+	if maximum < 0 {
+		return source
+	}
+	return io.LimitReader(source, maximum+1)
+}

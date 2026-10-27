@@ -188,6 +188,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
+	mux.HandleFunc("/api/files/search", only(http.MethodGet, a.withAuth(a.searchFiles)))
 	mux.HandleFunc("/api/files/trash", a.withAuth(a.trash))
 	mux.HandleFunc("/api/migrations", a.withAuth(a.migrations))
 	mux.HandleFunc("/api/phpmyadmin/", a.withAuth(a.phpMyAdmin))

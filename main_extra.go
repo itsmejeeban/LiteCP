@@ -79,6 +79,25 @@ func (a *App) files(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *App) searchFiles(w http.ResponseWriter, r *http.Request) {
+	site, err := a.requestSite(r)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	result, err := a.system.SearchManagedFiles(
+		*site,
+		r.URL.Query().Get("root"),
+		r.URL.Query().Get("query"),
+		r.URL.Query().Get("hidden") == "1",
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (a *App) fileContent(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -330,9 +349,25 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Only regular files can be downloaded.")
 		return
 	}
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": info.Name()})
+	dispositionType := "attachment"
+	contentType := "application/octet-stream"
+	if r.URL.Query().Get("preview") == "1" {
+		dispositionType = "inline"
+		contentType = mime.TypeByExtension(strings.ToLower(filepath.Ext(info.Name())))
+		if contentType == "" {
+			contentType = "text/plain; charset=utf-8"
+		}
+		// Active document formats are rendered as text and every preview is
+		// sandboxed, preventing website files from inheriting panel privileges.
+		if strings.HasPrefix(contentType, "text/html") || strings.Contains(contentType, "svg") || strings.Contains(contentType, "xml") {
+			contentType = "text/plain; charset=utf-8"
+		}
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+	}
+	disposition := mime.FormatMediaType(dispositionType, map[string]string{"filename": info.Name()})
 	w.Header().Set("Content-Disposition", disposition)
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", contentType)
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
@@ -700,11 +735,11 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := randomToken(8)
 	mailbox := Mailbox{ID: id, Domain: domain, Address: address, QuotaMB: input.QuotaMB, PasswordHash: hash, CreatedAt: time.Now().UTC()}
- prospective := append(append([]Mailbox{},mailboxes...),mailbox)
- prospectiveDomains:=append([]MailDomain{},domains...)
- var addedDomain *MailDomain
- if newDomain {domainID,err:=randomToken(8);if err!=nil{writeError(w,500,"Could not allocate mail domain");return};value:=MailDomain{ID:domainID,Domain:domain,DKIMSelector:"default",CreatedAt:time.Now().UTC()};addedDomain=&value;prospectiveDomains=append(prospectiveDomains,value)}
- if err := a.system.SyncMailConfig(r.Context(), prospectiveDomains, prospective, aliases); err != nil {
+	prospective := append(append([]Mailbox{},mailboxes...),mailbox)
+	prospectiveDomains:=append([]MailDomain{},domains...)
+	var addedDomain *MailDomain
+	if newDomain {domainID,err:=randomToken(8);if err!=nil{writeError(w,500,"Could not allocate mail domain");return};value:=MailDomain{ID:domainID,Domain:domain,DKIMSelector:"default",CreatedAt:time.Now().UTC()};addedDomain=&value;prospectiveDomains=append(prospectiveDomains,value)}
+	if err := a.system.SyncMailConfig(r.Context(), prospectiveDomains, prospective, aliases); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
