@@ -63,7 +63,9 @@
     home:["solid",0xf015], up:["solid",0xf3bf], back:["solid",0xf060], next:["solid",0xf061],
     refresh:["solid",0xf021], select:["regular",0xf14a], unselect:["regular",0xf0c8],
     settings:["glyph",0xe019], search:["solid",0xf002], close:["solid",0xf00d],
-    grid:["solid",0xf065], more:["solid",0xf142], info:["solid",0xf05a], list:["solid",0xf03a]
+    grid:["solid",0xf065], more:["solid",0xf142], info:["solid",0xf05a], list:["solid",0xf03a],
+    "file-text":["solid",0xf15c], "file-code":["solid",0xf1c9], "file-image":["solid",0xf1c5],
+    "file-archive":["solid",0xf1c6], "file-pdf":["solid",0xf1c1], "file-audio":["solid",0xf1c7], "file-video":["solid",0xf1c8]
   };
   const icon = name => { const glyph=glyphs[name]; return glyph ? `<i class="fm-icon fm-icon-${glyph[0]}" aria-hidden="true">${String.fromCodePoint(glyph[1])}</i>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`; };
   const button = (action,label,name,extra="") => `<button type="button" class="fm-tool ${extra}" data-fm-action="${action}" title="${label}">${icon(action==="delete" ? "delete" : action==="rename" ? "rename" : action==="html-edit" ? "html-edit" : action==="trash" && label==="Restore" ? "restore" : action==="new-folder" ? "plus" : name)}<span>${label}</span></button>`;
@@ -100,7 +102,7 @@
   panel.insertAdjacentHTML("beforeend", '<footer class="fm-footer"><span id="fmStatus" role="status">Select a website to begin.</span><span>Double-click to open · F2 to rename</span></footer>');
   const trashPanel = $("#trashPanel");
   trashPanel.innerHTML = `<div class="panel-head"><div><h2>Trash</h2><p>Recoverable items stored outside your public website.</p></div><div class="feature-actions">${button("close-trash","Close","close")}${button("empty-trash","Empty trash","trash","fm-danger")}</div></div><div id="trashTable"></div>`;
-  const menu = document.createElement("div"); menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); document.body.append(menu);
+  const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); document.body.append(menu);
   const dialog = document.createElement("dialog"); dialog.className = "fm-dialog"; document.body.append(dialog);
   dialog.setAttribute("aria-labelledby","fmDialogTitle");
   dialog.addEventListener("cancel", event => { if (dialog.querySelector('button[type="submit"]')?.disabled) event.preventDefault(); });
@@ -142,7 +144,11 @@
     page.querySelector('[data-fm-action="list"]').setAttribute("aria-pressed",String(view==="list"));
     page.querySelector('[data-fm-action="grid"]').setAttribute("aria-pressed",String(view==="grid"));
     $("#fileTable").classList.toggle("fm-grid-view",view==="grid");
-    const entryIcon = entry => `<span class="fm-entry-icon ${entry.type === "directory" ? "is-folder" : kind(entry)==="Archive" ? "is-archive" : ""}">${icon(entry.type==="directory" ? "folder" : kind(entry)==="Archive" ? "archive" : "file")}</span>`;
+    const entryIcon = entry => {
+      const ext=entry.name.split(".").pop().toLowerCase();
+      const type=entry.type==="directory" ? "folder" : kind(entry)==="Archive" ? "archive" : kind(entry)==="Image" ? "image" : ext==="pdf" ? "pdf" : ["mp3","wav","ogg","flac","m4a"].includes(ext) ? "audio" : ["mp4","webm","mov","avi"].includes(ext) ? "video" : ["html","htm","css","js","json","xml"].includes(ext) ? "code" : ["php","txt","md","ini","conf","sql","log","htaccess"].includes(ext) ? "text" : "file";
+      return `<span class="fm-entry-icon is-${type}">${icon(type==="folder" || type==="file" ? type : "file-"+type)}</span>`;
+    };
     const name = entry => `<button type="button" class="fm-name" data-fm-open="${esc(entry.path)}" title="${entry.type==="directory" ? "Open folder" : "Select file; double-click to edit"}">${entryIcon(entry)}<span>${esc(entry.name)}</span></button>`;
     if (!visible.length) $("#fileTable").innerHTML=`<div class="fm-empty">${icon($("#fileSearch").value ? "search" : "folder")}<h3>${count ? "No matching items" : "This folder is empty"}</h3><p>${count ? "Try another search or show hidden files." : "Upload files or create a new folder to get started."}</p></div>`;
     else if (view==="grid") $("#fileTable").innerHTML=`<div class="fm-cards">${visible.map(x=>`<article class="fm-card" data-fm-row="${esc(x.path)}" tabindex="0"><input type="checkbox" data-file-select value="${esc(x.path)}" aria-label="Select ${esc(x.name)}">${name(x)}<small>${x.type==="directory" ? "Folder" : cp.formatBytes(x.size)}</small><button class="fm-more" type="button" data-fm-menu="${esc(x.path)}" aria-label="Actions for ${esc(x.name)}">${icon("more")}</button></article>`).join("")}</div>`;
@@ -177,9 +183,11 @@
   function selectOne(path) { selected=new Set([path]); syncSelection(); }
   function showMenu(path,x,y) {
     if (!selected.has(path)) selectOne(path);
-    menu.innerHTML=[["edit","Edit","edit"],["download","Download","download"],["rename","Rename","edit"],["copy","Copy to…","copy"],["move","Move to…","move"],["chmod","Permissions","lock"],["archive","Compress","archive"],["extract","Extract ZIP","extract"],["delete","Move to Trash","trash"]].map(([action,label,name])=>button(action,label,name,action==="delete" ? "fm-danger" : "")).join("");
+    const current=picked(), singleFile=current.length===1 && current[0].type==="file";
+    const actions=[...(singleFile ? [["download","Download","download"],["view","View","eye"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && kind(current[0])==="Archive" ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
+    menu.innerHTML=actions.map(([action,label,name])=>button(action,label,name)).join("");
     menu.querySelectorAll("button").forEach(b=>{ const peer=page.querySelector(`[data-fm-action="${b.dataset.fmAction}"]`); b.disabled=peer?.disabled || false; b.setAttribute("role","menuitem"); });
-    menu.classList.remove("hidden"); menu.style.left=Math.min(x,window.innerWidth-menu.offsetWidth-12)+"px"; menu.style.top=Math.min(y,window.innerHeight-menu.offsetHeight-12)+"px"; menu.querySelector("button:not(:disabled)")?.focus();
+    menu.classList.remove("hidden"); menu.style.left=Math.max(8,Math.min(x,window.innerWidth-menu.offsetWidth-12))+"px"; menu.style.top=Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-12))+"px"; menu.querySelector("button:not(:disabled)")?.focus();
   }
   function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
     if (dialog.open) return;
