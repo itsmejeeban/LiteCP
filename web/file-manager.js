@@ -57,7 +57,7 @@
   };
   // The same Font Awesome Free and Bootstrap glyphs used by the reference manager.
   const glyphs = {
-    folder:["solid",0xf07b], "folder-open":["solid",0xf07c], file:["regular",0xf15b],
+    folder:["solid",0xf07b], "folder-open":["solid",0xf07c], globe:["solid",0xf0ac], file:["regular",0xf15b],
     plus:["glyph",0x002b], copy:["regular",0xf0c5], move:["glyph",0xe068],
     upload:["solid",0xf093], download:["solid",0xf019], trash:["glyph",0xe020],
     delete:["glyph",0xe014], restore:["solid",0xf0e2], rename:["solid",0xf15b],
@@ -151,6 +151,7 @@
     page.querySelector('[data-fm-action="grid"]').setAttribute("aria-pressed",String(view==="grid"));
     $("#fileTable").classList.toggle("fm-grid-view",view==="grid");
     const entryIcon = entry => {
+      if (entry.type === "directory" && entry.path === listing?.publicPath && listing.publicPath) return `<span class="fm-entry-icon is-webroot">${icon("globe")}</span>`;
       const ext=entry.name.split(".").pop().toLowerCase();
       const type=entry.type==="directory" ? "folder" : kind(entry)==="Archive" ? "archive" : kind(entry)==="Image" ? "image" : ext==="pdf" ? "pdf" : ["mp3","wav","ogg","flac","m4a"].includes(ext) ? "audio" : ["mp4","webm","mov","avi"].includes(ext) ? "video" : ["html","htm","css","js","json","xml"].includes(ext) ? "code" : ["php","txt","md","ini","conf","sql","log","htaccess"].includes(ext) ? "text" : "file";
       return `<span class="fm-entry-icon is-${type}">${icon(type==="folder" || type==="file" ? type : "file-"+type)}</span>`;
