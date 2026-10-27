@@ -1,0 +1,7 @@
+.sidebar-feature-group>.sidebar-group-toggle {width:100%;border:0;text-align:left;cursor:pointer;font-family:inherit;}
+.sidebar-group-toggle>img {flex:0 0 22px;object-fit:contain;}
+:root[data-theme] #sidebar .sidebar-group-toggle>.sidebar-group-chevron {width:14px;height:14px;margin-left:auto;flex:0 0 14px;stroke:currentColor;fill:none;stroke-width:2;}
+.sidebar-group-toggle[aria-expanded="true"]>.sidebar-group-chevron {transform:rotate(180deg);}
+:root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item {min-height:34px;height:auto;padding:8px 9px;font-size:12px;gap:9px;}
+:root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item>svg {width:18px;height:18px;flex-basis:18px;}
+.sidebar-group-toggle:focus-visible {outline:2px solid var(--teal);outline-offset:-2px;}
