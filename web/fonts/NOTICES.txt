@@ -1,0 +1,18 @@
+File Manager font assets
+
+Font Awesome Free 5: Copyright Fonticons, Inc.
+The font files are licensed under the SIL Open Font License 1.1.
+https://fontawesome.com/license/free
+https://scripts.sil.org/OFL
+
+Bootstrap Glyphicons Halflings: distributed with Bootstrap 3 under the MIT license.
+Copyright 2011-2015 Twitter, Inc.; Copyright 2011-2015 The Bootstrap Authors.
+https://github.com/twbs/bootstrap/blob/v3.3.7/LICENSE
+
+Open Sans: Copyright 2010-2011 Steve Matteson.
+Licensed under the Apache License, Version 2.0.
+https://www.apache.org/licenses/LICENSE-2.0
+
+These font files were exported from the user-provided cPanel File Manager page.
+They are self-hosted; no cPanel session or server dependency is required.
+LiteCP retains its own branding and implementation.
