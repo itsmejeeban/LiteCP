@@ -1,0 +1,18 @@
+/* Local multicolored sidebar artwork; navigation and labels are unchanged. */
+:root[data-theme] #sidebar .nav-item[data-page]>svg {width:22px;height:22px;flex:0 0 22px;padding:0;border:0;border-radius:0;background:var(--sidebar-feature-image) center / contain no-repeat;box-shadow:none;overflow:visible;}
+:root[data-theme] #sidebar .nav-item[data-page]>svg>* {display:none;}
+:root[data-theme] #sidebar .nav-item[data-page="dashboard"] { --sidebar-feature-image:url("assets/sidebar/dashboard.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="websites"] { --sidebar-feature-image:url("assets/sidebar/websites.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="applications"] { --sidebar-feature-image:url("assets/sidebar/applications.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="files"] { --sidebar-feature-image:url("assets/sidebar/files.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="databases"] { --sidebar-feature-image:url("assets/sidebar/databases.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="email"] { --sidebar-feature-image:url("assets/sidebar/email.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="services"] { --sidebar-feature-image:url("assets/sidebar/services.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="backups"] { --sidebar-feature-image:url("assets/sidebar/backups.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="logs"] { --sidebar-feature-image:url("assets/sidebar/logs.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="migrations"] { --sidebar-feature-image:url("assets/sidebar/migrations.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="extensions"] { --sidebar-feature-image:url("assets/sidebar/extensions.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="security"] { --sidebar-feature-image:url("assets/sidebar/security.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="firewall"] { --sidebar-feature-image:url("assets/sidebar/firewall.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="activities"] { --sidebar-feature-image:url("assets/sidebar/activities.svg"); }
+:root[data-theme] #sidebar .nav-item[data-page="settings"] { --sidebar-feature-image:url("assets/sidebar/settings.svg"); }
