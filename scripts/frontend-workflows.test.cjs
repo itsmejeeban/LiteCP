@@ -167,7 +167,7 @@ function editorWorkflow(api) {
   const errors = [];
   const app = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
   const functions = app.slice(app.indexOf('  async function openEditor('), app.indexOf('  async function createDatabase('));
-  const editor = vm.runInNewContext(`let editorFilePath='',editorSiteID='',editorRequest=0,editorSaving=false,editorOriginal='';
+  const editor = vm.runInNewContext(`let editorFilePath='',editorSiteID='',editorRequest=0,editorSaving=false,editorOriginal='',editorEncoding='UTF-8';
     ${functions}
     ({openEditor,closeEditor,saveEditor,snapshot:()=>({path:editorFilePath,site:editorSiteID,saving:editorSaving})})`, {
     $: element, api, window: {LiteCPDialogs:{confirm:async()=>true}}, encodeURIComponent,
@@ -190,7 +190,7 @@ test('file editor discards a response after the website selection changes', asyn
 test('file editor saves to its captured website and stays open during the save', async () => {
   const pending = deferred(), writes = [];
   const editor = editorWorkflow((url, options) => {
-    if (!options) return Promise.resolve({ content: 'original' });
+    if (!options) return Promise.resolve({ content: 'original', encoding: 'UTF-16LE' });
     writes.push({ url, body: options.body });
     return pending.promise;
   });
@@ -205,6 +205,7 @@ test('file editor saves to its captured website and stays open during the save',
   assert.equal(writes[0].body.siteId, 'site1');
   assert.equal(writes[0].body.path, 'config.php');
   assert.equal(writes[0].body.content, 'edited');
+  assert.equal(writes[0].body.encoding, 'UTF-16LE');
   assert.equal(editor.snapshot().path, 'config.php');
   assert.equal(editor.snapshot().saving, true);
   pending.resolve({});

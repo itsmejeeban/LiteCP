@@ -106,17 +106,23 @@ func (a *App) fileContent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		content, info, err := a.system.ReadManagedFile(*site, r.URL.Query().Get("path"))
+		encoding, err := normalizeEditorEncoding(r.URL.Query().Get("encoding"))
+		if err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		content, info, err := a.system.ReadManagedText(*site, r.URL.Query().Get("path"), encoding)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"path": r.URL.Query().Get("path"), "content": content, "mode": fmt.Sprintf("%04o", info.Mode().Perm())})
+		writeJSON(w, http.StatusOK, map[string]any{"path": r.URL.Query().Get("path"), "content": content, "encoding": encoding, "mode": fmt.Sprintf("%04o", info.Mode().Perm())})
 	case http.MethodPut:
 		var input struct {
-			SiteID  string `json:"siteId"`
-			Path    string `json:"path"`
-			Content string `json:"content"`
+			SiteID   string `json:"siteId"`
+			Path     string `json:"path"`
+			Content  string `json:"content"`
+			Encoding string `json:"encoding"`
 		}
 		if err := decodeJSONLimit(r, &input, maxEditableFileSize+64*1024); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -127,7 +133,7 @@ func (a *App) fileContent(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "Website not found.")
 			return
 		}
-		if err := a.system.WriteManagedFile(*site, input.Path, input.Content); err != nil {
+		if err := a.system.WriteManagedText(*site, input.Path, input.Content, input.Encoding); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -157,8 +163,8 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Choose at least one file to upload.")
 		return
 	}
- cleanNames := make([]string,len(files))
- seenNames := make(map[string]bool,len(files))
+	cleanNames := make([]string, len(files))
+	seenNames := make(map[string]bool, len(files))
 	for index, header := range files {
 		name := filepath.Base(header.Filename)
 		if err := validateFileName(name); err != nil {
@@ -171,7 +177,7 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		seenNames[name] = true
 		cleanNames[index] = name
-		if len(files) > 1 || r.FormValue("noReplace")=="1" {
+		if len(files) > 1 || r.FormValue("noReplace") == "1" {
 			relative := filepath.ToSlash(filepath.Join(r.FormValue("path"), name))
 			exists, err := a.system.ManagedPathExists(*site, relative)
 			if err != nil {
@@ -197,7 +203,7 @@ func (a *App) uploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		var entry FileEntry
 		var saveErr error
-		if len(files) > 1 || r.FormValue("noReplace")=="1" {
+		if len(files) > 1 || r.FormValue("noReplace") == "1" {
 			entry, saveErr = a.system.SaveNewUpload(*site, r.FormValue("path"), cleanNames[index], file)
 		} else {
 			entry, saveErr = a.system.SaveUpload(*site, r.FormValue("path"), cleanNames[index], file)
@@ -305,7 +311,7 @@ func (a *App) archiveFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	a.store.AddActivity("ZIP archive created", site.Domain+": "+entry.Path, "success")
+	a.store.AddActivity("Archive created", site.Domain+": "+entry.Path, "success")
 	writeJSON(w, http.StatusCreated, entry)
 }
 
@@ -328,7 +334,7 @@ func (a *App) extractArchive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	a.store.AddActivity("ZIP archive extracted", site.Domain+": "+input.Path, "success")
+	a.store.AddActivity("Archive extracted", site.Domain+": "+input.Path, "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -706,10 +712,11 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	domain := strings.ToLower(strings.TrimSpace(input.Domain))
 	address := strings.ToLower(strings.TrimSpace(input.LocalPart)) + "@" + domain
- newDomain:=!a.store.HasMailDomain(domain)
- if newDomain && a.store.SiteByDomain(domain)==nil {
-  writeError(w,http.StatusBadRequest,"Add the mail domain before creating mailboxes.");return
- }
+	newDomain := !a.store.HasMailDomain(domain)
+	if newDomain && a.store.SiteByDomain(domain) == nil {
+		writeError(w, http.StatusBadRequest, "Add the mail domain before creating mailboxes.")
+		return
+	}
 	if err := validateMailboxAddress(address, domain); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -738,15 +745,24 @@ func (a *App) createMailbox(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := randomToken(8)
 	mailbox := Mailbox{ID: id, Domain: domain, Address: address, QuotaMB: input.QuotaMB, PasswordHash: hash, CreatedAt: time.Now().UTC()}
-	prospective := append(append([]Mailbox{},mailboxes...),mailbox)
-	prospectiveDomains:=append([]MailDomain{},domains...)
+	prospective := append(append([]Mailbox{}, mailboxes...), mailbox)
+	prospectiveDomains := append([]MailDomain{}, domains...)
 	var addedDomain *MailDomain
-	if newDomain {domainID,err:=randomToken(8);if err!=nil{writeError(w,500,"Could not allocate mail domain");return};value:=MailDomain{ID:domainID,Domain:domain,DKIMSelector:"default",CreatedAt:time.Now().UTC()};addedDomain=&value;prospectiveDomains=append(prospectiveDomains,value)}
+	if newDomain {
+		domainID, err := randomToken(8)
+		if err != nil {
+			writeError(w, 500, "Could not allocate mail domain")
+			return
+		}
+		value := MailDomain{ID: domainID, Domain: domain, DKIMSelector: "default", CreatedAt: time.Now().UTC()}
+		addedDomain = &value
+		prospectiveDomains = append(prospectiveDomains, value)
+	}
 	if err := a.system.SyncMailConfig(r.Context(), prospectiveDomains, prospective, aliases); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := a.store.AddMailboxWithDomain(mailbox,addedDomain); err != nil {
+	if err := a.store.AddMailboxWithDomain(mailbox, addedDomain); err != nil {
 		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and mailbox rollback failed: "+rollbackErr.Error())
 			return

@@ -16,6 +16,7 @@
   let editorRequest = 0;
   let editorSaving = false;
   let editorOriginal = "";
+  let editorEncoding = "UTF-8";
 
   const icons = {
     copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>',
@@ -875,21 +876,23 @@
     } catch (error) { handleError(error); }
   }
 
-  async function openEditor(path) {
+  async function openEditor(path, options = {}) {
     if (editorSaving) return;
     const request = ++editorRequest, siteId = $("#fileSiteSelect").value;
     try {
-      const result = await api(`/api/files/content?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(path)}`);
+      const result = await api(`/api/files/content?siteId=${encodeURIComponent(siteId)}&path=${encodeURIComponent(path)}&encoding=${encodeURIComponent(options.encoding || "UTF-8")}`);
       if (request !== editorRequest || siteId !== $("#fileSiteSelect").value) return;
       editorSiteID = siteId;
+      editorEncoding = result.encoding || options.encoding || "UTF-8";
       editorFilePath = path; editorOriginal = result.content; $("#editorTitle").textContent = `Edit ${path.split("/").pop()}`; $("#editorPath").textContent = path; $("#editorContent").value = result.content; $("#editorModal").classList.remove("hidden");
       await window.LiteCPFeatures?.openEditor(path, result.content);
+      if (request === editorRequest && siteId === $("#fileSiteSelect").value) await window.LiteCPVisualEditor?.opened(path,result.content,{...options,encoding:editorEncoding});
     } catch (error) { if (request === editorRequest) handleError(error); }
   }
 
   async function closeEditor() {
     if (editorSaving) return;
-    const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value;
+    const content = window.LiteCPVisualEditor?.value() ?? window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value;
     if (editorFilePath && content !== editorOriginal && !await window.LiteCPDialogs.confirm("Discard unsaved editor changes?")) return;
     editorRequest++; editorFilePath = ""; editorSiteID = ""; $("#editorModal").classList.add("hidden");
   }
@@ -898,7 +901,7 @@
     event.preventDefault(); if (!editorFilePath || !editorSiteID || editorSaving) return;
     editorSaving = true;
     const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
-    try { const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: editorSiteID, path: editorFilePath, content } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
+    try { const content = window.LiteCPVisualEditor?.value() ?? window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: editorSiteID, path: editorFilePath, content, encoding:editorEncoding } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
     catch (error) { handleError(error); }
     finally { editorSaving = false; submit.disabled = false; }
   }

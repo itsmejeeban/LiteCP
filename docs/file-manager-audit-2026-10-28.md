@@ -44,3 +44,16 @@ The new audit folder was removed after testing with the user's approval. Existin
 - Symbolic links and special files are excluded. Structural website folders and unsafe permissions remain protected.
 - Preferences omits cPanel account-specific Public FTP Root and multi-domain account selection; LiteCP confines each file workspace to its selected website home.
 - This verifies the listed workflows, not a claim of complete cPanel parity or every browser/platform combination.
+
+## Follow-up: archive, editor and context-menu parity
+
+The former archive and editor limitations above are now addressed:
+
+- Added ZIP, TAR, gzip TAR and bzip2 TAR creation/extraction. Live create, download, content verification and extraction passed for all four formats. Traversal, links, special entries and oversized archives remain rejected.
+- Right-click now offers Edit for PHP, CSS, JavaScript and other text files, plus HTML Editor for HTML. Images/binary files retain View and Download.
+- Added script-disabled visual HTML editing, formatting controls and HTML source switching. Chrome confirmed rendering without executing an embedded test script; a visual text edit was saved and independently read from disk.
+- Added the installed iconv encoding catalogue (1,173 names/aliases on this server), preservation of the selected encoding on save, and a 64 MiB editor limit. Live Latin-1 and UTF-16LE round trips preserved their bytes.
+- Preferences now includes Home, public_html, public_ftp, a chosen website document root and Last Opened Folder. New website homes include a private public_ftp directory. whmcsdata creation remains disabled; existing directories are retained.
+- Browser extension markup is excluded from newly serialized visual edits.
+
+Security differences remain intentional: no symbolic/special files, cross-website access or unsafe permission modes. This is verified workflow coverage, not a claim of literal 100% cPanel parity. The dedicated private audit folder is retained for review; existing website data was untouched.

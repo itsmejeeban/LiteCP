@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	maxEditableFileSize   = 4 << 20
+	maxEditableFileSize   = 64 << 20
 	maxUploadSize         = -1 // Negative means no application-imposed upload size cap.
 	maxArchiveMembers     = 100000
 	maxExtractedSize      = int64(2 << 30)
@@ -373,7 +373,7 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	if len(paths) > 500 {
 		return FileEntry{}, errors.New("too many selected paths")
 	}
-	if !strings.HasSuffix(strings.ToLower(destination), ".zip") {
+	if managedArchiveFormat(destination)=="" {
 		destination += ".zip"
 	}
 	if err := validateFileName(filepath.Base(destination)); err != nil {
@@ -404,7 +404,8 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
 	limitedDestination := &cappedArchiveWriter{destination: temporary, maximum: maxCreatedArchiveSize}
-	writer := zip.NewWriter(limitedDestination)
+	writer, err := newManagedArchiveOutput(ctx,limitedDestination,managedArchiveFormat(destination))
+	if err!=nil{_ = temporary.Close();return FileEntry{},err}
 	seen := map[string]bool{}
 	members := 0
 	var addPath func(string) error
@@ -443,26 +444,9 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 				_ = file.Close()
 				return errors.New("archive contains too many entries")
 			}
-			header, err := zip.FileInfoHeader(info)
-			if err != nil {
-				_ = file.Close()
-				return err
-			}
-			header.Name = archiveName
-			if info.IsDir() {
-				header.Name += "/"
-				header.Method = zip.Store
-				if _, err := writer.CreateHeader(header); err != nil {
-					_ = file.Close()
-					return err
-				}
-			} else {
-				header.Method = zip.Deflate
-				destination, err := writer.CreateHeader(header)
-				if err != nil {
-					_ = file.Close()
-					return err
-				}
+			destination,err:=writer.Header(info,archiveName)
+			if err!=nil{_ = file.Close();return err}
+			if !info.IsDir() {
 				_, copyErr := io.Copy(destination, file)
 				closeErr := file.Close()
 				if copyErr != nil {
@@ -556,10 +540,11 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 	if err != nil || !archiveInfo.Mode().IsRegular() {
 		return errors.New("ZIP archive must be a regular file")
 	}
-	reader, err := zip.NewReader(archiveFile, archiveInfo.Size())
+	reader, cleanup, err := openManagedArchiveReader(ctx,archiveFile,archiveInfo.Size(),archiveClean,s.dataDir)
 	if err != nil {
 		return fmt.Errorf("open ZIP archive: %w", err)
 	}
+	defer cleanup()
 	if len(reader.File) > maxArchiveMembers {
 		return errors.New("archive contains too many entries")
 	}

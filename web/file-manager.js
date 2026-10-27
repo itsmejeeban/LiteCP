@@ -12,10 +12,17 @@
   function kind(entry) {
     if (entry.type === "directory") return "Folder";
     const ext = entry.name.includes(".") ? entry.name.split(".").pop().toLowerCase() : "";
-    if (["zip","gz","tar","tgz"].includes(ext)) return "Archive";
+    if (["zip","gz","tar","tgz","bz2","tbz","tbz2"].includes(ext)) return "Archive";
     if (["png","jpg","jpeg","gif","svg","webp","ico","avif"].includes(ext)) return "Image";
     return ext ? ext.toUpperCase() + " file" : "File";
   }
+  function editableFile(entry) {
+    if(!entry || entry.type!=="file")return false;
+    const ext=entry.name.split(".").pop().toLowerCase();
+    return !["zip","gz","tgz","tar","bz2","tbz","tbz2","png","jpg","jpeg","gif","svg","webp","ico","avif","pdf","mp3","wav","ogg","flac","m4a","mp4","webm","mov","avi","woff","woff2","ttf","eot","exe","dll","so","bin","doc","docx","xls","xlsx"].includes(ext);
+  }
+  const htmlFile=entry=>editableFile(entry)&&/\.html?$/i.test(entry.name);
+  const extractableFile=entry=>entry?.type==="file"&&/\.(zip|tar|tar\.gz|tgz|tar\.bz2|tbz2?)$/i.test(entry.name);
   function prepareEntries(entries, query, hidden, sort, descending) {
     return entries.filter(x => (hidden || !x.name.startsWith(".")) && x.name.toLowerCase().includes(query.toLowerCase())).sort((a,b) => {
       if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
@@ -23,7 +30,7 @@
       return (order || a.name.localeCompare(b.name)) * (descending ? -1 : 1);
     });
   }
-  if (typeof module !== "undefined" && module.exports) module.exports = {normalizePath,kind,prepareEntries};
+  if (typeof module !== "undefined" && module.exports) module.exports = {normalizePath,kind,prepareEntries,editableFile,htmlFile,extractableFile};
   if (typeof document === "undefined") return;
   const cp = window.LiteCP, $ = s => document.querySelector(s), esc = cp.escapeHTML;
   const page = $('[data-page-view="files"]'), panel = $(".file-manager-panel");
@@ -120,7 +127,7 @@
     page.querySelectorAll("[data-fm-action]").forEach(el => {
       const a = el.dataset.fmAction;
       if (["copy","move","archive","delete","clear"].includes(a)) el.disabled = !items.length;
-      if (["rename","chmod","edit","html-edit","view","download","extract"].includes(a)) el.disabled = !one || (["edit","html-edit","view","download"].includes(a) && current?.type !== "file") || (a === "extract" && !current?.name.toLowerCase().endsWith(".zip"));
+      if (["rename","chmod","edit","html-edit","view","download","extract"].includes(a)) el.disabled = !one || (["view","download"].includes(a) && current?.type !== "file") || (a==="edit"&&!editableFile(current)) || (a==="html-edit"&&!htmlFile(current)) || (a === "extract" && !extractableFile(current));
     });
     $("#fmInspector").innerHTML = one ? `<div class="fm-detail-icon ${current.type === "directory" ? "is-folder" : ""}">${icon(current.type === "directory" ? "folder" : kind(current)==="Archive" ? "archive" : "file")}</div><h3>${esc(current.name)}</h3><span class="fm-kind">${esc(kind(current))}</span><dl><dt>Location</dt><dd>${esc(displayPath(current.path))}</dd><dt>Size</dt><dd>${current.type === "directory" ? "Folder" : cp.formatBytes(current.size)}</dd><dt>Permissions</dt><dd><code>${esc(current.mode)}</code></dd><dt>Modified</dt><dd>${esc(cp.formatDateTime(current.modified))}</dd></dl><p>Changes apply immediately to this website.</p>` : `<div class="fm-detail-icon">${icon(items.length ? "copy" : "info")}</div><h3>${items.length ? `${items.length} items selected` : "File details"}</h3><p>${items.length ? "Use the toolbar to copy, move, compress or move the selection to Trash." : "Select a file or folder to view its details and available actions."}</p>`;
     page.querySelectorAll("[data-fm-row]").forEach(row => row.classList.toggle("fm-selected",selected.has(row.dataset.fmRow)));
@@ -129,9 +136,12 @@
     [$("#fmSelectAll"),$("#fmSelectVisible")].filter(Boolean).forEach(all=>{ all.checked = visible.length > 0 && visible.every(x=>selected.has(x.path)); all.indeterminate = !all.checked && visible.some(x=>selected.has(x.path)); });
   }
   function render(value) {
+    if(!site && preferences.start==="domain" && preferences.startSite && preferences.startSite!==value.siteId && cp.state()?.sites.some(item=>item.id===preferences.startSite)) {
+      $("#fileSiteSelect").value=preferences.startSite;$("#fileSiteSelect").dispatchEvent(new Event("change"));return;
+    }
     const changed = !listing || listing.siteId !== value.siteId || listing.path !== value.path;
     const siteChanged=site !== value.siteId;
-    const startupPath=siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : preferences.start==="public" ? (value.publicPath || "") : "";
+    const startupPath=siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : ["public","domain"].includes(preferences.start) ? (value.publicPath || "") : preferences.start==="ftp" ? "public_ftp" : "";
     if (siteChanged) { folders.clear(); expanded=new Set([""]); folderErrors.clear(); loadingFolders.clear(); history=[]; historyIndex=-1; site=value.siteId; }
     if (changed) { selected.clear(); lastIndex=-1; if (!historyNavigation) { history=history.slice(0,historyIndex+1); history.push(value.path || ""); historyIndex=history.length-1; } historyNavigation=false; }
     listing=value; selected=new Set([...selected].filter(path=>(value.entries || []).some(x=>x.path===path)));
@@ -192,10 +202,10 @@
   function showMenu(path,x,y) {
     if (!selected.has(path)) selectOne(path);
     const current=picked(), singleFile=current.length===1 && current[0].type==="file";
-    const actions=[...(singleFile ? [["download","Download","download"],["view","View","eye"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && kind(current[0])==="Archive" ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
+    const actions=[...(singleFile ? [["download","Download","download"],["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
     menu.innerHTML=actions.map(([action,label,name])=>button(action,label,name)).join("");
     menu.querySelectorAll("button").forEach(b=>{ const peer=page.querySelector(`[data-fm-action="${b.dataset.fmAction}"]`); b.disabled=peer?.disabled || false; b.setAttribute("role","menuitem"); });
-    menu.classList.remove("hidden"); menu.style.left=Math.max(8,Math.min(x,window.innerWidth-menu.offsetWidth-12))+"px"; menu.style.top=Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-12))+"px"; menu.querySelector("button:not(:disabled)")?.focus();
+    menu.classList.remove("hidden"); menu.style.left=Math.max(8,Math.min(x,window.innerWidth-menu.offsetWidth-12))+"px"; menu.style.top=Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-12))+"px"; menu.querySelector("button:not(:disabled)")?.focus({preventScroll:true});
   }
   function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
     if (dialog.open) return;
@@ -238,10 +248,13 @@
     if(request!==searchRequest || siteID()!==expectedSite || cp.path()!==expectedPath) return;
     showSearchResults(result,query);
   }
-  function editFile(item,html=false) {
-    const open=async()=>{await cp.openEditor(item.path);if(html){$("#editorTitle").textContent="HTML Editor — "+item.name;$("#editorLanguage").value="html";$("#editorLanguage").dispatchEvent(new Event("change"));}};
+  async function editFile(item,html=false) {
+    const open=async form=>{await cp.openEditor(item.path,{encoding:form?.get("encoding")||"UTF-8",visual:html});};
     if(preferences.skipEncoding) { open().catch(cp.handleError); return; }
-    openDialog({title:html ? "HTML Editor" : "Edit",description:"Back up the original file before editing.",fields:`<div class="fm-path-list"><strong>You will be editing:</strong><div>${esc(displayPath(item.path))}</div></div><label class="fm-field"><span>Please select the character encoding to use when opening this file:</span><select name="encoding"><option value="utf-8">utf-8</option></select><small>UTF-8 text files up to 4 MiB.</small></label>`,submit:"Edit",perform:open});
+    const expectedSite=siteID(), expectedPath=cp.path(), catalog=await cp.api("/api/files/encodings");
+    if(siteID()!==expectedSite||cp.path()!==expectedPath)return;
+    const encodings=catalog.encodings||["UTF-8"];
+    openDialog({title:html ? "HTML Editor" : "Edit",description:"",fields:`<div class="fm-path-list"><strong>You will be editing:</strong><div>${esc(displayPath(item.path))}</div></div><label class="fm-field"><span>Character encoding:</span><select name="encoding">${encodings.map(value=>`<option>${value}</option>`).join("")}</select><small>Text files up to 64 MiB. Saving preserves the selected encoding.</small></label>`,submit:"Edit",perform:open});
   }
   const field = (label,name,value="",help="") => `<label class="fm-field"><span>${esc(label)}</span><input name="${name}" value="${esc(value)}" autocomplete="off" ${["name","mode"].includes(name) ? "required" : ""}>${help ? `<small>${esc(help)}</small>` : ""}</label>`;
   const pathField=(label,name,value)=>`<label class="fm-field"><span>${esc(label)}</span><span class="fm-path-input">${icon("home")}<input name="${name}" value="${esc(value)}" autocomplete="off" required></span></label>`;
@@ -262,7 +275,7 @@
     if (name==="unselect-all") { selected.clear(); syncSelection(); return; }
     if (name==="up") { await cp.goToFilePath(currentPath.split("/").slice(0,-1).join("/")); return; }
     if (name==="back" || name==="forward") { const next=historyIndex+(name==="back" ? -1 : 1); if (next<0 || next>=history.length) return; historyIndex=next; historyNavigation=true; await cp.goToFilePath(history[next]); return; }
-    if (name==="edit" || name==="html-edit") { if (item.type==="file") editFile(item,name==="html-edit"); return; }
+    if (name==="edit" || name==="html-edit") { if (item.type==="file") await editFile(item,name==="html-edit"); return; }
     if (name==="view") { if (!cp.demo && item.type==="file") window.open(`/api/files/download?preview=1&siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`,"_blank","noopener"); return; }
     if (name==="download") { if (!cp.demo && item.type==="file") window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`); return; }
     if (name==="upload") {
@@ -275,8 +288,8 @@
     if (name==="close-trash") { trashPanel.classList.add("hidden"); return; }
     if (name==="settings") {
       document.querySelector(".cpfm-settings-menu")?.remove();
-      openDialog({title:"Preferences",description:"",fields:`<div class="fm-preferences-start"><p>Always open this directory in the future by default:</p><label><input type="radio" name="start" value="root" ${!["last","public"].includes(preferences.start) ? "checked" : ""}> Home Directory</label><label><input type="radio" name="start" value="public" ${preferences.start==="public" ? "checked" : ""}> Web Root (public_html)</label><label><input type="radio" name="start" value="last" ${preferences.start==="last" ? "checked" : ""}> Last Opened Folder</label></div><div class="fm-preferences-options"><label><input type="checkbox" name="hidden" ${$("#showHidden").checked ? "checked" : ""}> Show Hidden Files (dotfiles)</label><label><input type="checkbox" name="skipEncoding" ${preferences.skipEncoding ? "checked" : ""}> Disable Character Encoding Verification Dialogs</label></div>`,submit:"Save",perform:async data=>{
-        preferences={start:String(data.get("start")||"root"),hidden:data.has("hidden"),skipEncoding:data.has("skipEncoding")};
+      openDialog({title:"Preferences",description:"",fields:`<div class="fm-preferences-start"><p>Always open this directory in the future by default:</p><label><input type="radio" name="start" value="root" ${!["last","public","ftp","domain"].includes(preferences.start) ? "checked" : ""}> Home Directory</label><label><input type="radio" name="start" value="public" ${preferences.start==="public" ? "checked" : ""}> Web Root (public_html)</label><label><input type="radio" name="start" value="ftp" ${preferences.start==="ftp" ? "checked" : ""}> Public FTP Root (public_ftp)</label><label><input type="radio" name="start" value="domain" ${preferences.start==="domain" ? "checked" : ""}> Document Root for:</label><select name="startSite" aria-label="Default website">${(cp.state()?.sites||[]).map(item=>`<option value="${esc(item.id)}" ${(preferences.startSite||siteID())===item.id ? "selected" : ""}>${esc(item.domain)}</option>`).join("")}</select><label><input type="radio" name="start" value="last" ${preferences.start==="last" ? "checked" : ""}> Last Opened Folder</label></div><div class="fm-preferences-options"><label><input type="checkbox" name="hidden" ${$("#showHidden").checked ? "checked" : ""}> Show Hidden Files (dotfiles)</label><label><input type="checkbox" name="skipEncoding" ${preferences.skipEncoding ? "checked" : ""}> Disable Character Encoding Verification Dialogs</label></div>`,submit:"Save",perform:async data=>{
+        preferences={start:String(data.get("start")||"root"),startSite:String(data.get("startSite")||siteID()),hidden:data.has("hidden"),skipEncoding:data.has("skipEncoding")};
         localStorage.setItem(preferenceKey,JSON.stringify(preferences));$("#showHidden").checked=preferences.hidden;$("#showHidden").dispatchEvent(new Event("change"));
         cp.showToast("File Manager preferences saved","Your display and startup choices were updated.","success");
       }});
@@ -295,7 +308,7 @@
       dialog.querySelectorAll("[data-mode-digit]").forEach(input=>input.oninput=()=>{const digits=[...dialog.querySelectorAll("[data-mode-digit]")].map(input=>input.value).join("");if(/^[0-7]{3}$/.test(digits)){modeInput.value="0"+digits;boxes.forEach(box=>box.checked=Boolean(parseInt(modeInput.value,8)&Number(box.dataset.modeBit)));}});
       boxes.forEach(box=>box.onchange=()=>{modeInput.value="0"+boxes.reduce((mode,b)=>mode+(b.checked ? Number(b.dataset.modeBit) : 0),0).toString(8).padStart(3,"0");update();}); return;
     }
-    if (name==="archive") { openDialog({title:"Compress",description:"",fields:'<div class="fm-path-list"><strong>Compression Type:</strong><label><input type="radio" checked name="compression" value="zip"> Zip Archive</label></div>'+pathList("Files to compress:",items)+field("Enter the name of the compressed archive and click Compress:","name","archive.zip"),submit:"Compress Files",perform:async form=>{let target=filename(form.get("name"));if (!target.toLowerCase().endsWith(".zip"))target+=".zip";await api("/api/files/archive","POST",{paths:items.map(x=>x.path),destination:join(currentPath,target)});await refresh();}}); return; }
+    if (name==="archive") { const extensions={zip:".zip",tar:".tar","tar.gz":".tar.gz","tar.bz2":".tar.bz2"};openDialog({title:"Compress",description:"",fields:`<div class="fm-path-list"><strong>Compression Type:</strong>${[["zip","Zip Archive"],["tar","Tar Archive"],["tar.gz","GZiped Tar Archive"],["tar.bz2","Bzip2ed Tar Archive"]].map(([value,label])=>`<label><input type="radio" name="compression" value="${value}" ${value==="zip" ? "checked" : ""}> ${label}</label>`).join("")}</div>`+pathList("Files to compress:",items)+field("Archive name:","name","archive.zip"),submit:"Compress Files",perform:async form=>{let target=filename(form.get("name")),suffix=extensions[form.get("compression")];if(!suffix)throw new Error("Choose an archive format.");target=target.replace(/\.(tar\.bz2|tar\.gz|tbz2?|tgz|zip|tar)$/i,"")+suffix;await api("/api/files/archive","POST",{paths:items.map(x=>x.path),destination:join(currentPath,target)});await refresh();}});dialog.querySelectorAll('[name="compression"]').forEach(input=>input.onchange=()=>{const name=dialog.querySelector('[name="name"]');name.value=name.value.replace(/\.(tar\.bz2|tar\.gz|tbz2?|tgz|zip|tar)$/i,"")+extensions[input.value];});return; }
     if (name==="extract") { openDialog({title:"Extract",description:"Files with matching names may be replaced.",fields:pathList("File to extract:",[item])+pathField("Enter the path you wish to extract the files to:","destination",displayPath(currentPath)),submit:"Extract Files",perform:async form=>{await api("/api/files/extract","POST",{path:item.path,destination:inputPath(form.get("destination"))});folders.clear();await refresh();}}); return; }
     if (name==="delete") { openDialog({title:"Trash",description:"Are you sure you want to move the following files to the trash?",fields:pathList("",items),submit:"Confirm",danger:true,perform:async()=>{try {for(const entry of items)await api("/api/files","DELETE",{path:entry.path});} finally {folders.clear();await refresh();}}}); return; }
     if (name==="empty-trash") openDialog({title:"Permanently empty Trash?",description:"Every item in this website’s Trash will be permanently removed. This cannot be undone.",fields:field("Type EMPTY to confirm","confirmation"),submit:"Delete permanently",danger:true,perform:async form=>{if(form.get("confirmation")!=="EMPTY")throw new Error("Type EMPTY exactly to confirm.");await api("/api/files/trash","DELETE",{id:""});await showTrash();}});

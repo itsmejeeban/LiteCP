@@ -94,10 +94,11 @@
       {
         "title": "Browse and edit files",
         "steps": [
-          "Select the website. Use the folder tree, breadcrumb, back/forward/up buttons or address field to navigate inside its public root.",
+          "Use the folder tree, breadcrumb, back/forward/up buttons or address field to navigate inside the website home. Only public_html is served by the website. Preferences can start at Home, Web Root, Public FTP Root, a selected website's Document Root, or the last opened folder.",
           "Search filters the current folder. Toggle hidden files, sorting, and list/grid view as needed. Select files to see details and actions.",
           "Use New file, New folder or Upload. Uploads have no panel-imposed file-size or queue-count cap and are sent one file at a time; disk space, browser and connection timeouts still apply. Completed files remain if a later queued file fails. Open text files in the editor and save changes. Binary files require download and an appropriate local editor.",
-          "Select items to copy, move, rename, change permissions, compress, extract or download. Existing-path conflicts and unsafe archive paths may be rejected."
+          "Right-click PHP, HTML, CSS, JavaScript and other text files for Edit. Choose the original character encoding; saving preserves it. Text files up to 64 MiB are supported. HTML files also offer a visual HTML Editor with formatting, links, lists, tables, images and an HTML source tab. File scripts are disabled in the visual editor; PHP templates use source editing.",
+          "Select items to copy, move, rename, change permissions, compress, extract or download. Compression supports ZIP, TAR, gzip TAR and bzip2 TAR. Extraction validates members before changing the destination. Existing-path conflicts, symbolic links and unsafe archive paths may be rejected."
         ]
       },
       {

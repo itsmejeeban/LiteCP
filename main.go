@@ -202,6 +202,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/files/create", only(http.MethodPost, a.withAuth(a.createFile)))
 	mux.HandleFunc("/api/files/transfer", only(http.MethodPost, a.withAuth(a.transferFiles)))
 	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
+	mux.HandleFunc("/api/files/encodings", only(http.MethodGet,a.withAuth(func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"encodings":availableEditorEncodings(),"maxBytes":maxEditableFileSize})})))
 	mux.HandleFunc("/api/files/upload", only(http.MethodPost, a.withAuth(a.uploadFiles)))
 	mux.HandleFunc("/api/files/directory", only(http.MethodPost, a.withAuth(a.createDirectory)))
 	mux.HandleFunc("/api/files/rename", only(http.MethodPost, a.withAuth(a.renameFile)))

@@ -92,7 +92,7 @@ func (s *System) ensureSiteHome(site Site) error {
 	if err := os.Chmod(home, 0755); err != nil {
 		return err
 	}
-	for _, name := range []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc"} {
+	for _, name := range []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc", "public_ftp"} {
 		target := filepath.Join(home, name)
 		info, err := os.Lstat(target)
 		if errors.Is(err, os.ErrNotExist) {
@@ -105,7 +105,7 @@ func (s *System) ensureSiteHome(site Site) error {
 			return fmt.Errorf("unsafe private website directory: %s", name)
 		}
 		uid, gid := 0, 0
-		if name == "tmp" {
+		if name == "tmp" || name == "public_ftp" {
 			uid = site.RuntimeUID
 			gid = site.RuntimeGID
 		}

@@ -16,7 +16,7 @@ Release **0.5.1** adds failure-safe file extraction and migration, transactional
 - WHMCS, WordPress, or regular PHP/HTML virtual hosts with application-specific sensitive-file rules
 - Per-website PHP selection, isolated PHP-FPM worker identities, and safe runtime switching
 - Optional MySQL database and one-time generated credentials
-- Website-root-confined file manager with multiple upload, browser editing, download, folders, rename, permissions, delete, ZIP, and safe ZIP extraction
+- Website-home-confined file manager with multiple upload, visual HTML and source editing, character encoding selection, download, folders, rename, permissions, trash, ZIP/TAR/gzip/bzip2 archives, and validated extraction
 - Let's Encrypt certificates through Certbot
 - Five-minute WHMCS or WordPress cron management using each website's PHP version
 - On-demand website and database backups with FTP, encrypted FTPS, or host-key-pinned SFTP destinations
@@ -96,9 +96,9 @@ The included panel certificate is self-signed so the first browser visit will sh
 
 ## File manager
 
-Choose a managed website under **File manager**. LiteCP confines every operation to that website's document root and refuses symbolic links. The manager supports up to four files per upload request and 512 MiB per file, UTF-8 text editing up to 4 MiB, folder creation, rename/move paths, safe permissions, download, delete, ZIP creation, and ZIP extraction. Multi-file uploads preflight name conflicts and roll back newly created files if any item fails.
+Choose a managed website under **File manager**. LiteCP confines operations to the selected website home and refuses symbolic links. Uploads have no panel-imposed size or queue-count cap and run one file at a time; disk space and connection timeouts still apply. The manager supports text editing up to 64 MiB with the server's available iconv encodings, a visual HTML editor with formatting/source tabs, folders, copy/move/rename, permissions, download, trash/restore, and ZIP, TAR, gzip TAR and bzip2 TAR archives. Right-click text files for Edit; HTML files also offer HTML Editor. Images and binary files use View/Download.
 
-ZIP extraction rejects absolute paths, traversal, symbolic links, duplicate/conflicting members, more than 100,000 members, and archives expanding beyond 2 GiB. Existing files are moved to private recovery storage before replacement and automatically restored if extraction fails. ZIP creation enforces its 8 GiB compressed-size limit while writing, before it can consume unbounded temporary disk space. The editor blocks binary files, special permission bits, and world-writable modes.
+Archive extraction rejects absolute paths, traversal, symbolic/hard links, special files, duplicate/conflicting members, more than 100,000 members, and archives expanding beyond 2 GiB. Existing files are moved to private recovery storage before replacement and restored if extraction fails. Creation enforces an 8 GiB archive-size limit while writing. TAR formats share the validated ZIP extraction transaction through bounded private conversion. Bzip2 compression requires `bzip2`; encoding conversion uses `iconv` (the installer installs these utilities). The visual editor disables document scripts and network resources, preserves untouched source, supports embedded image insertion and previews local raster images through authenticated file APIs. PHP-containing templates should use the source editor. Unsafe permissions and structural folders remain protected.
 
 ## Remote backups
 
@@ -150,7 +150,7 @@ go test ./...
 
 - Panel configuration: `/var/lib/litecp/config.json` (`0600`)
 - Website homes: `/home/litecp/<domain>`; only `public_html/` is served publicly.
-- Private website folders: `backups/manual/`, `backups/scheduled/`, `.trash/`, `tmp/`, `logs/`, `ssl/`, and `etc/`. Application-specific folders such as `whmcsdata/` are not created automatically.
+- Private website folders: `backups/manual/`, `backups/scheduled/`, `.trash/`, `tmp/`, `logs/`, `ssl/`, `etc/`, and `public_ftp/`. Application-specific folders such as `whmcsdata/` are not created automatically. File Manager Preferences can start at Home, Web Root, Public FTP Root, a selected website's Document Root, or the last opened folder.
 - Existing installations keep their saved paths until explicitly migrated. Run `python3 scripts/migrate-site-storage.py` to preview; stop LiteCP, Nginx, cron and FTP before running with `--apply`. Use the updated service units and restart LiteCP afterwards to reconcile PHP pools. Migration copies data and retains original directories plus configuration recovery snapshots under `/var/lib/litecp/storage-migrations/`. Custom application configuration containing absolute paths may need updating. DNS, databases, domain names, and certificates remain unchanged.
 - Nginx configs: `/etc/nginx/sites-available/litecp-*.conf` on Ubuntu or `/etc/nginx/conf.d/litecp-*.conf` on AlmaLinux
 - Application cron files: `/etc/cron.d/litecp-*`

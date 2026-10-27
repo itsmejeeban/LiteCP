@@ -40,7 +40,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   printf 'postfix postfix/mailname string %s\npostfix postfix/main_mailer_type select Internet Site\n' "$(hostname -f)" | debconf-set-selections
-  apt-get install -y ca-certificates curl gnupg openssh-client sshpass tar unzip software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd unattended-upgrades
+  apt-get install -y ca-certificates curl gnupg openssh-client sshpass tar unzip bzip2 libc-bin software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd unattended-upgrades
   add-apt-repository -y ppa:ondrej/php
   apt-get update
   PHP_PACKAGES=()
@@ -66,7 +66,7 @@ else
   # AlmaLinux 10 advertises MariaDB 11.8 server packages as optional weak
   # dependencies. Installing those beside Oracle MySQL would cause file conflicts.
   DNF_INSTALL_OPTIONS+=(--setopt=install_weak_deps=False)
-  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl openssh-clients sshpass tar unzip openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot dnf-automatic
+  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl openssh-clients sshpass tar unzip bzip2 glibc-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot dnf-automatic
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi

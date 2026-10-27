@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizePath, kind, prepareEntries } = require('../web/file-manager.js');
+const { normalizePath, kind, prepareEntries,editableFile,htmlFile,extractableFile } = require('../web/file-manager.js');
 
 test('address and destination paths stay relative to the website root', () => {
   assert.equal(normalizePath('/public/wp-content/uploads/'), 'wp-content/uploads');
@@ -37,6 +37,15 @@ test('file type labels use the final extension and support folders', () => {
   assert.equal(kind({name:'LICENSE',type:'file'}), 'File');
 });
 
+test('right-click edit targets text files while media stays view-only',()=>{
+ for(const name of ['index.php','page.html','style.css','app.js','settings.json','README'])assert.equal(editableFile({name,type:'file'}),true,name);
+ for(const name of ['photo.jpg','image.png','document.pdf','archive.zip','font.woff2'])assert.equal(editableFile({name,type:'file'}),false,name);
+ assert.equal(editableFile({name:'folder',type:'directory'}),false);
+ assert.equal(htmlFile({name:'page.HTML',type:'file'}),true);
+ assert.equal(htmlFile({name:'index.php',type:'file'}),false);
+ for(const name of ['archive.zip','archive.tar','archive.tar.gz','archive.tgz','archive.tar.bz2','archive.tbz2'])assert.equal(extractableFile({name,type:'file'}),true,name);
+});
+
 test('home-based paths reject other accounts and retain public_html', () => {
   const home='/home/litecp/example.test';
   assert.equal(normalizePath(home+'/public_html/index.php',home),'public_html/index.php');
@@ -54,7 +63,7 @@ test('permission sorting compares octal modes in both directions', () => {
 test('search discards responses from a previous website and older request', async () => {
   const fs=require('node:fs'),vm=require('node:vm');
   const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
-  const code=source.slice(source.indexOf('  async function searchFiles()'),source.indexOf('  function editFile('));
+  const code=source.slice(source.indexOf('  async function searchFiles()'),source.indexOf('  async function editFile('));
   const pending=[],shown=[],controls={'#cpfmSearchInput':{value:'one'},'#cpfmSearchScope':{value:'all'},'#showHidden':{checked:false}};
   let current='site1';
   const search=vm.runInNewContext('let searchRequest=0;'+code+';searchFiles',{URLSearchParams,$:key=>controls[key],siteID:()=>current,cp:{path:()=>'',api:()=>new Promise(resolve=>pending.push(resolve))},showSearchResults:result=>shown.push(result)});
