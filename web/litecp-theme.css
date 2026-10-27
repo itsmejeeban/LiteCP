@@ -1,4 +1,4 @@
-/* Neutral control-panel theme, matching the supplied Cloudflare reference.
+/* LiteCP neutral control-panel theme.
    Loaded last so every feature shares the same surfaces and icon treatment. */
 :root {
   --ink:#202020;--muted:#616161;--muted-2:#757575;
@@ -178,7 +178,7 @@
 :root[data-theme] .fm-detail-icon svg {width:22px;height:22px;}
 :root[data-theme] .manual-section h3,:root[data-theme] .website-cron-dialog h3 {font-size:14px;}
 :root[data-theme] .manual-section li {font-size:13px;line-height:1.6;}
-/* Cloudflare-style sidebar scrollbar: thin thumb, no arrow buttons or track. */
+/* Slim sidebar scrollbar: thin thumb, no arrow buttons or track. */
 :root[data-theme] :is(.sidebar,.fm-folders) {scrollbar-width:thin;scrollbar-color:transparent transparent;}
 :root[data-theme] :is(.sidebar,.fm-folders):hover,:root[data-theme] :is(.sidebar,.fm-folders):focus-within {scrollbar-color:var(--cf-scroll-thumb) transparent;}
 :root[data-theme] :is(.sidebar,.fm-folders)::-webkit-scrollbar {width:6px;height:6px;}
