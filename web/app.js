@@ -206,7 +206,7 @@
   function bindEvents() {
     $("#loginForm").addEventListener("submit", login);
     $("#logoutButton").addEventListener("click", logout);
-    $("#refreshButton").addEventListener("click", refreshState);
+    $("#refreshButton")?.addEventListener("click", refreshState);
     $("#profileButton").addEventListener("click", event => { event.stopPropagation(); $("#profileMenu").classList.toggle("hidden"); });
     document.addEventListener("click", () => $("#profileMenu").classList.add("hidden"));
     $$("[data-password-toggle]").forEach(button => button.addEventListener("click", () => togglePassword(button)));
@@ -304,13 +304,13 @@
 
   async function refreshState() {
     const button = $("#refreshButton");
-    button.classList.add("spinning");
+    button?.classList.add("spinning");
     try {
       currentState = await api("/api/state");
       renderAll();
       showToast("Server refreshed", "Metrics and service health are up to date.");
     } catch (error) { handleError(error); }
-    finally { setTimeout(() => button.classList.remove("spinning"), 350); }
+    finally { setTimeout(() => button?.classList.remove("spinning"), 350); }
   }
 
   function renderAll() {
@@ -485,7 +485,7 @@
 
   function navigate(page, updateHash = true) {
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
-    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot"].includes(settingsPart)?`settings/${settingsPart}`:"";
+    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update"].includes(settingsPart)?`settings/${settingsPart}`:"";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";

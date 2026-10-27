@@ -21,8 +21,8 @@ function settingsUI(hash='#dashboard'){
  const group=parent.parentElement,toggle=group.children[1],submenu=group.children[2];
  return {node,group,toggle,submenu,location,navigate:cp.navigate,oldNavigations,panels:()=>node('grid').children.filter(child=>child.dataset.settingsPanel),clickToggle:()=>toggle.handlers.click(),visible:()=>node('grid').children.filter(child=>child.dataset.settingsPanel&&!child.classList.contains('hidden')).map(child=>child.dataset.settingsPanel)};
 }
-test('Settings expands and collapses seven ordered sub-tabs without changing the open page',()=>{
- const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Time zone','Backup settings','Server hostname','DNS resolver','Reboot server']);
+test('Settings expands and collapses eight ordered sub-tabs without changing the open page',()=>{
+ const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Time zone','Backup settings','Server hostname','DNS resolver','Update','Reboot server']);
  assert.equal(ui.toggle.getAttribute('aria-expanded'),'false');ui.clickToggle();assert.equal(ui.toggle.getAttribute('aria-expanded'),'true');assert.equal(ui.submenu.classList.contains('hidden'),false);assert.equal(ui.location.hash,'#dashboard');
  ui.clickToggle();assert.equal(ui.submenu.classList.contains('hidden'),true);assert.equal(ui.location.hash,'#dashboard');
 });

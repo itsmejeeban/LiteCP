@@ -16,7 +16,7 @@
         "title": "Navigation and appearance",
         "steps": [
           "Use the menu button to hide or show navigation. LiteCP always uses dark mode, including the file editor, regardless of your device's appearance settings.",
-          "Expand Settings with its sidebar arrow to show Administrator password, Administrator email, Time zone, Backup settings, Server hostname, DNS resolver and Reboot server. Click the arrow again to collapse the sub-tabs. Save each section separately. Backup retention and remote destinations are configured in Backup settings; create backups and view their history on Backups.",
+          "Expand Settings with its sidebar arrow to show Administrator password, Administrator email, Time zone, Backup settings, Server hostname, DNS resolver, Update and Reboot server. Click the arrow again to collapse the sub-tabs. Save each section separately. Backup retention and remote destinations are configured in Backup settings; create backups and view their history on Backups.",
           "The top bar shows the OS, hostname and server IP. Refresh server data with the refresh icon.",
           "Use Quick search below the sidebar logo, or press Ctrl+K / Command+K, to find features, settings, websites, databases and mailboxes. The shortcut opens navigation when it is hidden. Select a result or use the arrow keys and Enter to jump to it. Escape closes search. Search opens the relevant section without changing settings.",
           "Use the Documentation tab at any time. Search this manual by feature name or task."
@@ -320,6 +320,10 @@
           "Changing the hostname does not update public DNS, mail identity or certificates. Reboot disconnects all hosted services until the server returns.",
           "Change the administrator password using the current password and matching new-password fields. Keep recovery access to the server."
         ]
+      },
+      {
+        "title": "LiteCP updates",
+        "steps": ["Open Settings → Update and check for an official stable LiteCP release. Confirm Update LiteCP to download and build the release. The panel restarts; sign in again when it returns. Websites remain online. Operating-system packages are not updated.", "The updater retains the previous binary and panel data under /usr/local/lib/litecp-updates. It restores the previous binary if the new panel fails its health check. Do not rely on this as a replacement for independent website backups."]
       },
       {
         "title": "Recent Activities",

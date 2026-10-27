@@ -3,6 +3,7 @@
   const cp = window.LiteCP;
   const normalize = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const features = [
+    ["settings/update", "LiteCP update", "Check for and install stable LiteCP releases", "#updateSettingsPanel", "update upgrade version panel release"],
     ["dashboard", "Overview", "CPU, memory, disk and uptime", "", "dashboard resources monitoring status"],
     ["websites", "Websites", "Add and manage WordPress, WHMCS and regular websites", "#sitesTable", "domain hosting php version"],
     ["websites", "Add website", "Create hosting for a domain", "", "create new wordpress whmcs install"],
