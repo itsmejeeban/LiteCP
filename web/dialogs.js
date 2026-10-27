@@ -44,6 +44,7 @@
     if (active || !queue.length) return;
     active = true;
     const item = queue.shift(), options = { ...defaults(item.message, item.input), ...item.options };
+    options.danger = options.danger || /^(remove|delete|detach|empty)\b/i.test(options.confirmText || "");
     const previous = document.activeElement, id = `litecp-dialog-${++sequence}`;
     const dialog = document.createElement("dialog");
     dialog.className = "ui-dialog" + (options.danger ? " ui-dialog-danger" : "");

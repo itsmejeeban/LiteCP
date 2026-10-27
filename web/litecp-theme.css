@@ -234,3 +234,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button.danger:hover {background:transparent;color:var(--red);}
 :root[data-theme] #sitesTable .row-actions button:focus-visible {outline:2px solid var(--teal);outline-offset:1px;}
 :root[data-theme] #sitesTable .row-actions svg {width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+
+/* Destructive actions stay red in their normal and hover states. */
+:root[data-theme] button:is(.danger,[data-cron-remove],[data-ftp-remove],[data-backup-delete],#deleteAllActivities,#emptyTrash,#trashSelected,[data-site-action="delete"],[data-database-action="delete"],[data-file-action="delete"],[data-firewall-action="delete"],[data-backup-destination-action="delete"],[data-mail-action$="-delete"],[data-trash="delete"]) {color:var(--red);}
+:root[data-theme] #sitesTable .row-actions button.danger {color:var(--red);}
+:root[data-theme] .ui-dialog-danger [data-dialog-submit],:root[data-theme] .button-primary.danger {background:#dc2626;border-color:#dc2626;color:#fff;}
+:root[data-theme] .ui-dialog-danger [data-dialog-submit]:hover,:root[data-theme] .button-primary.danger:hover {background:#b91c1c;border-color:#b91c1c;color:#fff;}
