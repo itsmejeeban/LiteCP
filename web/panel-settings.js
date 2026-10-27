@@ -54,13 +54,23 @@
   select.insertAdjacentHTML("beforebegin",'<input type="search" id="timezoneSearch" aria-label="Search time zones" placeholder="Search country, region or city…" autocomplete="off">');
   select.insertAdjacentHTML("afterend",'<small id="timezoneCount" aria-live="polite"></small>');
   let zones=[...select.options].map(option=>option.value), unsupported=new Set();
+  let timezoneLabels=new Map(), offsetMinute=-1;
+  function timezoneLabel(zone,date){
+    try {
+      const offset=new Intl.DateTimeFormat("en-US",{timeZone:zone,timeZoneName:"longOffset"}).formatToParts(date).find(part=>part.type==="timeZoneName").value;
+      return `${zone} (${offset==="GMT" ? "UTC+00:00" : offset.replace("GMT","UTC")})`;
+    } catch {return zone;}
+  }
   function populateTimezones(){
     const selected=select.value || cp.state()?.settings.timezone || "UTC", query=$("#timezoneSearch").value.toLowerCase();
-    const visible=zones.filter(zone=>zone===selected || zone.toLowerCase().replaceAll("_"," ").includes(query.replaceAll("_"," ")));
-    select.innerHTML=visible.map(zone=>`<option value="${esc(zone)}" ${zone===selected ? "selected" : ""} ${unsupported.has(zone) ? "disabled" : ""}>${esc(zone)}${unsupported.has(zone) ? " — browser update required" : ""}</option>`).join("");
-    $("#timezoneCount").textContent=query ? `${visible.length} matching entries (current selection retained)` : `${zones.length} global time-zone entries, including UTC and regional aliases`;
+    const now=new Date(), minute=Math.floor(now.getTime()/60000);if(minute!==offsetMinute){timezoneLabels.clear();offsetMinute=minute;}
+    const label=zone=>{if(!timezoneLabels.has(zone))timezoneLabels.set(zone,timezoneLabel(zone,now));return timezoneLabels.get(zone);};
+    const visible=zones.filter(zone=>zone===selected || label(zone).toLowerCase().replaceAll("_"," ").includes(query.replaceAll("_"," ")));
+    select.innerHTML=visible.map(zone=>`<option value="${esc(zone)}" ${zone===selected ? "selected" : ""} ${unsupported.has(zone) ? "disabled" : ""}>${esc(label(zone))}${unsupported.has(zone) ? " — browser update required" : ""}</option>`).join("");
+    $("#timezoneCount").textContent=(query ? `${visible.length} matching entries (current selection retained)` : `${zones.length} global time-zone entries, including UTC and regional aliases`)+". Offsets include current daylight-saving changes.";
   }
   $("#timezoneSearch").addEventListener("input",populateTimezones);
+  populateTimezones();
   cp.api("/timezones.json").then(values=>{
     const saved=cp.state()?.settings.timezone || select.value || "UTC";
     zones=["UTC",...new Set([...values,saved].filter(value=>value!=="UTC"))].sort((a,b)=>a==="UTC" ? -1 : b==="UTC" ? 1 : a.localeCompare(b));
