@@ -484,7 +484,7 @@
 
   function navigate(page, updateHash = true) {
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
-    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update"].includes(settingsPart)?`settings/${settingsPart}`:"";
+    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";

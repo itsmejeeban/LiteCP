@@ -225,6 +225,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
 	mux.HandleFunc("/api/updates/install", only(http.MethodPost, a.withAuth(a.startPanelUpdate)))
+	mux.HandleFunc("/api/developer-mode", a.withAuth(func(w http.ResponseWriter,r *http.Request){if r.Method!=http.MethodGet && r.Method!=http.MethodPut {writeError(w,405,"Use GET or PUT");return};a.developerMode(w,r)}))
 	mux.HandleFunc("/api/updates/status", only(http.MethodGet, a.withAuth(a.panelUpdateStatus)))
 	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, checkRelease(version)) })))
 	mux.HandleFunc("/api/version", only(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
@@ -278,7 +279,7 @@ func only(method string, next http.HandlerFunc) http.HandlerFunc {
 func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("litecp_session")
-		if err != nil || !a.validSession(cookie.Value) {
+		if (err != nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
 			writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")
 			return
 		}
@@ -290,7 +291,7 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" {
 			a.mutationMu.Lock()
 			defer a.mutationMu.Unlock()
-			if !a.validSession(cookie.Value) {
+			if (cookie == nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
 				writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")
 				return
 			}
@@ -348,6 +349,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
+	a.forgetBrowser(w,r)
 	if cookie, err := r.Cookie("litecp_session"); err == nil {
 		a.mu.Lock()
 		delete(a.sessions, cookie.Value)
