@@ -102,7 +102,7 @@
   panel.insertAdjacentHTML("beforeend", '<footer class="fm-footer"><span id="fmStatus" role="status">Select a website to begin.</span><span>Double-click to open · F2 to rename</span></footer>');
   const trashPanel = $("#trashPanel");
   trashPanel.innerHTML = `<div class="panel-head"><div><h2>Trash</h2><p>Recoverable items stored outside your public website.</p></div><div class="feature-actions">${button("close-trash","Close","close")}${button("empty-trash","Empty trash","trash","fm-danger")}</div></div><div id="trashTable"></div>`;
-  const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); document.body.append(menu);
+  const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); page.append(menu);
   const dialog = document.createElement("dialog"); dialog.className = "fm-dialog"; document.body.append(dialog);
   dialog.setAttribute("aria-labelledby","fmDialogTitle");
   dialog.addEventListener("cancel", event => { if (dialog.querySelector('button[type="submit"]')?.disabled) event.preventDefault(); });
