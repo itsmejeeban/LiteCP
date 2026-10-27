@@ -6,7 +6,7 @@
 .fm-page .info-callout p {font-size:12px;}
 .file-manager-panel {overflow:hidden;border:1px solid var(--line);border-radius:14px!important;}
 .fm-page svg,.fm-dialog svg,.fm-context svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
-.fm-page .file-toolbar {padding:10px 12px;gap:3px;display:flex;flex-wrap:nowrap;overflow-x:auto;background:var(--paper);border-bottom:1px solid var(--line);}
+.fm-page .file-toolbar {padding:10px 12px;gap:3px;display:flex;flex-wrap:wrap;flex-shrink:0;overflow-x:visible;background:var(--paper);border-bottom:1px solid var(--line);}
 .fm-tool {display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 10px;border:1px solid transparent;background:transparent;color:var(--ink);border-radius:7px;font-family:inherit;font-weight:600;font-size:12px;line-height:1.2;white-space:nowrap;cursor:pointer;min-height:36px;}
 .fm-tool:hover:not(:disabled),.fm-tool[aria-pressed="true"] {background:var(--mint);color:var(--teal);}
 .fm-tool:disabled {opacity:.35;cursor:not-allowed;}
