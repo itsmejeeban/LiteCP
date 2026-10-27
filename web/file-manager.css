@@ -83,7 +83,7 @@
 :root[data-theme] body .fm-page .cpfm-settings{height:30px;min-height:30px;padding:5px 10px;font-size:12px!important;line-height:18px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:2px}
 :root[data-theme] body .fm-page .file-toolbar{min-height:34px;padding:0!important;gap:0!important;background:#eaeaea!important;border-bottom:1px solid #c1c6cb!important;overflow:auto!important;scrollbar-width:thin;flex-wrap:nowrap!important}
 :root[data-theme] body .fm-page .file-toolbar .fm-tool{min-height:34px;height:34px;padding:6px!important;font-size:14px!important;font-weight:400!important;line-height:20px;gap:5px!important;background:transparent!important;color:#333!important;border:1px solid transparent!important;border-radius:0!important}
-:root[data-theme] body .fm-page .file-toolbar .fm-tool:hover:not(:disabled){background:#ddd!important;color:#000!important;text-decoration:underline}
+:root[data-theme] body .fm-page .file-toolbar .fm-tool:hover:not(:disabled){background:#ddd!important;color:#000!important;text-decoration:none}
 :root[data-theme] body .fm-page .file-toolbar .fm-tool:disabled{color:#aaa!important;opacity:1!important}
 :root[data-theme] body .fm-page .fm-tool .fm-icon{font-size:14px;width:auto;color:inherit!important}
 :root[data-theme] body .fm-page .fm-fullscreen-toggle{display:inline-flex!important;width:28px;min-height:28px;padding:5px!important;margin:0!important;background:transparent!important;color:#fff!important;border:0!important}
@@ -92,7 +92,8 @@
 :root[data-theme] body .fm-page .cpfm-navigation{height:44px;min-height:44px;padding:5px 0;align-self:start;border:0;background:#fff}
 :root[data-theme] body .fm-page .cpfm-navigation .fm-tool{min-height:34px;height:34px;padding:6px 10px!important;gap:4px;font-size:14px!important;line-height:20px;background:transparent!important;border:1px solid transparent!important;border-radius:0;color:#428bca!important}
 :root[data-theme] body .fm-page .cpfm-navigation .fm-tool:disabled{color:#999!important;opacity:.5}
-:root[data-theme] body .fm-page .cpfm-navigation .fm-tool:hover:not(:disabled){background:#eee!important;text-decoration:underline}
+:root[data-theme] body .fm-page .cpfm-navigation .fm-tool:hover:not(:disabled){background:#eee!important;text-decoration:none}
+:root[data-theme] body .fm-page button,:root[data-theme] body .fm-page button:is(:hover,:focus,:active){text-decoration:none!important}
 :root[data-theme] body .fm-page .fm-address{height:44px;padding:5px 10px!important;grid-template-columns:40px minmax(0,1fr) 44px;border:0!important;background:#fff!important}
 :root[data-theme] body .fm-page .fm-address :is(.fm-home,.button,label){min-height:34px;height:34px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:0!important;padding:0!important}
 :root[data-theme] body .fm-page .fm-address label{border-left:0!important;border-right:0!important;min-width:0}
