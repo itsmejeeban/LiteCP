@@ -1,0 +1,38 @@
+/* Shared appearance for icon-only close controls, including dynamic dialogs. */
+:root[data-theme] #fmActionDialog:not(.fm-search-dialog) header {
+  min-height: 36px;
+}
+:root[data-theme] :is(#fmActionDialog, #editorModal, #siteModal, body) :is(button[aria-label^="Close"], button.cpfm-settings-close) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: #dc2626 !important;
+  color: #fff !important;
+  font: 22px/1 Arial, sans-serif;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+:root[data-theme] :is(#fmActionDialog, #editorModal, #siteModal, body) :is(button[aria-label^="Close"], button.cpfm-settings-close):hover {
+  background: #b91c1c !important;
+  filter: none;
+}
+:root[data-theme] :is(#fmActionDialog, #editorModal, #siteModal, body) :is(button[aria-label^="Close"], button.cpfm-settings-close):focus-visible {
+  outline: 2px solid #fca5a5;
+  outline-offset: 2px;
+}
+:root[data-theme] :is(#fmActionDialog, #editorModal, #siteModal, body) :is(button[aria-label^="Close"], button.cpfm-settings-close) svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
