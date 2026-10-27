@@ -124,7 +124,9 @@
   function renderTree() {
     function branch(path,label,depth) {
       const open=expanded.has(path), children=folders.get(path), error=folderErrors.get(path);
-      return `<div role="treeitem" aria-expanded="${open}" aria-selected="${listing?.path===path}" class="fm-tree-item"><div class="fm-tree-row ${listing?.path===path ? "active" : ""}" style="--depth:${depth}"><button type="button" data-fm-expand="${esc(path)}" aria-label="${open ? "Collapse" : "Expand"} ${esc(label)}">${open ? "⌄" : "›"}</button><button type="button" data-fm-folder="${esc(path)}">${icon("folder")}<span>${esc(label)}</span></button></div>${open ? `<div role="group">${children ? children.map(child=>branch(child.path,child.name,depth+1)).join("") : `<small class="fm-tree-note">${error ? esc(error) : "Loading folders…"}</small>`}</div>` : ""}</div>`;
+      const root=path==="", displayLabel=root ? "(/public)" : label;
+      const entryIcon=root ? `<span class="fm-tree-root-icons">${icon("folder")}${icon("home")}</span>` : icon("folder");
+      return `<div role="treeitem" aria-expanded="${open}" aria-selected="${listing?.path===path}" class="fm-tree-item"><div class="fm-tree-row ${root ? "is-root" : ""} ${listing?.path===path ? "active" : ""}" style="--depth:${depth}"><button type="button" data-fm-expand="${esc(path)}" aria-label="${open ? "Collapse" : "Expand"} ${esc(displayLabel)}">${open ? "−" : "+"}</button><button type="button" data-fm-folder="${esc(path)}">${entryIcon}<span>${esc(displayLabel)}</span></button></div>${open ? `<div role="group">${children ? children.map(child=>branch(child.path,child.name,depth+1)).join("") : `<small class="fm-tree-note">${error ? esc(error) : "Loading folders…"}</small>`}</div>` : ""}</div>`;
     }
     $("#fmTree").innerHTML=branch("","public",0);
   }
