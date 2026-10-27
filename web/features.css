@@ -113,3 +113,6 @@
 #sitesTable .badge {white-space:nowrap;}
 #sitesTable .row-actions {justify-content:flex-start;flex-wrap:nowrap;gap:7px;}
 #sitesTable .row-actions button {flex-shrink:0;}
+#sitesTable .application-logo {display:inline-flex;align-items:center;height:28px;max-width:92px;}
+#sitesTable .application-logo img {display:block;width:auto;height:25px;max-width:92px;object-fit:contain;}
+#sitesTable .application-logo-wordpress img {height:27px;}
