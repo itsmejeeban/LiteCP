@@ -496,6 +496,7 @@
   }
 
   function navigate(page, updateHash = true) {
+    if(page==="settings/backups")page="backups";
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
     const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
     const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";

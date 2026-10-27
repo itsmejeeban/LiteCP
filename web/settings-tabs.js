@@ -6,7 +6,6 @@
     {id:"password",title:"Administrator password",description:"Update your administrator sign-in password.",nodes:[$('#passwordForm')]},
     {id:"email",title:"Administrator email",description:"Set the email used for certificate renewal notices.",nodes:[$('#settingsForm')]},
     {id:"timezone",title:"Time zone",description:"Choose the time zone used throughout the panel.",nodes:[$('#timezoneForm')]},
-    {id:"backups",title:"Backup settings",description:"Configure retention and remote backup destinations.",nodes:[$('#backupSettingsForm'),$('#backupDestinationForm'),$('#backupDestinationsTable').closest('.panel')]},
     {id:"hostname",title:"Server hostname",description:"View and change the server hostname.",nodes:[$('#hostnameForm'),grid.querySelector('.environment-card')]},
     {id:"dns",title:"DNS resolver",description:"View the current DNS servers and configure resolvers.",nodes:[$('#resolversForm')]},
     {id:"developer",title:"Developer mode",description:"Keep this browser signed in for testing.",nodes:[$("#developerModePanel")]},
@@ -26,9 +25,10 @@
     const link=document.createElement('a');link.href='#settings/'+entry.id;link.textContent=entry.title;link.className='nav-item settings-subtab';link.dataset.settingsSection=entry.id;
     link.addEventListener('click',event=>{event.preventDefault();cp.navigate('settings/'+entry.id);});submenu.append(link);entry.link=link;
   }
-  $('#backupDestinationsTable').closest('.panel').classList.add('settings-backup-destinations');
+  const backupSettings=$('#backupSettingsForm');
+  $('[data-page-view="backups"] .backup-management-grid').after(backupSettings);
   $('.backup-management-grid').classList.add('backup-run-layout');
-  const backupLink=document.createElement('a');backupLink.href='#settings/backups';backupLink.className='button button-secondary';backupLink.textContent='Backup settings';backupLink.addEventListener('click',event=>{event.preventDefault();cp.navigate('settings/backups');});
+  const backupLink=document.createElement('a');backupLink.href='#backups';backupLink.className='button button-secondary';backupLink.textContent='Backup settings';backupLink.addEventListener('click',event=>{event.preventDefault();cp.navigate('backups');backupSettings.scrollIntoView({behavior:'smooth',block:'start'});});
   $('[data-page-view="backups"] .page-heading').append(backupLink);
   let lastRoute='';
   function activate(){
