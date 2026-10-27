@@ -37,10 +37,13 @@
   // Preserve the existing mobile drawer and add a persistent desktop toggle.
   const toggle=$("#mobileMenu"), sidebar=$("#sidebar"), scrim=$("#sidebarScrim"), mobile=matchMedia("(max-width: 900px)");
   toggle.setAttribute("aria-controls","sidebar");
+  const bottomToggle=$("#sidebarBottomToggle");
+  bottomToggle.addEventListener("click",()=>toggle.click());
   try{document.body.classList.toggle("sidebar-collapsed",localStorage.getItem("litecp-sidebar-hidden")==="true");}catch{}
   function syncSidebar(){
     const visible=mobile.matches ? sidebar.classList.contains("open") : !document.body.classList.contains("sidebar-collapsed");
     toggle.setAttribute("aria-expanded",String(visible));toggle.setAttribute("aria-label",visible ? "Hide navigation" : "Show navigation");toggle.title=visible ? "Hide navigation" : "Show navigation";
+    bottomToggle.setAttribute("aria-expanded",String(visible));bottomToggle.setAttribute("aria-label",visible ? "Collapse navigation" : "Expand navigation");bottomToggle.title=visible ? "Collapse navigation" : "Expand navigation";
     sidebar.inert=!visible;
   }
   toggle.addEventListener("click",event=>{event.stopImmediatePropagation();if(mobile.matches){sidebar.classList.toggle("open");scrim.classList.toggle("visible",sidebar.classList.contains("open"));}else{document.body.classList.toggle("sidebar-collapsed");try{localStorage.setItem("litecp-sidebar-hidden",String(document.body.classList.contains("sidebar-collapsed")));}catch{}}syncSidebar();},true);
