@@ -1,0 +1,16 @@
+.ui-dialog {width:min(540px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid var(--line);border-radius:16px;background:var(--paper);color:var(--ink);box-shadow:var(--shadow-lg);overflow:auto;}
+.ui-dialog::backdrop {background:rgba(5,12,28,.7);backdrop-filter:blur(4px);}
+.ui-dialog header {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 24px;border-bottom:1px solid var(--line);}
+.ui-dialog h2 {margin:0;font:inherit;font-size:21px;font-weight:750;line-height:1.35;overflow-wrap:anywhere;}
+.ui-dialog .ui-dialog-body {padding:20px 24px;}
+.ui-dialog [data-dialog-description] {margin:0;color:var(--muted);font-size:14px;line-height:1.7;white-space:pre-line;overflow-wrap:anywhere;}
+.ui-dialog [data-dialog-field] {margin-top:20px;}
+.ui-dialog [hidden] {display:none!important;}
+.ui-dialog input {width:100%;min-height:44px;}
+.ui-dialog .ui-dialog-error {margin:12px 0 0;color:var(--red);font-size:13px;line-height:1.5;}
+.ui-dialog footer {display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;padding:16px 24px;border-top:1px solid var(--line);}
+.ui-dialog footer .button {min-height:42px;}
+.ui-dialog-danger [data-dialog-submit] {background:#be354e;border-color:#be354e;color:#fff;}
+.ui-dialog-danger [data-dialog-submit]:hover {background:#a6273f;border-color:#a6273f;color:#fff;}
+.ui-dialog button:focus-visible {outline:2px solid var(--teal);outline-offset:3px;}
+@media(max-width:520px){.ui-dialog header{padding:18px;}.ui-dialog .ui-dialog-body{padding:18px;}.ui-dialog footer{padding:14px 18px;}.ui-dialog footer .button{flex:1;}}

@@ -14,7 +14,7 @@
     if(!form.reportValidity())return;
     const resolvers=[$("#resolverPrimary").value.trim(),$("#resolverSecondary").value.trim()].filter(Boolean);
     if(resolvers.some(value=>/[\s,]/.test(value))){cp.showToast("Invalid resolver","Enter one IP address in each field.","error");return;}
-    if(!confirm(`Apply ${resolvers.join(" and ")} as the current default DNS resolvers? Automatic enforcement restores 8.8.8.8 and 8.8.4.4 within five minutes and after reboot. Incorrect addresses can interrupt application connections.`))return;
+    if(!await window.LiteCPDialogs.confirm(`Apply ${resolvers.join(" and ")} as the current default DNS resolvers? Automatic enforcement restores 8.8.8.8 and 8.8.4.4 within five minutes and after reboot. Incorrect addresses can interrupt application connections.`))return;
     const button=form.querySelector('button[type="submit"]');button.disabled=true;
     try{await cp.api("/api/system/resolvers",{method:"PUT",body:{resolvers}});await cp.refresh();cp.showToast("Resolvers updated","The current system resolver list has been refreshed.");}
     catch(error){cp.handleError(error);}finally{button.disabled=false;}

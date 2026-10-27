@@ -63,7 +63,7 @@ function panel(script, api, options = {}) {
     navigate(page) { location.hash = '#' + page; features.navigate(page); },
     refresh: async () => features.render(cp.state())
   };
-  const window = { LiteCP: cp, LiteCPFeatures: features, addEventListener() {} };
+  const window = { LiteCP: cp, LiteCPFeatures: features, LiteCPDialogs: {confirm:async()=>false,prompt:async()=>null}, addEventListener() {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'web', script), 'utf8'), {
     window, document, location, confirm: () => false, fetch: options.fetch
   }, { filename: script });
@@ -170,7 +170,7 @@ function editorWorkflow(api) {
   const editor = vm.runInNewContext(`let editorFilePath='',editorSiteID='',editorRequest=0,editorSaving=false,editorOriginal='';
     ${functions}
     ({openEditor,closeEditor,saveEditor,snapshot:()=>({path:editorFilePath,site:editorSiteID,saving:editorSaving})})`, {
-    $: element, api, window: {}, encodeURIComponent, confirm: () => true,
+    $: element, api, window: {LiteCPDialogs:{confirm:async()=>true}}, encodeURIComponent,
     loadFiles: async () => {}, showToast() {}, handleError: error => errors.push(error.message)
   });
   return { ...editor, element, errors };

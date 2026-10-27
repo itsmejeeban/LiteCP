@@ -596,8 +596,7 @@
     button.disabled = true;
     try {
       if (button.dataset.siteAction === "ssl") {
-        let email = currentState.settings.email;
-        if (!email) email = prompt("Email for Let's Encrypt renewal notices:", "") || "";
+        const email = await window.LiteCPDialogs.prompt(`Enable HTTPS for ${site.domain}. Enter an email address for Let's Encrypt certificate renewal notices. The domain must point to this server.`, currentState.settings.email || "", { title: "Enable SSL certificate", label: "Renewal email address", type: "email", required: true, confirmText: "Enable SSL", placeholder: "you@example.com" });
         if (!email) return;
         await api("/api/sites/ssl", { method: "POST", body: { id: site.id, email } });
         showToast("SSL enabled", `${site.domain} now redirects to HTTPS.`);
@@ -605,7 +604,7 @@
         await api("/api/sites/cron", { method: "POST", body: { id: site.id, enabled: !site.cron } });
         showToast("Schedule updated", `${applicationLabel(site.appType)} cron ${site.cron ? "disabled" : "enabled"} for ${site.domain}.`);
       } else if (button.dataset.siteAction === "delete") {
-        const accepted = confirm(`Detach ${site.domain} from LiteCP?\n\nIts files and database will be preserved.`);
+        const accepted = await window.LiteCPDialogs.confirm(`Remove hosting configuration for ${site.domain}?\n\nIts files and database will be preserved. The website will stop being served through LiteCP.`, { title: "Detach website", confirmText: "Detach website", danger: true });
         if (!accepted) return;
         await api(`/api/sites/${encodeURIComponent(site.id)}`, { method: "DELETE" });
         showToast("Website detached", "Nginx and cron configuration removed; data was preserved.");
@@ -659,7 +658,7 @@
 
   async function restartAll() {
     const button = $("#restartAll");
-    if (!confirm(`Restart Nginx, PHP-FPM, ${currentState.system.databaseEngine || "database"}, mail and cron in sequence?`)) return;
+    if (!await window.LiteCPDialogs.confirm(`Restart Nginx, PHP-FPM, ${currentState.system.databaseEngine || "database"}, mail and cron in sequence?`)) return;
     button.disabled = true;
     const original = button.innerHTML;
     button.textContent = "Restarting stack…";
@@ -721,7 +720,7 @@
 
   async function handleBackupDestinationAction(event) {
     const button = event.target.closest("[data-backup-destination-action]");
-    if (!button || !confirm("Remove this remote destination? Existing backups will not be deleted.")) return;
+    if (!button || !await window.LiteCPDialogs.confirm("Remove this remote destination? Existing backups will not be deleted.")) return;
     try {
       await api(`/api/backup-destinations/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
       currentState = await api("/api/state"); renderAll();
@@ -773,7 +772,7 @@
   }
 
   async function createFolder() {
-    const name = prompt("New folder name:", "new-folder");
+    const name = await window.LiteCPDialogs.prompt("New folder name:", "new-folder");
     if (!name) return;
     try { await api("/api/files/directory", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path: currentFilePath, name } }); await loadFiles(); showToast("Folder created", name); }
     catch (error) { handleError(error); }
@@ -794,7 +793,7 @@
   async function archiveSelectedFiles() {
     const paths = $$('[data-file-select]:checked', $("#fileTable")).map(input => input.value);
     if (!paths.length) { showToast("Nothing selected", "Select files or folders to add to a ZIP archive.", "error"); return; }
-    const name = prompt("Archive name:", "archive.zip");
+    const name = await window.LiteCPDialogs.prompt("Archive name:", "archive.zip");
     if (!name) return;
     const destination = currentFilePath ? `${currentFilePath}/${name}` : name;
     try { await api("/api/files/archive", { method: "POST", body: { siteId: $("#fileSiteSelect").value, paths, destination } }); await loadFiles(); showToast("ZIP created", destination); }
@@ -811,17 +810,17 @@
     if (action === "edit") { openEditor(path); return; }
     try {
       if (action === "extract") {
-        if (!confirm(`Extract ${path} into the current directory? Existing files with matching names will be overwritten.`)) return;
+        if (!await window.LiteCPDialogs.confirm(`Extract ${path} into the current directory? Existing files with matching names will be overwritten.`)) return;
         await api("/api/files/extract", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path, destination: currentFilePath } });
       } else if (action === "rename") {
-        const oldName = path.split("/").pop(); const next = prompt("New name:", oldName); if (!next || next === oldName) return;
+        const oldName = path.split("/").pop(); const next = await window.LiteCPDialogs.prompt("New name:", oldName); if (!next || next === oldName) return;
         const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
         await api("/api/files/rename", { method: "POST", body: { siteId: $("#fileSiteSelect").value, path, destination: parent ? `${parent}/${next}` : next } });
       } else if (action === "chmod") {
-        const mode = prompt("Octal permissions (world-writable and special modes are blocked):", button.dataset.mode); if (!mode) return;
+        const mode = await window.LiteCPDialogs.prompt("Octal permissions (world-writable and special modes are blocked):", button.dataset.mode); if (!mode) return;
         await api("/api/files/permissions", { method: "PUT", body: { siteId: $("#fileSiteSelect").value, path, mode } });
       } else if (action === "delete") {
-        if (!confirm(`Move ${path} to Trash? You can restore it from the Trash view.`)) return;
+        if (!await window.LiteCPDialogs.confirm(`Move ${path} to Trash? You can restore it from the Trash view.`)) return;
         await api("/api/files", { method: "DELETE", body: { siteId: $("#fileSiteSelect").value, path } });
       }
       await loadFiles(); showToast("File operation completed", path);
@@ -840,10 +839,10 @@
     } catch (error) { if (request === editorRequest) handleError(error); }
   }
 
-  function closeEditor() {
+  async function closeEditor() {
     if (editorSaving) return;
     const content = window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value;
-    if (editorFilePath && content !== editorOriginal && !confirm("Discard unsaved editor changes?")) return;
+    if (editorFilePath && content !== editorOriginal && !await window.LiteCPDialogs.confirm("Discard unsaved editor changes?")) return;
     editorRequest++; editorFilePath = ""; editorSiteID = ""; $("#editorModal").classList.add("hidden");
   }
 
@@ -890,7 +889,7 @@
         return;
       }
       if (button.dataset.databaseAction === "delete") {
-        if (!confirm(`Permanently delete database ${database.name} and user ${database.username}? This cannot be undone.`)) return;
+        if (!await window.LiteCPDialogs.confirm(`Permanently delete database ${database.name} and user ${database.username}? This cannot be undone.`)) return;
         await api(`/api/databases/${encodeURIComponent(database.id)}`, { method: "DELETE" });
       } else {
         const password = await window.LiteCPFeatures.askPassword(`New password for ${database.username}`, true); if (password === null) return;
@@ -911,7 +910,7 @@
 
   async function handleFirewallAction(event) {
     if (window.LiteCPFeatures) { await window.LiteCPFeatures.firewallAction(event); return; }
-    const button = event.target.closest("[data-firewall-action]"); if (!button || !confirm("Remove this custom firewall rule?")) return;
+    const button = event.target.closest("[data-firewall-action]"); if (!button || !await window.LiteCPDialogs.confirm("Remove this custom firewall rule?")) return;
     try { await api(`/api/firewall/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" }); currentState = await api("/api/state"); renderAll(); showToast("Firewall rule removed", "The permanent firewall configuration was reloaded."); }
     catch (error) { handleError(error); }
   }
@@ -945,7 +944,7 @@
         await api("/api/mail/mailboxes/password", { method: "PUT", body: { id: button.dataset.id, password } }); showToast("Mailbox password reset", "Update the email client with the new password.");
       } else {
         const warning = action === "domain-delete" ? "Removing a mail domain disables all of its mailboxes and aliases. Stored Maildir messages are kept. Continue?" : action === "mailbox-delete" ? "Disable this mailbox login? Stored Maildir messages are kept." : "Remove this forwarding alias?";
-        if (!confirm(warning)) return;
+        if (!await window.LiteCPDialogs.confirm(warning)) return;
         const endpoint = action === "domain-delete" ? "domains" : action === "mailbox-delete" ? "mailboxes" : "aliases";
         await api(`/api/mail/${endpoint}/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
       }
