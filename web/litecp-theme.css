@@ -287,3 +287,11 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #developerModePanel input[type="checkbox"] {appearance:auto;display:inline-block;width:18px;height:18px;min-height:0;flex:0 0 18px;padding:0;margin:0;accent-color:var(--teal);box-shadow:none;border-radius:3px;}
 :root[data-theme] #developerModePanel .field {margin-bottom:12px;}
 :root[data-theme] #developerModePanel .settings-body>p {font-size:12px;line-height:1.6;color:var(--muted);}
+
+/* Website action images stay visible without button tiles behind them. */
+:root[data-theme] #sitesTable .row-actions button,
+:root[data-theme] #sitesTable .row-actions button:hover {
+  background:transparent!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+}
