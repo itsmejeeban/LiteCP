@@ -29,13 +29,12 @@
   heading.querySelector(".eyebrow")?.remove();
   heading.querySelector("p")?.remove();
   const fullscreen = document.createElement("button");
-  fullscreen.type = "button"; fullscreen.className = "button button-secondary fm-fullscreen-toggle";
+  fullscreen.type = "button"; fullscreen.className = "fm-tool fm-fullscreen-toggle";
   fullscreen.textContent = "Full screen"; fullscreen.setAttribute("aria-pressed", "false");
-  heading.append(fullscreen);
   const setFullscreen = enabled => {
     page.classList.toggle("fm-fullscreen", enabled);
     document.body.classList.toggle("fm-fullscreen-open", enabled);
-    fullscreen.textContent = enabled ? "Exit full screen" : "Full screen";
+    fullscreen.innerHTML = `${icon(enabled ? "close" : "grid")}<span>${enabled ? "Exit full screen" : "Full screen"}</span>`;
     fullscreen.setAttribute("aria-pressed", String(enabled));
   };
   fullscreen.addEventListener("click", () => setFullscreen(!page.classList.contains("fm-fullscreen")));
@@ -60,6 +59,8 @@
   const join = (a,b) => a ? `${a}/${b}` : b;
   page.classList.add("fm-page");
   $(".file-toolbar").innerHTML = `${button("new-file","New file","file")}${button("new-folder","New folder","folder")}${button("upload","Upload","upload","fm-primary")}<span class="fm-divider"></span>${button("copy","Copy","copy")}${button("move","Move","move")}${button("rename","Rename","edit")}${button("chmod","Permissions","lock")}${button("archive","Compress","archive")}${button("extract","Extract","extract")}${button("delete","Trash","trash","fm-danger")}<span class="fm-divider"></span>${button("refresh","Refresh","refresh")}${button("trash","View trash","trash")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
+  fullscreen.innerHTML = `${icon("grid")}<span>Full screen</span>`;
+  $(".file-toolbar").append(fullscreen);
   $(".file-breadcrumb").insertAdjacentHTML("beforebegin", `<form class="fm-address" id="fmAddressForm"><div class="fm-navigation">${button("back","Back","back")}${button("forward","Forward","next")}${button("up","Up one folder","up")}</div><label>${icon("folder")}<input id="fmAddress" aria-label="Folder path" placeholder="/public" autocomplete="off" spellcheck="false"></label><button class="button button-secondary" type="submit">Go</button></form>`);
   const filters = $(".file-filters");
   filters.innerHTML = `<label class="fm-search">${icon("search")}<input id="fileSearch" type="search" placeholder="Search this folder…" aria-label="Search this folder"></label><label class="fm-hidden"><input type="checkbox" id="showHidden" checked> Hidden files</label><select id="fileSort" aria-label="Sort files"><option value="name">Name</option><option value="type">Type</option><option value="modified">Modified</option><option value="size">Size</option></select><button type="button" class="fm-order" id="fmOrder" aria-label="Reverse sort order">↑</button><div class="fm-view-switch" role="group" aria-label="File view">${button("list","List view","list")}${button("grid","Grid view","grid")}</div>`;

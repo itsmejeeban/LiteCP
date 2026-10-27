@@ -1,5 +1,5 @@
 /* File manager workspace, using the panel's existing light/dark tokens. */
-.fm-page .page-heading {margin-bottom:20px;align-items:center;}
+.fm-page > .page-heading {display:none;}
 .fm-page .page-heading h1 {font-size:30px;}
 .fm-page .compact-select select {font-size:13px;min-width:230px;}
 .fm-page .info-callout {margin-top:16px;padding:14px 18px;}
@@ -132,7 +132,7 @@
 .fm-page .page-heading { margin-bottom: 12px; gap: 16px; }
 .fm-page .page-heading h1 { margin: 0; font-size: 26px; }
 .fm-page .page-heading .compact-select { margin-left: auto; }
-.fm-fullscreen-toggle { flex-shrink: 0; }
+.fm-fullscreen-toggle { flex-shrink:0;margin-left:auto!important;color:var(--ink)!important; }
 body.fm-fullscreen-open { overflow: hidden; }
 .fm-page.fm-fullscreen { position: fixed; inset: 0; z-index: 100; background: var(--paper); padding: 14px; display: flex; flex-direction: column; overflow: auto; }
 .fm-page.fm-fullscreen .page-heading { flex-shrink: 0; }
@@ -148,6 +148,6 @@ body.fm-fullscreen-open { overflow: hidden; }
 .fm-page .file-filters {padding:7px 10px;}
 .fm-page .fm-selection {min-height:32px;padding:4px 10px;}
 .fm-page .fm-footer {padding:6px 12px;}
-.fm-page .fm-body {height:calc(100vh - 330px);min-height:300px;}
+.fm-page .fm-body {height:calc(100vh - 245px);min-height:480px;}
 .fm-page.fm-fullscreen .fm-body {height:auto;min-height:0;}
 .fm-page .fm-folders>p {display:none;}
