@@ -71,7 +71,7 @@
 /* Ported reference values from Jupiter File Manager. Scoped to avoid panel CSS leaks. */
 :root[data-theme] body .fm-page{--paper:#fff;--ink:#333;--muted:#666;--line:#ccc;--surface-soft:#f9f9f9;--teal:#428bca;--mint:#d7edf9;--mint-2:#d7edf9;font:14px/18px FMOpenSans,'Open Sans',sans-serif!important;color:#333!important;color-scheme:light}
 :root[data-theme] body .fm-page :is(button,input,select){font-family:FMOpenSans,'Open Sans',sans-serif!important;font-weight:400;letter-spacing:normal;box-shadow:none!important;filter:none!important;text-shadow:none}
-:root[data-theme] body .fm-page .file-manager-panel{grid-template-columns:var(--fm-tree-width,330px) minmax(0,1fr);grid-template-rows:50px auto 44px 44px minmax(0,1fr);height:calc(100dvh - 112px);min-height:420px;overflow:hidden!important}
+:root[data-theme] body .fm-page .file-manager-panel{display:grid!important;grid-template-columns:var(--fm-tree-width,330px) minmax(0,1fr);grid-template-rows:50px auto 44px 44px minmax(0,1fr);height:calc(100dvh - 112px);min-height:420px;overflow:hidden!important}
 :root[data-theme] body .fm-page .cpfm-header{height:50px;min-height:50px;padding:0 10px 0 15px;background:#293a4a;border:0;gap:10px}
 :root[data-theme] body .fm-page .cpfm-brand{font-size:18px;line-height:50px}
 :root[data-theme] body .fm-page .cpfm-brand strong{font-size:25px;letter-spacing:-1.5px}
