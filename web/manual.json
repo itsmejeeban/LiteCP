@@ -240,7 +240,7 @@
       {
         "title": "Capture a live cPanel or Plesk source",
         "steps": [
-          "Connect with Linux root SSH, either a dedicated unencrypted private key or root password, and an independently verified SHA256 host-key fingerprint. Password login must be enabled on the source; interactive MFA and Plesk for Windows are unsupported.",
+          "Connect with Linux root SSH using a dedicated unencrypted private key or root password. LiteCP can detect the host key and ask you to trust its SHA256 fingerprint; verify it independently before accepting. Detection alone does not prove the server's identity. Password login must be enabled on the source; interactive MFA and Plesk for Windows are unsupported.",
           "Discover and select a source account or subscription. Confirm native backup creation; source and destination require enough free disk space.",
           "LiteCP retains the native archive, verifies the transfer checksum and stages compatible primary website files and SQL for review. Additional databases need separate target mapping.",
           "Capture is not a complete account restore. Mail, DNS, SSL, addon sites, packages, reseller settings and arbitrary cron jobs are not automatically activated.",

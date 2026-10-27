@@ -25,7 +25,7 @@
   $(".main-content").insertAdjacentHTML("beforeend", page("security", "Website security", "On-demand ClamAV scans and ModSecurity with the OWASP Core Rule Set.", `
     <div class="management-grid"><form id="scanForm" class="panel compact-form-card"><div class="panel-head"><div><h2>Malware scan</h2><p>Scan only; files are never automatically deleted.</p></div></div><div class="settings-body">
     ${field("Website", '<select name="siteId" id="scanSite" required></select>')}${field("Path within website", '<input name="path" placeholder="Leave empty to scan the whole site">')}
-    <p class="feature-note">The scanner runs on demand, with no resident antivirus daemon. Large or encrypted files may be skipped. A scan cannot guarantee a malware-free website.</p><button class="button button-primary" type="submit">Run ClamAV scan</button></div></form>
+    <p class="feature-note" id="scannerAvailability" role="status"></p><p class="feature-note">The scanner runs on demand, with no resident antivirus daemon. Large or encrypted files may be skipped. A scan cannot guarantee a malware-free website.</p><button class="button button-primary" type="submit">Run ClamAV scan</button></div></form>
     <article class="panel"><div class="panel-head"><div><h2>Web application firewall</h2><p id="wafEngineLabel">Checking engine…</p></div></div><div id="wafTable"></div></article></div>${resultBox("scanOutput")}`));
   $(".main-content").insertAdjacentHTML("beforeend", page("migrations", "Website migration", "Inspect a cPanel or Plesk website archive, then import into an empty LiteCP website.", `
     <div class="management-grid"><form id="migrationUploadForm" class="panel compact-form-card"><div class="panel-head"><div><h2>1. Inspect archive</h2><p>The source server is not modified.</p></div></div><div class="settings-body">
@@ -235,9 +235,13 @@
     $$('[data-mail-action="domain-delete"]').forEach(button=>{const domain=state.mailDomains.find(d=>d.id===button.dataset.id);if(domain)button.insertAdjacentHTML("beforebegin",`<button class="text-action" data-dns-domain="${esc(domain.domain)}">DNS records</button>`);});
     $$('[data-service="mail"]').forEach(button=>{button.disabled=state.settings.emailHostingEnabled===false;});
     ["scanSite","migrationSite"].forEach(id=>fillSiteSelect(id,state));
-    $("#wafEngineLabel").textContent=`Engine: ${state.system.wafEngine||"not installed"}. Begin with Detect; Blocking may need application-specific tuning.`;
+    $("#scannerAvailability").textContent=state.system.antivirusAvailable?"ClamAV is available. Scans do not modify website files.":"ClamAV is not installed. Install antivirus support on the server before running a scan.";
+    $('#scanForm button[type="submit"]').disabled=!state.system.antivirusAvailable;
+    const wafAvailable=Boolean(state.system.wafEngine&&state.system.wafEngine!=="not installed");
+    $("#wafEngineLabel").textContent=wafAvailable?`Engine: ${state.system.wafEngine}. Begin with Detect; Blocking may need application-specific tuning.`:"WAF support is not installed. Install the engine on the server before selecting Detect or Block.";
     $("#wafTable").innerHTML=`<table class="data-table"><thead><tr><th>WEBSITE</th><th>WAF MODE</th></tr></thead><tbody>${state.sites.map(site=>`<tr><td>${esc(site.domain)}</td><td><select data-waf="${esc(site.id)}" aria-label="WAF mode for ${esc(site.domain)}">${[["off","Off"],["detect","Detect / log"],["block","Block attacks"]].map(([v,label])=>`<option value="${v}" ${(site.wafMode||"off")===v?"selected":""}>${label}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table>`;
     if(document.activeElement!==$("#hostnameInput"))$("#hostnameInput").value=state.system.hostname||"";
+    $$('#wafTable select').forEach(select=>select.disabled=!wafAvailable);
     if(document.activeElement!==$("#resolversInput"))$("#resolversInput").value=(state.settings.resolvers||[]).join(", ");
   }
   window.LiteCPFeatures={render,activity,saveFirewall,firewallAction,askPassword,openEditor,editorValue:()=>editor?editor.getValue():$("#editorContent").value,

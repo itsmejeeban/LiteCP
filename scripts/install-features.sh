@@ -8,10 +8,10 @@ source /etc/os-release
 for feature in "$@"; do [[ $feature == mail || $feature == antivirus || $feature == waf || $feature == antispam ]] || { echo "Unknown feature: $feature"; exit 1; }; done
 exec 9>/run/litecp-feature-installer.lock
 flock -n 9 || { echo 'Another feature installer is running.' >&2; exit 1; }
-FEATURE_TMP=$(mktemp -d /tmp/litecp-features.XXXXXXXX)
-trap 'rm -rf -- "$FEATURE_TMP"' EXIT
 BACKUP=/var/backups/litecp/feature-install-$(date -u +%Y%m%dT%H%M%SZ)
 install -d -m 0700 "$BACKUP"
+FEATURE_TMP=$(mktemp -d "$BACKUP/downloads.XXXXXXXX")
+trap 'echo "Installation downloads and working files retained at $FEATURE_TMP"' EXIT
 for directory in /etc/nginx /etc/postfix /etc/dovecot /etc/opendkim.conf /etc/litecp/mail /etc/rspamd /etc/unbound; do
   [[ ! -e $directory ]] || cp -a --parents "$directory" "$BACKUP/"
 done
@@ -26,7 +26,9 @@ recover_nginx() {
   trap - ERR
   for nginx_file in "${NGINX_FILES[@]}"; do
     if [[ -f $BACKUP$nginx_file ]]; then cp -a "$BACKUP$nginx_file" "$nginx_file"
-    elif [[ -f $nginx_file ]]; then rm -f -- "$nginx_file"; fi
+    elif [[ -f $nginx_file ]]; then
+      # Retain a newly created invalid entry point instead of deleting it.
+      mv -- "$nginx_file" "$BACKUP/failed-$(basename "$nginx_file")"; fi
   done
   echo "Feature installation failed. Previous Nginx entry-point configuration restored; full component backups: $BACKUP" >&2
   exit "$exit_status"
@@ -82,8 +84,22 @@ EOF
 }
 
 install_mail() {
-  local php pool unit webgroup panel host cert key version=1.7.3
+  local php pool unit webgroup panel host cert key version=1.7.5
   [[ -f /etc/litecp/mail/mailboxes ]] || { echo 'Install the base LiteCP mail stack first.' >&2; return 1; }
+  if [[ $ID == ubuntu ]]; then panel=/etc/nginx/sites-available/litecp-panel.conf
+  else panel=/etc/nginx/conf.d/litecp-panel.conf; fi
+  host=${LITECP_MAIL_HOSTNAME:-$(postconf -h myhostname)}
+  [[ $host =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ && $host == *.* ]] || { echo 'A public fully qualified mail hostname is required.' >&2; return 1; }
+  cert=${LITECP_MAIL_CERT:-$(awk '$1=="ssl_certificate" {gsub(/;/,"",$2);print $2;exit}' "$panel")}
+  key=${LITECP_MAIL_KEY:-$(awk '$1=="ssl_certificate_key" {gsub(/;/,"",$2);print $2;exit}' "$panel")}
+  [[ $cert == /* && $key == /* && -r $cert && -r $key && $cert != *[$'\r\n\t ;{}']* && $key != *[$'\r\n\t ;{}']* ]] || { echo 'Readable absolute mail certificate/key paths without Nginx delimiters are required.' >&2; return 1; }
+  # Reject an invalid certificate before installing packages or changing services.
+  openssl x509 -in "$cert" -noout -checkhost "$host" >/dev/null || { echo 'The mail hostname needs a matching TLS certificate before installing webmail.' >&2; return 1; }
+  openssl x509 -in "$cert" -noout -checkend 0 >/dev/null || { echo 'The mail certificate has expired.' >&2; return 1; }
+  local cert_public key_public
+  cert_public=$(openssl x509 -in "$cert" -pubkey -noout | openssl pkey -pubin -outform DER | sha256sum)
+  key_public=$(openssl pkey -in "$key" -pubout -outform DER | sha256sum)
+  [[ $cert_public == "$key_public" ]] || { echo 'The mail certificate and private key do not match.' >&2; return 1; }
   if [[ $ID == ubuntu ]]; then
     packages opendkim opendkim-tools acl php8.3-fpm php8.3-sqlite3 php8.3-intl php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip
     php=/usr/bin/php8.3; pool=/etc/php/8.3/fpm/pool.d/litecp-webmail.conf; unit=php8.3-fpm; webgroup=www-data
@@ -94,12 +110,6 @@ install_mail() {
     panel=/etc/nginx/conf.d/litecp-panel.conf
   fi
   "$php" -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);' || { echo 'PHP 8.3 SQLite is required.' >&2; return 1; }
-  host=${LITECP_MAIL_HOSTNAME:-$(postconf -h myhostname)}
-  [[ $host =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || return 1
-  cert=$(awk '$1=="ssl_certificate" {gsub(/;/,"",$2);print $2;exit}' "$panel")
-  key=$(awk '$1=="ssl_certificate_key" {gsub(/;/,"",$2);print $2;exit}' "$panel")
-  # Do not disable IMAP/SMTP certificate verification to make login appear to work.
-  openssl x509 -in "$cert" -noout -checkhost "$host" >/dev/null || { echo 'The mail hostname needs a matching TLS certificate before installing webmail.' >&2; return 1; }
   # Explicit hostname override aligns SMTP/IMAP with the trusted panel certificate.
   # It does not change public DNS or the server's OS hostname.
   postconf -e "myhostname = $host"
@@ -110,7 +120,7 @@ ssl_cert = <$cert
 ssl_key = <$key
 EOF
   doveconf -n >/dev/null
-  download "https://github.com/roundcube/roundcubemail/releases/download/$version/roundcubemail-$version-complete.tar.gz" 443cde2ea03b840ce4701fe23c273f01e68702f176d282e60248236bbb5f5f85 roundcube.tar.gz
+  download "https://github.com/roundcube/roundcubemail/releases/download/$version/roundcubemail-$version-complete.tar.gz" 93a66c94e3efff7db93187c1c9d7f35546647a3e1e7b9327cc87911564edf9d1 roundcube.tar.gz
   # Versioned code is root-owned; only private SQLite, sessions and temp are writable.
   id litecp-webmail >/dev/null 2>&1 || useradd --system --home-dir /var/lib/litecp-webmail --shell /usr/sbin/nologin litecp-webmail
   install -d -m 0755 /opt/litecp
@@ -149,6 +159,8 @@ EOF
   local bundle=/etc/ssl/certs/ca-certificates.crt
   [[ $ID != almalinux ]] || bundle=/etc/pki/tls/certs/ca-bundle.crt
   cp "$bundle" /opt/litecp/webmail/config/mail-ca.pem
+  chown root:litecp-webmail /opt/litecp/webmail/config/mail-ca.pem
+  chmod 0640 /opt/litecp/webmail/config/mail-ca.pem
   chown root:litecp-webmail /opt/litecp/webmail/config/config.inc.php
   chmod 0640 /opt/litecp/webmail/config/config.inc.php
   cat > "$pool" <<EOF
@@ -243,10 +255,30 @@ EOF
   fi
   nginx -t
   systemctl restart "$unit"
-  if [[ ! -e /etc/litecp/mail/disabled ]]; then systemctl enable --now opendkim; systemctl restart postfix; fi
+  if [[ ! -e /etc/litecp/mail/disabled ]]; then systemctl enable --now opendkim; systemctl restart postfix dovecot; fi
   systemctl reload nginx
   open_port 8444
   printf 'https://%s:8444/\n' "$host" > /etc/litecp/mail/webmail-url
+  # A renewed certificate is not used by long-running TLS listeners until reload.
+  if [[ $cert == /etc/letsencrypt/live/*/fullchain.pem ]]; then
+    local lineage hook=/etc/letsencrypt/renewal-hooks/deploy/litecp-mail-reload
+    lineage=${cert%/fullchain.pem}
+    if [[ -f $hook ]]; then cp -a --parents "$hook" "$BACKUP/"; fi
+    install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+    cat > "$hook" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+[[ \${RENEWED_LINEAGE:-} == '$lineage' ]] || exit 0
+nginx -t
+doveconf -n >/dev/null
+postfix check
+systemctl reload nginx
+for unit in postfix dovecot; do
+  if systemctl is-active --quiet "\$unit"; then systemctl reload "\$unit"; fi
+done
+EOF
+    chmod 0755 "$hook"
+  fi
   echo "Webmail ready at https://$host:8444/; publish the panel's DNS records and test mail before changing MX."
 }
 

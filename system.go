@@ -1043,35 +1043,51 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 		return nil
 	}
 	for _, site := range sites {
-		if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
-			return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
-		}
-		if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {
-			return fmt.Errorf("secure %s ownership: %w", site.Domain, err)
-		}
-		if err := s.ensureSitePHPPool(ctx, site); err != nil {
-			return fmt.Errorf("prepare %s PHP pool: %w", site.Domain, err)
-		}
 		configPath, _ := s.nginxPaths(site.Domain)
-		if _, err := os.Stat(configPath); err == nil {
-			content, err := os.ReadFile(configPath)
-			if err != nil {
-				return err
-			}
-			updated, err := replaceFastCGISocket(string(content), s.sitePHPSocket(site))
-			if err != nil {
-				return err
-			}
-			if err := writeAtomic(configPath, []byte(updated), 0644); err != nil {
-				return err
-			}
-		}
+		if err := s.reconcileSiteRuntime(ctx, site, configPath); err != nil { return err }
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
 		return err
 	}
 	_, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx")
 	return err
+}
+
+func (s *System) reconcileSiteRuntime(ctx context.Context, site Site, configPath string) error {
+		if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
+			return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
+		}
+		if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {
+			return fmt.Errorf("secure %s ownership: %w", site.Domain, err)
+		}
+		if site.Application != nil {
+			if err := s.reconcileSiteNginx(site, configPath); err != nil { return fmt.Errorf("prepare %s application routing: %w", site.Domain, err) }
+			return nil
+		}
+		if err := s.ensureSitePHPPool(ctx, site); err != nil {
+			return fmt.Errorf("prepare %s PHP pool: %w", site.Domain, err)
+		}
+		if _, err := os.Stat(configPath); err == nil {
+			if err := s.reconcileSiteNginx(site, configPath); err != nil { return err }
+		}
+	return nil
+}
+
+func (s *System) reconcileSiteNginx(site Site, configPath string) error {
+	content, err := os.ReadFile(configPath)
+	if err != nil { return err }
+	var updated string
+	if site.Application != nil {
+		app := *site.Application
+		if err := updateApplicationCertificates(site, &app, content); err != nil { return err }
+		site.Application = &app
+		updated = s.applicationNginx(site)
+	} else {
+		updated, err = replaceFastCGISocket(string(content), s.sitePHPSocket(site))
+		if err != nil { return err }
+	}
+	if updated == string(content) { return nil }
+	return writeAtomic(configPath, []byte(updated), 0644)
 }
 
 func chownSitePath(path string, site Site, mode os.FileMode, webUser string) error {

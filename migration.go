@@ -519,16 +519,19 @@ func (s *System) importScopedSQL(ctx context.Context, sqlPath string, database M
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
-	check := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--batch", "--skip-column-names", database.Name, "--execute", "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")
+	// Keep the host's configured client socket while adding scoped credentials.
+	// --defaults-file suppresses /etc/my.cnf and breaks AlmaLinux's LiteCP socket.
+	emptyQuery := "SELECT (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()) + (SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = DATABASE()) + (SELECT COUNT(*) FROM information_schema.events WHERE event_schema = DATABASE())"
+	check := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-extra-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--batch", "--skip-column-names", database.Name, "--execute", emptyQuery)
 	var checkOutput limitedBuffer
 	check.Stdout, check.Stderr = &checkOutput, &checkOutput
 	if err := check.Run(); err != nil {
 		return fmt.Errorf("verify target database: %s", checkOutput.String())
 	}
 	if strings.TrimSpace(checkOutput.String()) != "0" {
-		return errors.New("the target database must be empty; existing tables were not modified")
+		return errors.New("the target database must be empty; existing tables, routines and events were not modified")
 	}
-	command := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--binary-mode=1", "--local-infile=0", database.Name)
+	command := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-extra-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--binary-mode=1", "--local-infile=0", database.Name)
 	command.Stdin = source
 	var stderr limitedBuffer
 	command.Stderr = &stderr

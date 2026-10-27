@@ -1,9 +1,22 @@
 package main
-import("testing";"fmt";"os/exec";"os";"context";"path/filepath";"time";"strings";"encoding/json";"net/http/httptest";"errors";"runtime")
+import("testing";"fmt";"os/exec";"os";"context";"path/filepath";"time";"strings";"encoding/json";"net/http/httptest";"net/http";"errors";"runtime";"sync/atomic")
 func TestApplicationHostingDefaultsAndValidation(t *testing.T){var settings Settings;if err:=json.Unmarshal([]byte(`{}`),&settings);err!=nil{t.Fatal(err)};for language:=range hostingImages{if settings.ApplicationHosting[language]{t.Fatal("hosting enabled by default")}};site:=Site{AppType:"regular",RuntimeUID:15001,RuntimeGID:15001};app:=ApplicationHosting{Language:"node",Version:"24",Command:"node server.js"};if err:=validateApplicationHosting(site,app);err!=nil{t.Fatal(err)};site.AppType="wordpress";if validateApplicationHosting(site,app)==nil{t.Fatal("WordPress conversion allowed")};site.AppType="regular";app.Version="24;id";if validateApplicationHosting(site,app)==nil{t.Fatal("unreviewed image allowed")}}
 func TestApplicationHostingContainerIsolation(t *testing.T){site:=Site{ID:"fixture",Root:"/var/www/litecp/example.test/public",RuntimeUID:15001,RuntimeGID:15001};app:=ApplicationHosting{Language:"python",Version:"3.13",Port:21000};args:=applicationContainerArgs(site,app,"fixture","python app.py",true);joined:=strings.Join(args," ");for _,required:=range []string{"--user 15001:15001","--cap-drop=ALL","--security-opt=no-new-privileges","--read-only","--memory=256m","--pids-limit=128","--restart=no","127.0.0.1:21000:8080","docker.io/library/python:3.13-slim-bookworm","/bin/sh -lc python app.py"}{if !strings.Contains(joined,required){t.Fatal("missing isolation",required)}};if strings.Contains(joined,"--privileged")||strings.Contains(joined,"--network=host"){t.Fatal("unsafe container permissions")}}
 func TestApplicationNginxUsesProxyOnly(t *testing.T){system:=&System{};site:=Site{Domain:"example.test",Root:"/var/www/litecp/example.test/public",SSL:true,Application:&ApplicationHosting{Enabled:true,Port:21000,Certificate:"/etc/letsencrypt/live/example.test/fullchain.pem",CertificateKey:"/etc/letsencrypt/live/example.test/privkey.pem"}};config:=system.nginxConfig(site);if !strings.Contains(config,"proxy_pass http://127.0.0.1:21000")||!strings.Contains(config,"listen 443 ssl")||strings.Contains(config,"fastcgi_pass"){t.Fatal("application routing invalid")}}
 func TestApplicationHostingRequiresAuthentication(t *testing.T){app:=&App{};response:=httptest.NewRecorder();app.routes().ServeHTTP(response,httptest.NewRequest("GET","/api/application-hosting",nil));if response.Code!=401{t.Fatal(response.Code)}}
+
+func TestApplicationMaintenanceWaitsForLoadedHostRouting(t *testing.T){
+ var requests int32;server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){if r.Host!="application.example.test"{t.Errorf("wrong host %q",r.Host)};if atomic.AddInt32(&requests,1)<3{w.WriteHeader(200);return};w.Header().Set("X-LiteCP-Application-State","maintenance");w.WriteHeader(503)}));defer server.Close()
+ if err:=waitApplicationMaintenance(context.Background(),server.URL,"application.example.test",time.Second);err!=nil{t.Fatal(err)};if atomic.LoadInt32(&requests)<3{t.Fatal("accepted old static routing")}
+}
+func TestApplicationMaintenanceRedirectDoesNotFollowTLS(t *testing.T){
+ server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.Header().Set("X-LiteCP-Application-State","maintenance");w.Header().Set("Location","https://unreachable.invalid/");w.WriteHeader(301)}));defer server.Close()
+ if err:=waitApplicationMaintenance(context.Background(),server.URL,"application.example.test",time.Second);err!=nil{t.Fatal("loaded same-server maintenance redirect rejected",err)}
+}
+func TestApplicationMaintenanceRejectsUnmarkedResponse(t *testing.T){
+ server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(503)}));defer server.Close()
+ if err:=waitApplicationMaintenance(context.Background(),server.URL,"application.example.test",120*time.Millisecond);err==nil{t.Fatal("unverified server response accepted")}
+}
 
 func TestDisabledApplicationNeverServesSource(t *testing.T){
  system:=&System{};for language:=range hostingImages{site:=Site{Domain:"example.test",Root:"/var/www/litecp/example.test/public",Application:&ApplicationHosting{Language:language,Enabled:false,Port:21000,Certificate:"/live/new/fullchain.pem",CertificateKey:"/live/new/privkey.pem",Backup:"/saved/prior-php.conf"}};config:=system.nginxConfig(site)

@@ -25,8 +25,9 @@ func applicationPort(siteID string,sites []Site)(int,error){hash:=fnv.New32a();h
 func applicationReady(ctx context.Context,port int)error{deadline:=time.Now().Add(25*time.Second);for time.Now().Before(deadline){connection,err:=net.DialTimeout("tcp",fmt.Sprintf("127.0.0.1:%d",port),time.Second);if err==nil{connection.Close();return nil};select{case <-ctx.Done():return ctx.Err();case <-time.After(500*time.Millisecond):}};return errors.New("application did not listen on 0.0.0.0:8080; review its startup command and logs")}
 func(s *System) applicationNginx(site Site)string{
  app:=site.Application;tls:="";if app.Certificate!=""&&app.CertificateKey!=""{tls=fmt.Sprintf("    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;",app.Certificate,app.CertificateKey)+"\n    if ($scheme = http) { return 301 https://$host$request_uri; }"}
+ marker:="    add_header X-LiteCP-Application-State maintenance always;"
  routing:="    location / { return 503; }"
- if app.Enabled{routing=fmt.Sprintf(`    location / {
+ if app.Enabled{marker="";routing=fmt.Sprintf(`    location / {
         proxy_pass http://127.0.0.1:%d;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -46,14 +47,27 @@ server {
     server_name %s;
     root %s;
     client_max_body_size 64m;
+%s
     location ^~ /.well-known/acme-challenge/ { try_files $uri =404; }
     location ~ /\.(?!well-known) { deny all; }
 %s
 }
-`,wafBlock(site,site.WAFMode),tls,site.Domain,site.Root,routing)
+`,wafBlock(site,site.WAFMode),tls,site.Domain,site.Root,marker,routing)
 }
 func(s *System) writeApplicationProxy(ctx context.Context,site Site)error{
- return s.writeApplicationRouting(ctx,site,[]byte(s.nginxConfig(site)))
+ if err:=s.writeApplicationRouting(ctx,site,[]byte(s.nginxConfig(site)));err!=nil{return err}
+ if site.Application!=nil&&!site.Application.Enabled{return waitApplicationMaintenance(ctx,"http://127.0.0.1:80/",site.Domain,3*time.Second)};return nil
+}
+func waitApplicationMaintenance(ctx context.Context,endpoint,domain string,timeout time.Duration)error{
+ ctx,cancel:=context.WithTimeout(ctx,timeout);defer cancel()
+ transport:=&http.Transport{Proxy:nil,DisableKeepAlives:true};defer transport.CloseIdleConnections()
+ client:=&http.Client{Transport:transport,Timeout:time.Second,CheckRedirect:func(_ *http.Request,_ []*http.Request)error{return http.ErrUseLastResponse}}
+ for{
+  request,err:=http.NewRequestWithContext(ctx,http.MethodGet,endpoint,nil);if err!=nil{return err};request.Host=domain
+  response,err:=client.Do(request)
+  if err==nil{protected:=response.Header.Get("X-LiteCP-Application-State")=="maintenance"&&(response.StatusCode==http.StatusServiceUnavailable||response.StatusCode==http.StatusMovedPermanently);response.Body.Close();if protected{return nil}}
+  select{case <-ctx.Done():return errors.New("maintenance routing has not become active; protected configuration retained, retry before uploading application source");case <-time.After(50*time.Millisecond):}
+ }
 }
 func(s *System) writeApplicationRouting(ctx context.Context,site Site,next []byte)error{
  path,_:=s.nginxPaths(site.Domain);return writeApplicationRoutingFile(ctx,path,next)
@@ -125,7 +139,7 @@ func(a *App) applicationHosting(w http.ResponseWriter,r *http.Request){
   }
   if _,err:=a.system.preserveApplicationNginx(*site,&app);err!=nil{writeError(w,502,err.Error());return}
   // Repair legacy disabled sites too, before dependency setup can write source.
-  previous:=[]byte(a.system.nginxConfig(*site));if err:=a.system.writeApplicationRouting(r.Context(),*site,previous);err!=nil{writeError(w,502,"Cannot protect application source before startup: "+err.Error());return}
+  previous:=[]byte(a.system.nginxConfig(*site));if err:=a.system.writeApplicationProxy(r.Context(),*site);err!=nil{writeError(w,502,"Cannot protect application source before startup: "+err.Error());return}
   if _,err:=a.system.applicationHostCommand(r.Context(),10*time.Minute,"podman","pull",hostingImages[app.Language][app.Version]);err!=nil{writeError(w,502,"Runtime image download failed; existing website unchanged");return}
   id,err:=randomToken(8);if err!=nil{writeError(w,500,err.Error());return};name:="litecp-app-"+safeSiteID(site.ID)+"-"+safeSiteID(id)
   if app.SetupCommand!=""{if _,err:=a.system.applicationHostCommand(r.Context(),10*time.Minute,"podman",applicationContainerArgs(*site,app,name+"-setup",app.SetupCommand,false)...);err!=nil{app.Container=name+"-setup";site.Application=&app;_ = save();writeError(w,502,"Dependency setup failed. Uploaded files and setup container retained for review. Open logs to inspect the setup failure.");return}}

@@ -22,6 +22,8 @@ Local MySQL's socket is mounted when present at `/run/mysqld/mysqld.sock`, read-
 
 ## Lifecycle and recovery
 
+Configuration and Disable wait for a bounded local probe to confirm that Nginx has activated the maintenance response. If activation cannot be confirmed, the API reports an error and retains the protected configuration; wait and retry before uploading source. This closes the interval between Nginx accepting a reload signal and new workers serving the new routing.
+
 Start pulls an allowlisted official image, runs optional setup, starts the container, checks its TCP listener and validates/reloads Nginx. Routing/state failures attempt to restore the exact preceding configuration, including TLS directives. A listening port is not proof that every endpoint is healthy. Startup failure containers and logs are retained for inspection. Logs show only the last 150 lines and may contain data printed by the application.
 
 Stop interrupts application traffic but preserves application proxy routing. Start resumes the saved stopped container. Disable website runtime stops the container and serves maintenance responses while keeping files and configuration. Configured application directories never fall back to PHP/static hosting, because that could expose Python/Ruby source or Node project files. Original routing snapshots remain root-only for explicit owner-led recovery; restoring ordinary hosting requires removing private application source from the public directory first. Version/command editing requires a disabled website runtime. Disable all website runtimes for a language before disabling its feature switch. Website detachment attempts to stop its saved application container before removing normal hosting configuration.
