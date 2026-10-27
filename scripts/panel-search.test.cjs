@@ -2,9 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync('web/panel-search.js','utf8');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function panel(options={}) {
-  const nodes=new Map(),listeners={},navigations=[],timers=[],eventTypes=[];
+  const nodes=new Map(),listeners={},navigations=[],timers=[],eventTypes=[],windowListeners={};let menuClicks=0;
   class Element {
-    constructor(tag='div'){this.tag=tag;this.children=[];this.handlers={};this.attributes={};this.value='';this.textContent='';this.dataset={};this.hidden=false;this.isConnected=true;this.classList={add(){},remove(){}};}
+    constructor(tag='div'){this.tag=tag;this.children=[];this.handlers={};this.attributes={};this.value='';this.textContent='';this.dataset={};this.style={};this.hidden=false;this.isConnected=true;const classes=new Set();this.classList={add:value=>classes.add(value),remove:value=>classes.delete(value),contains:value=>classes.has(value)};}
     querySelector(selector){return node(selector);}
     querySelectorAll(){return [];}
     setAttribute(key,value){this.attributes[key]=value;}
@@ -12,6 +12,8 @@ function panel(options={}) {
     addEventListener(name,callback){this.handlers[name]=callback;}
     append(...children){this.children.push(...children);}
     before(element){this.insertedBefore=element;}
+    after(element){this.insertedAfter=element;}
+    getBoundingClientRect(){return options.rect||{left:10,bottom:110};}
     replaceChildren(){this.children=[];}
     scrollIntoView(){this.scrolled=true;}
     focus(){document.activeElement=this;this.handlers.focus?.();}
@@ -26,12 +28,14 @@ function panel(options={}) {
   const field=new Element('input');field.value='MUST_NOT_INDEX_PRIVATE_VALUE';
   const heading=new Element('span');heading.textContent='Custom safe setting';heading.closest=selector=>selector==='label'?{querySelector:()=>field}:null;
   const page=new Element();page.dataset.pageView='settings';page.querySelector=()=>({textContent:'Settings'});page.querySelectorAll=()=>[heading];
-  const document={activeElement:null,createElement:tag=>new Element(tag),querySelector:selector=>selector.startsWith('dialog[')?null:node(selector),querySelectorAll:selector=>selector==='[data-page-view]'?[page]:[],addEventListener:(name,callback)=>listeners[name]=callback};
+  const document={body:new Element('body'),activeElement:null,createElement:tag=>new Element(tag),querySelector:selector=>selector.startsWith('dialog[')?null:node(selector),querySelectorAll:selector=>selector==='[data-page-view]'?[page]:[],addEventListener:(name,callback)=>listeners[name]=callback};
+  if(options.collapsed)document.body.classList.add('sidebar-collapsed');
+  node('#mobileMenu').click=()=>{menuClicks++;document.body.classList.remove('sidebar-collapsed');node('#sidebar').classList.add('open');};
   const state=options.state===undefined?{sites:[{domain:'my.example.test'}],databases:[{name:'customer_database',username:'db_user'}],mailboxes:[{address:'admin@example.test'}]}:options.state;
-  const window={LiteCP:{state:()=>state,navigate:page=>navigations.push(page)},addEventListener(){}};
+  const window={innerWidth:options.width||1440,innerHeight:options.height||900,LiteCP:{state:()=>state,navigate:page=>navigations.push(page)},addEventListener:(name,callback)=>windowListeners[name]=callback};
   vm.runInNewContext(source,{window,document,fetch:options.fetch||(async()=>({ok:false})),Event:class{constructor(type){this.type=type;}},setTimeout:callback=>{timers.push(callback);return timers.length;},clearTimeout(){}});
   const input=node('input'),dropdown=node('.panel-search-dropdown'),list=node('#panelSearchResults');
-  return {input,dropdown,list,node,field,listeners,navigations,eventTypes,query(value){input.value=value;input.handlers.input();},key(key,extra={}){let prevented=false;input.handlers.keydown({key,preventDefault(){prevented=true;},stopPropagation(){},...extra});return prevented;},click(title){const button=list.children.find(button=>button.children[0].textContent===title);assert.ok(button,'Missing search result '+title);button.handlers.click();},titles:()=>list.children.map(button=>button.children[0].textContent)};
+  return {input,dropdown,list,node,field,listeners,navigations,eventTypes,document,window,windowListeners,menuClicks:()=>menuClicks,query(value){input.value=value;input.handlers.input();},key(key,extra={}){let prevented=false;input.handlers.keydown({key,preventDefault(){prevented=true;},stopPropagation(){},...extra});return prevented;},click(title){const button=list.children.find(button=>button.children[0].textContent===title);assert.ok(button,'Missing search result '+title);button.handlers.click();},titles:()=>list.children.map(button=>button.children[0].textContent)};
 }
 test('global search finds feature aliases and individual settings without indexing values',()=>{
   const ui=panel();
@@ -64,4 +68,16 @@ test('manual failure leaves local feature search working; signed-out search stay
 test('result labels use text nodes rather than interpreting domain markup',()=>{
   const ui=panel({state:{sites:[{domain:'<img onerror=attack>'}]}});ui.query('onerror');assert.equal(ui.list.children.length,1);assert.equal(ui.list.children[0].children[0].textContent,'<img onerror=attack>');assert.equal(ui.list.children[0].innerHTML,undefined);
   ui.query('timezone');const result=ui.list.children[0];assert.equal(result.children[0].textContent,'Display timezone');assert.equal(result.innerHTML,undefined);
+});
+test('search sits below the logo and results are outside the scrolling sidebar',()=>{
+  const ui=panel();assert.ok(ui.node('.sidebar-brand').insertedAfter);assert.ok(ui.document.body.children.includes(ui.dropdown));
+  ui.query('dns');assert.equal(ui.dropdown.style.width,'420px');assert.equal(ui.dropdown.style.left,'12px');assert.equal(ui.dropdown.style.top,'118px');
+  ui.node('#sidebar').handlers.scroll();assert.equal(ui.dropdown.hidden,true);
+});
+test('keyboard shortcut reveals hidden navigation and narrow results stay inside the viewport',()=>{
+  for(const options of [{collapsed:true},{width:390,height:700,rect:{left:-232,bottom:120}}]){
+    const ui=panel(options);ui.listeners.keydown({key:'k',ctrlKey:true,preventDefault(){}});
+    assert.equal(ui.menuClicks(),1);assert.equal(ui.input.selected,true);assert.equal(ui.input.attributes['aria-expanded'],'true');
+    if(options.width){assert.equal(ui.dropdown.style.width,'366px');assert.equal(ui.dropdown.style.left,'12px');assert.ok(parseInt(ui.dropdown.style.top)+parseInt(ui.dropdown.style.maxHeight)<=options.height-12);}
+  }
 });

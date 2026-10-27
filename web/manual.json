@@ -17,7 +17,7 @@
         "steps": [
           "Use the menu button to hide or show navigation. Click the sun or moon icon in the top bar to switch light/dark mode. Your choice is remembered on this device; until you choose, the panel follows your system theme.",
           "The top bar shows the OS, hostname and server IP. Refresh server data with the refresh icon.",
-          "Use the header search bar, or press Ctrl+K / Command+K, to find features, settings, websites, databases and mailboxes. Select a result or use the arrow keys and Enter to jump to it. Escape closes search. Search opens the relevant section without changing settings.",
+          "Use Quick search below the sidebar logo, or press Ctrl+K / Command+K, to find features, settings, websites, databases and mailboxes. The shortcut opens navigation when it is hidden. Select a result or use the arrow keys and Enter to jump to it. Escape closes search. Search opens the relevant section without changing settings.",
           "Use the Documentation tab at any time. Search this manual by feature name or task."
         ]
       }
