@@ -192,7 +192,7 @@
   }
   function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
     if (dialog.open) return;
-    dialog.classList.remove("fm-search-dialog");
+    dialog.classList.remove("fm-search-dialog","fm-preferences-dialog");
     const expectedSite=siteID(), expectedPath=cp.path();
     dialog.innerHTML=`<form><header><h2 id="fmDialogTitle">${esc(title)}</h2><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body">${description ? `<p>${esc(description)}</p>` : ""}${fields}<p class="fm-error hidden" role="alert"></p></div><footer>${submit ? `<button type="submit" class="button ${danger ? "fm-danger-button" : "button-primary"}">${esc(submit)}</button>` : ""}<button type="button" class="button button-ghost" data-fm-cancel>Cancel</button></footer></form>`;
     dialog.querySelectorAll("[data-fm-cancel]").forEach(b=>b.onclick=()=>dialog.close());
@@ -207,16 +207,17 @@
   }
   function showSearchResults(result, query) {
     if (dialog.open) return;
+    dialog.classList.remove("fm-preferences-dialog");
     dialog.classList.add("fm-search-dialog");
     const entries=result.entries || [];
-    dialog.innerHTML=`<div class="fm-search-results"><header><div><span class="eyebrow">FILE MANAGER SEARCH</span><h2 id="fmDialogTitle">Search results</h2><p>${entries.length} match${entries.length===1 ? "" : "es"} for “${esc(query)}”${result.root ? ` in /public/${esc(result.root)}` : ""}.</p></div><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body">${result.truncated ? '<p class="fm-search-warning">Only the first 1,000 matches are shown. Refine your search to see fewer results.</p>' : ""}${entries.length ? `<div class="fm-search-table"><table class="fm-table"><thead><tr><th>Name</th><th>Location</th><th>Size</th><th>Modified</th><th>Type</th><th>Permissions</th><th></th></tr></thead><tbody>${entries.map(entry=>`<tr><td>${icon(entry.type==="directory" ? "folder" : "file")} ${esc(entry.name)}</td><td>/public/${esc(entry.path)}</td><td>${entry.type==="directory" ? "—" : cp.formatBytes(entry.size)}</td><td>${esc(cp.formatDateTime(entry.modified))}</td><td>${esc(kind(entry))}</td><td><code>${esc(entry.mode)}</code></td><td><button type="button" class="button button-secondary" data-fm-search-path="${esc(entry.path)}" data-fm-search-type="${esc(entry.type)}">Open</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="fm-empty"><h3>No matching files or folders</h3><p>Try a different name, location, or enable hidden files in Settings.</p></div>'}</div><footer><button type="button" class="button button-secondary" data-fm-cancel>Close</button></footer></div>`;
+    dialog.innerHTML=`<div class="fm-search-results"><header><h2 id="fmDialogTitle">Search Results for: ${esc(query)}</h2><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body"><p>Double click on a file or folder to open the folder (or the folder it is contained in if it is a file).</p>${result.truncated ? '<p class="fm-search-warning">Only the first 1,000 matches are shown. Refine your search to see fewer results.</p>' : ""}${entries.length ? `<div class="fm-search-table"><table class="fm-table"><thead><tr><th>Name</th></tr></thead><tbody>${entries.map(entry=>`<tr><td><button type="button" class="fm-search-result" data-fm-search-path="${esc(entry.path)}" data-fm-search-type="${esc(entry.type)}">/public/${esc(entry.path)}</button></td></tr>`).join("")}</tbody></table></div>` : '<div class="fm-empty"><p>No matching files or folders.</p></div>'}</div><footer><button type="button" class="button button-secondary" data-fm-cancel>Close</button></footer></div>`;
     dialog.querySelectorAll("[data-fm-cancel]").forEach(button=>button.onclick=()=>dialog.close());
-    dialog.querySelectorAll("[data-fm-search-path]").forEach(button=>button.onclick=async()=>{
+    dialog.querySelectorAll("[data-fm-search-path]").forEach(button=>{const open=async()=>{
       const path=button.dataset.fmSearchPath, folder=button.dataset.fmSearchType==="directory" ? path : path.split("/").slice(0,-1).join("/");
       dialog.close();
       await cp.goToFilePath(folder);
       if(button.dataset.fmSearchType!=="directory") { selected=new Set([path]); syncSelection(); }
-    });
+    };button.ondblclick=open;button.onclick=event=>{if(event.detail===0)open();};});
     dialog.showModal();
   }
   async function searchFiles() {
@@ -265,11 +266,12 @@
     if (name==="close-trash") { trashPanel.classList.add("hidden"); return; }
     if (name==="settings") {
       document.querySelector(".cpfm-settings-menu")?.remove();
-      const box=document.createElement("form");box.className="cpfm-settings-menu";
-      box.innerHTML=`<header><strong>Preferences</strong><button type="button" class="cpfm-settings-close" aria-label="Close">${icon("close")}</button></header><fieldset><legend>Always open this directory</legend><label><input type="radio" name="start" value="root" ${preferences.start!=="last" ? "checked" : ""}> Website root (/public)</label><label><input type="radio" name="start" value="last" ${preferences.start==="last" ? "checked" : ""}> Last opened folder</label></fieldset><label><input type="checkbox" name="hidden" ${$("#showHidden").checked ? "checked" : ""}> Show hidden files (dotfiles)</label><label><input type="checkbox" name="skipEncoding" ${preferences.skipEncoding ? "checked" : ""}> Disable character encoding verification dialogs</label><footer><button type="button" class="button button-secondary" data-settings-cancel>Cancel</button><button type="submit" class="button button-primary">Save</button></footer>`;
-      const close=()=>box.remove();box.querySelector(".cpfm-settings-close").onclick=close;box.querySelector("[data-settings-cancel]").onclick=close;
-      box.onsubmit=event=>{event.preventDefault();const data=new FormData(box);preferences={start:String(data.get("start")||"root"),hidden:data.has("hidden"),skipEncoding:data.has("skipEncoding")};localStorage.setItem(preferenceKey,JSON.stringify(preferences));$("#showHidden").checked=preferences.hidden;$("#showHidden").dispatchEvent(new Event("change"));close();cp.showToast("File Manager preferences saved","Your display and startup choices were updated.","success");};
-      panel.append(box);return;
+      openDialog({title:"Preferences",description:"",fields:`<div class="fm-preferences-start"><p>Always open this directory in the future by default:</p><label><input type="radio" name="start" value="root" ${preferences.start!=="last" ? "checked" : ""}> Website Root (/public)</label><label><input type="radio" name="start" value="last" ${preferences.start==="last" ? "checked" : ""}> Last Opened Folder</label></div><div class="fm-preferences-options"><label><input type="checkbox" name="hidden" ${$("#showHidden").checked ? "checked" : ""}> Show Hidden Files (dotfiles)</label><label><input type="checkbox" name="skipEncoding" ${preferences.skipEncoding ? "checked" : ""}> Disable Character Encoding Verification Dialogs</label></div>`,submit:"Save",perform:async data=>{
+        preferences={start:String(data.get("start")||"root"),hidden:data.has("hidden"),skipEncoding:data.has("skipEncoding")};
+        localStorage.setItem(preferenceKey,JSON.stringify(preferences));$("#showHidden").checked=preferences.hidden;$("#showHidden").dispatchEvent(new Event("change"));
+        cp.showToast("File Manager preferences saved","Your display and startup choices were updated.","success");
+      }});
+      dialog.classList.add("fm-preferences-dialog");return;
     }
     if (name==="new-folder" || name==="new-file") {
       const isFolder=name==="new-folder";
