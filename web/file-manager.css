@@ -1,4 +1,72 @@
-/* File manager workspace, using the panel's existing light/dark tokens. */
+/* File Manager styles. The final scoped reference rules isolate this workspace. */
+@font-face{font-family:FMOpenSans;src:url('fonts/OpenSans-Regular.woff') format('woff');font-weight:400;font-display:swap}
+@font-face{font-family:FMOpenSans;src:url('fonts/OpenSans-Bold.woff') format('woff');font-weight:700;font-display:swap}
+@font-face{font-family:FMFontAwesome;src:url('fonts/fa-solid-900.woff2') format('woff2');font-weight:900;font-display:block}
+@font-face{font-family:FMFontAwesome;src:url('fonts/fa-regular-400.woff2') format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:FMGlyphicons;src:url('fonts/glyphicons-halflings-regular.woff') format('woff');font-display:block}
+.fm-icon{display:inline-block;flex-shrink:0;font-style:normal;font-variant:normal;line-height:1;text-rendering:auto;-webkit-font-smoothing:antialiased}
+.fm-icon-solid{font-family:FMFontAwesome!important;font-weight:900!important}
+.fm-icon-regular{font-family:FMFontAwesome!important;font-weight:400!important}
+.fm-icon-glyph{font-family:FMGlyphicons!important;font-weight:400!important}
+
+/* Ported reference values from Jupiter File Manager. Scoped to avoid panel CSS leaks. */
+:root[data-theme] body .fm-page{--paper:#fff;--ink:#333;--muted:#666;--line:#ccc;--surface-soft:#f9f9f9;--teal:#428bca;--mint:#d7edf9;--mint-2:#d7edf9;font:14px/18px FMOpenSans,'Open Sans',sans-serif!important;color:#333!important;color-scheme:light}
+:root[data-theme] body .fm-page :is(button,input,select){font-family:FMOpenSans,'Open Sans',sans-serif!important;font-weight:400;letter-spacing:normal;box-shadow:none!important;filter:none!important;text-shadow:none}
+:root[data-theme] body .fm-page .file-manager-panel{grid-template-columns:330px minmax(0,1fr);grid-template-rows:50px auto 44px 44px minmax(0,1fr);height:calc(100dvh - 112px);min-height:420px;overflow:hidden!important}
+:root[data-theme] body .fm-page .cpfm-header{height:50px;min-height:50px;padding:0 10px 0 15px;background:#293a4a;border:0;gap:10px}
+:root[data-theme] body .fm-page .cpfm-brand{font-size:18px;line-height:50px}
+:root[data-theme] body .fm-page .cpfm-brand strong{font-size:25px;letter-spacing:-1.5px}
+:root[data-theme] body .fm-page .cpfm-header form{font-size:14px;gap:5px}
+:root[data-theme] body .fm-page .cpfm-header :is(input,select){height:30px;min-height:30px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:3px!important;font-size:12px!important;padding:5px 10px!important}
+:root[data-theme] body .fm-page .cpfm-header input{width:156px}
+:root[data-theme] body .fm-page .cpfm-header select{min-width:140px}
+:root[data-theme] body .fm-page .cpfm-header form button{height:30px;min-height:30px;padding:5px 12px;border:1px solid #357ebd!important;background:#428bca!important;color:#fff!important;font-size:12px;border-radius:2px}
+:root[data-theme] body .fm-page .cpfm-settings{height:30px;min-height:30px;padding:5px 10px;font-size:12px!important;line-height:18px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:2px}
+:root[data-theme] body .fm-page .file-toolbar{min-height:34px;padding:0!important;gap:0!important;background:#eaeaea!important;border-bottom:1px solid #c1c6cb!important;overflow:auto!important;scrollbar-width:thin;flex-wrap:wrap!important}
+:root[data-theme] body .fm-page .file-toolbar .fm-tool{min-height:34px;height:34px;padding:6px 12px!important;font-size:14px!important;font-weight:400!important;line-height:20px;gap:5px!important;background:transparent!important;color:#333!important;border:1px solid transparent!important;border-radius:0!important}
+:root[data-theme] body .fm-page .file-toolbar .fm-tool:hover:not(:disabled){background:#ddd!important;color:#000!important;text-decoration:underline}
+:root[data-theme] body .fm-page .file-toolbar .fm-tool:disabled{color:#aaa!important;opacity:1!important}
+:root[data-theme] body .fm-page .fm-tool .fm-icon{font-size:14px;width:auto;color:inherit!important}
+:root[data-theme] body .fm-page .fm-fullscreen-toggle{display:none!important}
+:root[data-theme] body .fm-page .cpfm-navigation{height:44px;min-height:44px;padding:5px 0;align-self:start;border:0;background:#fff}
+:root[data-theme] body .fm-page .cpfm-navigation .fm-tool{min-height:34px;height:34px;padding:6px 10px!important;gap:4px;font-size:14px!important;line-height:20px;background:transparent!important;border:1px solid transparent!important;border-radius:0;color:#428bca!important}
+:root[data-theme] body .fm-page .cpfm-navigation .fm-tool:disabled{color:#999!important;opacity:.5}
+:root[data-theme] body .fm-page .cpfm-navigation .fm-tool:hover:not(:disabled){background:#eee!important;text-decoration:underline}
+:root[data-theme] body .fm-page .fm-address{height:44px;padding:5px 10px!important;grid-template-columns:40px minmax(0,1fr) 44px;border:0!important;background:#fff!important}
+:root[data-theme] body .fm-page .fm-address :is(.fm-home,.button,label){min-height:34px;height:34px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:0!important;padding:0!important}
+:root[data-theme] body .fm-page .fm-address label{border-left:0!important;border-right:0!important;min-width:0}
+:root[data-theme] body .fm-page .fm-address input{height:32px;min-height:0;width:100%;line-height:32px;font:13px/32px monospace!important;color:#333!important;background:#fff!important;padding:0 8px!important;border:0!important}
+:root[data-theme] body .fm-page .fm-home .fm-icon{font-size:19px;color:#666!important}
+:root[data-theme] body .fm-page .cpfm-collapse{height:34px;min-height:34px;margin:0 10px 10px;padding:6px 0;background:#fff!important;border:1px solid #ccc!important;border-radius:2px;color:#333!important;font-size:14px;line-height:20px}
+:root[data-theme] body .fm-page .fm-body{height:auto!important;min-height:0!important;grid-row:5;margin-top:0;background:#fff!important;grid-template-columns:var(--fm-tree-width,330px) 4px minmax(0,1fr)!important}
+:root[data-theme] body .fm-page .fm-folders{padding:0 10px 10px 20px!important;background:#fff!important}
+:root[data-theme] body .fm-page .fm-tree-row{min-height:22px!important;height:22px;margin:0;padding-left:calc(var(--depth)*18px)!important;background:#fff!important;color:#333!important;border-radius:0}
+:root[data-theme] body .fm-page .fm-tree-row.active{background:#fff!important;color:#333!important}
+:root[data-theme] body .fm-page .fm-tree-row button{min-height:0!important;height:22px;padding:0 2px!important;background:transparent!important;color:#333!important;border:0!important;border-radius:0!important;font-size:14px!important;line-height:22px;gap:3px}
+:root[data-theme] body .fm-page .fm-tree-row button[data-fm-expand]{width:14px!important;min-width:14px!important;font:700 14px/22px Arial!important}
+:root[data-theme] body .fm-page .fm-tree-row .fm-icon{font-size:14px;color:#eeae4a!important}
+:root[data-theme] body .fm-page .fm-tree-root-icons{width:34px;height:22px;gap:2px}
+:root[data-theme] body .fm-page .fm-tree-root-icons .fm-icon:last-child{color:#333!important}
+:root[data-theme] body .fm-page .fm-tree-row.is-root button[data-fm-folder]{font-weight:700!important}
+:root[data-theme] body .fm-page .fm-resizer{width:4px;background:#fff;border:0;border-right:1px solid #ccc}
+:root[data-theme] body .fm-page .fm-resizer:hover{background:#428bca}
+:root[data-theme] body .fm-page .fm-content{border:1px solid #ccc;border-bottom:0;margin:0 5px 0 0;background:#fff!important}
+:root[data-theme] body .fm-page .fm-table{font:14px/18px Arial,sans-serif!important;table-layout:auto;width:100%;border-collapse:collapse}
+:root[data-theme] body .fm-page .fm-table th{height:35px!important;padding:8px 5px!important;font:700 14px/18px Arial,sans-serif!important;background:#f2f2f2!important;color:#428bca!important;border-bottom:1px solid #ccc!important}
+:root[data-theme] body .fm-page .fm-table td{height:31px!important;padding:5px!important;font:14px/20px Arial,sans-serif!important;color:#333!important;background:transparent!important;border-bottom:1px solid #ddd!important}
+:root[data-theme] body .fm-page .fm-table tbody tr:nth-child(even){background:#f9f9f9!important}
+:root[data-theme] body .fm-page .fm-table tbody tr:hover{background:#f1f7fb!important}
+:root[data-theme] body .fm-page .fm-table tbody tr.fm-selected{background:#d7edf9!important}
+:root[data-theme] body .fm-page .fm-table :is(th,td):first-child{width:28px!important;padding-left:5px!important}
+:root[data-theme] body .fm-page .fm-table :is(th,td):nth-child(2){width:46%;max-width:none!important}
+:root[data-theme] body .fm-page .fm-name{font:14px/20px Arial,sans-serif!important;gap:8px;background:transparent!important;color:#333!important}
+:root[data-theme] body .fm-page .fm-entry-icon{width:26px;color:#828b90!important}
+:root[data-theme] body .fm-page .fm-entry-icon .fm-icon{font-size:20px}
+:root[data-theme] body .fm-page .fm-entry-icon.is-folder{color:#eeae4a!important}
+:root[data-theme] body .fm-page .fm-mode{font:14px/20px Arial,sans-serif!important;color:#333!important;background:transparent!important;border:0!important}
+:root[data-theme] body .fm-page .fm-footer{display:none!important}
+:root[data-theme] body .fm-page input[type=checkbox]{appearance:auto!important;width:14px!important;height:14px!important;min-height:0!important;margin:0!important;padding:0!important;accent-color:#428bca}
+@media(max-width:1000px){:root[data-theme] body .fm-page .cpfm-header{flex-wrap:wrap;height:auto;min-height:50px}:root[data-theme] body .fm-page .file-manager-panel{grid-template-rows:auto auto 44px 44px minmax(0,1fr)}:root[data-theme] body .fm-page .cpfm-header form{order:3;width:100%;padding-bottom:8px}:root[data-theme] body .fm-page .cpfm-navigation .fm-tool span{display:none}}
 .fm-page > .page-heading {display:none;}
 .fm-page .page-heading h1 {font-size:30px;}
 .fm-page .compact-select select {font-size:13px;min-width:230px;}

@@ -52,8 +52,21 @@
     home:'M3 11 12 3l9 8v10h-7v-6h-4v6H3z', eye:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
     select:'M4 4h16v16H4zM8 12l3 3 6-7', unselect:'M5 5h14v14H5z', settings:'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0-6 1 3 3 1 3-1 2 3-2 2v3l2 2-2 3-3-1-3 1-1 3h-4l-1-3-3-1-3 1-2-3 2-2v-3L3 9l2-3 3 1 3-1z'
   };
-  const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
-  const button = (action,label,name,extra="") => `<button type="button" class="fm-tool ${extra}" data-fm-action="${action}" title="${label}">${icon(name)}<span>${label}</span></button>`;
+  // The same Font Awesome Free and Bootstrap glyphs used by the reference manager.
+  const glyphs = {
+    folder:["solid",0xf07b], "folder-open":["solid",0xf07c], file:["regular",0xf15b],
+    plus:["glyph",0x002b], copy:["regular",0xf0c5], move:["glyph",0xe068],
+    upload:["solid",0xf093], download:["solid",0xf019], trash:["glyph",0xe020],
+    delete:["glyph",0xe014], restore:["solid",0xf0e2], rename:["solid",0xf15b],
+    edit:["solid",0xf303], "html-edit":["regular",0xf044], lock:["solid",0xf084],
+    eye:["solid",0xf06e], extract:["glyph",0xe096], archive:["glyph",0xe097],
+    home:["solid",0xf015], up:["solid",0xf3bf], back:["solid",0xf060], next:["solid",0xf061],
+    refresh:["solid",0xf021], select:["regular",0xf14a], unselect:["regular",0xf0c8],
+    settings:["glyph",0xe019], search:["solid",0xf002], close:["solid",0xf00d],
+    grid:["solid",0xf065], more:["solid",0xf142], info:["solid",0xf05a], list:["solid",0xf03a]
+  };
+  const icon = name => { const glyph=glyphs[name]; return glyph ? `<i class="fm-icon fm-icon-${glyph[0]}" aria-hidden="true">${String.fromCodePoint(glyph[1])}</i>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`; };
+  const button = (action,label,name,extra="") => `<button type="button" class="fm-tool ${extra}" data-fm-action="${action}" title="${label}">${icon(action==="delete" ? "delete" : action==="rename" ? "rename" : action==="html-edit" ? "html-edit" : action==="trash" && label==="Restore" ? "restore" : action==="new-folder" ? "plus" : name)}<span>${label}</span></button>`;
   const preferenceKey = "litecpFileManagerPreferences";
   const readPreferences = () => {
     try { return {start:"root",hidden:false,skipEncoding:false,...JSON.parse(localStorage.getItem(preferenceKey) || "{}")}; }
@@ -78,7 +91,7 @@
   panel.append(body); $("#fmFileHost").append($("#fileTable"));
   const resizer=$(".fm-resizer"), savedTreeWidth=Number(localStorage.getItem("litecpFileTreeWidth"));
   const setTreeWidth=value=>{const maximum=Math.min(720,Math.max(220,body.clientWidth-420)),width=Math.max(220,Math.min(maximum,Math.round(value)));body.style.setProperty("--fm-tree-width",`${width}px`);resizer.setAttribute("aria-valuenow",String(width));return width;};
-  setTreeWidth(Number.isFinite(savedTreeWidth) && savedTreeWidth ? savedTreeWidth : 400);
+  setTreeWidth(Number.isFinite(savedTreeWidth) && savedTreeWidth ? savedTreeWidth : 330);
   resizer.addEventListener("pointerdown",event=>{event.preventDefault();resizer.setPointerCapture(event.pointerId);body.classList.add("fm-resizing");});
   resizer.addEventListener("pointermove",event=>{if(!resizer.hasPointerCapture(event.pointerId))return;setTreeWidth(event.clientX-body.getBoundingClientRect().left);});
   resizer.addEventListener("pointerup",event=>{if(!resizer.hasPointerCapture(event.pointerId))return;resizer.releasePointerCapture(event.pointerId);body.classList.remove("fm-resizing");localStorage.setItem("litecpFileTreeWidth",String(parseInt(getComputedStyle(body).getPropertyValue("--fm-tree-width"),10)));});
@@ -143,7 +156,7 @@
     function branch(path,label,depth) {
       const open=expanded.has(path), children=folders.get(path), error=folderErrors.get(path);
       const root=path==="", displayLabel=root ? "(/public)" : label;
-      const entryIcon=root ? `<span class="fm-tree-root-icons">${icon("folder")}${icon("home")}</span>` : icon("folder");
+      const entryIcon=root ? `<span class="fm-tree-root-icons">${icon(open ? "folder-open" : "folder")}${icon("home")}</span>` : icon(open ? "folder-open" : "folder");
       return `<div role="treeitem" aria-expanded="${open}" aria-selected="${listing?.path===path}" class="fm-tree-item"><div class="fm-tree-row ${root ? "is-root" : ""} ${listing?.path===path ? "active" : ""}" style="--depth:${depth}"><button type="button" data-fm-expand="${esc(path)}" aria-label="${open ? "Collapse" : "Expand"} ${esc(displayLabel)}">${open ? "−" : "+"}</button><button type="button" data-fm-folder="${esc(path)}">${entryIcon}<span>${esc(displayLabel)}</span></button></div>${open ? `<div role="group">${children ? children.map(child=>branch(child.path,child.name,depth+1)).join("") : `<small class="fm-tree-note">${error ? esc(error) : "Loading folders…"}</small>`}</div>` : ""}</div>`;
     }
     $("#fmTree").innerHTML=branch("","public",0);
