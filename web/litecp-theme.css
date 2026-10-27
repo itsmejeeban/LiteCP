@@ -250,3 +250,6 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 .website-ftp-dialog .ftp-details>div {display:grid;grid-template-columns:90px minmax(0,1fr);gap:12px;margin:8px 0;}
 .website-ftp-dialog .ftp-details dt {color:var(--muted);}
 .website-ftp-dialog .ftp-details dd {margin:0;overflow-wrap:anywhere;}
+
+.website-ftp-dialog [data-ftp-status] {text-align:center;margin:10px 0 16px;font-size:12px;}
+.website-ftp-dialog [data-ftp-status]:empty {display:none;}
