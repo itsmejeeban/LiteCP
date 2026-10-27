@@ -23,10 +23,15 @@
 .settings-body .feature-note {padding:0;}
 .feature-output {white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto;background:var(--paper);color:var(--ink);padding:20px;border:1px solid var(--line);border-radius:10px;font:14px/1.6 ui-monospace,Consolas,monospace;}
 .password-actions {display:flex;justify-content:flex-end;gap:5px;margin-top:-5px;}.password-actions .button {min-height:30px;font-size:13px;padding:0 9px;}
-.password-copy-field {position:relative;display:block;min-width:0;width:100%;}
-.password-copy-field input {width:100%;padding-right:48px!important;}
+.password-copy-field {--password-icon-size:34px;position:relative;display:block;min-width:0;width:100%;}
+.password-copy-field input {width:100%;padding-right:calc(28px + 2 * var(--password-icon-size))!important;}
+.password-copy-field.password-eye-only input {padding-right:calc(16px + var(--password-icon-size))!important;}
 .password-copy-button {display:inline-grid;place-items:center;flex-shrink:0;width:34px;height:34px;padding:7px;border:1px solid var(--line);border-radius:7px;background:var(--surface-soft);color:var(--ink);cursor:pointer;vertical-align:middle;margin-left:8px;}
 .password-copy-field>.password-copy-button {position:absolute;right:8px;top:50%;transform:translateY(-50%);margin:0;}
+.password-copy-field>.password-visibility-button {right:calc(12px + var(--password-icon-size));}
+.password-copy-field.password-eye-only>.password-visibility-button {right:8px;}
+.credential-list dd:has(.password-copy-field) {width:70%;max-width:70%;}
+.credential-list .password-copy-field input {height:38px;padding-left:10px;font:12px ui-monospace,Consolas,monospace;}
 .password-copy-button svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
 .password-copy-button:hover:not(:disabled) {background:var(--mint);color:var(--teal);}
 .password-copy-button:focus-visible {outline:2px solid var(--teal);outline-offset:2px;}

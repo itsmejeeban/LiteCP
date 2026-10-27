@@ -149,13 +149,13 @@
     $$('input[type="password"]',root).forEach(input=>{
       if(input.dataset.enhanced || input.id==="loginPassword")return;input.dataset.enhanced="1";
       const controls=document.createElement("span");controls.className="password-actions";
-      const toggle=document.createElement("button");toggle.type="button";toggle.className="button button-ghost";toggle.textContent="Show";toggle.setAttribute("aria-label","Show password");toggle.addEventListener("click",()=>{const show=input.type==="password";input.type=show?"text":"password";toggle.textContent=show?"Hide":"Show";toggle.setAttribute("aria-label",show?"Hide password":"Show password");});controls.append(toggle);
       if(input.autocomplete!=="current-password" && !["current","confirm"].includes(input.name)){
-        const generate=document.createElement("button");generate.type="button";generate.className="button button-ghost";generate.textContent="Generate";
+        const generate=document.createElement("button");generate.type="button";generate.className="button button-secondary";generate.textContent="Generate";
         generate.addEventListener("click",()=>{input.value=generatePassword();if(input.name==="next" && input.form?.elements.confirm)input.form.elements.confirm.value=input.value;input.dispatchEvent(new Event("input",{bubbles:true}));});controls.prepend(generate);
       }
-      input.insertAdjacentElement("afterend",controls);
-      if(input.autocomplete!=="current-password" && !["current","confirm"].includes(input.name))window.LiteCPPasswordCopy.enhance(input);
+      if(input.autocomplete!=="current-password" && !["current","confirm"].includes(input.name)){
+        input.insertAdjacentElement("afterend",controls);window.LiteCPPasswordCopy.enhance(input);
+      }else window.LiteCPPasswordCopy.enhance(input,{copy:false});
     });
   }
   function askPassword(title,generate){

@@ -172,6 +172,7 @@
 :root[data-theme] .ui-dialog footer {padding:12px 18px;}
 :root[data-theme] .ui-dialog footer .button {min-height:34px;}
 :root[data-theme] .password-copy-button {width:28px;height:28px;padding:5px;}
+:root[data-theme] .password-copy-field {--password-icon-size:28px;}
 :root[data-theme] .password-copy-button svg {width:15px;height:15px;}
 :root[data-theme] .fm-tool {min-height:30px;padding:6px 8px;font-size:11px;}
 :root[data-theme] .fm-entry-icon svg {width:18px;height:18px;}

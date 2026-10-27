@@ -579,7 +579,10 @@
     $("#credentialsModal .modal-head p").textContent = description;
     $("#credentialList").innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("");
     $$("#credentialList > div").forEach((row, index) => {
-      if (/password/i.test(rows[index][0])) row.querySelector("dd").append(window.LiteCPPasswordCopy.button(() => rows[index][1]));
+      if (/password/i.test(rows[index][0])) {
+        const input=document.createElement("input");input.type="password";input.value=String(rows[index][1]);input.readOnly=true;input.autocomplete="off";input.setAttribute("aria-label",rows[index][0]);
+        row.querySelector("dd").replaceChildren(input);window.LiteCPPasswordCopy.enhance(input);
+      }
     });
     $("#credentialsModal").classList.remove("hidden");
   }
