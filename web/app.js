@@ -411,7 +411,7 @@
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>SSL</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell"><span class="domain-favicon">${escapeHTML(site.domain[0])}</span><span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="badge ${site.ssl ? "success" : ""}">${site.ssl ? '<span class="pulse-dot"></span>Protected' : "Not enabled"}</span></td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}</button>`}${site.appType === "regular" ? "" : `<button aria-label="${site.cron ? "Disable" : "Enable"} cron for ${escapeHTML(site.domain)}" title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${escapeHTML(site.id)}">${icons.clock}</button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th></th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}</button>`}${site.appType === "regular" ? "" : `<button aria-label="${site.cron ? "Disable" : "Enable"} cron for ${escapeHTML(site.domain)}" title="${site.cron ? "Disable" : "Enable"} ${escapeHTML(applicationLabel(site.appType))} cron" data-site-action="cron" data-id="${escapeHTML(site.id)}">${icons.clock}</button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function renderPHPSelect(site) {
@@ -1073,6 +1073,13 @@
     const name = type === "wordpress" ? "WordPress" : type === "whmcs" ? "WHMCS" : "PHP";
     const detail = site.appVersion ? `${name} ${site.appVersion}` : name;
     return `<span class="application-logo application-logo-${type}" title="${escapeHTML(detail)}"><img src="logo-${type}.svg" alt="${escapeHTML(name)} logo"></span>`;
+  }
+
+  function renderSSLStatusIcon(site) {
+    const state = site.ssl ? "active" : "inactive";
+    const label = site.ssl ? "SSL active" : "SSL not active";
+    const mark = site.ssl ? '<path d="m9 12 2 2 4-5"/>' : '<path d="m9 9 6 6m0-6-6 6"/>';
+    return `<span class="domain-favicon ssl-status-icon ${state}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>${mark}</svg></span>`;
   }
 
   function escapeHTML(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }

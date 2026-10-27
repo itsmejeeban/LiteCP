@@ -99,15 +99,18 @@
 #sitesTable {overflow-x:auto;}
 #sitesTable .data-table {table-layout:fixed;min-width:850px;}
 #sitesTable th,#sitesTable td {padding-left:12px;padding-right:12px;}
-#sitesTable th:nth-child(1) {width:235px;}
-#sitesTable th:nth-child(2) {width:130px;}
-#sitesTable th:nth-child(3) {width:110px;}
-#sitesTable th:nth-child(4) {width:120px;}
+#sitesTable th:nth-child(1) {width:300px;}
+#sitesTable th:nth-child(2) {width:140px;}
+#sitesTable th:nth-child(3) {width:120px;}
 
 
 #sitesTable th:last-child {width:240px;}
 #sitesTable .domain-cell,#sitesTable .domain-copy {min-width:0;}
 #sitesTable .domain-favicon {flex-shrink:0;}
+#sitesTable .ssl-status-icon {width:32px;height:32px;border:0;background:transparent;display:inline-grid;place-items:center;}
+#sitesTable .ssl-status-icon svg {width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+#sitesTable .ssl-status-icon.active {color:#35d39a;}
+#sitesTable .ssl-status-icon.inactive {color:#f59e0b;}
 #sitesTable .domain-copy {flex:1;}
 #sitesTable .domain-copy strong,#sitesTable .domain-copy small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #sitesTable .badge {white-space:nowrap;}
