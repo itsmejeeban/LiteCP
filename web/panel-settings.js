@@ -44,11 +44,14 @@
     const visible=mobile.matches ? sidebar.classList.contains("open") : !document.body.classList.contains("sidebar-collapsed");
     toggle.setAttribute("aria-expanded",String(visible));toggle.setAttribute("aria-label",visible ? "Hide navigation" : "Show navigation");toggle.title=visible ? "Hide navigation" : "Show navigation";
     bottomToggle.setAttribute("aria-expanded",String(visible));bottomToggle.setAttribute("aria-label",visible ? "Collapse navigation" : "Expand navigation");bottomToggle.title=visible ? "Collapse navigation" : "Expand navigation";
-    sidebar.inert=!visible;
+    bottomToggle.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16${visible ? 'm7-12-4 4 4 4' : 'm4-12 4 4-4 4'}"/></svg>`;
+    sidebar.inert=mobile.matches&&!visible;
+    sidebar.querySelectorAll('.nav-item').forEach(item=>{if(!item.title)item.title=item.textContent.trim();});
   }
   toggle.addEventListener("click",event=>{event.stopImmediatePropagation();if(mobile.matches){sidebar.classList.toggle("open");scrim.classList.toggle("visible",sidebar.classList.contains("open"));}else{document.body.classList.toggle("sidebar-collapsed");try{localStorage.setItem("litecp-sidebar-hidden",String(document.body.classList.contains("sidebar-collapsed")));}catch{}}syncSidebar();},true);
   scrim.addEventListener("click",()=>requestAnimationFrame(syncSidebar));
   sidebar.addEventListener("click",()=>requestAnimationFrame(syncSidebar));
+  sidebar.addEventListener("click",event=>{if(!mobile.matches&&document.body.classList.contains("sidebar-collapsed")&&event.target.closest('.sidebar-group-toggle'))toggle.click();},true);
   mobile.addEventListener("change",()=>{sidebar.classList.remove("open");scrim.classList.remove("visible");syncSidebar();});
   syncSidebar();
 

@@ -1,0 +1,15 @@
+/* Keep desktop navigation available as an icon rail when collapsed. */
+.sidebar-toggle-bar #sidebarBottomToggle {align-self:flex-end;}
+@media(min-width:901px){
+  :root[data-theme] body.sidebar-collapsed #sidebar {width:60px;transform:none;padding-bottom:50px;overflow-x:hidden;}
+  body.sidebar-collapsed .workspace {margin-left:60px;}
+  body.sidebar-collapsed .sidebar-toggle-bar {width:60px;padding:0 15px;}
+  :root[data-theme] body.sidebar-collapsed #sidebar .sidebar-brand {padding:12px 4px;min-height:58px;justify-content:center;}
+  :root[data-theme] body.sidebar-collapsed #sidebar .sidebar-brand .litecp-logo {width:52px;}
+  body.sidebar-collapsed #sidebar :is(.sidebar-version,.nav-label,.settings-submenu,.panel-search) {display:none!important;}
+  :root[data-theme] body.sidebar-collapsed #sidebar .nav {padding:8px 6px;}
+  :root[data-theme] body.sidebar-collapsed #sidebar .nav-item {justify-content:center;padding:10px 0;gap:0;min-height:42px;}
+  body.sidebar-collapsed #sidebar .nav-item>span,
+  body.sidebar-collapsed #sidebar .sidebar-group-chevron {display:none!important;}
+  body.sidebar-collapsed #sidebar .nav-item {font-size:0;}
+}
