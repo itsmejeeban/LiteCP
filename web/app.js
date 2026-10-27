@@ -498,6 +498,9 @@
   function navigate(page, updateHash = true) {
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
     const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
+    const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";
+    const emailRoute=["add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases"].includes(emailPart)?`email/${emailPart}`:"";
+    if(emailRoute)page="email";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";
@@ -507,7 +510,7 @@
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
     });
-    const route=settingsRoute||page;
+    const route=settingsRoute||emailRoute||page;
     if (updateHash && location.hash !== `#${route}`) history.pushState(null, "", `#${route}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });

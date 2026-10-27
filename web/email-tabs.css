@@ -1,0 +1,4 @@
+.email-tab-panel {max-width:780px;}
+.email-tab-panel[data-email-panel="domains"],.email-tab-panel[data-email-panel="mailboxes"],.email-tab-panel[data-email-panel="aliases"] {max-width:none;}
+.email-tab-panel .settings-body {padding:18px;}
+.email-dns-only:has(>#mailDNSPanel.hidden) {display:none;}
