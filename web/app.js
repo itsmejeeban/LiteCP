@@ -729,7 +729,7 @@
     if (!site) return;
     const button = quick ? null : $("#backupButton");
     if (button) { button.disabled = true; button.textContent = "Creating backup…"; }
-    showToast("Backup started", `Archiving ${site.domain}. This may take a moment.`);
+    showToast("Backup started", `Archiving ${site.domain}. This may take a moment.`, "info");
     try {
       await api("/api/backups", { method: "POST", body: { siteId: site.id, destinationId } });
       currentState = await api("/api/state");
@@ -832,7 +832,7 @@
     const body = new FormData();
     body.append("siteId", $("#fileSiteSelect").value); body.append("path", currentFilePath);
     files.forEach(file => body.append("files", file, file.name));
-    showToast("Upload started", `${files.length} file(s) are being transferred.`);
+    showToast("Upload started", `${files.length} file(s) are being transferred.`, "info");
     try { await api("/api/files/upload", { method: "POST", body }); await loadFiles(); showToast("Upload completed", `${files.length} file(s) uploaded.`); }
     catch (error) { handleError(error); }
     finally { event.target.value = ""; }
@@ -854,7 +854,7 @@
     const action = button.dataset.fileAction;
     const path = button.dataset.path;
     if (action === "open") { currentFilePath = path; loadFiles(); return; }
-    if (action === "download") { if (demoMode) showToast("Preview", "Downloads are disabled in demo mode."); else location.href = `/api/files/download?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`; return; }
+    if (action === "download") { if (demoMode) showToast("Preview", "Downloads are disabled in demo mode.", "info"); else location.href = `/api/files/download?siteId=${encodeURIComponent($("#fileSiteSelect").value)}&path=${encodeURIComponent(path)}`; return; }
     if (action === "edit") { openEditor(path); return; }
     try {
       if (action === "extract") {
@@ -924,7 +924,7 @@
         return;
       }
       if (button.dataset.databaseAction === "open") {
-        if (demoMode) { showToast("Server required", "phpMyAdmin is available on the installed server."); return; }
+        if (demoMode) { showToast("Server required", "phpMyAdmin is available on the installed server.", "info"); return; }
         const target = "litecp_pma_" + Date.now();
         const tab = window.open("about:blank", target);
         if (!tab) { showToast("Tab blocked", "Allow new tabs for LiteCP, then click the database again.", "error"); return; }
