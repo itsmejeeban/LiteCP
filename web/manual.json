@@ -36,6 +36,17 @@
         ]
       },
       {
+        "title": "Website cron jobs",
+        "steps": [
+          "Open Websites and click the Cron jobs icon beside the required domain. Custom jobs are available for every website, including regular PHP/HTML hosts.",
+          "Enter an optional name, choose a common schedule or edit Minute, Hour, Day, Month and Weekday. Use numbers, *, lists, ranges and steps. Weekdays run from 0 (Sunday) to 7 (also Sunday). If both day-of-month and weekday are restricted, cron runs when either matches.",
+          "Enter a single-line shell command. Use full paths to executables; the displayed PHP CLI path matches the website's selected PHP runtime. PHP 7.3 container commands require separate runtime support and are not offered as a custom-job PHP shortcut.",
+          "Schedules use the server time zone shown in the popup. Commands start in the website document root and run as its isolated account, with that account's filesystem permissions. Output is discarded unless your command redirects it to a log file.",
+          "Click Create cron job to save. Use Edit to change it, Disable to pause future runs, or Remove and confirm to remove the schedule. Disabling or removing a job does not stop a command that is already running.",
+          "Built-in WordPress and WHMCS five-minute tasks remain separate. Avoid creating a duplicate custom task for the same application. Detaching a website pauses its custom schedules and retains the saved definitions."
+        ]
+      },
+      {
         "title": "SSL and detaching",
         "steps": [
           "Enable SSL after the domain points to this server and public HTTP validation is reachable. Review any error instead of repeatedly requesting certificates.",

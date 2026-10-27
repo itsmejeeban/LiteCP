@@ -1,0 +1,27 @@
+.website-cron-dialog {width:min(860px,calc(100vw - 32px));max-height:calc(100dvh - 40px);}
+.website-cron-dialog header p {margin:6px 0 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere;}
+.website-cron-dialog h3 {font-family:inherit;font-size:16px;line-height:1.4;margin:0;}
+.website-cron-dialog .website-cron-form-head,.website-cron-dialog .website-cron-list-head,.website-cron-job-head {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.website-cron-dialog form {padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft);}
+.website-cron-dialog .field {margin-top:15px;}
+.website-cron-dialog .field>span>small {font-weight:400;color:var(--muted);}
+.website-cron-dialog .website-cron-enabled {display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap;}
+.website-cron-dialog .website-cron-enabled input {width:16px;height:16px;min-height:0;accent-color:var(--teal);}
+.website-cron-fields {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+.website-cron-dialog input,.website-cron-dialog select,.website-cron-dialog textarea {max-width:100%;min-width:0;}
+.website-cron-dialog textarea {width:100%;padding:12px;resize:vertical;font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.6;}
+.website-cron-dialog .field small,.website-cron-help,.website-cron-php,.website-cron-preview {font-size:12px;line-height:1.7;color:var(--muted);}
+.website-cron-help {margin:12px 0;}
+.website-cron-preview code,.website-cron-schedule {color:var(--ink);font:13px ui-monospace,Consolas,monospace;}
+.website-cron-php code {overflow-wrap:anywhere;color:var(--ink);}
+.website-cron-dialog .website-cron-app {font-size:12px;margin-bottom:18px;padding:12px;border:1px solid var(--line);border-radius:8px;}
+.website-cron-dialog [data-cron-status] {font-size:13px;margin:14px 0;color:var(--ink);white-space:pre-wrap;}
+.website-cron-list-head {margin:20px 0 12px;}
+.website-cron-job {padding:16px;border:1px solid var(--line);border-radius:10px;margin-top:12px;}
+.website-cron-job-head strong {font-size:14px;overflow-wrap:anywhere;}
+.website-cron-schedule {display:block;margin-top:10px;}
+.website-cron-job pre {background:var(--surface-soft);color:var(--ink);border-radius:7px;padding:10px;margin:10px 0 14px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 ui-monospace,Consolas,monospace;}
+.website-cron-job .button {min-height:36px;font-size:12px;padding:7px 12px;}
+.website-cron-empty {padding:20px 0;font-size:13px;line-height:1.7;color:var(--muted);}
+.website-cron-dialog [hidden] {display:none!important;}
+@media(max-width:580px){.website-cron-dialog .fm-dialog-body{padding:16px;}.website-cron-dialog form{padding:14px;}.website-cron-fields{grid-template-columns:repeat(2,minmax(0,1fr));}.website-cron-dialog .website-cron-form-head{align-items:flex-start;}.website-cron-job-head{align-items:flex-start;}.website-cron-job .feature-actions .button{flex:1;}}

@@ -642,6 +642,7 @@ func replaceFastCGISocket(config, socket string) (string, error) {
 type siteConfigBackup struct {
 	nginx []byte
 	cron  []byte
+	customCron []byte
 }
 
 func (s *System) snapshotSiteConfig(site Site) (siteConfigBackup, error) {
@@ -657,13 +658,16 @@ func (s *System) snapshotSiteConfig(site Site) (siteConfigBackup, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return siteConfigBackup{}, fmt.Errorf("read cron configuration: %w", err)
 	}
-	return siteConfigBackup{nginx: nginx, cron: cron}, nil
+	customCron, err := os.ReadFile(s.websiteCronPath(site.ID))
+	if err != nil && !errors.Is(err, os.ErrNotExist) { return siteConfigBackup{}, fmt.Errorf("read custom cron configuration: %w", err) }
+	return siteConfigBackup{nginx: nginx, cron: cron, customCron: customCron}, nil
 }
 
 func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteConfigBackup) error {
 	if s.demo {
 		return nil
 	}
+	if len(backup.customCron)>0 { if err:=writeAtomic(s.websiteCronPath(site.ID),backup.customCron,0600);err!=nil{return fmt.Errorf("restore custom cron configuration: %w",err)} }
 	if err := s.ensureSitePHPPool(ctx, site); err != nil {
 		return fmt.Errorf("restore isolated PHP pool: %w", err)
 	}
@@ -705,6 +709,7 @@ func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
 	if s.demo {
 		return nil
 	}
+	if err:=s.pauseWebsiteCron(site.ID);err!=nil{return fmt.Errorf("pause custom cron jobs: %w",err)}
  if site.Application!=nil&&site.Application.Container!="" {if err:=s.stopApplicationContainer(ctx,site.Application.Container);err!=nil{return errors.New("stop the application before detaching this website")}}
 	configPath, enabledPath := s.nginxPaths(site.Domain)
 	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -1042,6 +1047,7 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 	if s.demo {
 		return nil
 	}
+	if err:=s.reconcileWebsiteCron(sites);err!=nil{return fmt.Errorf("reconcile custom cron jobs: %w",err)}
 	for _, site := range sites {
 		configPath, _ := s.nginxPaths(site.Domain)
 		if err := s.reconcileSiteRuntime(ctx, site, configPath); err != nil { return err }
