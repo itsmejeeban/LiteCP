@@ -1,0 +1,8 @@
+:root[data-theme] [data-page-view="dashboard"] .metric-icon {display:block;width:30px;height:30px;padding:0;border:0;border-radius:0;box-shadow:none;background:var(--overview-icon) center/contain no-repeat;}
+:root[data-theme] [data-page-view="dashboard"] .metric-icon>svg {display:none;}
+[data-page-view="dashboard"] .metric-card:has(#cpuValue) {--overview-icon:url('assets/sidebar/cpu.svg');}
+[data-page-view="dashboard"] .metric-card:has(#memoryValue) {--overview-icon:url('assets/sidebar/memory.svg');}
+[data-page-view="dashboard"] .metric-card:has(#diskValue) {--overview-icon:url('assets/sidebar/disk.svg');}
+[data-page-view="dashboard"] .metric-card:has(#uptimeValue) {--overview-icon:url('assets/sidebar/activities.svg');}
+[data-page-view="dashboard"] .metric-card:has(#totalWebsitesValue) {--overview-icon:url('assets/sidebar/websites.svg');}
+[data-page-view="dashboard"] .metric-card:has(#totalEmailAccountsValue) {--overview-icon:url('assets/sidebar/email.svg');}
