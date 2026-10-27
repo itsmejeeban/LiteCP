@@ -5,3 +5,12 @@
 :root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item {min-height:34px;height:auto;padding:8px 9px;font-size:12px;gap:9px;}
 :root[data-theme] #sidebar .sidebar-feature-group .settings-submenu>.nav-item>svg {width:18px;height:18px;flex-basis:18px;}
 .sidebar-group-toggle:focus-visible {outline:2px solid var(--teal);outline-offset:-2px;}
+:root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle,
+:root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle:hover,
+:root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle.active,
+:root[data-theme] #sidebar .sidebar-feature-group>button.sidebar-group-toggle:focus-visible {
+  background:var(--canvas)!important;
+  background-color:var(--canvas)!important;
+  box-shadow:none!important;
+  filter:none!important;
+}
