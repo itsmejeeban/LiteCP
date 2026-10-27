@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=1">
   <link rel="stylesheet" href="panel-search.css?v=sidebar-2">
-  <link rel="stylesheet" href="litecp-theme.css?v=sidebar-version-password-controls-6">
+  <link rel="stylesheet" href="litecp-theme.css?v=update-notice-password-controls-6">
   <link rel="stylesheet" href="settings-tabs.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
@@ -115,6 +115,7 @@
         <div class="topbar-actions">
           <span class="top-status hidden"><span class="pulse-dot"></span>System healthy</span>
           <button class="icon-button refresh-button" id="refreshButton" aria-label="Refresh server data"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></button>
+          <a id="updateNotice" class="update-notice hidden" target="_blank" rel="noopener noreferrer" aria-live="polite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg><span></span></a>
           <span class="topbar-divider"></span>
           <button class="profile-button" id="profileButton"><span class="avatar" id="avatar">A</span><span class="profile-copy"><strong id="profileName">Admin</strong><small>Administrator</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
           <div class="profile-menu hidden" id="profileMenu"><button data-page-target="settings">Account settings</button><button id="logoutButton">Sign out</button></div>
@@ -262,5 +263,6 @@
   <script src="database-popup.js?v=1" defer></script>
   <script src="panel-search.js?v=settings-tabs-1" defer></script>
   <script src="settings-tabs.js?v=1" defer></script>
+  <script src="update-notice.js?v=1" defer></script>
 </body>
 </html>

@@ -201,3 +201,6 @@
 @media(max-width:720px){:root[data-theme] .main-content{padding:18px 14px;}:root[data-theme] .topbar{padding-left:14px;padding-right:14px;}:root[data-theme] .page-heading{flex-wrap:wrap;gap:12px;}:root[data-theme] .page-heading h1{font-size:22px;}:root[data-theme] .page-heading .button{font-size:12px;width:auto;padding:0 12px;}:root[data-theme] .panel-head{padding:14px;}:root[data-theme] .login-shell{background:var(--canvas);}}
 
 :root[data-theme] .sidebar-brand .sidebar-version {margin-left:auto;align-self:flex-start;padding-top:2px;font-size:10px;line-height:1.4;font-weight:400;white-space:nowrap;}
+
+:root[data-theme] .update-notice {display:flex;align-items:center;gap:6px;color:var(--amber);font-size:11px;line-height:1.4;max-width:240px;}
+.update-notice svg {width:16px;height:16px;flex-shrink:0;}

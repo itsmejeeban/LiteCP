@@ -223,6 +223,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
+	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, checkRelease(version)) })))
 	mux.HandleFunc("/api/version", only(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": version})
 	}))
