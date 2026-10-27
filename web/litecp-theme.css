@@ -271,3 +271,13 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 :root[data-theme] button:not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
 :root[data-theme] button:not(.button-primary):not(.danger):hover {filter:brightness(1.15);}
+
+/* Generated multicolor website action image sprite. */
+:root[data-theme] #sitesTable .row-actions button svg {display:none;}
+:root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
+:root[data-theme] #sitesTable [data-site-ftp]::before {background-position:16.6667% center;}
+:root[data-theme] #sitesTable [data-site-backup]::before {background-position:33.3333% center;}
+:root[data-theme] #sitesTable [data-site-action="cron"]::before {background-position:50% center;}
+:root[data-theme] #sitesTable [data-site-action="files"]::before {background-position:66.6667% center;}
+:root[data-theme] #sitesTable [data-site-action="delete"]::before {background-position:83.3333% center;}
+:root[data-theme] #sitesTable [data-site-action="ssl"]::before {background-position:100% center;}
