@@ -1069,8 +1069,8 @@
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";
     const name = type === "wordpress" ? "WordPress" : type === "whmcs" ? "WHMCS" : "PHP";
     const detail = site.appVersion ? `${name} ${site.appVersion}` : name;
-    const logoVersion = type === "whmcs" ? "?v=official-2026" : "";
-    return `<span class="application-logo application-logo-${type}" title="${escapeHTML(detail)}"><img src="logo-${type}.svg${logoVersion}" alt="${escapeHTML(name)} logo"></span>`;
+    const logoSource = type === "wordpress" ? "logo-wordpress.png?v=provided-1" : `logo-${type}.svg${type === "whmcs" ? "?v=official-2026" : ""}`;
+    return `<span class="application-logo application-logo-${type}" title="${escapeHTML(detail)}"><img src="${logoSource}" alt="${escapeHTML(name)} logo"></span>`;
   }
 
   function renderSSLStatusIcon(site) {
