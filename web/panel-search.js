@@ -28,18 +28,18 @@
     ["security", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
     ["firewall", "Firewall rules", "Manage inbound and outbound network access", "#firewallForm", "port ip tcp udp allow deny block network"],
     ["backups", "Server backups", "Create a backup and review backup history", "#backupRunForm", "backup retention archive restore"],
-    ["backups", "Remote backup destinations", "Configure an off-server FTP, FTPS or SFTP destination", "#backupDestinationForm", "remote storage offsite upload password fingerprint"],
+    ["settings/backups", "Remote backup destinations", "Configure an off-server FTP, FTPS or SFTP destination", "#backupDestinationForm", "remote storage offsite upload password fingerprint"],
     ["migrations", "Live cPanel / Plesk migration", "Connect to a source server using root SSH access", "#liveSourceForm", "cpanel whm plesk migrate transfer root password private key ssh"],
     ["migrations", "Upload migration archive", "Inspect and import a website backup", "#migrationUploadForm", "migration restore tar zip sql database"],
     ["logs", "Server logs", "View Nginx, PHP, database, mail and cron logs", "#logTarget", "error access journal troubleshooting"],
     ["activities", "Recent Activities", "Review changes and choose how long activity history is kept", "#activityRetention", "audit event history retention seven 7 fifteen 15 days month year delete"],
-    ["settings", "Administrator email", "Set the email used for certificate renewal notices", "#settingsEmail", "account email letsencrypt ssl"],
-    ["settings", "Display timezone", "Choose the time zone used for panel dates", "#settingsTimezone", "time zone country utc timezone clock"],
-    ["settings", "Backup retention", "Set how long automatic backups are kept", "#settingsRetention", "backup days retention policy"],
-    ["settings", "Administrator password", "Change your panel sign-in password", "#passwordForm", "account login credentials security"],
-    ["settings", "Server hostname", "Change the server's operating-system hostname", "#hostnameForm", "hostname server name"],
-    ["settings", "DNS resolvers", "View current DNS and configure primary and secondary resolvers", "#resolversForm", "resolver dns nameserver 8.8.8.8 8.8.4.4 network"],
-    ["settings", "Server reboot", "Review the server power controls", "#rebootServer", "restart reboot power"],
+    ["settings/email", "Administrator email", "Set the email used for certificate renewal notices", "#settingsEmail", "account email letsencrypt ssl"],
+    ["settings/timezone", "Display timezone", "Choose the time zone used for panel dates", "#settingsTimezone", "time zone country utc timezone clock"],
+    ["settings/backups", "Backup retention", "Set how long automatic backups are kept", "#settingsRetention", "backup days retention policy"],
+    ["settings/password", "Administrator password", "Change your panel sign-in password", "#passwordForm", "account login credentials security"],
+    ["settings/hostname", "Server hostname", "Change the server's operating-system hostname", "#hostnameForm", "hostname server name"],
+    ["settings/dns", "DNS resolvers", "View current DNS and configure primary and secondary resolvers", "#resolversForm", "resolver dns nameserver 8.8.8.8 8.8.4.4 network"],
+    ["settings/reboot", "Server reboot", "Review the server power controls", "#rebootServer", "restart reboot power"],
     ["settings", "Dark theme", "LiteCP uses a consistent dark interface", "", "theme appearance dark"],
     ["documentation", "Documentation", "Search the complete user manual", "#manualSearch", "help guide instructions features support manual"]
   ];
@@ -64,12 +64,14 @@
     for (const page of document.querySelectorAll("[data-page-view]")) {
       const name = page.dataset.pageView, heading = page.querySelector("h1")?.textContent || name;
       for (const node of page.querySelectorAll("h2, label.field > span:first-child")) {
-        if(node.closest(".hidden,[hidden]"))continue;
+        const settingsPanel=node.closest("[data-settings-panel]");
+        if(node.closest(".hidden,[hidden]")&&!settingsPanel)continue;
+        const targetPage=settingsPanel?"settings/"+settingsPanel.dataset.settingsPanel:name;
         const title = node.textContent.trim(); if (!title || title.length>100) continue;
-        const key = name+":"+normalize(title); if (seen.has(key)) continue; seen.add(key);
+        const key = targetPage+":"+normalize(title); if (seen.has(key)) continue; seen.add(key);
         const target = node.closest("label")?.querySelector("input:not([type=hidden]),select,textarea") || node.closest(".panel") || node;
         // Index labels and headings, never input values, commands, passwords or logs.
-        items.push({...entry(name,title,heading,"","","Settings"), target});
+        items.push({...entry(targetPage,title,heading,"","","Settings"), target});
       }
     }
     const state = cp.state();

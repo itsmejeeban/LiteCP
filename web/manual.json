@@ -16,6 +16,7 @@
         "title": "Navigation and appearance",
         "steps": [
           "Use the menu button to hide or show navigation. LiteCP always uses dark mode, including the file editor, regardless of your device's appearance settings.",
+          "Expand Settings with its sidebar arrow to show Administrator password, Administrator email, Time zone, Backup settings, Server hostname, DNS resolver and Reboot server. Click the arrow again to collapse the sub-tabs. Save each section separately. Backup retention and remote destinations are configured in Backup settings; create backups and view their history on Backups.",
           "The top bar shows the OS, hostname and server IP. Refresh server data with the refresh icon.",
           "Use Quick search below the sidebar logo, or press Ctrl+K / Command+K, to find features, settings, websites, databases and mailboxes. The shortcut opens navigation when it is hidden. Select a result or use the arrow keys and Enter to jump to it. Escape closes search. Search opens the relevant section without changing settings.",
           "Use the Documentation tab at any time. Search this manual by feature name or task."
@@ -229,9 +230,9 @@
         "steps": [
           "Select a website and choose local storage or a configured remote destination. Create backup and wait for completion.",
           "Standard backups use a different TAR archive format from website manual ZIP backups. Keep an independent off-server copy and test your restore procedure.",
-          "Add a remote destination with its host, port, protocol, account, remote path and password. Prefer FTPS or SFTP over unencrypted FTP.",
+          "Open Settings → Backup settings and add a remote destination with its host, port, protocol, account, remote path and password. Prefer FTPS or SFTP over unencrypted FTP.",
           "SFTP requires a verified SSH host-key fingerprint. Verify it through a trusted channel before saving it. Remote destination passwords are encrypted in panel storage.",
-          "Local backup retention applies to standard archives according to Settings. Remote retention is managed at the destination. Review a backup status before relying on a remote copy."
+          "Local backup retention applies to standard archives according to Settings → Backup settings. Remote retention is managed at the destination. Review a backup status before relying on a remote copy."
         ]
       }
     ]

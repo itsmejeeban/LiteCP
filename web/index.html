@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="live-migration.css?v=1">
   <link rel="stylesheet" href="panel-search.css?v=sidebar-2">
   <link rel="stylesheet" href="litecp-theme.css?v=password-controls-6">
+  <link rel="stylesheet" href="settings-tabs.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
 <body>
@@ -208,7 +209,9 @@
         <section class="page" data-page-view="settings">
           <div class="page-heading"><div><span class="eyebrow">PREFERENCES</span><h1>Settings</h1><p>Configure safe defaults for LiteCP.</p></div></div>
           <div class="settings-grid">
-            <form class="panel settings-card" id="settingsForm"><div class="panel-head"><div><h2>Panel preferences</h2><p>Used for certificates, dates and backup retention.</p></div></div><div class="settings-body"><label class="field"><span>Administrator email</span><span class="input-wrap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg><input id="settingsEmail" name="email" type="email" placeholder="admin@example.com"></span><small>Pre-filled for Let's Encrypt certificate requests.</small></label><label class="field"><span>Display timezone</span><select id="settingsTimezone" name="timezone"><option value="UTC">UTC</option><option value="Asia/Kolkata">Asia/Kolkata</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option></select></label><label class="field"><span>Backup retention</span><span class="suffix-input"><input id="settingsRetention" name="backupRetention" type="number" min="1" max="90"><span>days</span></span><small>Expired local backups are removed after a successful backup or settings update.</small></label><button class="button button-primary" type="submit">Save preferences</button></div></form>
+            <form class="panel settings-card" id="settingsForm" data-settings-part="email"><div class="panel-head"><div><h2>Administrator email</h2><p>Used for certificate renewal notices.</p></div></div><div class="settings-body"><label class="field"><span>Administrator email</span><span class="input-wrap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg><input id="settingsEmail" name="email" type="email" placeholder="admin@example.com"></span><small>Pre-filled for Let's Encrypt certificate requests.</small></label><button class="button button-primary" type="submit">Save email</button></div></form>
+            <form class="panel settings-card" id="timezoneForm" data-settings-part="timezone"><div class="panel-head"><div><h2>Time zone</h2><p>Choose the time zone used for panel dates.</p></div></div><div class="settings-body"><label class="field"><span>Display timezone</span><select id="settingsTimezone" name="timezone"><option value="UTC">UTC</option><option value="Asia/Kolkata">Asia/Kolkata</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option></select></label><button class="button button-primary" type="submit">Save time zone</button></div></form>
+            <form class="panel settings-card" id="backupSettingsForm" data-settings-part="backups"><div class="panel-head"><div><h2>Backup settings</h2><p>Configure automatic backup retention and remote destinations.</p></div></div><div class="settings-body"><label class="field"><span>Backup retention</span><span class="suffix-input"><input id="settingsRetention" name="backupRetention" type="number" min="1" max="90"><span>days</span></span><small>Expired local backups are removed after a successful backup or settings update.</small></label><button class="button button-primary" type="submit">Save retention</button></div></form>
             <form class="panel settings-card" id="passwordForm"><div class="panel-head"><div><h2>Administrator password</h2><p>Use at least 12 characters and a unique passphrase.</p></div></div><div class="settings-body"><label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label><label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label><button class="button button-secondary" type="submit">Update password</button></div></form>
             <article class="panel settings-card environment-card"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">—</dd></div><div><dt>Operating system</dt><dd id="settingsOS">—</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd id="settingsDatabase">—</dd></div><div><dt>Firewall</dt><dd id="settingsFirewall">—</dd></div><div><dt>PHP</dt><dd id="settingsPHP">Multi-PHP FPM</dd></div></dl></article>
           </div>
@@ -244,7 +247,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=1" defer></script>
   <script src="password-copy.js?v=eye-2" defer></script>
-  <script src="app.js?v=password-controls-2" defer></script>
+  <script src="app.js?v=settings-tabs-1" defer></script>
   <script src="features.js?v=password-controls-2" defer></script>
   <script src="file-manager.js?v=qa-20261027" defer></script>
   <script src="panel-settings.js?v=utc-offsets-1" defer></script>
@@ -256,6 +259,7 @@
   <script src="documentation.js?v=3" defer></script>
   <script src="application-hosting.js?v=dialogs-1" defer></script>
   <script src="database-popup.js?v=1" defer></script>
-  <script src="panel-search.js?v=dashboard-clean-1" defer></script>
+  <script src="panel-search.js?v=settings-tabs-1" defer></script>
+  <script src="settings-tabs.js?v=1" defer></script>
 </body>
 </html>

@@ -252,7 +252,7 @@
     $("#mailDomainsTable").addEventListener("click", handleMailAction);
     $("#mailboxesTable").addEventListener("click", handleMailAction);
     $("#mailAliasesTable").addEventListener("click", handleMailAction);
-    $("#settingsForm").addEventListener("submit", saveSettings);
+    $$("form[data-settings-part]").forEach(form => form.addEventListener("submit", saveSettings));
     $("#passwordForm").addEventListener("submit", changePassword);
     $("#reloadLogs").addEventListener("click", loadLogs);
     $("#logTarget").addEventListener("change", loadLogs);
@@ -484,6 +484,9 @@
   }
 
   function navigate(page, updateHash = true) {
+    const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
+    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot"].includes(settingsPart)?`settings/${settingsPart}`:"";
+    if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
@@ -492,7 +495,8 @@
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
     });
-    if (updateHash && location.hash !== `#${page}`) history.pushState(null, "", `#${page}`);
+    const route=settingsRoute||page;
+    if (updateHash && location.hash !== `#${route}`) history.pushState(null, "", `#${route}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
     clearInterval(logTimer);
@@ -963,7 +967,12 @@
     const submit = $('button[type="submit"]', event.currentTarget);
     submit.disabled = true;
     try {
-      const body = { email: $("#settingsEmail").value.trim(), timezone: $("#settingsTimezone").value, backupRetention: Number($("#settingsRetention").value) };
+      const saved=currentState.settings, part=event.currentTarget.dataset.settingsPart;
+      const body = {email:saved.email||"",timezone:saved.timezone||"UTC",backupRetention:saved.backupRetention||14};
+      if(part==="email")body.email=$("#settingsEmail").value.trim();
+      else if(part==="timezone")body.timezone=$("#settingsTimezone").value;
+      else if(part==="backups")body.backupRetention=Number($("#settingsRetention").value);
+      else throw new Error("Choose a settings section before saving.");
       await api("/api/settings", { method: "PUT", body });
       currentState.settings = { ...currentState.settings, ...body };
       renderAll();

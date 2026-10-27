@@ -48,6 +48,8 @@ test('resource searches open the correct page and website result applies its dom
   assert.deepEqual(ui.navigations,['websites']);assert.equal(ui.node('#siteSearch').value,'my.example.test');assert.deepEqual(ui.eventTypes,['input']);
   ui.query('customer_database');ui.click('customer_database');assert.equal(ui.navigations.at(-1),'databases');
   ui.query('admin@example.test');ui.click('admin@example.test');assert.equal(ui.navigations.at(-1),'email');
+  ui.query('DNS resolvers');ui.click('DNS resolvers');assert.equal(ui.navigations.at(-1),'settings/dns');
+  ui.query('remote backup destinations');ui.click('Remote backup destinations');assert.equal(ui.navigations.at(-1),'settings/backups');
 });
 test('keyboard selection, Enter, Escape and Ctrl+K work without invoking settings actions',()=>{
   const ui=panel();ui.query('hosting');assert.equal(ui.input.attributes['aria-expanded'],'true');

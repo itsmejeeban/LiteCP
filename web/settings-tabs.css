@@ -1,0 +1,19 @@
+.settings-nav-group {position:relative;}
+.settings-nav-group>[data-page="settings"] {padding-right:38px;}
+.settings-nav-toggle {position:absolute;right:5px;top:5px;display:grid;place-items:center;width:28px;height:28px;padding:5px;border:0;border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;}
+.settings-nav-toggle svg {width:15px;height:15px;transition:transform .15s;}
+.settings-nav-toggle[aria-expanded="true"] svg {transform:rotate(180deg);}
+.settings-nav-toggle:hover {background:var(--cf-hover);}
+.settings-submenu {margin:3px 10px 10px 18px;padding-left:12px;border-left:1px solid var(--line);}
+.settings-subtab {display:flex;align-items:center;min-height:32px;padding:6px 9px;margin:2px 0;font-size:12px;line-height:1.4;color:var(--muted);border-radius:5px;}
+.settings-subtab:hover,.settings-subtab.active {background:var(--cf-hover);color:var(--ink);}
+.settings-subtab.active {font-weight:600;}
+.settings-nav-toggle:focus-visible,.settings-subtab:focus-visible {outline:2px solid var(--teal);outline-offset:2px;}
+[data-page-view="settings"] .settings-grid {display:block;}
+.settings-tab-panel {display:grid;grid-template-columns:minmax(0,780px);gap:16px;}
+.settings-tab-panel[data-settings-panel="backups"],.settings-tab-panel[data-settings-panel="hostname"] {grid-template-columns:repeat(2,minmax(0,1fr));}
+.settings-tab-panel>.settings-backup-destinations {grid-column:1/-1;overflow-x:auto;}
+.settings-tab-panel .settings-card {margin:0;}
+.backup-management-grid.backup-run-layout {grid-template-columns:minmax(0,780px);}
+@media(max-width:900px){.settings-tab-panel[data-settings-panel="backups"],.settings-tab-panel[data-settings-panel="hostname"]{grid-template-columns:minmax(0,1fr);}}
+@media(prefers-reduced-motion:reduce){.settings-nav-toggle svg{transition:none;}}
