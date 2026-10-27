@@ -1,6 +1,6 @@
 /* Shared appearance for icon-only close controls, including dynamic dialogs. */
 :root[data-theme] #fmActionDialog:not(.fm-search-dialog) header {
-  min-height: 36px;
+  min-height: 28px;
 }
 :root[data-theme] :is(#fmActionDialog, #editorModal, #siteModal, body) :is(button[aria-label^="Close"], button.cpfm-settings-close) {
   display: inline-flex;
@@ -35,4 +35,26 @@
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
+}
+/* File Manager uses the compact cPanel-style title-bar control. */
+:root[data-theme] #fmActionDialog:not(.fm-search-dialog) header > button[aria-label^="Close"] {
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 28px;
+  height: 20px;
+  min-height: 20px;
+  border: 1px solid #222 !important;
+  border-radius: 2px !important;
+  background: linear-gradient(#666, #333) !important;
+  color: #fff !important;
+  font: 14px/18px Arial, sans-serif;
+  box-shadow: inset 0 1px 0 #ffffff40 !important;
+}
+:root[data-theme] #fmActionDialog:not(.fm-search-dialog) header > button[aria-label^="Close"]:hover {
+  background: linear-gradient(#777, #444) !important;
+}
+:root[data-theme] #fmActionDialog:not(.fm-search-dialog) header > button[aria-label^="Close"]:focus-visible {
+  outline: 2px solid #8bc4ef;
+  outline-offset: 1px;
 }
