@@ -257,3 +257,17 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 /* Filled destructive buttons across every panel and popup. */
 :root[data-theme] button:is(.danger,[data-cron-remove],[data-ftp-remove],[data-backup-delete],#deleteAllActivities,#emptyTrash,#trashSelected,[data-site-action="delete"],[data-database-action="delete"],[data-file-action="delete"],[data-firewall-action="delete"],[data-backup-destination-action="delete"],[data-mail-action$="-delete"],[data-trash="delete"]) {background:#dc2626!important;border-color:#dc2626!important;color:#fff!important;}
 :root[data-theme] button:is(.danger,[data-cron-remove],[data-ftp-remove],[data-backup-delete],#deleteAllActivities,#emptyTrash,#trashSelected,[data-site-action="delete"],[data-database-action="delete"],[data-file-action="delete"],[data-firewall-action="delete"],[data-backup-destination-action="delete"],[data-mail-action$="-delete"],[data-trash="delete"]):hover {background:#b91c1c!important;border-color:#b91c1c!important;color:#fff!important;}
+
+/* Visible button surfaces on the dark panel. */
+:root[data-theme] button {background-color:#293548;color:#f1f5f9;}
+:root[data-theme] button:hover {background-color:#36465e;}
+:root[data-theme] :is(.button-secondary,.button-ghost,.icon-button,.text-button,.password-copy-button,.password-visibility-button,.password-generate-button,.settings-nav-toggle) {background-color:#293548;color:#f1f5f9;border-color:#43516a;}
+:root[data-theme] :is(.button-secondary,.button-ghost,.icon-button,.text-button,.password-copy-button,.password-visibility-button,.password-generate-button,.settings-nav-toggle):hover {background-color:#36465e;color:#fff;border-color:#60708a;}
+:root[data-theme] .button-primary {background-color:#0866ff;color:#fff;}
+:root[data-theme] .button-primary:hover {background-color:#0051d4;}
+:root[data-theme] .row-actions button,:root[data-theme] #sitesTable .row-actions button {background-color:#293548;color:#f1f5f9;}
+:root[data-theme] .row-actions button:hover,:root[data-theme] #sitesTable .row-actions button:hover {background-color:#36465e;color:#fff;}
+.website-ftp-dialog .ftp-form-actions {margin-top:18px;margin-bottom:24px;padding-bottom:8px;gap:12px;}
+
+:root[data-theme] button:not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
+:root[data-theme] button:not(.button-primary):not(.danger):hover {filter:brightness(1.15);}
