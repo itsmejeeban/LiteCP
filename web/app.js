@@ -216,6 +216,8 @@
     $$(".modal-close").forEach(button => button.addEventListener("click", closeSiteModal));
     $("#siteModal").addEventListener("click", event => { if (event.target.id === "siteModal") closeSiteModal(); });
     $("#siteForm").addEventListener("submit", createSite);
+    $("#siteNextStep").addEventListener("click", () => setSiteCreationStep(2));
+    $("#sitePreviousStep").addEventListener("click", () => setSiteCreationStep(1));
     $("#siteAppType").addEventListener("change", configureSiteForm);
     $("#siteAppVersion").addEventListener("change", configureSiteForm);
     $("#closeCredentials").addEventListener("click", closeCredentials);
@@ -507,8 +509,28 @@
     window.LiteCPFeatures?.navigate(page);
   }
 
+  let siteCreationStep = 1;
+  function setSiteCreationStep(step) {
+    if (step === 2) {
+      const controls = $$("#siteDetailsStep input, #siteDetailsStep select");
+      for (const control of controls) if (!control.disabled && !control.reportValidity()) return;
+    }
+    siteCreationStep = step;
+    $("#siteDetailsStep").classList.toggle("hidden", step !== 1);
+    $("#siteOptionsStep").classList.toggle("hidden", step !== 2);
+    $("#siteNextStep").classList.toggle("hidden", step !== 1);
+    $("#sitePreviousStep").classList.toggle("hidden", step !== 2);
+    $('#siteForm button[type="submit"]').classList.toggle("hidden", step !== 2);
+    $("#siteStepLabel").textContent = step === 1 ? "Step 1 of 2 · Website details" : "Step 2 of 2 · Database and automation";
+    if (step === 2) {
+      $("#siteReview").textContent = `${$('#siteForm input[name="domain"]').value.trim()} · ${applicationLabel($("#siteAppType").value)} · PHP ${$("#sitePHPVersion").value}`;
+      $("#sitePreviousStep").focus();
+    }
+  }
+
   function openSiteModal() {
 	configureSiteForm();
+    setSiteCreationStep(1);
     $("#siteModal").classList.remove("hidden");
     setTimeout(() => $('#siteForm input[name="domain"]').focus(), 50);
   }
@@ -553,6 +575,7 @@
 
   async function createSite(event) {
     event.preventDefault();
+    if (siteCreationStep === 1) { setSiteCreationStep(2); return; }
     const form = event.currentTarget;
     const submit = $('button[type="submit"]', form);
     const data = new FormData(form);

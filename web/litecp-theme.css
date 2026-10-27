@@ -218,3 +218,12 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .login-card {width:min(380px,100%);}
 :root[data-theme] .login-card .mobile-login-logo {display:flex;justify-content:center;margin:0 auto 32px;}
 :root[data-theme] .login-card .security-note {font-size:10px;line-height:1.5;text-align:center;}
+
+#siteModal .modal-card {width:min(600px,100%);overflow-y:auto;scrollbar-width:none;}
+#siteModal .modal-card::-webkit-scrollbar {display:none;}
+#siteModal .site-step-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+#siteModal .field {margin-bottom:0;min-width:0;}
+#siteModal .field small {font-size:10px;line-height:1.4;}
+#siteModal .site-review {margin:0 0 14px;color:var(--muted);overflow-wrap:anywhere;}
+#siteModal .provision-summary {margin-top:12px;padding:12px;}
+@media(max-width:480px){#siteModal .site-step-grid{grid-template-columns:minmax(0,1fr);gap:10px;}#siteModal .modal-head,#siteModal .modal-body,#siteModal .modal-actions{padding:12px 14px;}}
