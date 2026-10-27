@@ -25,6 +25,7 @@
     refresh: '<svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg>',
     trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg>',
     folder: '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 9h18"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="m4 20 4.2-1 10.4-10.4a2 2 0 0 0-2.8-2.8L5.4 16.2 4 20Z"/><path d="m14.5 7.1 2.8 2.8"/></svg>',
     file: '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>',
     empty: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>'
   };
@@ -120,6 +121,15 @@
       demoState.sites.push(site);
       if (input.createDatabase) demoState.databases.push({ id: `db_${Date.now()}`, name: databaseName, username: databaseName, siteId: site.id, domain: site.domain, createdAt: site.createdAt });
       return { site, database: input.createDatabase ? { name: databaseName, username: databaseName, password: "uG7J6Jb8z2YdZPBJqx9YdX9n", host: "localhost" } : null };
+    }
+    if (path === "/api/sites/domain" && options.method === "PUT") {
+      const site = demoState.sites.find(item => item.id === options.body.id);
+      if (site) {
+        site.domain = options.body.domain;
+        site.ssl = false;
+        demoState.databases.filter(item => item.siteId === site.id).forEach(item => { item.domain = site.domain; });
+      }
+      return { ok: true };
     }
     if (path === "/api/backups" && options.method === "POST") {
       const site = demoState.sites.find(item => item.id === options.body.siteId);
@@ -411,7 +421,7 @@
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>ACTIONS</th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions">${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>ACTIONS</th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions"><button class="site-domain-edit" aria-label="Edit domain ${escapeHTML(site.domain)}" title="Edit domain" data-site-action="domain" data-id="${escapeHTML(site.id)}">${icons.edit}<span class="site-action-label">Domain</span></button>${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function renderPHPSelect(site) {
@@ -627,7 +637,16 @@
     if (button.dataset.siteAction === "files") { $("#fileSiteSelect").value = site.id; currentFilePath = ""; navigate("files"); return; }
     button.disabled = true;
     try {
-      if (button.dataset.siteAction === "ssl") {
+      if (button.dataset.siteAction === "domain") {
+        const domain = await window.LiteCPDialogs.prompt(`Enter the new domain for ${site.domain}. Website files, databases and cron jobs will be preserved. SSL must be enabled again for the new domain.`, site.domain, { title: "Edit website domain", label: "Domain name", required: true, confirmText: "Update domain", placeholder: "example.com" });
+        if (!domain) return;
+        const normalized = String(domain).trim().toLowerCase();
+        if (normalized === site.domain) return;
+        const accepted = await window.LiteCPDialogs.confirm(`Change ${site.domain} to ${normalized}?\n\nThe website data will be preserved. DNS must point the new domain to this server, and SSL will need to be enabled again.`, { title: "Confirm domain change", confirmText: "Update domain" });
+        if (!accepted) return;
+        await api("/api/sites/domain", { method: "PUT", body: { id: site.id, domain: normalized } });
+        showToast("Domain updated", `${normalized} is now configured. Point its DNS to this server, then enable SSL.`);
+      } else if (button.dataset.siteAction === "ssl") {
         const email = await window.LiteCPDialogs.prompt(`Enable HTTPS for ${site.domain}. Enter an email address for Let's Encrypt certificate renewal notices. The domain must point to this server.`, currentState.settings.email || "", { title: "Enable SSL certificate", label: "Renewal email address", type: "email", required: true, confirmText: "Enable SSL", placeholder: "you@example.com" });
         if (!email) return;
         await api("/api/sites/ssl", { method: "POST", body: { id: site.id, email } });

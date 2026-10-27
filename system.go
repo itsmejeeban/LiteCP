@@ -727,6 +727,71 @@ func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
 	return s.removeSitePHPPool(ctx, site)
 }
 
+func (s *System) ChangeSiteDomain(ctx context.Context, current, updated Site) error {
+	if !domainPattern.MatchString(current.Domain) || !domainPattern.MatchString(updated.Domain) {
+		return errors.New("website domain is invalid")
+	}
+	if current.ID != updated.ID || current.Root != updated.Root {
+		return errors.New("website identity cannot be changed")
+	}
+	if s.demo || current.Domain == updated.Domain {
+		return nil
+	}
+	oldConfig, oldEnabled := s.nginxPaths(current.Domain)
+	newConfig, newEnabled := s.nginxPaths(updated.Domain)
+	if _, err := os.Lstat(newConfig); err == nil {
+		return errors.New("the new domain already has an Nginx configuration")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect new domain configuration: %w", err)
+	}
+	suffix := fmt.Sprintf(".renamed-%d", time.Now().UnixNano())
+	archivedConfig := oldConfig + suffix
+	archivedEnabled := oldEnabled + suffix
+	if err := os.Rename(oldConfig, archivedConfig); err != nil {
+		return fmt.Errorf("preserve previous domain configuration: %w", err)
+	}
+	enabledMoved := false
+	if oldEnabled != "" {
+		if err := os.Rename(oldEnabled, archivedEnabled); err != nil && !errors.Is(err, os.ErrNotExist) {
+			_ = os.Rename(archivedConfig, oldConfig)
+			return fmt.Errorf("preserve previous enabled website link: %w", err)
+		} else if err == nil {
+			enabledMoved = true
+		}
+	}
+	rollback := func(cause error) error {
+		failedConfig := newConfig + suffix + ".failed"
+		if _, err := os.Lstat(newConfig); err == nil {
+			_ = os.Rename(newConfig, failedConfig)
+		}
+		if newEnabled != "" {
+			if _, err := os.Lstat(newEnabled); err == nil {
+				_ = os.Rename(newEnabled, newEnabled+suffix+".failed")
+			}
+		}
+		_ = os.Rename(archivedConfig, oldConfig)
+		if enabledMoved {
+			_ = os.Rename(archivedEnabled, oldEnabled)
+		}
+		return cause
+	}
+	if err := writeAtomic(newConfig, []byte(s.nginxConfig(updated)), 0644); err != nil {
+		return rollback(fmt.Errorf("write new domain configuration: %w", err))
+	}
+	if newEnabled != "" {
+		if err := os.Symlink(newConfig, newEnabled); err != nil {
+			return rollback(fmt.Errorf("enable new domain configuration: %w", err))
+		}
+	}
+	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
+		return rollback(err)
+	}
+	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
+		return rollback(err)
+	}
+	return nil
+}
+
 func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 	backupID, err := randomToken(8)
 	if err != nil {

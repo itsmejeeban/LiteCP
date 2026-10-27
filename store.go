@@ -446,6 +446,43 @@ func (s *Store) UpdateSite(id string, update func(*Site)) error {
 	return errors.New("website not found")
 }
 
+func (s *Store) UpdateSiteDomain(id, domain string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, site := range s.cfg.Sites {
+		if site.ID != id && strings.EqualFold(site.Domain, domain) {
+			return errors.New("website already exists")
+		}
+	}
+	for i := range s.cfg.Sites {
+		if s.cfg.Sites[i].ID != id {
+			continue
+		}
+		originalSites := append([]Site{}, s.cfg.Sites...)
+		originalDatabases := append([]ManagedDatabase{}, s.cfg.Databases...)
+		s.cfg.Sites[i].Domain = domain
+		s.cfg.Sites[i].SSL = false
+		if s.cfg.Sites[i].Application != nil {
+			application := *s.cfg.Sites[i].Application
+			application.Certificate = ""
+			application.CertificateKey = ""
+			s.cfg.Sites[i].Application = &application
+		}
+		for j := range s.cfg.Databases {
+			if s.cfg.Databases[j].SiteID == id {
+				s.cfg.Databases[j].Domain = domain
+			}
+		}
+		if err := s.saveLocked(); err != nil {
+			s.cfg.Sites = originalSites
+			s.cfg.Databases = originalDatabases
+			return err
+		}
+		return nil
+	}
+	return errors.New("website not found")
+}
+
 func (s *Store) RemoveSite(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

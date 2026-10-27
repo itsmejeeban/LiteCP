@@ -175,6 +175,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
+	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
@@ -702,6 +703,58 @@ func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.store.AddActivity("PHP version changed", site.Domain+" now uses PHP "+strings.TrimSpace(input.Version), "success")
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *App) changeSiteDomain(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID     string `json:"id"`
+		Domain string `json:"domain"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	input.Domain = strings.ToLower(strings.TrimSpace(input.Domain))
+	if len(input.Domain) > 253 || !domainPattern.MatchString(input.Domain) {
+		writeError(w, http.StatusBadRequest, "Enter a valid domain name, such as example.com.")
+		return
+	}
+	site := a.store.SiteByID(input.ID)
+	if site == nil {
+		writeError(w, http.StatusNotFound, "Website not found.")
+		return
+	}
+	if site.Domain == input.Domain {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+	if existing := a.store.SiteByDomain(input.Domain); existing != nil && existing.ID != site.ID {
+		writeError(w, http.StatusConflict, "That domain is already managed by LiteCP.")
+		return
+	}
+	updated := *site
+	updated.Domain = input.Domain
+	updated.SSL = false
+	if updated.Application != nil {
+		application := *updated.Application
+		application.Certificate = ""
+		application.CertificateKey = ""
+		updated.Application = &application
+	}
+	if err := a.system.ChangeSiteDomain(r.Context(), *site, updated); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if err := a.store.UpdateSiteDomain(site.ID, input.Domain); err != nil {
+		if rollbackErr := a.system.ChangeSiteDomain(context.Background(), updated, *site); rollbackErr != nil {
+			writeError(w, http.StatusInternalServerError, "Domain change could not be saved and configuration rollback also failed: "+rollbackErr.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Domain change was rolled back because panel state could not be saved.")
+		return
+	}
+	a.store.AddActivity("Website domain changed", site.Domain+" changed to "+input.Domain+"; files and database were preserved", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
