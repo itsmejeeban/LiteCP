@@ -127,6 +127,10 @@
 :root[data-theme] :is(.modal-card,.password-dialog,.ui-dialog,.fm-dialog,.fm-context,.toast) {background:var(--paper);color:var(--ink);border-color:var(--line);border-radius:8px;}
 :root[data-theme] .modal-layer,:root[data-theme] .password-dialog::backdrop,:root[data-theme] .ui-dialog::backdrop,:root[data-theme] .fm-dialog::backdrop {background:#0008;backdrop-filter:none;}
 :root[data-theme] .toast span {font-size:12px;}
+:root[data-theme] .toast {background:#17663f;color:#fff;border-color:#208a55;border-left-color:#65d996;}
+:root[data-theme] .toast.error {background:#8f202b;color:#fff;border-color:#bf3944;border-left-color:#ff929b;}
+:root[data-theme] .toast.info {background:#174f8f;color:#fff;border-color:#2a75ca;border-left-color:#8fc5ff;}
+:root[data-theme] .toast span {color:#fff;opacity:.92;}
 :root[data-theme] .code-editor {background:var(--surface-soft);color:var(--ink);}
 :root[data-theme] .fm-tool.fm-primary {background:#0866ff;border-color:#287aff;color:#fff;}
 :root[data-theme] .fm-tool.fm-primary:hover:not(:disabled) {background:#0054dd;color:#fff;}
