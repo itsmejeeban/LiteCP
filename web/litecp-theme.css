@@ -212,3 +212,9 @@
 body.sidebar-collapsed .sidebar-toggle-bar {width:48px;padding:0 8px;}
 body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 @media(max-width:900px){.sidebar-toggle-bar{width:48px;padding:0 8px;}}
+
+:root[data-theme] .login-shell {display:grid;grid-template-columns:minmax(0,1fr);place-items:center;min-height:100vh;min-height:100dvh;padding:24px 20px;background:var(--canvas);}
+:root[data-theme] .login-form-panel {width:100%;padding:0;}
+:root[data-theme] .login-card {width:min(380px,100%);}
+:root[data-theme] .login-card .mobile-login-logo {display:flex;justify-content:center;margin:0 auto 32px;}
+:root[data-theme] .login-card .security-note {font-size:10px;line-height:1.5;text-align:center;}

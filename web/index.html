@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=1">
   <link rel="stylesheet" href="panel-search.css?v=sidebar-2">
-  <link rel="stylesheet" href="litecp-theme.css?v=bottom-toggle-password-controls-6">
+  <link rel="stylesheet" href="litecp-theme.css?v=centered-login-password-controls-6">
   <link rel="stylesheet" href="settings-tabs.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
@@ -24,36 +24,13 @@
   <div class="ambient ambient-two"></div>
 
   <section class="login-shell hidden" id="loginView" aria-labelledby="loginTitle">
-    <div class="login-brand-panel">
-      <a class="brand brand-light" href="#" aria-label="LiteCP home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 40 40"><path d="M8 7.5h10.2v17H31V33H8V7.5Z"/><path d="M21.5 7.5H32v10.2H21.5V7.5Z"/></svg>
-        </span>
-        <span><strong>LiteCP</strong><small>By Hostingtom</small></span>
-      </a>
-      <div class="login-promise">
-        <span class="eyebrow light">PURPOSE-BUILT APP HOSTING</span>
-        <h1>Less server overhead.<br>More room to grow.</h1>
-        <p>A focused hosting panel for the services your billing platform depends on—nothing more.</p>
-        <div class="promise-grid">
-          <div><span class="promise-icon">01</span><p><strong>Lean by design</strong><small>One compact service, no heavy control-panel stack.</small></p></div>
-          <div><span class="promise-icon">02</span><p><strong>Safe operations</strong><small>Allowlisted actions and protected configuration.</small></p></div>
-          <div><span class="promise-icon">03</span><p><strong>App ready</strong><small>Multi-PHP, files, databases, mail and secure backups.</small></p></div>
-        </div>
-      </div>
-      <p class="login-os"><span></span> Ready for Ubuntu &amp; AlmaLinux</p>
-    </div>
     <div class="login-form-panel">
       <form class="login-card" id="loginForm">
         <span class="mobile-login-logo brand">
           <span class="brand-mark"><svg viewBox="0 0 40 40"><path d="M8 7.5h10.2v17H31V33H8V7.5Z"/><path d="M21.5 7.5H32v10.2H21.5V7.5Z"/></svg></span>
           <span><strong>LiteCP</strong><small>By Hostingtom</small></span>
         </span>
-        <div class="login-heading">
-          <span class="eyebrow">SECURE SERVER ACCESS</span>
-          <h2 id="loginTitle">Welcome back</h2>
-          <p>Sign in to manage your application server.</p>
-        </div>
+        <h1 class="sr-only" id="loginTitle">Sign in to LiteCP</h1>
         <label class="field">
           <span>Username</span>
           <span class="input-wrap">
