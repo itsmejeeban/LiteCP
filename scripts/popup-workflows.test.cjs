@@ -74,7 +74,7 @@ function popup(kind, api) {
     refresh: async () => { refreshes++; }
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'web', `website-${kind}.js`), 'utf8'), {
-    document, window: { LiteCP: cp, LiteCPFeatures: { render() {} }, LiteCPDialogs:{confirm:async()=>true} },
+    document, window: { LiteCP: cp, LiteCPFeatures: { render() {} }, LiteCPPasswordCopy:{enhance(){}}, LiteCPDialogs:{confirm:async()=>true} },
     FormData: class { constructor(form) { this.values = form.values || {}; } get(name) { return this.values[name] || null; } }
   });
   function click(selector, dataset = {}) {

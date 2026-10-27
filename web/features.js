@@ -163,6 +163,7 @@
         generate.addEventListener("click",()=>{input.value=generatePassword();if(input.name==="next" && input.form?.elements.confirm)input.form.elements.confirm.value=input.value;input.dispatchEvent(new Event("input",{bubbles:true}));});controls.prepend(generate);
       }
       input.insertAdjacentElement("afterend",controls);
+      if(input.autocomplete!=="current-password" && !["current","confirm"].includes(input.name))window.LiteCPPasswordCopy.enhance(input);
     });
   }
   function askPassword(title,generate){

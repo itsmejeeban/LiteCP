@@ -578,6 +578,9 @@
     $("#credentialsTitle").textContent = title;
     $("#credentialsModal .modal-head p").textContent = description;
     $("#credentialList").innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("");
+    $$("#credentialList > div").forEach((row, index) => {
+      if (/password/i.test(rows[index][0])) row.querySelector("dd").append(window.LiteCPPasswordCopy.button(() => rows[index][1]));
+    });
     $("#credentialsModal").classList.remove("hidden");
   }
 
