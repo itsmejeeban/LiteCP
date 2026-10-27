@@ -94,7 +94,7 @@
     if (!button) return;
     siteID = button.dataset.siteCronJobs; generation++; busy = false; ready = false; items = [];
     const active = context();
-    dialog.innerHTML = `<header><div><h2 id="websiteCronTitle">Website cron jobs</h2><p data-cron-domain></p></div><button type="button" data-cron-close aria-label="Close cron jobs">&#215;</button></header>
+    dialog.innerHTML = `<header><div><h2 id="websiteCronTitle">Website cron jobs</h2><p data-cron-domain></p></div><button type="button" class="website-cron-close" data-cron-close aria-label="Close cron jobs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
       <div class="fm-dialog-body"><p data-cron-context>Loading website schedule…</p>
       <form novalidate><div class="website-cron-form-head"><h3 data-cron-form-title>Add a cron job</h3><label class="website-cron-enabled"><input name="enabled" type="checkbox" checked> Enabled</label></div>
 

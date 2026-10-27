@@ -34,3 +34,6 @@
 .website-cron-dialog [data-cron-status]:empty {display:none;}
 
 .website-cron-dialog [data-cron-output] {max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-soft);padding:12px;border-radius:6px;font:12px/1.6 monospace;}
+.website-cron-dialog header>.website-cron-close {width:36px;height:36px;min-height:36px;flex:0 0 36px;display:grid;place-items:center;padding:0;border:0!important;border-radius:8px;background:transparent!important;color:var(--muted);box-shadow:none!important;}
+.website-cron-dialog header>.website-cron-close:hover,.website-cron-dialog header>.website-cron-close:focus-visible {background:var(--surface-soft)!important;color:var(--ink);}
+.website-cron-dialog .website-cron-close svg {width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;}
