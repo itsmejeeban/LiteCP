@@ -292,6 +292,31 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions .site-action-label {display:block;font-size:9px;font-weight:600;line-height:1;color:var(--muted);}
 :root[data-theme] #sitesTable .row-actions button:hover .site-action-label {color:var(--ink);}
 
+/* The File Manager is an intentionally isolated cPanel-style light workspace. */
+:root[data-theme] .fm-page button {box-shadow:none;filter:none;}
+:root[data-theme] .fm-page .file-toolbar .fm-tool {min-height:43px;padding:5px 8px!important;background-color:transparent!important;color:#253746!important;border-color:#d2d2d2!important;border-radius:0!important;font-size:12px!important;}
+:root[data-theme] .fm-page .file-toolbar .fm-tool:hover:not(:disabled) {background-color:#fff!important;color:#247fc1!important;filter:none;}
+:root[data-theme] .fm-page .file-toolbar .fm-tool:disabled {background-color:transparent!important;color:#aaa!important;opacity:1!important;}
+:root[data-theme] .fm-page .file-toolbar .fm-tool svg {width:17px!important;height:17px!important;color:currentColor!important;}
+:root[data-theme] .fm-page .file-toolbar {background:#eee!important;overflow-x:hidden!important;}
+:root[data-theme] .fm-page .cpfm-navigation .fm-tool {min-height:32px;padding:7px 8px!important;background-color:transparent!important;color:#3787c5!important;border:0!important;border-radius:0!important;font-size:12px!important;}
+:root[data-theme] .fm-page .cpfm-navigation .fm-tool:hover:not(:disabled) {background-color:#eef6fb!important;color:#176ba3!important;filter:none;}
+:root[data-theme] .fm-page .cpfm-navigation .fm-tool:disabled {background-color:transparent!important;color:#aaa!important;}
+:root[data-theme] .fm-page .cpfm-navigation .fm-tool svg {color:currentColor!important;}
+:root[data-theme] .fm-page .fm-tree-row {background:#fff!important;color:#1b2a35!important;border-radius:0!important;}
+:root[data-theme] .fm-page .fm-tree-row:hover {background:#f3f8fc!important;}
+:root[data-theme] .fm-page .fm-tree-row.active {background:#eef6fb!important;color:#176ba3!important;}
+:root[data-theme] .fm-page .fm-tree-row button,:root[data-theme] .fm-page .fm-name,:root[data-theme] .fm-page .fm-mode {background-color:transparent!important;color:inherit!important;border-color:transparent!important;filter:none;}
+:root[data-theme] .fm-page .fm-tree-row svg,:root[data-theme] .fm-page .fm-entry-icon.is-folder {color:#efad3c!important;}
+:root[data-theme] .fm-page .fm-entry-icon.is-folder svg {fill:#efad3c!important;stroke:#efad3c!important;}
+:root[data-theme] .fm-page .fm-name {color:#111!important;}
+:root[data-theme] .fm-page .fm-mode {color:#111!important;}
+:root[data-theme] .fm-page .fm-home,:root[data-theme] .fm-page .fm-address .button,:root[data-theme] .fm-page .cpfm-collapse {background-color:#fff!important;color:#253746!important;border-color:#c7cdd1!important;}
+:root[data-theme] .fm-page .fm-home:hover,:root[data-theme] .fm-page .fm-address .button:hover,:root[data-theme] .fm-page .cpfm-collapse:hover {background-color:#f1f5f8!important;filter:none;}
+:root[data-theme] .fm-page .cpfm-header form button {background-color:#3089c7!important;color:#fff!important;border:0!important;}
+:root[data-theme] .fm-page .cpfm-settings {background-color:#fff!important;color:#1d2d38!important;border:0!important;}
+:root[data-theme] .fm-page .cpfm-settings:hover {background-color:#f2f5f7!important;color:#1d2d38!important;filter:none;}
+
 /* Developer preferences use compact checkbox rows, not text-input sizing. */
 :root[data-theme] #developerModePanel .field>span {display:flex;align-items:center;gap:10px;min-height:30px;font-size:13px;font-weight:600;}
 :root[data-theme] #developerModePanel input[type="checkbox"] {appearance:auto;display:inline-block;width:18px;height:18px;min-height:0;flex:0 0 18px;padding:0;margin:0;accent-color:var(--teal);box-shadow:none;border-radius:3px;}
