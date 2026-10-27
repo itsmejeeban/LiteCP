@@ -253,3 +253,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 .website-ftp-dialog [data-ftp-status] {text-align:center;margin:10px 0 16px;font-size:12px;}
 .website-ftp-dialog [data-ftp-status]:empty {display:none;}
+
+/* Filled destructive buttons across every panel and popup. */
+:root[data-theme] button:is(.danger,[data-cron-remove],[data-ftp-remove],[data-backup-delete],#deleteAllActivities,#emptyTrash,#trashSelected,[data-site-action="delete"],[data-database-action="delete"],[data-file-action="delete"],[data-firewall-action="delete"],[data-backup-destination-action="delete"],[data-mail-action$="-delete"],[data-trash="delete"]) {background:#dc2626!important;border-color:#dc2626!important;color:#fff!important;}
+:root[data-theme] button:is(.danger,[data-cron-remove],[data-ftp-remove],[data-backup-delete],#deleteAllActivities,#emptyTrash,#trashSelected,[data-site-action="delete"],[data-database-action="delete"],[data-file-action="delete"],[data-firewall-action="delete"],[data-backup-destination-action="delete"],[data-mail-action$="-delete"],[data-trash="delete"]):hover {background:#b91c1c!important;border-color:#b91c1c!important;color:#fff!important;}
