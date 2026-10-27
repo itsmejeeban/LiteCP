@@ -281,6 +281,10 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="files"]::before {background-position:66.6667% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-position:83.3333% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="ssl"]::before {background-position:100% center;}
+:root[data-theme] #sitesTable .row-actions button {width:52px;height:48px;min-width:52px;}
+:root[data-theme] #sitesTable .row-actions button::before {flex:0 0 28px;}
+:root[data-theme] #sitesTable .row-actions .site-action-label {display:block;font-size:9px;font-weight:600;line-height:1;color:var(--muted);}
+:root[data-theme] #sitesTable .row-actions button:hover .site-action-label {color:var(--ink);}
 
 /* Developer preferences use compact checkbox rows, not text-input sizing. */
 :root[data-theme] #developerModePanel .field>span {display:flex;align-items:center;gap:10px;min-height:30px;font-size:13px;font-weight:600;}
