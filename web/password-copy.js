@@ -1,22 +1,22 @@
 (() => {
   "use strict";
-  function button(readValue, selectValue) {
+  function button(readValue, selectValue, name = "password") {
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "password-copy-button";
-    copy.title = "Copy password";
-    copy.setAttribute("aria-label", "Copy password");
+    copy.title = `Copy ${name}`;
+    copy.setAttribute("aria-label", `Copy ${name}`);
     copy.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>';
     copy.addEventListener("click", async event => {
       event.preventDefault();
       const value = readValue();
-      if (!value) { window.LiteCP.showToast("No password to copy", "Generate or enter a password first."); return; }
+      if (!value) { window.LiteCP.showToast(`No ${name} to copy`, `Generate or enter a ${name} first.`); return; }
       try {
         await navigator.clipboard.writeText(value);
-        window.LiteCP.showToast("Copied", "Password copied to your clipboard.");
+        window.LiteCP.showToast("Copied", `${name[0].toUpperCase()+name.slice(1)} copied to your clipboard.`);
       } catch {
         selectValue?.();
-        window.LiteCP.showToast("Copy unavailable", "Select and copy the password manually.", "error");
+        window.LiteCP.showToast("Copy unavailable", `Select and copy the ${name} manually.`, "error");
       }
     });
     return copy;

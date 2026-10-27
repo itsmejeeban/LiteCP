@@ -367,6 +367,8 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .credential-list div:last-child { border-bottom: 0; }
 .credential-list dt { color: var(--muted); font-size: 9px; }
 .credential-list dd { margin: 0; max-width: 70%; overflow-wrap: anywhere; font: 10px ui-monospace,SFMono-Regular,Consolas,monospace; font-weight: 700; }
+.credential-list dd.credential-copy-value { display: inline-flex; align-items: center; gap: 8px; }
+.credential-copy-value .password-copy-button { flex-shrink: 0; }
 .warning-callout { margin-top: 13px; padding: 11px 12px; display: flex; flex-direction: column; background: #fff7e9; border-radius: 8px; }
 .warning-callout strong { color: #9a6426; font-size: 9px; }
 .warning-callout span { color: #9b825e; font-size: 8px; margin-top: 3px; }

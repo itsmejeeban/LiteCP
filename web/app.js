@@ -619,6 +619,10 @@
       if (/password/i.test(rows[index][0])) {
         const input=document.createElement("input");input.type="password";input.value=String(rows[index][1]);input.readOnly=true;input.autocomplete="off";input.setAttribute("aria-label",rows[index][0]);
         row.querySelector("dd").replaceChildren(input);window.LiteCPPasswordCopy.enhance(input);
+      } else if (/^username$/i.test(rows[index][0])) {
+        const value=String(rows[index][1]),cell=row.querySelector("dd"),text=document.createElement("span");text.textContent=value;
+        const copy=window.LiteCPPasswordCopy.button(()=>value,()=>{const selection=window.getSelection(),range=document.createRange();range.selectNodeContents(text);selection.removeAllRanges();selection.addRange(range);},"username");
+        cell.classList.add("credential-copy-value");cell.replaceChildren(text,copy);
       }
     });
     $("#credentialsModal").classList.remove("hidden");
