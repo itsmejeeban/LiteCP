@@ -1,0 +1,10 @@
+/* Use the supplied transparent LiteCP artwork without altering its colors. */
+:root[data-theme] .litecp-logo {display:block;object-fit:contain;max-width:100%;height:auto;flex-shrink:0;}
+:root[data-theme] .sidebar-brand {align-items:center;gap:10px;padding-top:8px;padding-bottom:8px;}
+:root[data-theme] .sidebar-brand .litecp-logo {width:145px;}
+:root[data-theme] .sidebar-brand .sidebar-version {align-self:center;padding-top:0;}
+:root[data-theme] .login-card .mobile-login-logo {margin-bottom:24px;}
+:root[data-theme] .mobile-login-logo .litecp-logo {width:260px;}
+:root[data-theme] body .fm-page .cpfm-brand {display:flex;align-items:center;gap:10px;}
+:root[data-theme] .cpfm-brand .litecp-logo {width:110px;}
+@media(max-width:600px){:root[data-theme] .mobile-login-logo .litecp-logo {width:220px;}}
