@@ -368,8 +368,7 @@
     const safe = Math.max(0, Math.min(100, Number(value) || 0));
     $(`#${name}Value`).textContent = safe.toFixed(safe < 10 ? 1 : 0);
     $(`#${name}Bar`).style.width = `${safe}%`;
-    if (safe > 82) $(`#${name}Bar`).style.background = "#d95858";
-    else if (safe > 65) $(`#${name}Bar`).style.background = "#e99b39";
+    $(`#${name}Bar`).style.background = safe > 70 ? "#ef4444" : safe > 50 ? "#eab308" : "#22c55e";
   }
 
   function renderServices() {
