@@ -78,16 +78,16 @@
     const state = cp.state();
     for (const site of state?.sites || []) items.push({...entry("websites",site.domain,"Website · hosting, SSL, cron, FTP and backups","#sitesTable","domain website","Websites"),domain:site.domain});
     for (const database of state?.databases || []) items.push(entry("databases",database.name,"Database · "+database.username,"#databasesTable","mysql phpmyadmin sql database","Databases"));
-    for (const mailbox of state?.mailboxes || []) items.push(entry("email",mailbox.address,"Mailbox · email account","#mailboxesTable","email mailbox webmail","Mailboxes"));
-    for (const domain of state?.mailDomains || []) items.push(entry("email",domain.domain,"Email domain · routing and DNS records","#mailDomainsTable","mail domain dns dkim spf dmarc mx","Mail domains"));
+    for (const mailbox of state?.mailboxes || []) items.push(entry("email/mailboxes",mailbox.address,"Mailbox · email account","#mailboxesTable","email mailbox webmail","Mailboxes"));
+    for (const domain of state?.mailDomains || []) items.push(entry("email/domains",domain.domain,"Email domain · routing and DNS records","#mailDomainsTable","mail domain dns dkim spf dmarc mx","Mail domains"));
     return items.concat(manual);
   }
   function close() { dropdown.hidden=true; input.setAttribute("aria-expanded","false");input.removeAttribute("aria-activedescendant"); }
   function positionResults() {
-    const rect=search.getBoundingClientRect(), width=Math.min(420,window.innerWidth-24);
+    const rect=search.getBoundingClientRect(), width=Math.min(440,window.innerWidth-24);
     const top=Math.max(8,Math.min(rect.bottom+8,window.innerHeight-120));
     dropdown.style.width=width+"px";dropdown.style.left=Math.max(12,Math.min(rect.left,window.innerWidth-width-12))+"px";
-    dropdown.style.top=top+"px";dropdown.style.maxHeight=Math.max(100,Math.min(520,window.innerHeight-top-12))+"px";
+    dropdown.style.top=top+"px";dropdown.style.maxHeight=Math.max(100,Math.min(420,window.innerHeight-top-12))+"px";
   }
   function focusSearch() {
     const sidebar=document.querySelector("#sidebar");
@@ -101,14 +101,14 @@
   }
   function show() {
     if (!cp.state()) { close(); return; }
-    const matches = rank(catalogue(),input.value.trim()), limit = 12;
+    const matches = rank(catalogue(),input.value.trim()), limit = input.value.trim() ? 7 : 5;
     results = matches.slice(0,limit);selected=0;list.replaceChildren();
     for (const [index,item] of results.entries()) {
       const result=document.createElement("button");result.type="button";result.id="panel-search-result-"+index;result.className="panel-search-result";result.setAttribute("role","option");result.setAttribute("aria-selected",String(index===0));
       const title=document.createElement("strong"),description=document.createElement("span"),group=document.createElement("small");
-      title.textContent=item.title;description.textContent=item.description;group.textContent=item.group;result.append(title,description,group);result.addEventListener("click",()=>open(item));list.append(result);
+      title.textContent=item.title;description.textContent=item.description;group.textContent=item.group;result.append(title,group,description);result.addEventListener("click",()=>open(item));list.append(result);
     }
-    status.textContent = !results.length ? "No results. Try another feature or setting name." : !input.value.trim() ? "Quick access · type to search the panel" : `${matches.length} results${matches.length>limit?" · showing the first 12":""}`;
+    status.textContent = !results.length ? "No results. Try another feature or setting name." : !input.value.trim() ? "Quick access · type to search the panel" : `${matches.length} results${matches.length>limit?" · showing the best 7":""}`;
     dropdown.hidden=false;positionResults();input.setAttribute("aria-expanded","true");
     if(results.length)input.setAttribute("aria-activedescendant",list.children[0].id);else input.removeAttribute("aria-activedescendant");
   }

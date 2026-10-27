@@ -275,7 +275,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .row-actions button:hover,:root[data-theme] #sitesTable .row-actions button:hover {background-color:#36465e;color:#fff;}
 .website-ftp-dialog .ftp-form-actions {margin-top:18px;margin-bottom:24px;padding-bottom:8px;gap:12px;}
 
-:root[data-theme] button:not(.fm-page button):not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
+:root[data-theme] button:not(.panel-search-result):not(.fm-page button):not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
 :root[data-theme] button:not(.button-primary):not(.danger):hover {filter:brightness(1.15);}
 
 /* Generated multicolor website action image sprite. */
