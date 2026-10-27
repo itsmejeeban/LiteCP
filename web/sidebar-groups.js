@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const groups = [
-    {id:"website-tools", title:"Website Tools", icon:"tools", after:"websites", pages:["files","databases","website-backups","website-cron","website-ftp","website-ssl"]},
+    {id:"website-tools", title:"Website Tools", icon:"tools", after:"websites", pages:["file-manager","files","databases","website-backups","website-cron","website-ftp","website-ssl"]},
     {id:"security", title:"Security", icon:"security", after:"email", pages:["firewall","security","waf"]},
     {id:"environment", title:"Server Environment", icon:"server-environment", pages:["applications","extensions"]}
   ];

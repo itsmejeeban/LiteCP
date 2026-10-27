@@ -504,7 +504,7 @@
     const emailRoute=["add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases"].includes(emailPart)?`email/${emailPart}`:"";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "analytics", "activities", "documentation", "applications"];
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "analytics", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
