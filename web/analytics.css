@@ -1,5 +1,5 @@
 .analytics-controls {display:flex;align-items:center;gap:24px;padding:18px;margin-bottom:18px;}
-.analytics-controls .field {margin:0;min-width:240px;}
+:root[data-theme] .analytics-controls .field {margin:0;min-width:240px;}
 .analytics-controls p {color:var(--muted);font-size:12px;}
 .usage-graphs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;}
 .usage-chart svg {display:block;width:100%;height:auto;padding:12px;}

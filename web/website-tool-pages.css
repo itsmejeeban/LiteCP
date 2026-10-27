@@ -1,5 +1,6 @@
 .website-tool-picker {display:flex;align-items:flex-end;gap:14px;padding:18px;}
-.website-tool-picker .field {flex:1;margin:0;max-width:500px;}
+:root[data-theme] .website-tool-picker>.field {flex:1;min-width:0;margin:0;max-width:500px;}
+:root[data-theme] .website-tool-picker>.button {height:36px;min-height:36px;margin:0;flex-shrink:0;align-self:flex-end;}
 dialog.website-tool-inline[open] {position:static;inset:auto;display:block;width:100%;max-width:none;max-height:none;margin:18px 0;box-shadow:none;}
 dialog.website-tool-inline>.fm-dialog-body {max-height:none;overflow:visible;}
 dialog.website-tool-inline header>button[aria-label^="Close"] {display:none!important;}
@@ -10,4 +11,4 @@ dialog.website-tool-inline header>button[aria-label^="Close"] {display:none!impo
 [data-backup-upload] input[type=file] {display:block;min-height:46px;height:auto;padding:7px 10px;line-height:30px;}
 [data-backup-upload] input[type=file]::file-selector-button {vertical-align:middle;margin:0 12px 0 0;padding:5px 12px;border:0;border-radius:5px;background:#293548;color:#fff;line-height:22px;cursor:pointer;}
 .sidebar-feature-group .settings-submenu>.nav-item>img {flex:0 0 18px;}
-@media(max-width:600px){.website-tool-picker{align-items:stretch;flex-direction:column;}}
+@media(max-width:600px){.website-tool-picker{align-items:stretch;flex-direction:column;}:root[data-theme] .website-tool-picker>.field{max-width:none;}:root[data-theme] .website-tool-picker>.button{align-self:stretch;}}
