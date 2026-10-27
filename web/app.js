@@ -1088,7 +1088,7 @@
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";
     const name = type === "wordpress" ? "WordPress" : type === "whmcs" ? "WHMCS" : "PHP";
     const detail = site.appVersion ? `${name} ${site.appVersion}` : name;
-    const logoSource = type === "wordpress" ? "logo-wordpress.png?v=provided-1" : `logo-${type}.svg${type === "whmcs" ? "?v=official-2026" : ""}`;
+    const logoSource = type === "wordpress" ? "logo-wordpress.png?v=provided-1" : `logo-${type}.svg${type === "whmcs" ? "?v=dark-panel-1" : ""}`;
     return `<span class="application-logo application-logo-${type}" title="${escapeHTML(detail)}"><img src="${logoSource}" alt="${escapeHTML(name)} logo"></span>`;
   }
 
