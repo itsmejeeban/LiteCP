@@ -285,7 +285,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button[data-site-backup]::before {background-position:33.3333% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="cron"]::before {background-position:50% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="files"]::before {background-position:66.6667% center;}
-:root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-position:83.3333% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-image:url('assets/remove-website.svg');background-size:26px 26px;background-position:center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="ssl"]::before {background-position:100% center;}
 :root[data-theme] #sitesTable .row-actions button.site-domain-edit::before {display:none;}
 :root[data-theme] #sitesTable .row-actions button.site-domain-edit svg {display:block;width:28px;height:28px;stroke:#60a5fa;stroke-width:1.8;fill:none;}
