@@ -281,3 +281,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable [data-site-action="files"]::before {background-position:66.6667% center;}
 :root[data-theme] #sitesTable [data-site-action="delete"]::before {background-position:83.3333% center;}
 :root[data-theme] #sitesTable [data-site-action="ssl"]::before {background-position:100% center;}
+
+/* Developer preferences use compact checkbox rows, not text-input sizing. */
+:root[data-theme] #developerModePanel .field>span {display:flex;align-items:center;gap:10px;min-height:30px;font-size:13px;font-weight:600;}
+:root[data-theme] #developerModePanel input[type="checkbox"] {appearance:auto;display:inline-block;width:18px;height:18px;min-height:0;flex:0 0 18px;padding:0;margin:0;accent-color:var(--teal);box-shadow:none;border-radius:3px;}
+:root[data-theme] #developerModePanel .field {margin-bottom:12px;}
+:root[data-theme] #developerModePanel .settings-body>p {font-size:12px;line-height:1.6;color:var(--muted);}
