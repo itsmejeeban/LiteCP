@@ -26,7 +26,7 @@
     find("[data-cron-close]").disabled = busy;
     find("[data-cron-refresh]").disabled = busy;
   }
-  function updatePreview() { find("[data-cron-expression]").textContent = schedule(); }
+  function updatePreview() { find("[data-cron-expression]").textContent = schedule(); find("[data-cron-custom]").hidden = form().elements.preset.value !== "custom"; }
   function setSchedule(value) {
     const parts = value.trim().split(/\s+/);
     fields.forEach((name, index) => { form().elements[name].value = parts[index] || "*"; });
@@ -69,10 +69,8 @@
     if (!current(active) || request !== listRequest) return;
     items = result.items;
     find("[data-cron-domain]").textContent = result.domain;
-    find("[data-cron-context]").textContent = `Server time zone: ${result.timezone}. Commands start in ${result.directory}.`;
+    find("[data-cron-context]").textContent = `Time zone: ${result.timezone}`;
     find("[data-cron-php]").textContent = result.phpCommand || "PHP CLI is not available for this runtime.";
-    const app = result.appCron;
-    find("[data-cron-app]").textContent = app?.available ? `Built-in application cron: ${app.enabled ? "Enabled" : "Disabled"} · ${app.schedule || "Every five minutes"}. Managed separately through the website's application cron control.` : "Custom cron jobs are independent of the website's application runtime.";
     ready = true;
     renderList();
     setControls();
@@ -97,14 +95,14 @@
     siteID = button.dataset.siteCronJobs; generation++; busy = false; ready = false; items = [];
     const active = context();
     dialog.innerHTML = `<header><div><h2 id="websiteCronTitle">Website cron jobs</h2><p data-cron-domain></p></div><button type="button" data-cron-close aria-label="Close cron jobs">&#215;</button></header>
-      <div class="fm-dialog-body"><p>Add multiple cron jobs for this website, each with its own schedule and command. After saving a job, use the cleared form to add another.</p><p data-cron-context>Loading website schedule…</p><p class="website-cron-app" data-cron-app></p>
+      <div class="fm-dialog-body"><p data-cron-context>Loading website schedule…</p>
       <form novalidate><div class="website-cron-form-head"><h3 data-cron-form-title>Add a cron job</h3><label class="website-cron-enabled"><input name="enabled" type="checkbox" checked> Enabled</label></div>
-      <label class="field"><span>Job name <small>(optional)</small></span><input name="name" maxlength="100" placeholder="For example, Daily report"></label>
-      <label class="field"><span>Common schedules</span><select name="preset"><option value="minute">Every minute</option><option value="five" selected>Every 5 minutes</option><option value="fifteen">Every 15 minutes</option><option value="thirty">Every 30 minutes</option><option value="hourly">Once an hour</option><option value="daily">Once a day at midnight</option><option value="weekly">Once a week on Sunday</option><option value="monthly">Once a month</option><option value="custom">Custom schedule</option></select></label>
-      <div class="website-cron-fields">${fields.map((name, index) => `<label class="field"><span>${["Minute", "Hour", "Day", "Month", "Weekday"][index]}</span><input name="${name}" data-cron-field autocomplete="off" spellcheck="false" maxlength="128" required aria-describedby="websiteCronSyntax"><small>${["0–59", "0–23", "1–31", "1–12", "0–7; Sun = 0 or 7"][index]}</small></label>`).join("")}</div>
-      <p class="website-cron-help" id="websiteCronSyntax">Use * for every value, */5 for every five, 1,15 for a list, or 1-5 for a range. When both day and weekday are restricted, either match runs the job.</p><p class="website-cron-preview">Schedule: <code data-cron-expression></code></p>
-      <label class="field"><span>Command</span><textarea name="command" rows="3" maxlength="4096" spellcheck="false" required placeholder="Enter the full command or absolute path to your script"></textarea><small>Runs as this website's user, never as root. Use absolute executable paths. Standard output is discarded; redirect output inside your command if needed.</small></label>
-      <p class="website-cron-php">PHP CLI for this website: <code data-cron-php></code></p><p class="website-cron-help">Disabling or removing a job stops future scheduled runs. Commands already running continue until they finish.</p>
+
+      <label class="field"><span>Run this job</span><select name="preset"><option value="minute">Every minute</option><option value="five" selected>Every 5 minutes</option><option value="fifteen">Every 15 minutes</option><option value="thirty">Every 30 minutes</option><option value="hourly">Once an hour</option><option value="daily">Once a day at midnight</option><option value="weekly">Once a week on Sunday</option><option value="monthly">Once a month</option><option value="custom">Custom schedule</option></select></label>
+      <div data-cron-custom hidden><div class="website-cron-fields">${fields.map((name, index) => `<label class="field"><span>${["Minute", "Hour", "Day", "Month", "Weekday"][index]}</span><input name="${name}" data-cron-field autocomplete="off" spellcheck="false" maxlength="128" required aria-describedby="websiteCronSyntax"><small>${["0–59", "0–23", "1–31", "1–12", "0–7; Sun = 0 or 7"][index]}</small></label>`).join("")}</div>
+      <p class="website-cron-help" id="websiteCronSyntax">Use * for every value, */5 for every five, 1,15 for a list, or 1-5 for a range. When both day and weekday are restricted, either match runs the job.</p><p class="website-cron-preview">Schedule: <code data-cron-expression></code></p></div>
+      <label class="field"><span>Command</span><textarea name="command" rows="2" maxlength="4096" spellcheck="false" required placeholder="Example: /usr/bin/php /path/to/script.php"></textarea><small>Paste the command provided by your application.</small></label>
+      <details class="website-cron-options"><summary>More options</summary><label class="field"><span>Job name (optional)</span><input name="name" maxlength="100" placeholder="Daily report"></label><p class="website-cron-php">PHP command: <code data-cron-php></code></p></details>
       <div class="feature-actions"><button type="submit" class="button button-primary" data-cron-save>Create cron job</button><button type="button" class="button button-secondary" data-cron-cancel-edit hidden>Cancel edit</button></div></form>
       <p data-cron-status role="status" aria-live="polite"></p><div class="website-cron-list-head"><h3>Custom cron jobs</h3><button type="button" class="button button-secondary" data-cron-refresh>Refresh</button></div><div data-cron-list></div></div>`;
     resetForm(); dialog.showModal(); setControls();
@@ -114,7 +112,7 @@
   dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
   dialog.addEventListener("keydown", event => event.stopPropagation());
   dialog.addEventListener("change", event => {
-    if (event.target === form().elements.preset && presets[event.target.value]) setSchedule(presets[event.target.value]);
+    if (event.target === form().elements.preset) { if (presets[event.target.value]) setSchedule(presets[event.target.value]); else updatePreview(); }
   });
   dialog.addEventListener("input", event => {
     if (event.target.matches("[data-cron-field]")) { form().elements.preset.value = "custom"; updatePreview(); }

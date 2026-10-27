@@ -78,7 +78,8 @@ test('cron popup ignores old lists after switching websites and closing', async 
   requests[0].resolve(list('A', [job('old-A')])); await first;
   assert.match(ui.dialog.querySelector('[data-cron-list]').innerHTML, /new-B/);
   assert.doesNotMatch(ui.dialog.querySelector('[data-cron-list]').innerHTML, /old-A/);
-  assert.match(ui.dialog.querySelector('[data-cron-context]').textContent, /\/public\/B/);
+  assert.equal(ui.dialog.querySelector('[data-cron-domain]').textContent, 'B.test');
+  assert.equal(ui.dialog.querySelector('[data-cron-context]').textContent, 'Time zone: UTC');
   const third = ui.open('C'); await ui.close(); requests[2].resolve(list('C', [job('closed-C')])); await third;
   assert.equal(ui.dialog.querySelector('[data-cron-list]').innerHTML, '');
 });
@@ -134,4 +135,12 @@ test('old mutation completion cannot unlock a new popup mutation', async () => {
   pending[1].resolve({}); await second;
   assert.equal(activeButton.disabled, false); assert.equal(ui.dialog.querySelector('[data-cron-status]').textContent, 'Cron job created.');
   assert.deepEqual(writes, ['/api/website-cron?siteId=A', '/api/website-cron?siteId=B']);
+});
+
+test('beginner schedules hide custom timing fields and Custom reveals them', async () => {
+ const ui=panel(async()=>list('A'));await ui.open('A');
+ assert.equal(ui.dialog.querySelector('[data-cron-custom]').hidden,true);
+ await ui.preset('custom');assert.equal(ui.dialog.querySelector('[data-cron-custom]').hidden,false);
+ await ui.preset('daily');assert.equal(ui.dialog.querySelector('[data-cron-custom]').hidden,true);
+ assert.equal(ui.dialog.querySelector('[data-cron-expression]').textContent,'0 0 * * *');
 });
