@@ -103,7 +103,8 @@
   const trashPanel = $("#trashPanel");
   trashPanel.innerHTML = `<div class="panel-head"><div><h2>Trash</h2><p>Recoverable items stored outside your public website.</p></div><div class="feature-actions">${button("close-trash","Close","close")}${button("empty-trash","Empty trash","trash","fm-danger")}</div></div><div id="trashTable"></div>`;
   const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); page.append(menu);
-  const dialog = document.createElement("dialog"); dialog.className = "fm-dialog"; document.body.append(dialog);
+  const dialog = document.createElement("dialog"); dialog.id="fmActionDialog"; dialog.className = "fm-dialog"; page.append(dialog);
+  page.append($("#editorModal"));
   dialog.setAttribute("aria-labelledby","fmDialogTitle");
   dialog.addEventListener("cancel", event => { if (dialog.querySelector('button[type="submit"]')?.disabled) event.preventDefault(); });
   function closeMenu() { menu.classList.add("hidden"); }
@@ -193,7 +194,7 @@
     if (dialog.open) return;
     dialog.classList.remove("fm-search-dialog");
     const expectedSite=siteID(), expectedPath=cp.path();
-    dialog.innerHTML=`<form><header><div><span class="eyebrow">FILE MANAGER</span><h2 id="fmDialogTitle">${esc(title)}</h2></div><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body"><p>${esc(description)}</p>${fields}<p class="fm-error hidden" role="alert"></p></div><footer><button type="button" class="button button-ghost" data-fm-cancel>Cancel</button><button type="submit" class="button ${danger ? "fm-danger-button" : "button-primary"}">${esc(submit)}</button></footer></form>`;
+    dialog.innerHTML=`<form><header><h2 id="fmDialogTitle">${esc(title)}</h2><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body">${description ? `<p>${esc(description)}</p>` : ""}${fields}<p class="fm-error hidden" role="alert"></p></div><footer>${submit ? `<button type="submit" class="button ${danger ? "fm-danger-button" : "button-primary"}">${esc(submit)}</button>` : ""}<button type="button" class="button button-ghost" data-fm-cancel>Cancel</button></footer></form>`;
     dialog.querySelectorAll("[data-fm-cancel]").forEach(b=>b.onclick=()=>dialog.close());
     dialog.querySelector("form").onsubmit=async event=>{
       event.preventDefault(); if (!event.target.reportValidity()) return;
@@ -227,11 +228,14 @@
     const result=await cp.api(`/api/files/search?${params}`);
     showSearchResults(result,query);
   }
-  function editFile(item) {
-    if(preferences.skipEncoding) { cp.openEditor(item.path); return; }
-    openDialog({title:"Select character encoding",description:`Open ${item.name} in the browser editor.`,fields:'<label class="fm-field"><span>Character encoding</span><select name="encoding"><option value="utf-8">UTF-8</option></select><small>LiteCP safely edits UTF-8 text files up to 4 MiB.</small></label>',submit:"Edit file",perform:async()=>cp.openEditor(item.path)});
+  function editFile(item,html=false) {
+    const open=async()=>{await cp.openEditor(item.path);if(html){$("#editorTitle").textContent="HTML Editor — "+item.name;$("#editorLanguage").value="html";$("#editorLanguage").dispatchEvent(new Event("change"));}};
+    if(preferences.skipEncoding) { open().catch(cp.handleError); return; }
+    openDialog({title:html ? "HTML Editor" : "Edit",description:"Back up the original file before editing.",fields:`<div class="fm-path-list"><strong>You will be editing:</strong><div>/public/${esc(item.path)}</div></div><label class="fm-field"><span>Please select the character encoding to use when opening this file:</span><select name="encoding"><option value="utf-8">utf-8</option></select><small>UTF-8 text files up to 4 MiB.</small></label>`,submit:"Edit",perform:open});
   }
   const field = (label,name,value="",help="") => `<label class="fm-field"><span>${esc(label)}</span><input name="${name}" value="${esc(value)}" autocomplete="off" ${["name","mode"].includes(name) ? "required" : ""}>${help ? `<small>${esc(help)}</small>` : ""}</label>`;
+  const pathField=(label,name,value)=>`<label class="fm-field"><span>${esc(label)}</span><span class="fm-path-input">${icon("home")}<input name="${name}" value="${esc(value)}" autocomplete="off" required></span></label>`;
+  const pathList=(label,items)=>`<div class="fm-path-list"><strong>${esc(label)}</strong>${items.map(item=>`<div>/public/${esc(item.path)}</div>`).join("")}</div>`;
   function filename(value) { const name=String(value).trim(); if (!name || name==="." || name===".." || /[/\\\x00-\x1f]/.test(name)) throw new Error("Enter a file name without slashes or control characters."); return name; }
   async function refresh() { closeMenu(); await cp.loadFiles(); }
   async function action(name) {
@@ -248,10 +252,15 @@
     if (name==="unselect-all") { selected.clear(); syncSelection(); return; }
     if (name==="up") { await cp.goToFilePath(currentPath.split("/").slice(0,-1).join("/")); return; }
     if (name==="back" || name==="forward") { const next=historyIndex+(name==="back" ? -1 : 1); if (next<0 || next>=history.length) return; historyIndex=next; historyNavigation=true; await cp.goToFilePath(history[next]); return; }
-    if (name==="edit" || name==="html-edit") { if (item.type==="file") editFile(item); return; }
+    if (name==="edit" || name==="html-edit") { if (item.type==="file") editFile(item,name==="html-edit"); return; }
     if (name==="view") { if (!cp.demo && item.type==="file") window.open(`/api/files/download?preview=1&siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`,"_blank","noopener"); return; }
     if (name==="download") { if (!cp.demo && item.type==="file") window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`); return; }
-    if (name==="upload") { $("#fileUploadInput").click(); return; }
+    if (name==="upload") {
+      openDialog({title:"File Upload",description:`Select the file you want to upload to “/public${currentPath ? "/"+currentPath : ""}”.`,fields:'<div class="fm-upload-drop" id="fmUploadDrop"><p>Drop files here to start uploading</p><p>or</p><button type="button" class="button" id="fmChooseUpload">Select File</button></div>',submit:null});
+      $("#fmChooseUpload").onclick=()=>$("#fileUploadInput").click();
+      $("#fmUploadDrop").ondragover=event=>event.preventDefault();
+      $("#fmUploadDrop").ondrop=event=>{event.preventDefault();event.stopPropagation();dialog.close();upload([...event.dataTransfer.files]);}; return;
+    }
     if (name==="trash") { await showTrash(); return; }
     if (name==="close-trash") { trashPanel.classList.add("hidden"); return; }
     if (name==="settings") {
@@ -264,19 +273,19 @@
     }
     if (name==="new-folder" || name==="new-file") {
       const isFolder=name==="new-folder";
-      openDialog({title:isFolder ? "New folder" : "New file",description:`Create inside /public${currentPath ? "/"+currentPath : ""}.`,fields:field("Name","name",isFolder ? "new-folder" : "new-file.txt"),submit:"Create",perform:async form=>{const result=await api(isFolder ? "/api/files/directory" : "/api/files/create","POST",{path:currentPath,name:filename(form.get("name"))}); await refresh(); cp.showToast(isFolder ? "Folder created" : "File created",result.path || String(form.get("name")));}}); return;
+      openDialog({title:isFolder ? "New Folder" : "New File",description:"",fields:field(isFolder ? "New Folder Name:" : "New File Name:","name","",isFolder ? "" : "(ex: file.txt, file.html, file.php)")+pathField(isFolder ? "New Folder will be created in:" : "New file will be created in:","destination","/public"+(currentPath ? "/"+currentPath : "")),submit:isFolder ? "Create New Folder" : "Create New File",perform:async form=>{const result=await api(isFolder ? "/api/files/directory" : "/api/files/create","POST",{path:normalizePath(form.get("destination")),name:filename(form.get("name"))}); await refresh(); cp.showToast(isFolder ? "Folder created" : "File created",result.path || String(form.get("name")));}}); return;
     }
-    if (name==="rename") { openDialog({title:"Rename item",description:item.name,fields:field("New name","name",item.name),submit:"Rename",perform:async form=>{await api("/api/files/rename","POST",{path:item.path,destination:join(item.path.split("/").slice(0,-1).join("/"),filename(form.get("name")))}); await refresh();}}); return; }
-    if (name==="copy" || name==="move") { openDialog({title:name==="copy" ? "Copy items" : "Move items",description:`${items.length} selected item(s). Existing destination names are never overwritten.`,fields:field("Destination folder","destination",currentPath,"Relative to /public. Leave empty for the website root. The folder must already exist."),submit:name==="copy" ? "Copy" : "Move",perform:async form=>{await api("/api/files/transfer","POST",{paths:items.map(x=>x.path),destination:normalizePath(form.get("destination")),operation:name}); folders.clear(); await refresh();}}); return; }
+    if (name==="rename") { openDialog({title:"Rename",description:"",fields:pathList("Old file name:",[item])+field("New file name:","name",item.name),submit:"Rename File",perform:async form=>{await api("/api/files/rename","POST",{path:item.path,destination:join(item.path.split("/").slice(0,-1).join("/"),filename(form.get("name")))}); await refresh();}}); return; }
+    if (name==="copy" || name==="move") { openDialog({title:name==="copy" ? "Copy" : "Move",description:"",fields:pathList(name==="copy" ? "File path:" : "Current Path:",items)+pathField(`Enter the file path that you want to ${name} ${items.length===1 ? "this file" : "these files"} to:`,"destination","/public"+(currentPath ? "/"+currentPath : "")),submit:name==="copy" ? "Copy Files" : "Move Files",perform:async form=>{await api("/api/files/transfer","POST",{paths:items.map(x=>x.path),destination:normalizePath(form.get("destination")),operation:name}); folders.clear(); await refresh();}}); return; }
     if (name==="chmod") {
-      openDialog({title:"File permissions",description:`${item.name}. Changes apply to this item only. Special modes and world-writable permissions are blocked.`,fields:field("Octal permissions","mode",item.mode)+`<div class="fm-permission-grid"><strong></strong><strong>Read</strong><strong>Write</strong><strong>Execute</strong>${["Owner","Group","Others"].map((label,index)=>`<strong>${label}</strong>${[4,2,1].map(bit=>`<input type="checkbox" data-mode-bit="${bit << ((2-index)*3)}" aria-label="${label} ${bit===4 ? "read" : bit===2 ? "write" : "execute"}">`).join("")}`).join("")}</div>`,submit:"Apply permissions",perform:async form=>{const mode=String(form.get("mode"));if (!/^0?[0-7]{3}$/.test(mode) || (parseInt(mode,8)&2)) throw new Error("Use three octal digits without write permission for Others.");await api("/api/files/permissions","PUT",{path:item.path,mode});await refresh();}});
+      openDialog({title:"Change Permissions",description:"",fields:pathList("File(s):",[item])+`<input type="hidden" name="mode" value="${esc(item.mode)}"><div class="fm-permission-grid"><strong>Mode</strong><strong>User</strong><strong>Group</strong><strong>World</strong>${[["Read",4],["Write",2],["Execute",1]].map(([label,bit])=>`<strong>${label}</strong>${["User","Group","World"].map((owner,index)=>`<input type="checkbox" data-mode-bit="${bit << ((2-index)*3)}" aria-label="${owner} ${label.toLowerCase()}">`).join("")}`).join("")}<strong>Permission</strong>${[0,1,2].map(index=>`<input type="text" readonly data-mode-digit="${index}" aria-label="${["User","Group","World"][index]} permission">`).join("")}</div>`,submit:"Change Permissions",perform:async form=>{const mode=String(form.get("mode"));if (!/^0?[0-7]{3}$/.test(mode) || (parseInt(mode,8)&2)) throw new Error("Use three octal digits without write permission for World.");await api("/api/files/permissions","PUT",{path:item.path,mode});await refresh();}});
       const modeInput=dialog.querySelector('[name="mode"]'), boxes=[...dialog.querySelectorAll("[data-mode-bit]")];
-      const update=()=>boxes.forEach(box=>box.checked=Boolean(parseInt(modeInput.value,8)&Number(box.dataset.modeBit))); update(); modeInput.oninput=update;
-      boxes.forEach(box=>box.onchange=()=>{modeInput.value="0"+boxes.reduce((mode,b)=>mode+(b.checked ? Number(b.dataset.modeBit) : 0),0).toString(8).padStart(3,"0");}); return;
+      const update=()=>{boxes.forEach(box=>box.checked=Boolean(parseInt(modeInput.value,8)&Number(box.dataset.modeBit)));dialog.querySelectorAll("[data-mode-digit]").forEach(input=>input.value=modeInput.value.slice(-3)[Number(input.dataset.modeDigit)]);}; update(); modeInput.oninput=update;
+      boxes.forEach(box=>box.onchange=()=>{modeInput.value="0"+boxes.reduce((mode,b)=>mode+(b.checked ? Number(b.dataset.modeBit) : 0),0).toString(8).padStart(3,"0");update();}); return;
     }
-    if (name==="archive") { openDialog({title:"Compress selection",description:`Create a ZIP containing ${items.length} selected item(s).`,fields:field("Archive name","name","archive.zip"),submit:"Create ZIP",perform:async form=>{let target=filename(form.get("name"));if (!target.toLowerCase().endsWith(".zip"))target+=".zip";await api("/api/files/archive","POST",{paths:items.map(x=>x.path),destination:join(currentPath,target)});await refresh();}}); return; }
-    if (name==="extract") { openDialog({title:"Extract ZIP archive",description:`Extract ${item.name}. Files with matching names may be replaced. Review the destination before continuing.`,fields:field("Destination folder","destination",currentPath,"Relative to /public. Empty means the website root."),submit:"Extract archive",perform:async form=>{await api("/api/files/extract","POST",{path:item.path,destination:normalizePath(form.get("destination"))});folders.clear();await refresh();}}); return; }
-    if (name==="delete") { openDialog({title:"Move selection to Trash?",description:`Move ${items.length} item(s) to private Trash storage. You can restore them later.`,fields:`<ul class="fm-confirm-list">${items.map(x=>`<li>${esc(x.name)}</li>`).join("")}</ul>`,submit:"Move to Trash",danger:true,perform:async()=>{try {for(const entry of items)await api("/api/files","DELETE",{path:entry.path});} finally {folders.clear();await refresh();}}}); return; }
+    if (name==="archive") { openDialog({title:"Compress",description:"",fields:'<div class="fm-path-list"><strong>Compression Type:</strong><label><input type="radio" checked name="compression" value="zip"> Zip Archive</label></div>'+pathList("Files to compress:",items)+field("Enter the name of the compressed archive and click Compress:","name","archive.zip"),submit:"Compress Files",perform:async form=>{let target=filename(form.get("name"));if (!target.toLowerCase().endsWith(".zip"))target+=".zip";await api("/api/files/archive","POST",{paths:items.map(x=>x.path),destination:join(currentPath,target)});await refresh();}}); return; }
+    if (name==="extract") { openDialog({title:"Extract",description:"Files with matching names may be replaced.",fields:pathList("File to extract:",[item])+pathField("Enter the path you wish to extract the files to:","destination","/public"+(currentPath ? "/"+currentPath : "")),submit:"Extract Files",perform:async form=>{await api("/api/files/extract","POST",{path:item.path,destination:normalizePath(form.get("destination"))});folders.clear();await refresh();}}); return; }
+    if (name==="delete") { openDialog({title:"Trash",description:"Are you sure you want to move the following files to the trash?",fields:pathList("",items),submit:"Confirm",danger:true,perform:async()=>{try {for(const entry of items)await api("/api/files","DELETE",{path:entry.path});} finally {folders.clear();await refresh();}}}); return; }
     if (name==="empty-trash") openDialog({title:"Permanently empty Trash?",description:"Every item in this website’s Trash will be permanently removed. This cannot be undone.",fields:field("Type EMPTY to confirm","confirmation"),submit:"Delete permanently",danger:true,perform:async form=>{if(form.get("confirmation")!=="EMPTY")throw new Error("Type EMPTY exactly to confirm.");await api("/api/files/trash","DELETE",{id:""});await showTrash();}});
   }
   async function showTrash() {
@@ -329,7 +338,7 @@
   $("#cpfmCollapse").onclick=()=>{expanded=new Set();renderTree();};
   ["fileSearch","showHidden","fileSort"].forEach(id=>$("#"+id).addEventListener(id==="fileSearch" ? "input" : "change",()=>{selected.clear();lastIndex=-1;if(id==="fileSort")descending=["size","modified"].includes($("#fileSort").value);if(listing)render(listing);}));
   $("#fmOrder").onclick=()=>{descending=!descending;$("#fmOrder").textContent=descending ? "↓" : "↑";if(listing)render(listing);};
-  $("#fileUploadInput").onchange=event=>{upload([...event.target.files]);event.target.value="";};
+  $("#fileUploadInput").onchange=event=>{if(event.target.files.length && dialog.open)dialog.close();upload([...event.target.files]);event.target.value="";};
   let dragDepth=0;
   panel.addEventListener("dragenter",event=>{if(!event.dataTransfer.types.includes("Files"))return;event.preventDefault();dragDepth++;panel.classList.add("fm-dragging");});
   panel.addEventListener("dragover",event=>{if(event.dataTransfer.types.includes("Files"))event.preventDefault();});
