@@ -10,7 +10,7 @@
     if(!text||text==='�'||/^Checking/i.test(text))return '';
     return /\b(not|none|no|unknown|unavailable|unable|disabled|inactive|stopped|failed|error|dead|missing|unsupported)\b/i.test(text)?'environment-error':'environment-good';
   }
-  const row=(name,value,status=environmentStatus(value))=>`<div><dt>${esc(name)}</dt><dd class="${status}">${esc(value)}</dd></div>`;
+  const row=(name,value,status=["Operating system","Hostname","Server IP"].includes(name)?"environment-info":environmentStatus(value))=>`<div><dt>${esc(name)}</dt><dd class="${status}">${esc(value)}</dd></div>`;
   function summary(state){const system=state?.system||{};card.querySelector('.environment-summary').innerHTML=row('Operating system',system.os||'Checking…')+row('Hostname',system.hostname||'—')+row('Server IP',system.ipAddress||'—')+row('Installed PHP versions',(system.phpVersions||[]).map(version=>'PHP '+version).join(' · ')||'None detected')+row('Database engine',system.databaseEngine||'Not detected')+row('Firewall',system.firewallBackend||'Not detected')+row('Web application firewall',system.wafEngine||'Not detected')+(system.services||[]).map(service=>row(service.label,service.state,["active","running"].includes(String(service.state).toLowerCase())?"environment-good":"environment-error")).join('')+row('Antivirus scanner',system.antivirusAvailable?'Installed':'Not detected')+row('Webmail',system.webmailAvailable?'Available':'Not configured');}
   async function load(force=false){
     summary(cp.state());if(pending)return pending;if(!force&&Date.now()-loaded<60000)return;
