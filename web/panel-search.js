@@ -40,7 +40,7 @@
     ["settings", "Server hostname", "Change the server's operating-system hostname", "#hostnameForm", "hostname server name"],
     ["settings", "DNS resolvers", "View current DNS and configure primary and secondary resolvers", "#resolversForm", "resolver dns nameserver 8.8.8.8 8.8.4.4 network"],
     ["settings", "Server reboot", "Review the server power controls", "#rebootServer", "restart reboot power"],
-    ["settings", "Light / dark mode", "Use the sun or moon icon in the header", "#themeToggle", "theme appearance dark light system"],
+    ["settings", "Dark theme", "LiteCP uses a consistent dark interface", "", "theme appearance dark"],
     ["documentation", "Documentation", "Search the complete user manual", "#manualSearch", "help guide instructions features support manual"]
   ];
   function rank(items, query) {

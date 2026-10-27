@@ -40,20 +40,12 @@
     <button class="button button-primary" type="submit" id="migrationImportButton" disabled>Import selected website</button><button class="button button-ghost" type="button" id="migrationDiscardButton" disabled>Delete staged archive</button></div></form></div>
     <div class="info-callout"><div><strong>Website files and a selected database only</strong><p>Update application credentials and paths after import. Mail accounts, DNS, SSL, server settings, addon sites and arbitrary cron jobs are not imported. Verify the website before changing DNS.</p></div></div>${resultBox("migrationOutput")}`));
 
-  // Persistent, device-local theme selection. No account data is stored here.
-  $(".topbar-actions").insertAdjacentHTML("afterbegin", '<button type="button" class="icon-button theme-control theme-toggle" id="themeToggle" aria-label="Switch theme"></button>');
-  let themePreference = "system";
-  try { const saved=localStorage.getItem("litecp-theme"); if(["light","dark"].includes(saved))themePreference=saved; } catch { /* storage unavailable */ }
+  // LiteCP uses one consistent dark theme, including the file editor.
   function theme() {
-    const dark=themePreference === "dark" || (themePreference === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-    const toggle=$("#themeToggle"), label=dark?"Switch to light mode":"Switch to dark mode";
-    toggle.setAttribute("aria-label",label);toggle.setAttribute("title",label);toggle.setAttribute("aria-pressed",String(dark));
-    toggle.innerHTML=dark?'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/></svg>';
-    if (editor) editor.setTheme(`ace/theme/${document.documentElement.dataset.theme === "dark" ? "tomorrow_night" : "tomorrow"}`);
+    document.documentElement.dataset.theme = "dark";
+    if (editor) editor.setTheme("ace/theme/tomorrow_night");
   }
-  $("#themeToggle").addEventListener("click",()=>{themePreference=document.documentElement.dataset.theme==="dark"?"light":"dark";try{localStorage.setItem("litecp-theme",themePreference);}catch{}theme();});
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", theme);theme();
+  theme();
 
   $(".activity-panel").insertAdjacentHTML("beforeend", '<nav class="pagination" aria-label="Activity pages"><button class="button button-ghost" id="activityPrevious">Previous</button><span id="activityPageLabel" aria-live="polite"></span><button class="button button-ghost" id="activityNext">Next</button></nav>');
   $("#activityPrevious").addEventListener("click", () => { if (activityPage > 1) { activityPage--; activity(); } });
