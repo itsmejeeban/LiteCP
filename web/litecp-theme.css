@@ -240,3 +240,13 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button.danger {color:var(--red);}
 :root[data-theme] .ui-dialog-danger [data-dialog-submit],:root[data-theme] .button-primary.danger {background:#dc2626;border-color:#dc2626;color:#fff;}
 :root[data-theme] .ui-dialog-danger [data-dialog-submit]:hover,:root[data-theme] .button-primary.danger:hover {background:#b91c1c;border-color:#b91c1c;color:#fff;}
+
+.website-ftp-dialog .ftp-username-wrap {display:block;position:relative;}
+.website-ftp-dialog .ftp-username-wrap input {padding-right:44px;}
+.website-ftp-dialog .ftp-username-wrap .password-copy-button {position:absolute;right:6px;top:5px;}
+.website-ftp-dialog .ftp-form-actions,.website-ftp-dialog .ftp-account .feature-actions {justify-content:center;}
+.website-ftp-dialog .ftp-account {border-top:1px solid var(--line);padding:16px 0;}
+.website-ftp-dialog .ftp-details {font-size:12px;}
+.website-ftp-dialog .ftp-details>div {display:grid;grid-template-columns:90px minmax(0,1fr);gap:12px;margin:8px 0;}
+.website-ftp-dialog .ftp-details dt {color:var(--muted);}
+.website-ftp-dialog .ftp-details dd {margin:0;overflow-wrap:anywhere;}
