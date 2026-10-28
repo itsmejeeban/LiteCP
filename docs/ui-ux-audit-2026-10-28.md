@@ -61,6 +61,8 @@ Local evidence is under `docs/ui-audit-2026-10-28/`: `final/results.json` contai
 
 The `bc77ed5` build was deployed with the previous binary and configuration retained under `/var/backups/litecp/browser-audit-20261028-bc77ed5`. Only LiteCP restarted. The version endpoint reported the correct build, the service was active, and the hosted website returned HTTP 200. `deployed/results.json` repeats all 352 observations against delivered assets, with no JavaScript errors, failed API responses, page overflow, clipped controls or unnamed visible buttons. The subsequent search-dialog-only correction was candidate-tested separately in `search-verified/` before its deployment.
 
+The final code build `fd13952` includes the search-dialog correction. Its deployment also retained a binary/configuration backup, the service reported active, and the website returned HTTP 200. Final delivered-asset browser evidence is in `deployed-final/`.
+
 ## Remaining verification limits
 
 | Status | Area | Reason |
