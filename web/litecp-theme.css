@@ -337,6 +337,11 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .fm-page {color-scheme:light;}
 
 /* Developer preferences use compact checkbox rows, not text-input sizing. */
+:root[data-theme] #loginForm .password-toggle,
+:root[data-theme] #loginForm .password-toggle:hover,
+:root[data-theme] #loginForm .password-toggle:active {background:transparent!important;border-color:transparent!important;box-shadow:none!important;}
+:root[data-theme] #loginForm>button[type="submit"] {position:relative;justify-content:center;text-align:center;}
+:root[data-theme] #loginForm>button[type="submit"]>svg {position:absolute;right:16px;}
 :root[data-theme] #developerModePanel .field>span {display:flex;align-items:center;gap:10px;min-height:30px;font-size:13px;font-weight:600;}
 :root[data-theme] #developerModePanel input[type="checkbox"] {appearance:auto;display:inline-block;width:18px;height:18px;min-height:0;flex:0 0 18px;padding:0;margin:0;accent-color:var(--teal);box-shadow:none;border-radius:3px;}
 :root[data-theme] #developerModePanel .field {margin-bottom:12px;}
