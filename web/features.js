@@ -154,7 +154,7 @@
         generate.addEventListener("click",()=>{input.value=generatePassword();if(input.name==="next" && input.form?.elements.confirm)input.form.elements.confirm.value=input.value;input.dispatchEvent(new Event("input",{bubbles:true}));});controls.prepend(generate);
       }
       if(input.autocomplete!=="current-password" && !["current","confirm"].includes(input.name)){
-        input.insertAdjacentElement("afterend",controls);window.LiteCPPasswordCopy.enhance(input);
+        input.insertAdjacentElement("afterend",controls);window.LiteCPPasswordCopy.enhance(input); if(input.form?.id!=="databaseForm"){const wrapper=input.closest(".password-copy-field");wrapper.classList.add("password-generate-inline");wrapper.append(controls);}
       }else window.LiteCPPasswordCopy.enhance(input,{copy:false});
     });
   }

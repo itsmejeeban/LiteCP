@@ -123,3 +123,7 @@
 #sitesTable .application-logo-wordpress img {height:27px;}
 #sitesTable .application-logo-whmcs {height:28px;max-width:112px;padding:4px 7px;background:#f8fafc;border-radius:6px;box-sizing:border-box;}
 #sitesTable .application-logo-whmcs img {height:18px;max-width:98px;}
+
+.password-generate-inline input {padding-right:calc(120px + 2 * var(--password-icon-size))!important;}
+.password-generate-inline>.password-actions {position:absolute;right:calc(20px + 2 * var(--password-icon-size));top:50%;transform:translateY(-50%);margin:0;}
+.password-generate-inline>.password-actions .button {min-height:28px;height:28px;font-size:12px;padding:0 8px;}
