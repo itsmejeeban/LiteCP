@@ -406,3 +406,11 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #siteModal .modal-card {border:1px solid #626973;box-shadow:0 18px 60px rgba(0,0,0,.65);}
 
 :root[data-theme] #fmActionDialog.fm-preferences-dialog :is(.fm-preferences-start>p,.fm-preferences-start>label,.fm-preferences-options>label){color:#dedede!important;opacity:1;}
+/* File action dialogs share the panel's dark palette, including nested labels. */
+:root[data-theme] #fmActionDialog {background:#111!important;color:#dedede!important;color-scheme:dark;}
+:root[data-theme] #fmActionDialog :is(.fm-dialog-body,.fm-search-results) {background:#111!important;color:#dedede!important;}
+:root[data-theme] #fmActionDialog :is(.fm-dialog-body p,.fm-field,.fm-path-list,.fm-upload-list,.fm-upload-list span,.fm-permission-grid,.fm-permission-grid strong,.fm-search-result,.fm-search-table td,.fm-search-table th) {color:#dedede!important;}
+:root[data-theme] #fmActionDialog :is(.fm-field small,.fm-upload-list small) {color:#b6b6b6!important;}
+:root[data-theme] #fmActionDialog :is(.fm-upload-drop,.fm-path-input) {background:#1c1c1c!important;color:#dedede!important;border-color:#666!important;}
+:root[data-theme] #fmActionDialog .fm-field :is(input,select),:root[data-theme] #fmActionDialog .fm-permission-grid input[readonly] {background:#1c1c1c!important;color:#eee!important;border-color:#666!important;}
+:root[data-theme] #fmActionDialog footer {background:#191919!important;border-color:#555!important;}
