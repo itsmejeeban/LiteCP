@@ -375,3 +375,8 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
   border-color:transparent!important;
   box-shadow:none!important;
 }
+
+/* Keep SSL action labels and controls centered within their column. */
+[data-ssl-table] th:last-child,
+[data-ssl-table] td:last-child { text-align: center; }
+[data-ssl-table] td:last-child > .feature-note { display: inline; margin: 0; padding: 0; }
