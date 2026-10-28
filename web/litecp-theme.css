@@ -402,3 +402,5 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 #mailDeliveryPanel .delivery-deferred,#mailDeliveryPanel .delivery-queued {background:#332b17;color:#c8ac64;}
 #mailDeliveryPanel .delivery-bounced,#mailDeliveryPanel .delivery-rejected,#mailDeliveryPanel .delivery-expired {background:#3a2222;color:#d59797;}
 .email-tab-panel[data-email-panel="delivery"] {max-width:none;}
+
+:root[data-theme] #siteModal .modal-card {border:1px solid #626973;box-shadow:0 18px 60px rgba(0,0,0,.65);}
