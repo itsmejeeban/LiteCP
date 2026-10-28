@@ -553,7 +553,7 @@ SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)
 [[ "${LITECP_INSTALL_ANTIVIRUS:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antivirus)
-[[ "${LITECP_INSTALL_WAF:-0}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
+[[ "${LITECP_INSTALL_WAF:-1}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
