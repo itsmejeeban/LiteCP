@@ -77,6 +77,10 @@ def export(request):
         if not binary:
             raise RuntimeError('Plesk CLI is not installed on this source')
         accounts = [{'id':value.strip(), 'domain':value.strip()} for value in command([binary,'bin','subscription','--list']).splitlines() if value.strip()]
+    elif platform == 'litecp':
+        with open('/var/lib/litecp/config.json') as config_file:
+            config = json.load(config_file)
+        accounts = [{'id': x['id'], 'domain': x['domain']} for x in config.get('sites', [])]
     else:
         raise RuntimeError('Unsupported source platform')
     if mode == 'discover':
@@ -92,6 +96,41 @@ def export(request):
     root.mkdir(mode=0o700, exist_ok=False)
     log = open(root/'export.log','x')
     os.chmod(root/'export.log',0o600)
+    if platform == 'litecp':
+        site = next(x for x in config['sites'] if x['id'] == account)
+        source = pathlib.Path(site['root'])
+        resolved = source.resolve()
+        if source.is_symlink() or not source.is_dir() or not any(str(resolved).startswith(prefix) for prefix in ('/home/litecp/', '/var/www/litecp/')):
+            raise RuntimeError('Unsafe LiteCP website root')
+        archive = root / 'litecp-website.tar.gz'
+        skipped = []
+        def filter_member(info):
+            if not (info.isfile() or info.isdir()):
+                skipped.append(info.name)
+                return None
+            info.uid = info.gid = 0
+            info.uname = info.gname = ''
+            return info
+        databases = [item['name'] for item in config.get('databases', []) if item.get('siteId') == account]
+        if site.get('database') and site['database'] not in databases:
+            databases.append(site['database'])
+        dumps = []
+        for index, database in enumerate(databases):
+            if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_$-]{0,63}', database) or database.lower() in ('mysql','sys','information_schema','performance_schema'):
+                raise RuntimeError('Unsafe database name')
+            dump = root / ('database-' + str(index) + '.sql')
+            with open(dump, 'xb') as destination:
+                result = subprocess.run(['mysqldump','--protocol=socket','--user=root','--single-transaction','--routines','--triggers',database],stdout=destination,stderr=log,timeout=3600)
+            os.chmod(dump, 0o600)
+            if result.returncode:
+                raise RuntimeError('LiteCP database export failed; source export log retained')
+            dumps.append((dump, 'databases/' + database + '.sql'))
+        with tarfile.open(archive, 'w:gz', dereference=False) as target:
+            target.add(source, arcname='public_html', filter=filter_member)
+            for dump, name in dumps:
+                target.add(dump, arcname=name, filter=filter_member)
+        os.chmod(archive, 0o600)
+        return {'native':describe(archive), 'portable':describe(archive), 'sourceExport':str(root), 'warnings':['LiteCP website files and registered databases captured. Mail, DNS, SSL, cron and application credentials require separate configuration.', str(len(skipped)) + ' links or special entries omitted.']}
     if platform == 'cpanel':
         command(['/usr/local/cpanel/scripts/pkgacct',account,str(root)],log)
         archive = root / ('cpmove-' + account + '.tar.gz')

@@ -77,7 +77,7 @@ type LiveMigrationJob struct {
 
 func validateLiveSource(source LiveSource) error {
  if source.AuthMethod!=""&&source.AuthMethod!="key"&&source.AuthMethod!="password" {return errors.New("select SSH key or root password authentication")}
-	if source.Platform != "cpanel" && source.Platform != "plesk" { return errors.New("select cPanel or Plesk") }
+	if source.Platform != "cpanel" && source.Platform != "plesk" && source.Platform != "litecp" { return errors.New("select cPanel, Plesk or LiteCP") }
 	if source.Port < 1 || source.Port > 65535 { return errors.New("SSH port must be between 1 and 65535") }
 	if ip := net.ParseIP(source.Host); ip != nil {
 		if ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() { return errors.New("select the source hosting server, not a local or link-local address") }

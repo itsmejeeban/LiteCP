@@ -92,7 +92,7 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 		preview.Bytes += written
 		parts := strings.Split(clean, "/")
 		for i, part := range parts {
-			if (platform == "cpanel" && part == "public_html") || (platform == "plesk" && part == "httpdocs") {
+			if ((platform == "cpanel" || platform == "litecp") && part == "public_html") || (platform == "plesk" && part == "httpdocs") {
 				roots[strings.Join(parts[:i+1], "/")] = true
 				break
 			}
