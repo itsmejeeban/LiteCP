@@ -31,4 +31,13 @@
   const previous=window.LiteCPFeatures.navigate;
   window.LiteCPFeatures.navigate=id=>{previous?.(id);sync();};
   window.addEventListener("hashchange",sync);sync();
+  // Run after all deferred menu builders, including Migration and Analytics.
+  function moveFinalMenus(){
+    const nav=document.querySelector('.nav');
+    const activities=nav.querySelector('[data-page="activities"]');
+    const settings=nav.querySelector('#settingsSubmenu')?.closest('.sidebar-feature-group');
+    if(activities)nav.append(activities);
+    if(settings)nav.append(settings);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',moveFinalMenus,{once:true});else moveFinalMenus();
 })();
