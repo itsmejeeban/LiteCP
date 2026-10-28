@@ -404,3 +404,5 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 .email-tab-panel[data-email-panel="delivery"] {max-width:none;}
 
 :root[data-theme] #siteModal .modal-card {border:1px solid #626973;box-shadow:0 18px 60px rgba(0,0,0,.65);}
+
+:root[data-theme] #fmActionDialog.fm-preferences-dialog :is(.fm-preferences-start>p,.fm-preferences-start>label,.fm-preferences-options>label){color:#dedede!important;opacity:1;}
