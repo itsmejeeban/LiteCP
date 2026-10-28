@@ -93,6 +93,7 @@
     if (!response.ok) {
       const error = new Error(payload.error || `Request failed (${response.status})`);
       error.status = response.status;
+      error.twoFactorRequired = payload.twoFactorRequired === true;
       throw error;
     }
     return payload;
@@ -279,6 +280,8 @@
   }
 
   function showLogin() {
+    $("#loginSecondFactor").classList.add("hidden");
+    const code = $("#loginSecondFactor input"); code.value = ""; code.disabled = true; code.required = false;
     $("#appView").classList.add("hidden");
     $("#loginView").classList.remove("hidden");
     setTimeout(() => $("#loginPassword").focus(), 50);
@@ -305,6 +308,10 @@
       form.reset();
       showApp();
     } catch (error) {
+      if (error.twoFactorRequired) {
+        $("#loginSecondFactor").classList.remove("hidden");
+        const code = $("#loginSecondFactor input"); code.disabled = false; code.required = true; code.focus();
+      }
       errorNode.textContent = error.message;
       errorNode.classList.remove("hidden");
     } finally { submit.disabled = false; }

@@ -61,7 +61,7 @@
             </button>
           </span>
         </label>
-        <label class="field"><span>Authenticator or recovery code (if enabled)</span><input name="code" autocomplete="one-time-code" maxlength="32" spellcheck="false"></label>
+        <label class="field hidden" id="loginSecondFactor"><span>Authenticator or recovery code</span><input name="code" autocomplete="one-time-code" maxlength="32" spellcheck="false" disabled></label>
         <p class="form-error hidden" id="loginError" role="alert"></p>
         <button class="button button-primary button-large" type="submit">
           <span>Sign in to LiteCP</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>

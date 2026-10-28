@@ -377,6 +377,10 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
 		return
 	}
+	if a.store.twoFactor().Enabled && strings.TrimSpace(input.Code) == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error":"Enter your authenticator or recovery code to finish signing in.", "twoFactorRequired":true})
+		return
+	}
 	if a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
 		a.authenticationEvent("failed", r)
 		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
