@@ -3,6 +3,10 @@
 :root[data-theme] .website-tool-picker>.button {height:36px;min-height:36px;margin:0;flex-shrink:0;align-self:flex-end;}
 dialog.website-tool-inline[open] {position:static;inset:auto;display:block;width:100%;max-width:none;max-height:none;margin:18px 0;box-shadow:none;}
 dialog.website-tool-inline>.fm-dialog-body {max-height:none;overflow:visible;}
+dialog.website-tool-inline {max-width:960px;}
+dialog.website-tool-inline [data-ftp-form] {max-width:600px;margin:0 auto;}
+dialog.website-tool-inline [data-ftp-connection] {max-width:760px;font-size:13px;line-height:1.6;}
+dialog.website-tool-inline .fm-dialog-body>p {margin-top:0;}
 dialog.website-tool-inline header>button[aria-label^="Close"] {display:none!important;}
 .website-backup-row {display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 0;border-top:1px solid var(--line);}
 .website-backup-file {flex:1;min-width:180px;overflow-wrap:anywhere;}

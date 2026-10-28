@@ -245,3 +245,26 @@ test('mailbox creation sends one validated backend action without a separate dom
   assert.equal(calls[0].body.localPart, 'admin');
   assert.deepEqual(errors, ['Invalid password']);
 });
+
+test('mail action enhancements stay single across repeated retained-table refreshes', () => {
+  const source=fs.readFileSync(path.join(__dirname,'..','web','features.js'),'utf8');
+  const section=source.slice(source.indexOf('    // Base tables may retain'),source.indexOf('    $$(\'[data-service="mail"]\')'));
+  assert.ok(section.includes('data-mail-enhancement'));
+  const added=[];
+  const anchor=id=>({dataset:{id},insertAdjacentHTML(position,html){
+    for(const tag of html.match(/<(?:button|a)\b[^>]*>/g)||[]) added.push({tag,remove(){added.splice(added.indexOf(this),1);}});
+  }});
+  const mailbox=anchor('mail1'),domain=anchor('domain1'),link={classList:{toggle(){}}};
+  const render=vm.runInNewContext(`(state)=>{${section}}`,{
+    $$:selector=>selector.includes('[data-mail-enhancement]')?[...added]:selector.includes('mailbox-password')?[mailbox]:selector.includes('domain-delete')?[domain]:[],
+    $:()=>link,esc:value=>value,URL,location:{origin:'https://panel.test',hostname:'panel.test'}
+  });
+  const state={mailboxes:[{id:'mail1',address:'admin@example.test',domain:'example.test'}],mailDomains:[{id:'domain1',domain:'example.test'}],system:{webmailAvailable:true,webmailUrl:'https://mail.example.test'},settings:{emailHostingEnabled:true}};
+  for(let i=0;i<5;i++)render(state);
+  assert.equal(added.length,3);
+  assert.equal(added.filter(node=>node.tag.startsWith('<a')).length,1);
+  state.system.webmailAvailable=false;render(state);
+  assert.equal(added.length,3);
+  assert.equal(added.filter(node=>node.tag.includes('data-webmail-unavailable')).length,1);
+  assert.equal(added.filter(node=>node.tag.startsWith('<a')).length,0);
+});

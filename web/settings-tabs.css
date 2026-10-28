@@ -10,7 +10,9 @@
 .settings-subtab.active {font-weight:600;}
 .settings-nav-toggle:focus-visible,.settings-subtab:focus-visible {outline:2px solid var(--teal);outline-offset:2px;}
 [data-page-view="settings"] .settings-grid {display:block;}
-.settings-tab-panel {display:grid;grid-template-columns:minmax(0,780px);gap:16px;}
+.settings-tab-panel {display:grid;grid-template-columns:minmax(0,780px);gap:16px;align-items:start;}
+[data-page-view="settings"]>.page-heading p {display:none;}
+.settings-details dt,.settings-details dd {font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
 .settings-tab-panel[data-settings-panel="backups"],.settings-tab-panel[data-settings-panel="hostname"] {grid-template-columns:repeat(2,minmax(0,1fr));}
 .settings-tab-panel>.settings-backup-destinations {grid-column:1/-1;overflow-x:auto;}
 .settings-tab-panel .settings-card {margin:0;}

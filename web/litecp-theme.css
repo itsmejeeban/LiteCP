@@ -99,6 +99,7 @@
 :root[data-theme] .field>small {font-size:12px;}
 :root[data-theme] :is(input:not([type=checkbox]):not([type=radio]),select,textarea,.suffix-input) {border-color:var(--line);color:var(--ink);background-color:var(--surface-soft);border-radius:6px;}
 :root[data-theme] .field input:not([type=checkbox]):not([type=radio]),:root[data-theme] .field select {height:36px;font-size:13px;}
+:root[data-theme] .field select {padding-right:32px;background-position:calc(100% - 18px) center,calc(100% - 13px) center;}
 :root[data-theme] .field input:focus,:root[data-theme] .field select:focus {border-color:var(--teal);box-shadow:0 0 0 1px var(--teal);}
 :root[data-theme] :is(input,textarea)::placeholder {color:var(--muted-2);opacity:1;}
 :root[data-theme] :is(button,a,input,select,textarea):focus-visible {outline:2px solid var(--teal);outline-offset:2px;}
@@ -116,6 +117,21 @@
 :root[data-theme] .row-actions button:hover {background:var(--cf-hover);border-color:var(--muted-2);color:var(--ink);box-shadow:none;}
 :root[data-theme] .row-actions button.danger:hover {background:var(--cf-error-bg);border-color:var(--red);color:var(--red);}
 :root[data-theme] .row-actions .text-action {font-size:12px;}
+:root[data-theme] .row-actions button.text-action {width:auto;min-width:32px;min-height:32px;height:auto;padding:6px 10px;white-space:nowrap;flex-shrink:0;}
+:root[data-theme] :is(#mailboxesTable,#mailDomainsTable,#mailAliasesTable) .row-actions {flex-wrap:wrap;align-items:center;}
+:root[data-theme] .info-callout p {font-size:12px;line-height:1.5;}
+:root[data-theme] .info-callout strong {font-size:12px;}
+:root[data-theme] .button-row {display:flex;align-items:center;flex-wrap:wrap;gap:10px;}
+:root[data-theme] .service-card h3 {font-family:inherit;font-size:16px;}
+:root[data-theme] .service-card p,:root[data-theme] .service-card code {font-size:12px;overflow-wrap:anywhere;}
+:root[data-theme] .empty-state {padding:28px 18px;}
+:root[data-theme] .empty-state h3 {font-family:inherit;font-size:16px;}
+:root[data-theme] .empty-state p {font-size:12px;}
+:root[data-theme] [data-page-view="extensions"] .two-column-fields {grid-template-columns:2fr 1fr 1fr;}
+:root[data-theme] .field input[type="file"] {height:auto;min-height:40px;padding:6px 10px;line-height:26px;}
+:root[data-theme] .field input[type="file"]::file-selector-button {vertical-align:middle;margin:0 10px 0 0;padding:4px 10px;border:0;border-radius:4px;background:#293548;color:#fff;line-height:22px;cursor:pointer;}
+:root[data-theme] #migrationUploadForm button+button,:root[data-theme] #migrationImportForm button+button {margin-left:8px;}
+@media(max-width:700px){:root[data-theme] [data-page-view="extensions"] .two-column-fields {grid-template-columns:1fr;}}
 :root[data-theme] .row-actions svg {width:14px;height:14px;}
 :root[data-theme] :is(.info-callout,.provision-summary,.credential-list dd,.modal-actions,.fm-dialog footer,.log-toolbar,.fm-inspector,.fm-folders) {background:var(--surface-soft);color:var(--ink);border-color:var(--line);}
 :root[data-theme] .option-card {background:var(--paper);border-color:var(--line);}
@@ -275,7 +291,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .row-actions button:hover,:root[data-theme] #sitesTable .row-actions button:hover {background-color:#36465e;color:#fff;}
 .website-ftp-dialog .ftp-form-actions {margin-top:18px;margin-bottom:24px;padding-bottom:8px;gap:12px;}
 
-:root[data-theme] button:not(.sidebar-group-toggle):not(.panel-search-result):not(.fm-page button):not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
+:root[data-theme] button:not([aria-label^="Close"]):not(.sidebar-group-toggle):not(.panel-search-result):not(.fm-page button):not(.button-primary):not(.danger):not([data-dialog-submit]):not([data-cron-remove]):not([data-ftp-remove]):not([data-backup-delete]):not(#deleteAllActivities):not(#emptyTrash):not(#trashSelected):not([data-site-action="delete"]):not([data-database-action="delete"]):not([data-file-action="delete"]):not([data-firewall-action="delete"]):not([data-backup-destination-action="delete"]):not([data-mail-action$="-delete"]):not([data-trash="delete"]) {background-color:#293548!important;color:#f1f5f9;}
 :root[data-theme] button:not(.button-primary):not(.danger):hover {filter:brightness(1.15);}
 
 /* Generated multicolor website action image sprite. */
