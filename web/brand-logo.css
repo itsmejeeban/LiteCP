@@ -8,3 +8,13 @@
 :root[data-theme] body .fm-page .cpfm-brand {display:flex;align-items:center;gap:10px;}
 :root[data-theme] .cpfm-brand .litecp-logo {width:110px;}
 @media(max-width:600px){:root[data-theme] .mobile-login-logo .litecp-logo {width:220px;}}
+
+/* Keep the brand divider level with the desktop header divider. */
+@media (min-width:901px) {
+ :root[data-theme] .topbar,
+ :root[data-theme] #sidebar .sidebar-brand {
+  box-sizing:border-box;height:56px;min-height:56px;
+ }
+ :root[data-theme] #sidebar .sidebar-brand {padding-top:6px;padding-bottom:6px;}
+ :root[data-theme] #sidebar .sidebar-brand .litecp-logo {max-height:42px;}
+}
