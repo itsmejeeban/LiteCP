@@ -468,7 +468,7 @@
   function renderFirewall() {
     const protectedRules = [
       { port: "22", protocol: "tcp", label: "SSH" }, { port: "80", protocol: "tcp", label: "HTTP" },
-      { port: "443", protocol: "tcp", label: "HTTPS" }, { port: "8443", protocol: "tcp", label: "LiteCP" },
+      { port: "443", protocol: "tcp", label: "HTTPS" }, { port: window.location.port || "4321", protocol: "tcp", label: "LiteCP" },
       { port: "25, 465, 587, 993", protocol: "tcp", label: "Email hosting" }
     ];
     const managed = currentState.firewallRules || [];

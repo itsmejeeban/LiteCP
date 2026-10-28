@@ -232,3 +232,16 @@ func (s *System) applyHostResolvers(ctx context.Context, values []string) error 
 }
 
 func defaultResolversMatch(values []string)bool{return len(values)==2&&values[0]=="8.8.8.8"&&values[1]=="8.8.4.4"}
+
+// NetworkManager can return from reapply before its resolv.conf update finishes.
+func waitForDefaultResolvers(ctx context.Context, read func() []string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	for {
+		if defaultResolversMatch(read()) { return nil }
+		select {
+		case <-ctx.Done(): return fmt.Errorf("default DNS resolver verification failed: %w", ctx.Err())
+		case <-time.After(50*time.Millisecond):
+		}
+	}
+}

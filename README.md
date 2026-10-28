@@ -26,7 +26,7 @@ Release **0.5.1** adds failure-safe file extraction and migration, transactional
 - Allowlisted Nginx, PHP, database, mail, and cron log views
 - Parallel PHP 7.3, 7.4, 8.1, 8.2, 8.3, and 8.4 where native packages are available
 - ionCube Loader, OPcache, and low-idle-memory FPM defaults for every runtime
-- HTTPS panel proxy on port `8443`
+- HTTPS panel proxy on port `4321`
 - Loopback-only database access and a minimal host firewall enabled during installation
 - Fail2ban protection for repeated SSH authentication failures
 
@@ -69,7 +69,7 @@ On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository. Ubuntu 22.04
 The installer asks for an administrator username and password, installs the required packages, builds LiteCP, and prints the panel URL:
 
 ```text
-https://SERVER_IP:8443
+https://SERVER_IP:4321
 ```
 
 For automated provisioning from an already downloaded source checkout, provide credentials through the process environment. The password is used only for first-time initialization and is not written to the service environment file.
@@ -81,7 +81,7 @@ sudo LITECP_ADMIN_USERNAME=admin \
   bash scripts/install.sh
 ```
 
-The included panel certificate is self-signed so the first browser visit will show a warning. Verify its fingerprint over SSH or replace it with a trusted certificate before regular administration. Allow TCP ports `80`, `443`, and `8443` in any provider-level firewall. Email hosting additionally uses `25`, `465`, `587`, and `993`.
+The included panel certificate is self-signed so the first browser visit will show a warning. Verify its fingerprint over SSH or replace it with a trusted certificate before regular administration. Allow TCP ports `80`, `443`, and `4321` in any provider-level firewall. Email hosting additionally uses `25`, `465`, `587`, and `993`.
 
 ## First website
 
@@ -179,7 +179,7 @@ Detaching a website removes its LiteCP-managed Nginx, isolated PHP pool, and cro
 - Panel process isolated with systemd filesystem and kernel protections
 - No application database password persistence after provisioning; mailbox passwords are one-way hashed
 
-LiteCP runs as root because it must update Nginx, cron, certificates, ownership, and system services. Keep port `8443` private to administrator IPs when possible, maintain normal operating-system updates, and copy backups to separate storage.
+LiteCP runs as root because it must update Nginx, cron, certificates, ownership, and system services. Keep port `4321` private to administrator IPs when possible, maintain normal operating-system updates, and copy backups to separate storage.
 
 ## Project layout
 

@@ -64,7 +64,7 @@ func main() {
   wanted:=[]string{"8.8.8.8","8.8.4.4"}
   if !defaultResolversMatch(currentSystemResolvers()) {
    if err:=NewSystem(dataDir).applyHostResolvers(ctx,wanted);err!=nil{log.Fatal(err)}
-   if !defaultResolversMatch(currentSystemResolvers()){log.Fatal("default DNS resolver verification failed")}
+   if err:=waitForDefaultResolvers(ctx,currentSystemResolvers);err!=nil{log.Fatal(err)}
    log.Print("Restored Google DNS resolvers: 8.8.8.8, 8.8.4.4")
   }
 

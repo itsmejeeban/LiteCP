@@ -225,7 +225,7 @@ func TestWAFConfigPreservesTLS(t *testing.T) {
 }
 
 func TestFirewallDirectionAndProtectedPorts(t *testing.T) {
-	for _, port := range []int{22, 25, 80, 443, 465, 587, 993, 8443} {
+	for _, port := range []int{22, 25, 80, 443, 465, 587, 993, 4321, 8443} {
 		if err := validateFirewallRule(normalizeFirewallRule(FirewallRule{Port: port, Protocol: "tcp", Action: "deny"})); err == nil {
 			t.Errorf("essential port %d allowed", port)
 		}

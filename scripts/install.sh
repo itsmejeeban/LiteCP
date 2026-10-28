@@ -311,8 +311,8 @@ fi
 PANEL_NGINX=$(cat <<'EOF'
 # LiteCP panel HTTPS reverse proxy
 server {
-    listen 8443 ssl;
-    listen [::]:8443 ssl;
+    listen 4321 ssl;
+    listen [::]:4321 ssl;
     server_name _;
 
     ssl_certificate /etc/litecp/tls/litecp.crt;
@@ -361,7 +361,7 @@ else
     printf '%s\n' "${PANEL_NGINX}" > "${PANEL_CONFIG}"
   fi
   setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true
-  semanage port -a -t http_port_t -p tcp 8443 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 8443 >/dev/null 2>&1 || true
+  semanage port -a -t http_port_t -p tcp 4321 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 4321 >/dev/null 2>&1 || true
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
   semanage fcontext -a -t httpd_sys_content_t '/home/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_content_t '/home/litecp(/.*)?'
   for folder in public_html tmp; do
@@ -482,7 +482,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
   ufw allow 22/tcp >/dev/null
   ufw allow 80/tcp >/dev/null
   ufw allow 443/tcp >/dev/null
-  ufw allow 8443/tcp >/dev/null
+  ufw allow 4321/tcp >/dev/null
   ufw allow 25/tcp >/dev/null
   ufw allow 465/tcp >/dev/null
   ufw allow 587/tcp >/dev/null
@@ -493,7 +493,7 @@ elif systemctl is-active --quiet firewalld; then
   firewall-cmd --permanent --zone=public --add-service=ssh >/dev/null
   firewall-cmd --permanent --zone=public --add-service=http >/dev/null
   firewall-cmd --permanent --zone=public --add-service=https >/dev/null
-  firewall-cmd --permanent --zone=public --add-port=8443/tcp >/dev/null
+  firewall-cmd --permanent --zone=public --add-port=4321/tcp >/dev/null
   firewall-cmd --permanent --zone=public --add-service=smtp >/dev/null
   firewall-cmd --permanent --zone=public --add-port=465/tcp >/dev/null
   firewall-cmd --permanent --zone=public --add-service=smtp-submission >/dev/null 2>&1 || firewall-cmd --permanent --zone=public --add-port=587/tcp >/dev/null
@@ -504,7 +504,7 @@ else
   firewall-offline-cmd --zone=public --add-service=ssh >/dev/null
   firewall-offline-cmd --zone=public --add-service=http >/dev/null
   firewall-offline-cmd --zone=public --add-service=https >/dev/null
-  firewall-offline-cmd --zone=public --add-port=8443/tcp >/dev/null
+  firewall-offline-cmd --zone=public --add-port=4321/tcp >/dev/null
   firewall-offline-cmd --zone=public --add-service=smtp >/dev/null
   firewall-offline-cmd --zone=public --add-port=465/tcp >/dev/null
   firewall-offline-cmd --zone=public --add-port=587/tcp >/dev/null
@@ -566,9 +566,9 @@ OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
-printf '\nOpen: \033[1mhttps://%s:8443\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
+printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
-printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 8443 and mail ports 25, 465, 587, 993 as needed.\n'
+printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 4321 and mail ports 25, 465, 587, 993 as needed.\n'
 DATABASE_VERSION="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute 'SELECT VERSION()' 2>/dev/null || true)"
 if [[ -n "${DATABASE_VERSION}" ]]; then
   printf 'Database engine: MySQL %s.\n' "${DATABASE_VERSION}"
