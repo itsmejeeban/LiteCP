@@ -505,6 +505,9 @@
     const backupPart=String(page).startsWith("backups/")?String(page).slice(8):"";
     const backupRoute=["create","add-destination","settings","destinations","history"].includes(backupPart)?`backups/${backupPart}`:"";
     if(backupRoute)page="backups";
+    const migrationPart=String(page).startsWith("migrations/")?String(page).slice(11):"";
+    const migrationRoute=["cpanel","plesk","litecp","upload"].includes(migrationPart)?`migrations/${migrationPart}`:"";
+    if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "analytics", "activities", "documentation", "applications"];
@@ -515,7 +518,7 @@
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
     });
-    const route=settingsRoute||emailRoute||backupRoute||page;
+    const route=settingsRoute||emailRoute||backupRoute||migrationRoute||page;
     if (updateHash && location.hash !== `#${route}`) history.pushState(null, "", `#${route}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });

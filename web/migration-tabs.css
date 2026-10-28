@@ -1,0 +1,5 @@
+.migration-output-hidden {display:none!important;}
+[data-page-view="migrations"] .management-grid {grid-template-columns:minmax(0,1fr);}
+[data-page-view="migrations"] [data-litecp-workspace] [data-backup-create] {display:none;}
+[data-page-view="migrations"] .panel>.settings-body {padding:18px;}
+[data-page-view="migrations"] ol {padding-left:20px;font-size:13px;line-height:1.8;}
