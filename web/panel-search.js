@@ -31,6 +31,7 @@
     ["security", "Malware scan", "Scan a website with the antivirus service", "#scanForm", "virus clamav antivirus infected files"],
     ["waf", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
     ["firewall", "Firewall rules", "Manage inbound and outbound network access", "#firewallForm", "port ip tcp udp allow deny block network"],
+    ["two-factor", "2FA", "Manage administrator authenticator and recovery codes", ".two-factor-panel", "two factor authentication totp security recovery codes authenticator"],
     ["backups/create", "Server backups", "Create a backup and review backup history", "#backupRunForm", "backup retention archive restore"],
     ["backups/add-destination", "Remote backup destinations", "Configure an off-server FTP, FTPS or SFTP destination", "#backupDestinationForm", "remote storage offsite upload password fingerprint"],
     ["migrations", "Live cPanel / Plesk migration", "Connect to a source server using root SSH access", "#liveSourceForm", "cpanel whm plesk migrate transfer root password private key ssh"],
