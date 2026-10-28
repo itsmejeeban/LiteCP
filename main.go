@@ -158,6 +158,7 @@ func main() {
 	}
 	reconcileCancel()
 	app.startUsageMonitor()
+	app.startBackupSchedules()
 
 	server := &http.Server{
 		Addr:              bind,
@@ -194,6 +195,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
 	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
 	mux.HandleFunc("/api/security/server-scan", a.withAuth(a.serverScan))
+	mux.HandleFunc("/api/backup-schedules", a.withAuth(a.backupSchedules))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
 	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))

@@ -35,6 +35,7 @@ type Site struct {
 }
 
 type Backup struct {
+	ScheduleID string `json:"scheduleId,omitempty"`
 	ID              string    `json:"id"`
 	SiteID          string    `json:"siteId"`
 	Domain          string    `json:"domain"`
@@ -131,6 +132,7 @@ type Admin struct {
 }
 
 type Config struct {
+	BackupSchedules []BackupSchedule `json:"backupSchedules,omitempty"`
 	SchemaVersion      int                 `json:"schemaVersion"`
 	Admin              Admin               `json:"admin"`
 	Settings           Settings            `json:"settings"`
@@ -513,9 +515,6 @@ func (s *Store) AddBackup(backup Backup) error {
 	defer s.mu.Unlock()
 	original := append([]Backup{}, s.cfg.Backups...)
 	s.cfg.Backups = append([]Backup{backup}, s.cfg.Backups...)
-	if len(s.cfg.Backups) > 100 {
-		s.cfg.Backups = s.cfg.Backups[:100]
-	}
 	if err := s.saveLocked(); err != nil {
 		s.cfg.Backups = original
 		return err
@@ -528,7 +527,7 @@ func (s *Store) ExpiredBackups(cutoff time.Time) []Backup {
 	defer s.mu.RUnlock()
 	result := []Backup{}
 	for _, backup := range s.cfg.Backups {
-		if backup.CreatedAt.Before(cutoff) {
+		if backup.ScheduleID == "" && backup.CreatedAt.Before(cutoff) {
 			result = append(result, backup)
 		}
 	}
