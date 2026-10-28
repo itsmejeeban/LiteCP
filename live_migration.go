@@ -166,9 +166,9 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	if input.Action=="connect" {
 		if err:=validateLiveSource(input.Source);err!=nil{writeError(w,400,err.Error());return}
 		if input.Source.AuthMethod=="password" {if !validLiveRootPassword(input.Password){writeError(w,400,"Enter a root password of 1–1024 characters without line breaks.");return};if _,err:=exec.LookPath("sshpass");err!=nil{writeError(w,503,"Password migration requires sshpass; update the LiteCP installer dependencies.");return}}else if len(input.PrivateKey)<100||len(input.PrivateKey)>64<<10||!strings.Contains(input.PrivateKey,"PRIVATE KEY") {writeError(w,400,"Provide an unencrypted root SSH private key.");return}
-		entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));retained:=0
-		for _,entry:=range entries{if existing,err:=a.loadLiveJob(entry.Name());err!=nil||existing.CredentialsRetained||existing.NativeReady{retained++}}
-		if retained>=3||len(entries)>=64 {writeError(w,409,"Migration retention limit reached. Forget credentials for failed connections, or have the server owner review retained native backups before another capture.");return}
+		// Discovery only creates small private connection metadata. Retained backups
+        // must not block reconnecting; archive capacity is checked at capture time.
+        if _,err:=migrationFreeBytes(r.Context(),a.system.dataDir);err!=nil{writeError(w,503,"Cannot verify migration storage availability.");return}
 		id,err:=randomToken(18);if err!=nil{writeError(w,500,"Could not allocate job");return};id=safeSiteID(id)
 		root,_:=a.liveJobRoot(id);if err:=os.MkdirAll(root,0700);err!=nil{writeError(w,500,"Cannot create private migration directory");return}
 		job:=LiveMigrationJob{ID:id,Source:input.Source,Status:"connecting",Message:"Verifying SSH host identity",Accounts:[]LiveAccount{},Warnings:[]string{},CredentialsRetained:true,CreatedAt:time.Now().UTC()}
