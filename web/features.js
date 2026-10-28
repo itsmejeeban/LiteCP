@@ -81,7 +81,7 @@
     const body = { direction, action: data.get("action"), port: Number(data.get("port")), protocol: data.get("protocol"), label: data.get("label"), [direction === "outbound" ? "destination" : "source"]: String(data.get("source")).trim() };
     const id = String(data.get("id") || "");
     if (body.action === "deny" && !await window.LiteCPDialogs.confirm(`Apply this ${direction} block? It can interrupt applications using port ${body.port}.`)) return;
-    await busy(form, async () => { await cp.api(`/api/firewall${id ? "/"+encodeURIComponent(id) : ""}`, {method:id ? "PUT":"POST", body}); form.reset(); $('#firewallForm [name="id"]').value = ""; directionChange(); await cp.refresh(); cp.showToast("Firewall saved", "The custom rule has been applied."); });
+    await busy(form, async () => { await cp.api(`/api/firewall${id ? "/"+encodeURIComponent(id) : ""}`, {method:id ? "PUT":"POST", body}); form.reset(); $('#firewallForm [name="id"]').value = ""; directionChange(); await cp.refresh(); cp.showToast("Firewall saved", "The custom rule has been applied."); form.dispatchEvent(new Event("firewall-saved")); });
   }
   async function firewallAction(event) {
     const button = event.target.closest("[data-firewall-action]"); if (!button) return;
