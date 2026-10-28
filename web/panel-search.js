@@ -18,6 +18,7 @@
     ["email/add-domain", "Mail domains", "Add a separate email domain", "#mailDomainForm", "email routing hosted domain"],
     ["email/create-alias", "Email forwarding", "Create an alias that forwards mail to another address", "#mailAliasForm", "alias redirect email forward"],
     ["email/webmail", "Webmail", "Open a mailbox using its Log in button", "#mailboxesTable", "roundcube email inbox login"],
+    ["email/delivery", "Email Delivery", "View email delivery logs, statuses and failure details", "#mailDeliveryPanel", "mail logs sent delivered bounced deferred rejected queue smtp"],
     ["email/domains", "Email DNS records", "Use Configuration or DNS records to view the required mail records", "#mailDomainsTable", "dkim spf dmarc mx ptr deliverability spam"],
     ["email", "Email hosting", "Enable or disable the server's mail services", "#mailHostingToggle", "smtp imap postfix dovecot"],
     ["applications", "Node.js hosting", "Enable Node.js and select an application runtime", "#applicationFeatures", "node nodejs npm javascript version selector"],

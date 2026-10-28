@@ -392,3 +392,13 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 #databaseForm .database-password-field > .database-generate-button {right:calc(16px + 2 * var(--password-icon-size));}
 #databaseForm .database-password-field input {padding-right:calc(32px + 3 * var(--password-icon-size))!important;}
 #databaseForm .database-generate-button svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+#mailDeliveryPanel .delivery-filters {display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+#mailDeliveryPanel .delivery-filters .field {flex:1;min-width:180px;margin:0;}
+#mailDeliveryPanel .data-table td {vertical-align:top;overflow-wrap:anywhere;}
+#mailDeliveryPanel .data-table pre {white-space:pre-wrap;max-width:440px;overflow-wrap:anywhere;font-size:12px;}
+#mailDeliveryPanel summary {cursor:pointer;color:#9eb9d6;white-space:nowrap;}
+#mailDeliveryPanel .delivery-sent,#mailDeliveryPanel .delivery-delivered {background:#1e3426;color:#92bb9b;}
+#mailDeliveryPanel .delivery-deferred,#mailDeliveryPanel .delivery-queued {background:#332b17;color:#c8ac64;}
+#mailDeliveryPanel .delivery-bounced,#mailDeliveryPanel .delivery-rejected,#mailDeliveryPanel .delivery-expired {background:#3a2222;color:#d59797;}
+.email-tab-panel[data-email-panel="delivery"] {max-width:none;}

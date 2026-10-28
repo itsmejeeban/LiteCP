@@ -225,6 +225,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/databases/phpmyadmin", only(http.MethodPost, a.withAuth(a.databaseAdminLaunch)))
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))
 	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
+	mux.HandleFunc("/api/mail/delivery", only(http.MethodGet, a.withAuth(a.emailDeliveryLogs)))
 	mux.HandleFunc("/api/system-snapshots", a.withAuth(a.systemSnapshots))
 	mux.HandleFunc("/api/system-snapshots/upload", only(http.MethodPost, a.withAuth(a.uploadSystemSnapshot)))
 	mux.HandleFunc("/api/system-snapshots/inspect", only(http.MethodPost, a.withAuth(a.inspectSystemSnapshot)))
