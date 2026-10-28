@@ -120,6 +120,30 @@ func main() {
 		return
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "snapshot-reconcile" {
+		if os.Geteuid() != 0 { log.Fatal("snapshot-reconcile requires root") }
+		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Minute);defer cancel()
+		system:=NewSystem(dataDir)
+		if err:=system.reconcileWebsiteCron(store.Sites());err!=nil{log.Fatal(err)}
+		for _,site:=range store.Sites(){
+			if !domainPattern.MatchString(site.Domain){log.Fatal("invalid snapshot domain")}
+			path,enabled:=system.nginxPaths(site.Domain)
+			if enabled!=""{if _,err:=os.Lstat(enabled);os.IsNotExist(err){if err=os.Symlink(path,enabled);err!=nil{log.Fatal(err)}}}
+			if err:=system.reconcileSiteRuntime(ctx,site,path);err!=nil{log.Fatal(err)}
+		}
+		for _,site:=range store.Sites(){
+			if site.Application==nil || !site.Application.Enabled {continue}
+			app:=*site.Application
+			if err:=validateApplicationHosting(site,app);err!=nil{log.Fatal(err)}
+			if _,err:=runCommand(ctx,15*time.Second,"podman","container","exists",app.Container);err==nil{
+				_,_ = runCommand(ctx,30*time.Second,"podman","stop",app.Container)
+				if _,err=runCommand(ctx,15*time.Second,"podman","rename",app.Container,app.Container+"-recovery-"+time.Now().Format("20060102150405"));err!=nil{log.Fatal(err)}
+			}
+			if _,err:=runCommand(ctx,2*time.Minute,"podman",applicationContainerArgs(site,app,app.Container,app.Command,true)...);err!=nil{log.Fatal(err)}
+			if _,err:=runCommand(ctx,15*time.Second,"podman","update","--restart=always",app.Container);err!=nil{log.Fatal(err)}
+		}
+		return
+	}
 	app := &App{
 		store:    store,
 		system:   NewSystem(dataDir),
@@ -201,6 +225,10 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/databases/phpmyadmin", only(http.MethodPost, a.withAuth(a.databaseAdminLaunch)))
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))
 	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
+	mux.HandleFunc("/api/system-snapshots", a.withAuth(a.systemSnapshots))
+	mux.HandleFunc("/api/system-snapshots/upload", only(http.MethodPost, a.withAuth(a.uploadSystemSnapshot)))
+	mux.HandleFunc("/api/system-snapshots/inspect", only(http.MethodPost, a.withAuth(a.inspectSystemSnapshot)))
+	mux.HandleFunc("/api/system-snapshots/restore", only(http.MethodPost, a.withAuth(a.restoreSystemSnapshot)))
 	mux.HandleFunc("/internal/webmail-ticket", only(http.MethodPost, a.consumeWebmailTicket))
 	mux.HandleFunc("/api/live-migrations", a.withAuth(a.liveMigrations))
 	mux.HandleFunc("/api/live-migrations/download", only(http.MethodGet, a.withAuth(a.liveMigrationDownload)))

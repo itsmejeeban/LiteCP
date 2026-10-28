@@ -177,6 +177,8 @@ info "Building the LiteCP single-binary service"
 FRESH_INSTALL=0
 [[ -f /var/lib/litecp/config.json ]] || FRESH_INSTALL=1
 install -d -m 0700 /var/lib/litecp /var/backups/litecp
+install -d -m 0755 /usr/local/lib/litecp
+install -m 0700 "${SOURCE_DIR}/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 install -d -m 0755 /var/www/litecp
 install -d -m 0755 /home/litecp
 install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail /etc/litecp/php73-pools

@@ -6,7 +6,8 @@
     ['add-destination','Add Remote Destination','#backupDestinationForm','add-mail-domain'],
     ['settings','Backup Settings','#backupSettingsForm','settings'],
     ['destinations','Remote Destinations','#backupDestinationsTable','services-control'],
-    ['history','Backup History','#backupsTable','activities']
+    ['history','Backup History','#backupsTable','activities'],
+    ['system-snapshot','System Snapshot','#systemSnapshotPanel','backup-vault']
   ];
   const parent=document.querySelector('.nav-item[data-page="backups"]'),group=document.createElement('div'),toggle=document.createElement('button'),submenu=document.createElement('nav');
   group.className='sidebar-feature-group';parent.replaceWith(group);toggle.type='button';toggle.className='nav-item sidebar-group-toggle';toggle.setAttribute('aria-controls','backupsSubmenu');toggle.innerHTML='<img src="assets/sidebar/backup-vault.svg" alt="" width="22" height="22"><span>Backups</span><svg class="sidebar-group-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
@@ -18,7 +19,7 @@
   page.querySelector('.backup-management-grid').classList.add('hidden');
   let lastRoute='';function sync(){const route=location.hash.slice(1),active=route==='backups'||route.startsWith('backups/'),selected=entries.find(entry=>entry[0]===route.split('/')[1])||entries[0];
     toggle.classList.toggle('active',active);for(const entry of entries){const current=active&&entry===selected;entry.panel.classList.toggle('hidden',!current);entry.link.classList.toggle('active',current);if(current)entry.link.setAttribute('aria-current','page');else entry.link.removeAttribute('aria-current');}
-    page.querySelector('.backup-note').classList.toggle('hidden',selected!==entries[0]);if(active){page.querySelector('h1').textContent=selected[1];if(route!==lastRoute)expand(true);}lastRoute=route;
+    page.querySelector('.backup-note').classList.toggle('hidden',selected!==entries[0]);page.querySelector('.page-heading p')?.classList.toggle('hidden',selected[0]==='system-snapshot');if(active){page.querySelector('h1').textContent=selected[1];if(route!==lastRoute)expand(true);}lastRoute=route;
   }
   const navigate=window.LiteCPFeatures.navigate;window.LiteCPFeatures.navigate=id=>{navigate?.(id);sync();};
   window.addEventListener('hashchange',sync);expand(false);sync();
