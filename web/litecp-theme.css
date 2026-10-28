@@ -380,3 +380,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 [data-ssl-table] th:last-child,
 [data-ssl-table] td:last-child { text-align: center; }
 [data-ssl-table] td:last-child > .feature-note { display: inline; margin: 0; padding: 0; }
+
+/* Center mailbox removal glyphs inside their red controls. */
+:root[data-theme] #mailboxesTable button[data-mail-action="mailbox-delete"] {
+ display:inline-flex;align-items:center;justify-content:center;
+ width:38px;height:38px;min-width:38px;padding:0;line-height:1;
+}

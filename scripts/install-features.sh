@@ -255,6 +255,7 @@ EOF
   fi
   nginx -t
   systemctl restart "$unit"
+  bash "$(dirname "${BASH_SOURCE[0]}")/install-webmail-signon.sh"
   if [[ ! -e /etc/litecp/mail/disabled ]]; then systemctl enable --now opendkim; systemctl restart postfix dovecot; fi
   systemctl reload nginx
   open_port 8444

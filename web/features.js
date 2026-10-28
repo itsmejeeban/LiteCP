@@ -171,6 +171,19 @@
 
   $("[data-page-view=email] .page-heading").insertAdjacentHTML("beforeend", '<div class="feature-actions"><a class="button button-secondary hidden" id="webmailLink" target="_blank" rel="noopener">Open webmail</a><button class="button button-primary" id="mailHostingToggle">Email hosting</button></div>');
   $("#mailboxesTable").addEventListener("click",event=>{if(event.target.closest('[data-webmail-unavailable]'))cp.showToast("Webmail setup required","Configure a public mail hostname with a matching TLS certificate and install webmail before logging in.","error");});
+  $("#mailboxesTable").addEventListener("click",async event=>{
+    const button=event.target.closest('[data-webmail-login]');if(!button)return;
+    const target='litecp_webmail_'+Date.now(),tab=window.open('about:blank',target);
+    if(!tab){cp.showToast('Tab blocked','Allow new tabs for LiteCP, then try again.','error');return;}
+    button.disabled=true;
+    try{
+      const result=await cp.api('/api/mail/webmail-login',{method:'POST',body:{id:button.dataset.webmailLogin}});
+      const url=new URL(result.url);if(url.protocol!=='https:')throw Error('Webmail requires HTTPS.');
+      const form=document.createElement('form');form.method='POST';form.action=url.href;form.target=target;
+      const ticket=document.createElement('input');ticket.type='hidden';ticket.name='litecp_ticket';ticket.value=result.ticket;form.append(ticket);
+      document.body.append(form);form.submit();form.remove();tab.opener=null;
+    }catch(error){tab.close();cp.handleError(error);}finally{button.disabled=false;}
+  });
   $("#mailHostingToggle").addEventListener("click",async()=>{const enabled=cp.state().settings.emailHostingEnabled!==false;if(!await window.LiteCPDialogs.confirm(`${enabled?"Disable":"Enable"} email hosting? ${enabled?"SMTP delivery and mailbox access will stop; messages and accounts will be kept.":"Postfix, Dovecot and DKIM services will start."}`))return;try{await cp.api("/api/mail/hosting",{method:"PUT",body:{enabled:!enabled}});await cp.refresh();}catch(error){notifyError(error);}});
   $("[data-page-view=email] .stacked-panels").insertAdjacentHTML("beforeend", '<article class="panel hidden" id="mailDNSPanel"><div class="panel-head"><div><h2 id="mailDNSTitle">DNS records</h2><p>Publish these at your DNS provider. LiteCP does not change public DNS.</p></div></div><p class="feature-note" id="mailDNSConnection"></p><div id="mailDNSTable"></div><p class="feature-note" id="mailDNSNote"></p></article>');
   $("[data-page-view=email]").addEventListener("click",async event=>{const button=event.target.closest("[data-dns-domain]");if(!button)return;try{if(cp.demo)throw new Error("DNS generation requires the installed mail server.");const data=await cp.api(`/api/mail/dns?domain=${encodeURIComponent(button.dataset.dnsDomain)}`);$("#mailDNSPanel").classList.remove("hidden");$("#mailDNSTitle").textContent=`DNS for ${button.dataset.dnsDomain}`;$("#mailDNSTable").innerHTML=`<table class="data-table dns-table"><thead><tr><th>TYPE</th><th>NAME</th><th>VALUE</th></tr></thead><tbody>${data.records.map(item=>`<tr><td>${esc(item.type)}</td><td><code>${esc(item.name)}</code></td><td><code>${esc(item.value)}</code></td></tr>`).join("")}</tbody></table>`;$("#mailDNSNote").textContent=(!data.dkimReady?"DKIM is not ready; install/configure OpenDKIM first. ":"")+data.note;const mailbox=button.dataset.mailboxAddress;$("#mailDNSConnection").textContent=`${mailbox ? "Username: " + mailbox + " · " : "Username: full email address · "}Incoming: ${data.hostname}, IMAP 993 (SSL/TLS). Outgoing: ${data.hostname}, SMTP 465 (SSL/TLS) or 587 (STARTTLS). Use the mailbox password and enable SMTP authentication.`;$("#mailDNSPanel").scrollIntoView({behavior:"smooth",block:"start"});}catch(error){notifyError(error);}});
@@ -227,7 +240,7 @@
       const mailbox=state.mailboxes.find(item=>item.id===button.dataset.id);if(!mailbox)return;
       const enabled=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;
       let login='<button class="text-action" type="button" data-mail-enhancement data-webmail-unavailable>Log in</button>';
-      if(enabled){try{const url=new URL(state.system.webmailUrl,location.origin);if(url.protocol==='https:'){url.searchParams.set('_user',mailbox.address);login=`<a class="button button-secondary" data-mail-enhancement target="_blank" rel="noopener noreferrer" href="${esc(url.href)}" aria-label="Log in to ${esc(mailbox.address)}">Log in</a>`;}}catch(error){}}
+      if(enabled){try{const url=new URL(state.system.webmailUrl,location.origin);if(url.protocol==='https:'){login=`<button type="button" class="button button-secondary" data-mail-enhancement data-webmail-login="${esc(mailbox.id)}" aria-label="Log in to ${esc(mailbox.address)}">Log in</button>`;}}catch(error){}}
       button.insertAdjacentHTML("beforebegin",`${login}<button class="text-action" type="button" data-mail-enhancement data-dns-domain="${esc(mailbox.domain)}" data-mailbox-address="${esc(mailbox.address)}">Configuration</button>`);
     });
     const available=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;$("#webmailLink").classList.toggle("hidden",!available);$("#webmailLink").href=state.system.webmailUrl||`https://${location.hostname}:8444/`;

@@ -200,6 +200,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/phpmyadmin/", a.withAuth(a.phpMyAdmin))
 	mux.HandleFunc("/api/databases/phpmyadmin", only(http.MethodPost, a.withAuth(a.databaseAdminLaunch)))
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))
+	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
+	mux.HandleFunc("/internal/webmail-ticket", only(http.MethodPost, a.consumeWebmailTicket))
 	mux.HandleFunc("/api/live-migrations", a.withAuth(a.liveMigrations))
 	mux.HandleFunc("/api/live-migrations/download", only(http.MethodGet, a.withAuth(a.liveMigrationDownload)))
 	mux.HandleFunc("/api/migrations/database", only(http.MethodPost, a.withAuth(a.migrationDatabaseImport)))
@@ -266,7 +268,13 @@ func (a *App) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		formSources := "'self'"
+		if a.system != nil {
+			if webmail, err := url.Parse(a.system.WebmailURL()); err == nil && webmail.Scheme == "https" && webmail.Host != "" && webmail.User == nil && !strings.ContainsAny(webmail.Host, " ;'\r\n") {
+				formSources += " https://" + webmail.Host
+			}
+		}
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action " + formSources)
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
