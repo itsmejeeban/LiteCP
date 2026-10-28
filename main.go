@@ -56,6 +56,7 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args)>1 && os.Args[1]=="scan-server" { if err:=runServerScan();err!=nil{log.Fatal(err)};return }
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
  if len(os.Args)>1 && os.Args[1]=="ensure-default-resolvers" {
@@ -192,6 +193,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
 	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
+	mux.HandleFunc("/api/security/server-scan", a.withAuth(a.serverScan))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
 	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
