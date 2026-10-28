@@ -33,6 +33,7 @@ func rewriteMigrationDB(content,app string,credentials DBCredentials)(string,err
 func(a *App) startAutoMigrationRestores(){if a.system.demo{return};go func(){timer:=time.NewTicker(10*time.Second);defer timer.Stop();for range timer.C{
  if !a.mutationMu.TryLock(){continue}
  entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));for _,entry:=range entries{job,err:=a.loadLiveJob(entry.Name());if err!=nil||!job.AutoRestore||job.Status!="review"{continue};a.performAutoMigration(&job,false)}
+ a.startNextQueuedMigration()
  a.mutationMu.Unlock()
  }}()}
 

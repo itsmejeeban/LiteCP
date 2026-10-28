@@ -151,8 +151,9 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	}
 	if r.Method!=http.MethodPost{writeError(w,405,"Use GET or POST.");return}
 	if a.system.demo {writeError(w,400,"Live migration requires the installed Linux server.");return}
-	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Password string `json:"password"`;Account string `json:"account"`;Confirm bool `json:"confirm"`}
+	var input struct{Action string `json:"action"`;ID string `json:"id"`;Source LiveSource `json:"source"`;PrivateKey string `json:"privateKey"`;Password string `json:"password"`;Account string `json:"account"`;Accounts []string `json:"accounts"`;Confirm bool `json:"confirm"`}
 	if err:=decodeJSONWithLimit(r,&input,80<<10);err!=nil{writeError(w,400,err.Error());return}
+ if input.Action=="queue" { a.queueLiveAccounts(w,r,input.ID,input.Accounts,input.Confirm);return }
  if input.Action=="fingerprint" {
   source:=input.Source
   if source.AuthMethod!="password"{writeError(w,400,"Automatic host-key discovery is for password authentication");return}
@@ -210,7 +211,7 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	if input.Action=="forget" {
 		job,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
 		liveJobMu.Lock();running:=liveRunning[job.ID];liveJobMu.Unlock();running=running||liveCaptureActive(job.ID)
-		if running||!input.Confirm{writeError(w,409,"Confirm credential removal after the capture has stopped.");return}
+		if running||job.Status=="queued"||!input.Confirm{writeError(w,409,"Confirm credential removal after the capture has stopped.");return}
 		root,_:=a.liveJobRoot(job.ID)
 		for _,name:=range []string{"identity","known_hosts","password.enc"}{if err:=os.Remove(filepath.Join(root,name));err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Could not remove source credentials");return}}
 		job.CredentialsRetained=false;if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Credential removal completed but job state could not be saved");return}
@@ -261,7 +262,6 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	required,sizeErr:=migrationArchiveBytes(ctx,archive)
     if sizeErr!=nil{job.Status="captured";job.Message="Native backup verified. Cannot estimate website extraction: "+sizeErr.Error();_ = a.saveLiveJob(&job);return}
     if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<required+(1<<30){job.Status="captured";job.Message="Native backup verified. Insufficient disk space for this archive plus a 1 GiB safety reserve; no target data was changed.";_ = a.saveLiveJob(&job);return}
-	staged,err:=a.retainedMigrationStages();if err!=nil{fail(err);return};if staged>=3{job.Status="captured";job.Message="Native backup verified. Three website stages already exist; review them before staging this capture.";_ = a.saveLiveJob(&job);return}
 	if err:=os.MkdirAll(filepath.Join(stage,"files"),0700);err!=nil{fail(err);return}
 	preview,err:=extractMigration(ctx,archive,filepath.Join(stage,"files"),job.Source.Platform)
 	if err!=nil{job.Status="captured";job.Message="Native backup verified; website staging could not complete: "+err.Error();_ = a.saveLiveJob(&job);return}
