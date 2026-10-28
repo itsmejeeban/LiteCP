@@ -207,6 +207,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/system/reboot", only(http.MethodPost, a.withAuth(a.systemReboot)))
 	mux.HandleFunc("/api/services/action", only(http.MethodPost, a.withAuth(a.serviceAction)))
 	mux.HandleFunc("/api/sites", only(http.MethodPost, a.withAuth(a.createSite)))
+	mux.HandleFunc("/api/sites/suspension", only(http.MethodPut, a.withAuth(a.siteSuspension)))
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))

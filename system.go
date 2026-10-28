@@ -909,7 +909,8 @@ func (s *System) nginxPaths(domain string) (string, string) {
 	return filepath.Join("/etc/nginx/conf.d", "litecp-"+domain+".conf"), ""
 }
 
-func (s *System) nginxConfig(site Site) string {
+func (s *System) nginxConfig(site Site) (content string) {
+ defer func(){content=suspensionConfig(content,site.Suspended)}()
  if site.Application!=nil {return s.applicationNginx(site)}
 	applicationRules := `    location = /configuration.php { deny all; }
     location ^~ /crons/ { deny all; }`

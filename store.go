@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+	Suspended bool `json:"suspended,omitempty"`
  Application *ApplicationHosting `json:"application,omitempty"`
 	ID         string    `json:"id"`
 	Domain     string    `json:"domain"`
