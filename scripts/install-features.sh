@@ -330,6 +330,11 @@ reject = 15;
 add_header = 6;
 greylist = 4;
 EOF
+  # OpenDKIM is the only outbound signer for LiteCP mail domains.
+  # Keep Rspamd's inbound DKIM verification; disable just its signing module.
+  cat > /etc/rspamd/local.d/dkim_signing.conf <<'EOF'
+  enabled = false;
+  EOF
   cat > /etc/rspamd/local.d/worker-proxy.inc <<'EOF'
 bind_socket = "127.0.0.1:11332";
 milter = yes;

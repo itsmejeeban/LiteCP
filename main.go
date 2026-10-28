@@ -167,6 +167,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
 	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
+	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
+	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
 	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))
 	mux.HandleFunc("/api/system/resolvers", only(http.MethodPut, a.withAuth(a.systemResolvers)))
@@ -315,6 +317,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 	}
 	if err := decodeJSONWithLimit(r, &input, 16<<10); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -332,11 +335,18 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.store.CheckPassword(input.Username, input.Password) {
+		a.authenticationEvent("failed", r)
 		time.Sleep(350 * time.Millisecond)
-		writeError(w, http.StatusUnauthorized, "The username or password is incorrect.")
+		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
+		return
+	}
+	if a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
+		a.authenticationEvent("failed", r)
+		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
 		return
 	}
 	a.clearLoginFailures(ip)
+	a.authenticationEvent("password_verified", r)
 	token, err := randomToken(32)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Could not create a session.")
@@ -918,9 +928,12 @@ func (a *App) pruneExpiredBackups() error {
 }
 
 func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {
+	a.loginMu.Lock()
+	defer a.loginMu.Unlock()
 	var input struct {
 		Current string `json:"current"`
 		Next    string `json:"next"`
+		Code    string `json:"code"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -931,10 +944,19 @@ func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := a.store.Username()
+	if !a.reserveLoginAttempt(clientIP(r)) {
+		writeError(w, 429, "Too many authentication attempts. Try again later.")
+		return
+	}
 	if !a.store.CheckPassword(username, input.Current) {
 		writeError(w, http.StatusUnauthorized, "The current password is incorrect.")
 		return
 	}
+	if a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
+		writeError(w, http.StatusUnauthorized, "Authentication failed.")
+		return
+	}
+	a.clearLoginFailures(clientIP(r))
 	if err := a.store.SetPassword(input.Next); err != nil {
 		writeError(w, http.StatusInternalServerError, "Could not update the password.")
 		return

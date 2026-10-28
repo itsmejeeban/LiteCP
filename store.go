@@ -127,6 +127,7 @@ type Settings struct {
 type Admin struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"passwordHash"`
+	TwoFactor    twoFactorConfig `json:"twoFactor,omitempty"`
 }
 
 type Config struct {
@@ -305,7 +306,14 @@ func (s *Store) CheckPassword(username, password string) bool {
 	s.mu.RLock()
 	admin := s.cfg.Admin
 	s.mu.RUnlock()
-	return subtleStringEqual(admin.Username, strings.TrimSpace(username)) && verifyPassword(admin.PasswordHash, password)
+	return checkAdminCredentials(admin, username, password, verifyPassword)
+}
+
+func checkAdminCredentials(admin Admin, username, password string, verify func(string, string) bool) bool {
+	// Always do the password work, including for an unknown username. Otherwise
+	// the expensive derivation reveals which administrator name exists.
+	passwordOK := verify(admin.PasswordHash, password)
+	return subtleStringEqual(admin.Username, strings.TrimSpace(username)) && passwordOK
 }
 
 func subtleStringEqual(a, b string) bool {

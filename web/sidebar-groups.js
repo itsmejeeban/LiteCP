@@ -2,7 +2,7 @@
   "use strict";
   const groups = [
     {id:"website-tools", title:"Website Tools", icon:"tools", after:"websites", pages:["file-manager","files","databases","website-backups","website-cron","website-ftp","website-ssl"]},
-    {id:"security", title:"Security", icon:"security", after:"email", pages:["firewall","security","waf"]},
+    {id:"security", title:"Security", icon:"security", after:"email", pages:["security-dashboard","firewall","security","waf"]},
     {id:"environment", title:"Server Environment", icon:"server-environment", pages:["applications","extensions"]}
   ];
   let anchor = document.querySelector('.nav-item[data-page="email"]');

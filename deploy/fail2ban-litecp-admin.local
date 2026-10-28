@@ -1,0 +1,12 @@
+# Review allowlisted management IPs and rollback access before enabling.
+[litecp-admin]
+enabled = false
+filter = litecp-admin
+backend = systemd
+port = 8443
+protocol = tcp
+maxretry = 5
+findtime = 15m
+bantime = 15m
+# Select the installed backend after review; do not change SSH rules here.
+banaction = firewallcmd-rich-rules

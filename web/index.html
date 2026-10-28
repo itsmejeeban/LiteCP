@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="live-migration.css?v=1">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
   <link rel="stylesheet" href="litecp-theme.css?v=ui-audit-6">
+  <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
   <link rel="stylesheet" href="file-manager.css?v=advanced-editor-2">
   <link rel="stylesheet" href="close-buttons.css?v=cpanel-dialog-2">
@@ -60,6 +61,7 @@
             </button>
           </span>
         </label>
+        <label class="field"><span>Authenticator or recovery code (if enabled)</span><input name="code" autocomplete="one-time-code" maxlength="32" spellcheck="false"></label>
         <p class="form-error hidden" id="loginError" role="alert"></p>
         <button class="button button-primary button-large" type="submit">
           <span>Sign in to LiteCP</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
@@ -200,7 +202,7 @@
             <form class="panel settings-card" id="settingsForm" data-settings-part="email"><div class="panel-head"><div><h2>Administrator email</h2><p>Used for certificate renewal notices.</p></div></div><div class="settings-body"><label class="field"><span>Administrator email</span><span class="input-wrap"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg><input id="settingsEmail" name="email" type="email" placeholder="admin@example.com"></span><small>Pre-filled for Let's Encrypt certificate requests.</small></label><button class="button button-primary" type="submit">Save email</button></div></form>
             <form class="panel settings-card" id="timezoneForm" data-settings-part="timezone"><div class="panel-head"><div><h2>Time zone</h2><p>Choose the time zone used for panel dates.</p></div></div><div class="settings-body"><label class="field"><span>Display timezone</span><select id="settingsTimezone" name="timezone"><option value="UTC">UTC</option><option value="Asia/Kolkata">Asia/Kolkata</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option></select></label><button class="button button-primary" type="submit">Save time zone</button></div></form>
             <form class="panel settings-card" id="backupSettingsForm" data-settings-part="backups"><div class="panel-head"><div><h2>Backup settings</h2><p>Configure automatic backup retention and remote destinations.</p></div></div><div class="settings-body"><label class="field"><span>Backup retention</span><span class="suffix-input"><input id="settingsRetention" name="backupRetention" type="number" min="1" max="90"><span>days</span></span><small>Expired local backups are removed after a successful backup or settings update.</small></label><button class="button button-primary" type="submit">Save retention</button></div></form>
-            <form class="panel settings-card" id="passwordForm"><div class="panel-head"><div><h2>Administrator password</h2><p>Use at least 12 characters and a unique passphrase.</p></div></div><div class="settings-body"><label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label><label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label><button class="button button-secondary" type="submit">Update password</button></div></form>
+            <form class="panel settings-card" id="passwordForm"><div class="panel-head"><div><h2>Administrator password</h2><p>Use at least 12 characters and a unique passphrase.</p></div></div><div class="settings-body"><label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label><label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Authenticator or recovery code (if enabled)</span><input name="code" autocomplete="one-time-code" maxlength="32"></label><button class="button button-secondary" type="submit">Update password</button></div></form>
             <form class="panel settings-card" id="developerModePanel"><div class="panel-head"><h2>Developer mode</h2></div><div class="settings-body"><label class="field"><span><input type="checkbox" id="developerEnabled"> Enable developer mode</span></label><label class="field"><span><input type="checkbox" id="developerRequirePassword" checked> Require password for next login</span></label><p>Turn password requirement off to trust this browser for 30 days across updates and reboots. New browsers still need a password. Signing out, changing the administrator password, or disabling this option revokes access.</p><button class="button button-primary" type="submit">Save developer settings</button><p id="developerStatus" role="status"></p></div></form><article class="panel settings-card" id="updateSettingsPanel"><div class="panel-head"><div><h2>LiteCP update</h2><p>Check for and install official stable LiteCP releases.</p></div></div><div class="settings-body"><p id="panelUpdateVersions">Checking the installed version…</p><p id="panelUpdateMessage" role="status" aria-live="polite"></p><div class="button-row"><button type="button" class="button button-secondary" id="checkUpdatesButton">Check for updates</button><button type="button" class="button button-primary" id="installPanelUpdate" disabled>Update LiteCP</button></div><p class="muted">The panel restarts during installation. Hosted websites stay online. A copy of the previous binary and panel data is retained.</p></div></article>
             <article class="panel settings-card environment-card"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">—</dd></div><div><dt>Operating system</dt><dd id="settingsOS">—</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd id="settingsDatabase">—</dd></div><div><dt>Firewall</dt><dd id="settingsFirewall">—</dd></div><div><dt>PHP</dt><dd id="settingsPHP">Multi-PHP FPM</dd></div></dl></article>
           </div>
@@ -235,7 +237,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=migration-tabs-11" defer></script>
+  <script src="app.js?v=security-auth-12" defer></script>
   <script src="features.js?v=single-mail-actions-2" defer></script>
   <script src="html-editor.js?v=2" defer></script>
   <script src="file-manager.js?v=cloud-logo-2" defer></script>
@@ -254,12 +256,14 @@
   <script src="website-tool-pages.js?v=1" defer></script>
   <script src="website-ssl.js?v=1" defer></script>
   <script src="file-manager-picker.js?v=1" defer></script>
-  <script src="sidebar-groups.js?v=file-picker-8" defer></script>
+  <script src="security-dashboard.js?v=1" defer></script>
+  <script src="two-factor.js?v=1" defer></script>
+  <script src="sidebar-groups.js?v=security-dashboard-9" defer></script>
   <script src="email-tabs.js?v=1" defer></script>
   <script src="submenu-icons.js?v=1" defer></script>
   <script src="backup-tabs.js?v=1" defer></script>
   <script src="update-notice.js?v=settings-2" defer></script>
-  <script src="developer-mode.js?v=1" defer></script>
+  <script src="developer-mode.js?v=security-auth-2" defer></script>
   <script src="overview-environment.js?v=info-blue-3" defer></script>
   <script src="analytics.js?v=1" defer></script>
   <script src="migration-tabs.js?v=1" defer></script>

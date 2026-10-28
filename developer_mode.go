@@ -59,11 +59,17 @@ func (a *App) developerWrite(state developerSettings) error {
 func (a *App) credentialStamp() string {
 	a.store.mu.RLock()
 	defer a.store.mu.RUnlock()
-	return trustHash(a.store.cfg.Admin.PasswordHash)
+	if a.store.cfg.Admin.TwoFactor.Revision == "" {
+		return trustHash(a.store.cfg.Admin.PasswordHash)
+	}
+	return trustHash(a.store.cfg.Admin.PasswordHash + ":" + a.store.cfg.Admin.TwoFactor.Revision)
 }
 func (a *App) trustedRequest(r *http.Request) bool {
 	cookie, err := r.Cookie("litecp_trusted")
 	if err != nil || cookie.Value == "" {
+		return false
+	}
+	if a.store.twoFactor().Enabled {
 		return false
 	}
 	developerMu.Lock()
@@ -90,6 +96,7 @@ func (a *App) developerMode(w http.ResponseWriter, r *http.Request) {
 		var input struct {
 			Enabled         bool `json:"enabled"`
 			RequirePassword bool `json:"requirePassword"`
+			Password        string `json:"password"`
 		}
 		if decodeJSON(r, &input) != nil {
 			writeError(w, 400, "Invalid developer settings")
@@ -97,6 +104,25 @@ func (a *App) developerMode(w http.ResponseWriter, r *http.Request) {
 		}
 		var token string
 		if input.Enabled && !input.RequirePassword {
+			if a.store.twoFactor().Enabled {
+				writeError(w, 400, "Trusted browser bypass is unavailable while two-factor authentication is enabled.")
+				return
+			}
+			if !a.loginMu.TryLock() {
+				writeError(w, 429, "Another authentication request is being checked.")
+				return
+			}
+			defer a.loginMu.Unlock()
+			if !a.reserveLoginAttempt(clientIP(r)) {
+				writeError(w, 429, "Too many authentication attempts. Try again later.")
+				return
+			}
+			if !a.store.CheckPassword(a.store.Username(), input.Password) {
+				a.authenticationEvent("failed", r)
+				writeError(w, 401, "Authentication failed.")
+				return
+			}
+			a.clearLoginFailures(clientIP(r))
 			if !requestIsHTTPS(r) {
 				writeError(w, 400, "Trusted browser mode requires HTTPS")
 				return

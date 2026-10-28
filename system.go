@@ -157,7 +157,11 @@ func (s *System) SiteSSLHealthy(site Site) bool {
 		return false
 	}
 	certificate, err := x509.ParseCertificate(block.Bytes)
-	return err == nil && time.Now().Before(certificate.NotAfter)
+	return err == nil && certificateMatchesSite(certificate, site.Domain, time.Now())
+}
+
+func certificateMatchesSite(certificate *x509.Certificate, domain string, now time.Time) bool {
+	return certificate != nil && !certificate.IsCA && !now.Before(certificate.NotBefore) && now.Before(certificate.NotAfter) && certificate.VerifyHostname(domain) == nil
 }
 
 func (s *System) serviceProbe(ctx context.Context, key string) bool {

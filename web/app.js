@@ -300,7 +300,7 @@
     errorNode.classList.add("hidden");
     try {
       const data = new FormData(form);
-      await api("/api/login", { method: "POST", body: { username: data.get("username"), password: data.get("password") } });
+      await api("/api/login", { method: "POST", body: { username: data.get("username"), password: data.get("password"), code: data.get("code") || "" } });
       currentState = await api("/api/state");
       form.reset();
       showApp();
@@ -510,7 +510,7 @@
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "analytics", "activities", "documentation", "applications"];
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "security-dashboard", "analytics", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
@@ -1045,7 +1045,7 @@
     const submit = $('button[type="submit"]', form);
     submit.disabled = true;
     try {
-      await api("/api/password", { method: "PUT", body: { current: data.get("current"), next: data.get("next") } });
+      await api("/api/password", { method: "PUT", body: { current: data.get("current"), next: data.get("next"), code: data.get("code") || "" } });
       form.reset();
       currentState = null;
       showLogin();
