@@ -436,7 +436,7 @@
   function renderPHPSelect(site) {
     if(site.application?.enabled)return `<span class="badge">${escapeHTML(site.application.language)} ${escapeHTML(site.application.version)}</span>`;
     const installed = currentState.system.phpVersions || [];
-    const compatible = compatiblePHPVersions(site.appType || "whmcs", site.appVersion).filter(version => installed.includes(version));
+    const compatible = [...installed];
     if (!compatible.includes(site.phpVersion)) compatible.unshift(site.phpVersion);
     const options = [...new Set(compatible)].map(version => `<option value="${escapeHTML(version)}" ${version === site.phpVersion ? "selected" : ""}>PHP ${escapeHTML(version)}</option>`).join("");
     return `<select class="inline-php-select" data-php-version data-id="${escapeHTML(site.id)}" aria-label="PHP version for ${escapeHTML(site.domain)}">${options}</select>`;

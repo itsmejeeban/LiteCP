@@ -713,7 +713,7 @@ func (a *App) changeSitePHP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
-	if err := validateSiteOptions(site.AppType, site.AppVersion, strings.TrimSpace(input.Version)); err != nil {
+	if err := validatePHPVersionSwitch(strings.TrimSpace(input.Version)); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

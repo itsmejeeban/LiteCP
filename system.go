@@ -558,7 +558,7 @@ func (s *System) SetCron(site Site, enabled bool) error {
 func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
  if site.Application!=nil&&site.Application.Enabled{return errors.New("disable the application runtime before changing PHP")}
 	phpVersion = strings.TrimSpace(phpVersion)
-	if err := validateSiteOptions(site.AppType, site.AppVersion, phpVersion); err != nil {
+	if err := validatePHPVersionSwitch(phpVersion); err != nil {
 		return err
 	}
 	if !s.phpRuntimeAvailable(phpVersion) {
@@ -1650,4 +1650,8 @@ func firstAvailableCommand(names ...string) string {
 		}
 	}
 	return names[0]
+}
+
+func validatePHPVersionSwitch(version string) error {
+ if !containsString(supportedPHPVersions, version) { return errors.New("choose an available PHP version") }; return nil
 }
