@@ -58,6 +58,7 @@ type liveExportResult struct {
 	Error string `json:"error"`
 }
 type LiveMigrationJob struct {
+ AutoRestore bool `json:"autoRestore,omitempty"`
  Progress *migrationTransferProgress `json:"progress,omitempty"`
 	ID string `json:"id"`
 	Source LiveSource `json:"source"`
@@ -200,7 +201,7 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 		if !found||!liveAccountPattern.MatchString(input.Account){writeError(w,400,"Select a discovered source account");return}
 		entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));for _,entry:=range entries{if liveCaptureActive(entry.Name()){writeError(w,409,"Another capture worker is already running.");return}}
         liveJobMu.Lock();if len(liveRunning)>0{liveJobMu.Unlock();writeError(w,409,"Another live capture is already running.");return};liveRunning[job.ID]=true;liveJobMu.Unlock()
-		job.Account=input.Account;job.Status="running";job.Message="Creating source native backup. This can take time; no target website is being changed."
+		job.AutoRestore=true;job.Account=input.Account;job.Status="running";job.Message="Creating source native backup. This can take time; no target website is being changed."
 		if err:=a.saveLiveJob(&job);err!=nil{liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock();writeError(w,500,"Could not save capture job");return}
 		_,startErr:=runCommand(r.Context(),15*time.Second,"systemd-run","--unit="+liveCaptureUnit(job.ID),"--collect","--property=RuntimeMaxSec=7500","--property=UMask=0077","--setenv=LITECP_DATA_DIR="+a.system.dataDir,"/usr/local/bin/litecp","capture-worker",job.ID)
         liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock()
