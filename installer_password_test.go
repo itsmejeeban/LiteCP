@@ -23,5 +23,9 @@ func TestInstallerGeneratesFreshAdminPasswords(t *testing.T) {
   value,err:=cmd.Output(); if err!=nil {t.Fatal(err)}
   if len(value)!=48 || seen[string(value)] {t.Fatal("password length or uniqueness failed")};seen[string(value)]=true
  }
- if !strings.Contains(script,"chmod 0600 /var/lib/litecp/initial-admin-credentials.txt") {t.Fatal("credential file permissions missing")}
+ if strings.Contains(script,"initial-admin-credentials.txt") {t.Fatal("installer must not save plaintext credentials")}
+ display:=strings.Index(script,"Administrator password: %s")
+ complete:=strings.Index(script,"LiteCP - By Hostingtom is installed.")
+ clear:=strings.LastIndex(script,"unset ADMIN_PASSWORD")
+ if display<complete || complete<0 || clear<display {t.Fatal("password must be displayed after installation and then cleared")}
 }

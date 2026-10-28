@@ -72,7 +72,7 @@ The installer generates a unique random administrator password, installs the req
 https://SERVER_IP:4321
 ```
 
-For automated provisioning, optionally set the administrator username. Every fresh installation generates a new 48-character password using OpenSSL, ignoring any inherited `LITECP_ADMIN_PASSWORD`. Retrieve it as root with `sudo cat /var/lib/litecp/initial-admin-credentials.txt` (file permissions: 0600). The password is not printed in installation logs or written to the service environment. Existing installations keep their administrator credentials.
+For automated provisioning, optionally set the administrator username. Every fresh installation generates a new 48-character password using OpenSSL, ignoring any inherited `LITECP_ADMIN_PASSWORD`. The password is displayed once after installation completes; save it then. LiteCP does not save the plaintext password to a file or service environment; authentication stores only its salted password hash. Do not redirect installation output to a log if you want to avoid capturing the displayed password. Existing installations keep their administrator credentials.
 
 ```bash
 sudo LITECP_ADMIN_USERNAME=admin \
