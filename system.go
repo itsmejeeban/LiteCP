@@ -93,7 +93,7 @@ type System struct {
 var domainPattern = regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$`)
 var safeDatabasePart = regexp.MustCompile(`[^a-z0-9]+`)
 var fastCGIPassPattern = regexp.MustCompile(`(?m)^(\s*fastcgi_pass\s+unix:)[^;]+(;\s*)$`)
-var supportedPHPVersions = []string{"7.3", "7.4", "8.1", "8.2", "8.3", "8.4"}
+var supportedPHPVersions = []string{"7.3", "7.4", "8.1", "8.2", "8.3", "8.4", "8.5"}
 
 func NewSystem(dataDir string) *System {
 	info := detectOS()
@@ -1339,7 +1339,7 @@ func validateSiteOptions(appType, appVersion, phpVersion string) error {
 		return errors.New("application must be WHMCS, WordPress or Regular Website")
 	}
 	if !containsString(supportedPHPVersions, phpVersion) {
-		return errors.New("choose PHP 7.3, 7.4, 8.1, 8.2, 8.3 or 8.4")
+		return errors.New("choose PHP 7.3, 7.4, 8.1, 8.2, 8.3, 8.4 or 8.5")
 	}
 	if appType == "whmcs" {
 		if appVersion != "8.13" && appVersion != "9.0" {
@@ -1348,8 +1348,8 @@ func validateSiteOptions(appType, appVersion, phpVersion string) error {
 		if appVersion == "9.0" && phpVersion != "8.2" && phpVersion != "8.3" {
 			return errors.New("WHMCS 9.0 requires PHP 8.2 or 8.3")
 		}
-		if appVersion == "8.13" && phpVersion == "8.4" {
-			return errors.New("WHMCS 8.13 does not support PHP 8.4")
+		if appVersion == "8.13" && (phpVersion == "8.4" || phpVersion == "8.5") {
+			return errors.New("WHMCS 8.13 does not support PHP 8.4 or 8.5")
 		}
 	}
 	if appType == "wordpress" && phpVersion == "7.3" {

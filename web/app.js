@@ -76,7 +76,7 @@
         { key: "cron", label: "App Scheduler", unit: "cron", state: "running" },
         { key: "mail", label: "Email Hosting", unit: "postfix, dovecot", state: "running" }
       ],
-      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"], databaseEngine: "MySQL", firewallBackend: "ufw"
+      phpVersions: ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4", "8.5"], databaseEngine: "MySQL", firewallBackend: "ufw"
     }
   };
 
@@ -572,7 +572,7 @@
     const installed = currentState?.system?.phpVersions || [];
     const compatible = compatiblePHPVersions(appType, appVersion);
     const preferred = appType === "wordpress" || appType === "regular" ? "8.4" : "8.3";
-    $("#sitePHPVersion").innerHTML = ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"].map(version => {
+    $("#sitePHPVersion").innerHTML = ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4", "8.5"].map(version => {
       const available = installed.includes(version);
       const allowed = compatible.includes(version);
       const note = !available ? " — unavailable on this server" : !allowed ? ` — not supported by ${applicationLabel(appType)}` : "";
@@ -1093,8 +1093,8 @@
   }
 
   function compatiblePHPVersions(appType, appVersion = "") {
-    if (appType === "wordpress") return ["7.4", "8.1", "8.2", "8.3", "8.4"];
-    if (appType === "regular") return ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4"];
+    if (appType === "wordpress") return ["7.4", "8.1", "8.2", "8.3", "8.4", "8.5"];
+    if (appType === "regular") return ["7.3", "7.4", "8.1", "8.2", "8.3", "8.4", "8.5"];
     return appVersion === "9.0" ? ["8.2", "8.3"] : ["7.3", "7.4", "8.1", "8.2", "8.3"];
   }
 

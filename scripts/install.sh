@@ -31,7 +31,7 @@ fi
 
 info "Installing the lean WHMCS and WordPress runtime with ${DATABASE_ENGINE} for ${PRETTY_NAME}"
 
-REQUESTED_PHP_VERSIONS=("7.3" "7.4" "8.1" "8.2" "8.3" "8.4")
+REQUESTED_PHP_VERSIONS=("7.3" "7.4" "8.1" "8.2" "8.3" "8.4" "8.5")
 PHP_VERSIONS=()
 PHP_UNITS=()
 NEEDS_PHP73_CONTAINER=0
@@ -48,6 +48,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
     PHP_VERSIONS+=("${PHP_VERSION}")
     PHP_UNITS+=("php${PHP_VERSION}-fpm")
     for PHP_PACKAGE in fpm cli common mysql curl gd imap mbstring xml intl bcmath gmp soap zip opcache; do
+      [[ "${PHP_VERSION}" != "8.5" || "${PHP_PACKAGE}" != "opcache" ]] || continue
       PHP_PACKAGES+=("php${PHP_VERSION}-${PHP_PACKAGE}")
     done
   done
@@ -85,6 +86,7 @@ else
     PHP_VERSIONS+=("${PHP_VERSION}")
     PHP_UNITS+=("php${PHP_COMPACT}-php-fpm")
     for PHP_PACKAGE in fpm cli common mysqlnd gd mbstring xml intl bcmath gmp soap opcache process; do
+      [[ "${PHP_VERSION}" != "8.5" || "${PHP_PACKAGE}" != "opcache" ]] || continue
       PHP_PACKAGES+=("php${PHP_COMPACT}-php-${PHP_PACKAGE}")
     done
     PHP_PACKAGES+=("php${PHP_COMPACT}-php-pecl-zip")
@@ -113,13 +115,15 @@ tar -xzf "${IONCUBE_TMP}/ioncube.tar.gz" -C "${IONCUBE_TMP}"
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
   PHP_COMPACT="${PHP_VERSION/.}"
   IONCUBE_LOADER="${IONCUBE_TMP}/ioncube/ioncube_loader_lin_${PHP_VERSION}.so"
-  [[ -f "${IONCUBE_LOADER}" ]] || fail "ionCube Loader does not include PHP ${PHP_VERSION} support for ${MACHINE_ARCH}."
+  [[ "${PHP_VERSION}" == "8.5" || -f "${IONCUBE_LOADER}" ]] || fail "ionCube Loader does not include PHP ${PHP_VERSION} support for ${MACHINE_ARCH}."
   if [[ "${OS_ID}" == "ubuntu" ]]; then
     PHP_BINARY="/usr/bin/php${PHP_VERSION}"
     PHP_EXTENSION_DIR="$(${PHP_BINARY} -r 'echo ini_get("extension_dir");')"
+    if [[ -f "${IONCUBE_LOADER}" ]]; then
     install -m 0644 "${IONCUBE_LOADER}" "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
     printf 'zend_extension=%s/ioncube_loader_lin_%s.so\n' "${PHP_EXTENSION_DIR}" "${PHP_VERSION}" > "/etc/php/${PHP_VERSION}/mods-available/ioncube.ini"
     phpenmod -v "${PHP_VERSION}" ioncube
+    fi
     install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" "/etc/php/${PHP_VERSION}/mods-available/litecp.ini"
     phpenmod -v "${PHP_VERSION}" litecp
     PHP_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
@@ -127,15 +131,21 @@ for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
   else
     PHP_BINARY="/opt/remi/php${PHP_COMPACT}/root/usr/bin/php"
     PHP_EXTENSION_DIR="$(${PHP_BINARY} -r 'echo ini_get("extension_dir");')"
+    if [[ -f "${IONCUBE_LOADER}" ]]; then
     install -m 0644 "${IONCUBE_LOADER}" "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
     printf 'zend_extension=%s/ioncube_loader_lin_%s.so\n' "${PHP_EXTENSION_DIR}" "${PHP_VERSION}" > "/etc/opt/remi/php${PHP_COMPACT}/php.d/00-ioncube.ini"
+    fi
     install -m 0644 "${SOURCE_DIR}/deploy/php-litecp.ini" "/etc/opt/remi/php${PHP_COMPACT}/php.d/99-litecp.ini"
     printf '\nmysqli.default_socket = /run/mysqld/mysqld.sock\npdo_mysql.default_socket = /run/mysqld/mysqld.sock\n' >> "/etc/opt/remi/php${PHP_COMPACT}/php.d/99-litecp.ini"
     PHP_SOCKET="/var/opt/remi/php${PHP_COMPACT}/run/php-fpm/www.sock"
     sed "s#@PHP_SOCKET@#${PHP_SOCKET}#g" "${SOURCE_DIR}/deploy/fpm-almalinux.conf" > "/etc/opt/remi/php${PHP_COMPACT}/php-fpm.d/zz-litecp.conf"
   fi
+  if [[ -f "${IONCUBE_LOADER}" ]]; then
   chmod 0644 "${PHP_EXTENSION_DIR}/ioncube_loader_lin_${PHP_VERSION}.so"
   "${PHP_BINARY}" -v | grep -qi ioncube || fail "ionCube Loader did not activate for PHP ${PHP_VERSION}."
+  else
+    info "PHP ${PHP_VERSION} installed without ionCube; WHMCS remains restricted to compatible runtimes."
+  fi
 done
 
 if [[ "${NEEDS_PHP73_CONTAINER}" -eq 1 ]]; then
