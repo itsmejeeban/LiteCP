@@ -247,7 +247,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	job.Message="Source backup finished. Transferring and verifying the native archive.";_ = a.saveLiveJob(&job)
 	if err:=a.transferLiveFile(ctx,job.Source,root,filepath.Join(root,"native-backup"),result.Native);err!=nil{fail(err);return}
 	job.NativeReady=true;job.NativeBytes=result.Native.Size;job.NativeSHA256=result.Native.SHA256
-	job.Message="Full native backup captured and verified. Preparing the compatible website review.";_ = a.saveLiveJob(&job)
+	job.Message="Native backup verified. Transferring the website archive over SSH; transfer speed depends on the source server.";_ = a.saveLiveJob(&job)
 	archive:=filepath.Join(root,"native-backup")
 	{
 		if result.Portable==nil{job.Status="captured";job.Message="Native backup verified. This source layout needs manual compatibility review before website import.";_ = a.saveLiveJob(&job);return}
@@ -255,7 +255,9 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 		archive=filepath.Join(root,"portable-backup");if err:=a.transferLiveFile(ctx,job.Source,root,archive,result.Portable);err!=nil{fail(err);return}
 	}
 	stage:=filepath.Join(a.system.dataDir,"migrations",job.ID)
-	if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<migrationExtractLimit+(1<<30){job.Status="captured";job.Message="Native backup verified. Website extraction needs at least 9 GiB free disk space; no target data was changed.";_ = a.saveLiveJob(&job);return}
+	required,sizeErr:=migrationArchiveBytes(ctx,archive)
+    if sizeErr!=nil{job.Status="captured";job.Message="Native backup verified. Cannot estimate website extraction: "+sizeErr.Error();_ = a.saveLiveJob(&job);return}
+    if available,err:=migrationFreeBytes(ctx,root);err!=nil||available<required+(1<<30){job.Status="captured";job.Message="Native backup verified. Insufficient disk space for this archive plus a 1 GiB safety reserve; no target data was changed.";_ = a.saveLiveJob(&job);return}
 	staged,err:=a.retainedMigrationStages();if err!=nil{fail(err);return};if staged>=3{job.Status="captured";job.Message="Native backup verified. Three website stages already exist; review them before staging this capture.";_ = a.saveLiveJob(&job);return}
 	if err:=os.MkdirAll(filepath.Join(stage,"files"),0700);err!=nil{fail(err);return}
 	preview,err:=extractMigration(ctx,archive,filepath.Join(stage,"files"),job.Source.Platform)
