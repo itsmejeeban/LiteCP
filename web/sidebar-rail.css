@@ -25,3 +25,11 @@
 :root[data-theme] #sidebarBottomToggle:active {
  background:transparent!important;border-color:transparent!important;box-shadow:none;
 }
+
+/* Compact footer: keep the copyright and collapse control on one row. */
+:root[data-theme] .sidebar-toggle-bar {height:48px;min-height:48px;padding:4px 12px;justify-content:center;gap:0;}
+:root[data-theme] .sidebar-toggle-bar #sidebarBottomToggle {bottom:4px;}
+:root[data-theme] .sidebar-toggle-bar .sidebar-copyright {margin-bottom:0;}
+:root[data-theme] #sidebar {padding-bottom:48px;}
+@media(min-width:901px){body.sidebar-collapsed .sidebar-toggle-bar {height:48px;min-height:48px;} :root[data-theme] body.sidebar-collapsed #sidebar {padding-bottom:48px;}}
+@media(max-width:900px){#sidebar.open~.sidebar-toggle-bar {height:48px;min-height:48px;padding:4px 12px;}}
