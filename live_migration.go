@@ -58,6 +58,7 @@ type liveExportResult struct {
 	Error string `json:"error"`
 }
 type LiveMigrationJob struct {
+ Progress *migrationTransferProgress `json:"progress,omitempty"`
 	ID string `json:"id"`
 	Source LiveSource `json:"source"`
 	Accounts []LiveAccount `json:"accounts"`
@@ -139,7 +140,7 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 			job,err:=a.loadLiveJob(id);if err!=nil{writeError(w,404,err.Error());return}
 			liveJobMu.Lock();running:=liveRunning[id];liveJobMu.Unlock();running=running||liveCaptureActive(id)
 			if job.Status=="running"&&!running {job.Status="interrupted";job.Message="The panel restarted during capture. Retained files need review; no destination was activated."}
-			writeJSON(w,200,job);return
+			a.attachMigrationProgress(&job);writeJSON(w,200,job);return
 		}
 		items:=[]LiveMigrationJob{};entries,err:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"))
 		if err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Cannot read live migration jobs");return}
@@ -224,6 +225,7 @@ func validateLiveFile(file *liveSourceFile, jobID string) error {
 	digest,err:=hex.DecodeString(file.SHA256);if err!=nil||len(digest)!=32{return errors.New("source archive checksum is invalid")};return nil
 }
 func (a *App) transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile) error {
+	descriptor,_:=json.Marshal(migrationTransferProgress{File:filepath.Base(destination),Total:file.Size});if err:=writeAtomic(filepath.Join(root,"transfer.json"),descriptor,0600);err!=nil{return err}
 	available,err:=migrationFreeBytes(ctx,root);if err!=nil{return err};if available<file.Size*2+(1<<30){return errors.New("not enough local disk space to retain and inspect the source archive safely")}
 	output,err:=os.OpenFile(destination,os.O_CREATE|os.O_EXCL|os.O_WRONLY,0600);if err!=nil{return err};defer output.Close()
 	cmd,cleanup,err:=a.liveSSHCommand(ctx,source,root,append(liveSSHArgs(source,root),"cat -- '"+file.Path+"'"));if err!=nil{return err};defer cleanup()
