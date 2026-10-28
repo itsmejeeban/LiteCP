@@ -72,6 +72,7 @@ func(a *App) performAutoMigration(job *LiveMigrationJob,overwrite bool){
   if e=a.store.AddDatabase(value);e!=nil{fail(e);return};if e=a.system.importScopedSQL(ctx,sqlPath,value,credentials.Password);e!=nil{fail(e);return}
   rewritten,e:=rewriteMigrationDB(content,app,credentials);if e!=nil{fail(e);return};if e=writeAtomic(filepath.Join(stage,configName),[]byte(rewritten),0640);e!=nil{fail(e);return};if e=os.Chown(filepath.Join(stage,configName),site.RuntimeUID,site.RuntimeGID);e!=nil{fail(e);return}
  }
+ if app=="whmcs"{if err=a.restoreWHMCSPrivate(ctx,job.ID,site,filepath.Join(stage,configName));err!=nil{fail(err);return}}
  if err=chownSiteTree(stage,site,a.system.webUser());err!=nil{fail(err);return}
  // Rename rather than delete: previous files remain available for recovery.
  previous:=stage+"-previous";if err=os.Rename(site.Root,previous);err!=nil{fail(err);return};if err=os.Rename(stage,site.Root);err!=nil{_ = os.Rename(previous,site.Root);fail(err);return}
