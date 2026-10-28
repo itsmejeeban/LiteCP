@@ -137,7 +137,7 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 	if r.Method==http.MethodGet {
 		if id:=r.URL.Query().Get("id");id!="" {
 			job,err:=a.loadLiveJob(id);if err!=nil{writeError(w,404,err.Error());return}
-			liveJobMu.Lock();running:=liveRunning[id];liveJobMu.Unlock()
+			liveJobMu.Lock();running:=liveRunning[id];liveJobMu.Unlock();running=running||liveCaptureActive(id)
 			if job.Status=="running"&&!running {job.Status="interrupted";job.Message="The panel restarted during capture. Retained files need review; no destination was activated."}
 			writeJSON(w,200,job);return
 		}
@@ -181,19 +181,33 @@ func (a *App) liveMigrations(w http.ResponseWriter,r *http.Request) {
 		job.Status="connected";job.Message="Host key verified. Select a source account or subscription.";if err:=a.saveLiveJob(&job);err!=nil{writeError(w,500,"Could not save discovery state");return}
 		writeJSON(w,201,job);return
 	}
+    if input.Action=="retry" {
+        original,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
+        if !input.Confirm||!original.CredentialsRetained||original.NativeReady||liveCaptureActive(original.ID){writeError(w,409,"Retry requires retained credentials and a stopped, incomplete capture.");return}
+        id,err:=randomToken(18);if err!=nil{writeError(w,500,err.Error());return};id=safeSiteID(id)
+        oldRoot,_:=a.liveJobRoot(original.ID);newRoot,_:=a.liveJobRoot(id)
+        if err=os.MkdirAll(newRoot,0700);err!=nil{writeError(w,500,err.Error());return}
+        names:=[]string{"known_hosts","identity"};if original.Source.AuthMethod=="password"{names=[]string{"known_hosts","password.enc"}}
+        for _,name:=range names{content,e:=os.ReadFile(filepath.Join(oldRoot,name));if e!=nil{writeError(w,409,"Source credentials unavailable; reconnect the source.");return};if e=os.WriteFile(filepath.Join(newRoot,name),content,0600);e!=nil{writeError(w,500,e.Error());return}}
+        original.ID=id;original.Status="connected";original.Message="Previous interrupted capture retained. Select the website and capture again in a restart-independent worker.";original.CreatedAt=time.Now().UTC()
+        if err=a.saveLiveJob(&original);err!=nil{writeError(w,500,err.Error());return};writeJSON(w,201,original);return
+    }
 	if input.Action=="capture" {
 		job,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
 		if job.Status!="connected"||!job.CredentialsRetained||!input.Confirm {writeError(w,409,"Review and confirm native source backup creation before capture; source credentials must still be available.");return}
 		found:=false;for _,account:=range job.Accounts{if account.ID==input.Account{found=true}}
 		if !found||!liveAccountPattern.MatchString(input.Account){writeError(w,400,"Select a discovered source account");return}
-		liveJobMu.Lock();if len(liveRunning)>0{liveJobMu.Unlock();writeError(w,409,"Another live capture is already running.");return};liveRunning[job.ID]=true;liveJobMu.Unlock()
+		entries,_:=os.ReadDir(filepath.Join(a.system.dataDir,"live-migrations"));for _,entry:=range entries{if liveCaptureActive(entry.Name()){writeError(w,409,"Another capture worker is already running.");return}}
+        liveJobMu.Lock();if len(liveRunning)>0{liveJobMu.Unlock();writeError(w,409,"Another live capture is already running.");return};liveRunning[job.ID]=true;liveJobMu.Unlock()
 		job.Account=input.Account;job.Status="running";job.Message="Creating source native backup. This can take time; no target website is being changed."
 		if err:=a.saveLiveJob(&job);err!=nil{liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock();writeError(w,500,"Could not save capture job");return}
-		go a.captureLiveMigration(job);writeJSON(w,202,job);return
+		_,startErr:=runCommand(r.Context(),15*time.Second,"systemd-run","--unit="+liveCaptureUnit(job.ID),"--collect","--property=RuntimeMaxSec=7500","--property=UMask=0077","--setenv=LITECP_DATA_DIR="+a.system.dataDir,"/usr/local/bin/litecp","capture-worker",job.ID)
+        liveJobMu.Lock();delete(liveRunning,job.ID);liveJobMu.Unlock()
+        if startErr!=nil{job.Status="failed";job.Message="Cannot start independent capture worker: "+startErr.Error();_ = a.saveLiveJob(&job);writeError(w,502,job.Message);return};writeJSON(w,202,job);return
 	}
 	if input.Action=="forget" {
 		job,err:=a.loadLiveJob(input.ID);if err!=nil{writeError(w,404,err.Error());return}
-		liveJobMu.Lock();running:=liveRunning[job.ID];liveJobMu.Unlock()
+		liveJobMu.Lock();running:=liveRunning[job.ID];liveJobMu.Unlock();running=running||liveCaptureActive(job.ID)
 		if running||!input.Confirm{writeError(w,409,"Confirm credential removal after the capture has stopped.");return}
 		root,_:=a.liveJobRoot(job.ID)
 		for _,name:=range []string{"identity","known_hosts","password.enc"}{if err:=os.Remove(filepath.Join(root,name));err!=nil&&!errors.Is(err,os.ErrNotExist){writeError(w,500,"Could not remove source credentials");return}}
@@ -250,7 +264,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	if err:=writeAtomic(filepath.Join(stage,"manifest.json"),content,0600);err!=nil{fail(err);return}
 	job.Preview=&preview;job.Status="review";job.Message="Native backup verified and website data staged. Select the website root/database and an empty target below. Capture is not a completed account restore."
 	_ = a.saveLiveJob(&job)
-	a.store.AddActivity("Live source captured",job.Source.Platform+": "+job.Account+"; verified backup and review required","success")
+	// Worker status is stored separately; the HTTP process owns config/activity writes.
 }
 
 func migrationFreeBytes(ctx context.Context, path string) (int64,error) {

@@ -56,6 +56,7 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args)==3 && os.Args[1]=="capture-worker" {if err:=runLiveCaptureWorker(os.Args[2]);err!=nil{log.Fatal(err)};return}
 	if len(os.Args)>1 && os.Args[1]=="scan-server" { if err:=runServerScan();err!=nil{log.Fatal(err)};return }
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
