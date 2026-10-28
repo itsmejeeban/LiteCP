@@ -73,7 +73,7 @@ func (a *App) runWebsiteCron(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
 	defer cancel()
-	args := []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--property=RuntimeMaxSec=30", "--property=TimeoutStopSec=2", "--property=KillMode=control-group", "--property=NoNewPrivileges=yes", "--property=MemoryMax=256M", "--property=TasksMax=32", fmt.Sprintf("--property=User=%d", site.RuntimeUID), fmt.Sprintf("--property=Group=%d", site.RuntimeGID), "--setenv=PATH=/usr/local/bin:/usr/bin:/bin", "--", "/bin/sh"}
+	args := cronTestArguments(*site)
 	command := exec.CommandContext(ctx, "systemd-run", args...)
 	command.Stdin = strings.NewReader(string(script))
 	output := &cronTestOutput{}
@@ -91,4 +91,10 @@ func (a *App) runWebsiteCron(w http.ResponseWriter, r *http.Request) {
 	}
 	a.store.AddActivity("Cron job tested", site.Domain+": "+message, "info")
 	writeJSON(w, 200, map[string]any{"success": err == nil, "message": message, "output": text, "durationMs": time.Since(started).Milliseconds()})
+}
+
+func cronTestArguments(site Site) []string {
+	// Website IDs deliberately have no system login account. Drop credentials
+	// before the shell starts, as scheduled cron does, without NSS user lookup.
+	return []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--property=RuntimeMaxSec=30", "--property=TimeoutStopSec=2", "--property=KillMode=control-group", "--property=NoNewPrivileges=yes", "--property=MemoryMax=256M", "--property=TasksMax=32", "--setenv=PATH=/usr/local/bin:/usr/bin:/bin", "--", "/usr/bin/setpriv", fmt.Sprintf("--reuid=%d", site.RuntimeUID), fmt.Sprintf("--regid=%d", site.RuntimeGID), "--clear-groups", "--no-new-privs", "/bin/sh"}
 }

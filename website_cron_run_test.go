@@ -16,3 +16,9 @@ func TestCronTestOutputIsBounded(t *testing.T) {
 		t.Fatal("output limit changed")
 	}
 }
+
+func TestCronTestDropsToWebsiteIdentityBeforeShell(t *testing.T) {
+	args := strings.Join(cronTestArguments(Site{RuntimeUID:1934344478,RuntimeGID:1934344478})," ")
+	if !strings.Contains(args,"-- /usr/bin/setpriv --reuid=1934344478 --regid=1934344478 --clear-groups --no-new-privs /bin/sh") { t.Fatal("website identity drop missing") }
+	for _, property := range []string{"RuntimeMaxSec=30","MemoryMax=256M","TasksMax=32","NoNewPrivileges=yes"} { if !strings.Contains(args,property) {t.Fatal("resource protection missing: "+property)} }
+}
