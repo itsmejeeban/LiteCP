@@ -386,3 +386,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
  display:inline-flex;align-items:center;justify-content:center;
  width:38px;height:38px;min-width:38px;padding:0;line-height:1;
 }
+
+/* Inline generation and copying in the database creation form. */
+#databaseForm .database-identifier-field > .database-generate-button {right:calc(12px + var(--password-icon-size));}
+#databaseForm .database-password-field > .database-generate-button {right:calc(16px + 2 * var(--password-icon-size));}
+#databaseForm .database-password-field input {padding-right:calc(32px + 3 * var(--password-icon-size))!important;}
+#databaseForm .database-generate-button svg {width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
