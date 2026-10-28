@@ -31,6 +31,7 @@ import (
 )
 
 var version = "0.5.1-dev"
+var buildRevision = ""
 
 //go:embed web/*
 var webAssets embed.FS
@@ -237,7 +238,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/updates/status", only(http.MethodGet, a.withAuth(a.panelUpdateStatus)))
 	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, checkRelease(version)) })))
 	mux.HandleFunc("/api/version", only(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"version": version})
+		writeJSON(w, http.StatusOK, map[string]string{"version": version, "build": buildRevision})
 	}))
 
 	webFS, err := fs.Sub(webAssets, "web")

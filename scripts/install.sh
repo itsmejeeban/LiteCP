@@ -254,7 +254,12 @@ EOF
   systemctl enable --now dnf-automatic-install.timer
 fi
 cd "${SOURCE_DIR}"
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION}" -o /usr/local/bin/litecp .
+BUILD_REVISION="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+if [[ -z "$BUILD_REVISION" && -f "${SOURCE_DIR}/../litecp.tar.gz" ]]; then
+  ARCHIVE_ROOT="$(tar -tzf "${SOURCE_DIR}/../litecp.tar.gz" | sed -n '1p')"
+  [[ "$ARCHIVE_ROOT" =~ -([0-9a-f]{7,40})/ ]] && BUILD_REVISION="${BASH_REMATCH[1]}"
+fi
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${LITECP_VERSION} -X main.buildRevision=${BUILD_REVISION}" -o /usr/local/bin/litecp .
 chmod 0755 /usr/local/bin/litecp
 command -v restorecon >/dev/null 2>&1 && restorecon /usr/local/bin/litecp || true
 install -m 0644 "${SOURCE_DIR}/deploy/litecp-website-logs" /etc/logrotate.d/litecp-websites

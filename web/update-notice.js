@@ -21,7 +21,7 @@
    latest=available?result.latest:'';
    notice.classList.toggle('hidden',!available);
    if(available){label.textContent=`LiteCP ${result.latest.replace(/^v/,'')} version available for update`;notice.href='#settings/update';}
-   if(versions)versions.textContent=`Installed: ${result.current}${result.latest?' · Latest stable release: '+result.latest:''}`;
+   if(versions)versions.textContent=`Installed: ${result.current}${/^[a-f0-9]{7,40}$/i.test(result.build||'')?' (build '+result.build.slice(0,12)+')':''}${result.latest?' · Latest stable release: '+result.latest:''}`;
    if(!running)say(!result.checked?'The release service is unavailable. Try again later.':available?'A new LiteCP version is ready to install.':'No newer stable LiteCP release is available.');
    if(install)install.disabled=running||!available;
   }catch(error){say(error.message);}

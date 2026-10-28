@@ -52,7 +52,15 @@ with tarfile.open(archive,'r:gz') as source:
 PY
 status running "Building LiteCP. Existing websites remain online."
 cd "$work/source"
-CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=${tag#v}" -o "$work/next-litecp" .
+BUILD_REVISION="$(python3 - "$work/source.tar.gz" <<'PY'
+import re,sys,tarfile
+with tarfile.open(sys.argv[1],'r:gz') as archive:
+    root=archive.getmembers()[0].name.split('/')[0]
+    match=re.search(r'-([0-9a-f]{7,40})$',root)
+    print(match.group(1) if match else '')
+PY
+)"
+CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=${tag#v} -X main.buildRevision=${BUILD_REVISION}" -o "$work/next-litecp" .
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 status running "Restarting LiteCP and checking the new version."
 systemctl stop litecp

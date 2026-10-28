@@ -17,3 +17,12 @@ test('current version, unavailable checks and malformed versions do not show a w
  for(const result of [{checked:true,available:false,latest:'v0.5.1'},{checked:false,available:true,latest:'v0.5.2'},{checked:true,available:true,latest:'<script>'}])assert.equal((await render(result)).notice.hidden,true);
  assert.equal((await render({},false)).notice.hidden,true);
 });
+test('update page displays the installed build revision',async()=>{
+ const versions={textContent:''};
+ const notice={hidden:true,querySelector:()=>({textContent:''}),classList:{toggle(){}}};
+ const app={classList:{contains:()=>false}};
+ const elements={'#updateNotice':notice,'#appView':app,'#panelUpdateVersions':versions};
+ vm.runInNewContext(code,{document:{querySelector:s=>elements[s]},MutationObserver:class{observe(){}},fetch:async()=>({ok:true,json:async()=>({current:'0.5.1',build:'c432478abcdef123',checked:true,available:false})}),Date,setInterval(){}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(versions.textContent,'Installed: 0.5.1 (build c432478abcde)');
+});

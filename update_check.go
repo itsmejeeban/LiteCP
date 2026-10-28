@@ -13,6 +13,7 @@ import (
 
 type releaseStatus struct {
 	Current   string `json:"current"`
+	Build     string `json:"build,omitempty"`
 	Latest    string `json:"latest,omitempty"`
 	Available bool   `json:"available"`
 	Checked   bool   `json:"checked"`
@@ -102,7 +103,7 @@ func checkRelease(current string) releaseStatus {
 			}
 		}
 	}
-	status := releaseStatus{Current: current, Latest: releaseCache.tag, Checked: releaseCache.checked, Available: newerRelease(releaseCache.tag, current)}
+	status := releaseStatus{Current: current, Build: buildRevision, Latest: releaseCache.tag, Checked: releaseCache.checked, Available: newerRelease(releaseCache.tag, current)}
 	if status.Available {
 		status.URL = fmt.Sprintf("https://github.com/itsmejeeban/LiteCP/releases/tag/%s", releaseCache.tag)
 	}
