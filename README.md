@@ -66,17 +66,16 @@ For the private GitHub repository, enter a GitHub token with read access to this
 
 On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository. Ubuntu 22.04 and 24.04 use their distribution MySQL 8.0 packages; the installer does not automatically replace those with Oracle MySQL 8.4. MySQL binds to localhost on both platforms, and installation reports the actual running version when available. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
-The installer asks for an administrator username and password, installs the required packages, builds LiteCP, and prints the panel URL:
+The installer generates a unique random administrator password, installs the required packages, builds LiteCP, and prints the panel URL:
 
 ```text
 https://SERVER_IP:4321
 ```
 
-For automated provisioning from an already downloaded source checkout, provide credentials through the process environment. The password is used only for first-time initialization and is not written to the service environment file.
+For automated provisioning, optionally set the administrator username. Every fresh installation generates a new 48-character password using OpenSSL, ignoring any inherited `LITECP_ADMIN_PASSWORD`. Retrieve it as root with `sudo cat /var/lib/litecp/initial-admin-credentials.txt` (file permissions: 0600). The password is not printed in installation logs or written to the service environment. Existing installations keep their administrator credentials.
 
 ```bash
 sudo LITECP_ADMIN_USERNAME=admin \
-  LITECP_ADMIN_PASSWORD='use-a-long-unique-passphrase' \
   LITECP_MAIL_HOSTNAME=mail.example.com \
   bash scripts/install.sh
 ```

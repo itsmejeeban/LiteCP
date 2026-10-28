@@ -272,24 +272,14 @@ systemctl enable --now litecp-resolvers.timer
 
 
 ADMIN_USERNAME="${LITECP_ADMIN_USERNAME:-admin}"
-ADMIN_PASSWORD="${LITECP_ADMIN_PASSWORD:-}"
 if [[ ! -f /var/lib/litecp/config.json ]]; then
-  if [[ -z "${ADMIN_PASSWORD}" ]]; then
-    [[ -t 0 ]] || fail "Set LITECP_ADMIN_PASSWORD (12+ characters) for a non-interactive install."
-    read -r -p "LiteCP administrator username [admin]: " INPUT_USERNAME
-    ADMIN_USERNAME="${INPUT_USERNAME:-admin}"
-    while true; do
-      read -r -s -p "LiteCP administrator password (12+ characters): " ADMIN_PASSWORD
-      printf '\n'
-      [[ ${#ADMIN_PASSWORD} -ge 12 ]] || { info "The password must contain at least 12 characters."; continue; }
-      read -r -s -p "Confirm administrator password: " ADMIN_PASSWORD_CONFIRM
-      printf '\n'
-      [[ "${ADMIN_PASSWORD}" == "${ADMIN_PASSWORD_CONFIRM}" ]] && break
-      info "Passwords did not match; try again."
-    done
-  fi
-  [[ ${#ADMIN_PASSWORD} -ge 12 ]] || fail "The administrator password must contain at least 12 characters."
+  # Generate for every fresh installation, even if an old provisioning password
+  # remains in the caller's environment. Never reset an existing administrator.
+  ADMIN_PASSWORD="$(openssl rand -hex 24)"
+  [[ ${#ADMIN_PASSWORD} -eq 48 && "${ADMIN_PASSWORD}" != *[!0-9a-f]* ]] || fail "Could not generate a secure administrator password."
   LITECP_DATA_DIR=/var/lib/litecp LITECP_ADMIN_PASSWORD="${ADMIN_PASSWORD}" /usr/local/bin/litecp init --username "${ADMIN_USERNAME}"
+  (umask 077; printf 'Username: %s\nPassword: %s\n' "${ADMIN_USERNAME}" "${ADMIN_PASSWORD}" > /var/lib/litecp/initial-admin-credentials.txt)
+  chmod 0600 /var/lib/litecp/initial-admin-credentials.txt
 else
   ADMIN_USERNAME="existing administrator"
   info "Existing LiteCP configuration found; administrator credentials were preserved."
@@ -567,6 +557,9 @@ OPTIONAL_FEATURES=()
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
 printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
+if [[ "${FRESH_INSTALL}" -eq 1 ]]; then
+  printf 'A unique administrator password was generated. Retrieve it as root:\n  sudo cat /var/lib/litecp/initial-admin-credentials.txt\n'
+fi
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
 printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 4321 and mail ports 25, 465, 587, 993 as needed.\n'
 DATABASE_VERSION="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute 'SELECT VERSION()' 2>/dev/null || true)"
