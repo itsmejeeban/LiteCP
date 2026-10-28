@@ -40,7 +40,7 @@
   };
 
   const demoState = {
-    version: "0.5.1",
+    version: "1.0.0",
     username: "admin",
     settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14, emailHostingEnabled: true, resolvers: ["8.8.8.8", "8.8.4.4"] },
     sites: [
