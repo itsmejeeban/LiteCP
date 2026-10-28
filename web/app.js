@@ -1083,6 +1083,7 @@
   function setGreeting() { const hour = new Date().getHours(); $("#greetingTime").textContent = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"; }
 
   function showToast(title, message, type = "success") {
+    if (type === "success" && /^(cannot\b|.*\bfailed\b|error\b)/i.test(title)) type = "error";
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
     const strong = document.createElement("strong");
@@ -1091,7 +1092,18 @@
     span.textContent = message;
     toast.append(strong, span);
     $("#toastRegion").append(toast);
-    setTimeout(() => toast.remove(), 4200);
+    if (type === "error") {
+      toast.setAttribute("role", "alert");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "toast-close";
+      close.setAttribute("aria-label", "Close failed notification");
+      close.textContent = "\u00d7";
+      close.addEventListener("click", () => toast.remove());
+      toast.append(close);
+    } else {
+      setTimeout(() => toast.remove(), 4200);
+    }
   }
 
   function handleError(error) {
