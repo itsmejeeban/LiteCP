@@ -418,3 +418,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .toast.error {position:relative;padding-right:48px;pointer-events:auto;}
 :root[data-theme] .toast .toast-close {position:absolute;top:8px;right:8px;display:grid;place-items:center;width:28px;height:28px;min-height:28px;padding:0;border:1px solid #e18b93;border-radius:6px;background:#b52b38;color:#fff;font-size:22px;line-height:1;cursor:pointer;}
 :root[data-theme] .toast .toast-close:hover {background:#ce3947;}
+
+:root[data-theme] #sitesTable .row-actions .site-suspension-action::before {display:none;}
+:root[data-theme] #sitesTable .row-actions .site-suspension-action svg {display:block;width:28px;height:28px;fill:none;stroke:#d4a75d;stroke-width:2.5;stroke-linecap:round;}
+:root[data-theme] #sitesTable .row-actions .site-suspension-action[title="Restore website access"] svg {stroke:#7fc99a;fill:#7fc99a;stroke-width:1;}
