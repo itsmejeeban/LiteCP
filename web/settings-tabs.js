@@ -6,7 +6,7 @@
     {id:"password",title:"Administrator password",description:"Update your administrator sign-in password.",nodes:[$('#passwordForm')]},
     {id:"email",title:"Administrator email",description:"Set the email used for certificate renewal notices.",nodes:[$('#settingsForm')]},
     {id:"timezone",title:"Time zone",description:"Choose the time zone used throughout the panel.",nodes:[$('#timezoneForm')]},
-    {id:"hostname",title:"Server hostname",description:"View and change the server hostname.",nodes:[$('#hostnameForm'),grid.querySelector('.environment-card')]},
+    {id:"hostname",title:"Server hostname",description:"View and change the server hostname.",nodes:[$('#hostnameForm')]},
     {id:"dns",title:"DNS resolver",description:"View the current DNS servers and configure resolvers.",nodes:[$('#resolversForm')]},
     {id:"developer",title:"Developer mode",description:"Keep this browser signed in for testing.",nodes:[$("#developerModePanel")]},
     {id:"update",title:"Update",description:"Check for and install LiteCP updates.",nodes:[$('#updateSettingsPanel')]},
