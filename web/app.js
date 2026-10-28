@@ -497,11 +497,14 @@
   }
 
   function navigate(page, updateHash = true) {
-    if(page==="settings/backups")page="backups";
+    if(page==="settings/backups")page="backups/settings";
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
     const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
     const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";
     const emailRoute=["add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases"].includes(emailPart)?`email/${emailPart}`:"";
+    const backupPart=String(page).startsWith("backups/")?String(page).slice(8):"";
+    const backupRoute=["create","add-destination","settings","destinations","history"].includes(backupPart)?`backups/${backupPart}`:"";
+    if(backupRoute)page="backups";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "analytics", "activities", "documentation", "applications"];
@@ -512,7 +515,7 @@
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
     });
-    const route=settingsRoute||emailRoute||page;
+    const route=settingsRoute||emailRoute||backupRoute||page;
     if (updateHash && location.hash !== `#${route}`) history.pushState(null, "", `#${route}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });

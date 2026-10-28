@@ -28,8 +28,6 @@
   const backupSettings=$('#backupSettingsForm');
   $('[data-page-view="backups"] .backup-management-grid').after(backupSettings);
   $('.backup-management-grid').classList.add('backup-run-layout');
-  const backupLink=document.createElement('a');backupLink.href='#backups';backupLink.className='button button-secondary';backupLink.textContent='Backup settings';backupLink.addEventListener('click',event=>{event.preventDefault();cp.navigate('backups');backupSettings.scrollIntoView({behavior:'smooth',block:'start'});});
-  $('[data-page-view="backups"] .page-heading').append(backupLink);
   let lastRoute='';
   function activate(){
     const route=location.hash.slice(1),active=route==='settings'||route.startsWith('settings/');

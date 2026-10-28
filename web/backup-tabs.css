@@ -1,0 +1,4 @@
+.backup-tab-panel {max-width:820px;}
+.backup-tab-panel[data-backup-panel="destinations"],.backup-tab-panel[data-backup-panel="history"] {max-width:none;overflow-x:auto;}
+.backup-tab-panel .settings-body {padding:18px;}
+.backup-tab-panel .compact-form-card {margin:0;}
