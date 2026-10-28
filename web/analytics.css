@@ -6,3 +6,4 @@
 .usage-chart .panel-head h2 {font-size:15px;}
 .usage-empty {padding:35px 18px;color:var(--muted);text-align:center;}
 @media(max-width:1100px){.usage-graphs {grid-template-columns:minmax(0,1fr);}.analytics-controls {align-items:stretch;flex-direction:column;gap:10px;}}
+.usage-chart svg text {stroke:none;stroke-width:0;font-family:Arial,sans-serif;font-weight:400;font-size:11px;fill:#a6a6a6;text-shadow:none;}
