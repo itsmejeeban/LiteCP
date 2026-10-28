@@ -767,7 +767,7 @@
     const port = $('#backupDestinationForm input[name="port"]');
     port.value = protocol === "sftp" ? 22 : protocol === "ftps" ? 990 : 21;
     $("#hostKeyField").classList.toggle("hidden", protocol !== "sftp");
-    $("#hostKeyField input").required = protocol === "sftp";
+    $("#hostKeyField input").required = false;
   }
 
   async function createBackupDestination(event) {
@@ -777,6 +777,13 @@
     const submit = $('button[type="submit"]', form);
     submit.disabled = true;
     try {
+      if (data.get("protocol") === "sftp" && !String(data.get("hostKeySha256") || "").trim()) {
+        const host = String(data.get("host")).trim(), port = Number(data.get("port"));
+        const detected = await api("/api/backup-destinations/host-key", {method:"POST", body:{host,port}});
+        if (!await window.LiteCPDialogs.confirm(`Trust the detected SSH host key for ${host}:${port}?\n\n${detected.fingerprint}\n\nVerify this fingerprint with your provider. First-time detection cannot independently prove server identity.`, {title:"Trust SFTP server",confirmText:"Trust and save"})) return;
+        data.set("hostKeySha256", detected.fingerprint);
+        form.elements.hostKeySha256.value = detected.fingerprint;
+      }
       await api("/api/backup-destinations", { method: "POST", body: {
         name: String(data.get("name")).trim(), protocol: data.get("protocol"), host: String(data.get("host")).trim(),
         port: Number(data.get("port")), username: String(data.get("username")).trim(), password: data.get("password"),
