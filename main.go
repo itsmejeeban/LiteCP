@@ -250,6 +250,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/databases", only(http.MethodPost, a.withAuth(a.createManagedDatabase)))
 	mux.HandleFunc("/api/databases/password", only(http.MethodPut, a.withAuth(a.resetManagedDatabasePassword)))
 	mux.HandleFunc("/api/databases/", only(http.MethodDelete, a.withAuth(a.deleteManagedDatabase)))
+	mux.HandleFunc("/api/firewall/apply-litecp", only(http.MethodPost, a.withAuth(a.applyLiteCPFirewall)))
 	mux.HandleFunc("/api/firewall", only(http.MethodPost, a.withAuth(a.createFirewallRule)))
 	mux.HandleFunc("/api/firewall/", a.withAuth(a.firewallRuleAction))
 	mux.HandleFunc("/api/mail/hosting", only(http.MethodPut, a.withAuth(a.toggleMailHosting)))
