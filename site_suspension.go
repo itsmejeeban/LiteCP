@@ -1,9 +1,9 @@
 package main
 import("context";"fmt";"net/http";"os";"strings";"time")
-const suspensionDirective="    # LITECP_SUSPENDED\n    default_type text/plain;\n    return 503 'This website is suspended. Please contact the administrator.';\n"
+const suspensionDirective="\n    # LITECP_SUSPENDED\n    default_type text/plain;\n    return 503 'This website is suspended. Please contact the administrator.';\n"
 func suspensionConfig(content string,suspended bool)string{
  content=strings.ReplaceAll(content,suspensionDirective,"")
- if suspended{content=strings.ReplaceAll(content,"server {","server {\n"+suspensionDirective)};return content
+ if suspended{content=strings.ReplaceAll(content,"server {","server {"+suspensionDirective)};return content
 }
 func(s *System) setSuspension(ctx context.Context,site Site,suspended bool)error{
  if s.demo{return nil};path,_:=s.nginxPaths(site.Domain);old,err:=os.ReadFile(path);if err!=nil{return err}
