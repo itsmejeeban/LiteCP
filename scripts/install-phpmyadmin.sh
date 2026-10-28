@@ -78,17 +78,18 @@ pm = ondemand
 pm.max_children = 2
 pm.process_idle_timeout = 10s
 pm.max_requests = 200
-request_terminate_timeout = 300s
+request_terminate_timeout = 2500s
 clear_env = yes
 security.limit_extensions = .php
 php_admin_value[session.save_path] = ${STATE}/sessions
 php_admin_value[session.cookie_httponly] = 1
 php_admin_value[session.cookie_secure] = 1
 php_admin_value[upload_tmp_dir] = ${STATE}/tmp
-php_admin_value[upload_max_filesize] = 128M
-php_admin_value[post_max_size] = 130M
+php_admin_value[upload_max_filesize] = 5120M
+php_admin_value[post_max_size] = 5122M
 php_admin_value[memory_limit] = 192M
-php_admin_value[max_execution_time] = 300
+php_admin_value[max_execution_time] = 2400
+php_admin_value[max_input_time] = 2700
 EOF
 cat > "${NGINX}" <<EOF
 # Internal only. External requests must pass LiteCP session authentication.
@@ -97,7 +98,7 @@ server {
  server_name localhost;
  root ${ROOT};
  index index.php;
- client_max_body_size 130m;
+ client_max_body_size 5122m;
  location / { try_files \$uri \$uri/ =404; }
  location ~ ^/(setup|test|tests|doc|examples|libraries|templates|vendor)/ { deny all; }
  location ~ /\. { deny all; }
@@ -108,10 +109,15 @@ server {
   fastcgi_param HTTP_PROXY "";
   fastcgi_param HTTPS on;
   fastcgi_pass unix:${SOCKET};
-  fastcgi_read_timeout 310s;
+  fastcgi_read_timeout 2600s;
  }
 }
 EOF
+PANEL_PROXY=/etc/nginx/conf.d/litecp-panel.conf
+[[ $ID != ubuntu ]] || PANEL_PROXY=/etc/nginx/sites-available/litecp-panel.conf
+if [[ -f $PANEL_PROXY ]]; then
+ bash "${SCRIPT_DIR}/configure-phpmyadmin-uploads.sh" "$PANEL_PROXY"
+fi
 "${PHP_BIN}" -n -l "${ROOT}/config.inc.php"
 nginx -t
 systemctl reload "${PHP_UNIT}"
