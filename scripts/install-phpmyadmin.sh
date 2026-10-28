@@ -28,6 +28,10 @@ if [[ ! -f ${ROOT}/index.php ]]; then
  (cd "${DOWNLOAD}" && sha256sum -c "${ARCHIVE}.sha256")
  tar -xzf "${DOWNLOAD}/${ARCHIVE}" --strip-components=1 -C "${ROOT}"
 fi
+# Installation may run with umask 077. Allow the web service to traverse the
+# application root while keeping configuration and session data restricted.
+chown "root:${WEB_USER}" "${ROOT}"
+chmod 750 "${ROOT}"
 if [[ ! -f ${ROOT}/config.inc.php ]]; then
  SECRET=$(openssl rand -hex 16)
  cat > "${ROOT}/config.inc.php" <<'PHP'
