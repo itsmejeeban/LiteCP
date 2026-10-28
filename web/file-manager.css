@@ -108,7 +108,7 @@
 :root[data-theme] body .fm-page .cpfm-header select{min-width:140px}
 :root[data-theme] body .fm-page .cpfm-header form button{height:30px;min-height:30px;padding:5px 12px;border:1px solid #357ebd!important;background:#428bca!important;color:#fff!important;font-size:12px;border-radius:2px}
 :root[data-theme] body .fm-page .cpfm-settings{height:30px;min-height:30px;padding:5px 10px;font-size:12px!important;line-height:18px;background:#fff!important;color:#333!important;border:1px solid #ccc!important;border-radius:2px}
-:root[data-theme] body .fm-page .file-toolbar{min-height:34px;padding:0!important;gap:0!important;background:#eaeaea!important;border-bottom:1px solid #c1c6cb!important;overflow:auto!important;scrollbar-width:thin;flex-wrap:nowrap!important}
+:root[data-theme] body .fm-page .file-toolbar{min-height:34px;padding:0!important;gap:0!important;background:#eaeaea!important;border-bottom:1px solid #c1c6cb!important;overflow:visible!important;flex-wrap:wrap!important}
 :root[data-theme] body .fm-page .file-toolbar .fm-tool{min-height:34px;height:34px;padding:6px!important;font-size:14px!important;font-weight:400!important;line-height:20px;gap:5px!important;background:transparent!important;color:#333!important;border:1px solid transparent!important;border-radius:0!important}
 :root[data-theme] body .fm-page .file-toolbar .fm-tool:hover:not(:disabled){background:#ddd!important;color:#000!important;text-decoration:none}
 :root[data-theme] body .fm-page .file-toolbar .fm-tool:disabled{color:#aaa!important;opacity:1!important}

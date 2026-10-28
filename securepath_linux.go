@@ -33,6 +33,30 @@ func openSecureRoot(root string) (int, error) {
 	return unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 }
 
+// Some systemd sandbox filters return ENOSYS for openat2. Walk each directory
+// through a held descriptor instead, refusing symlinks at every component.
+func openManagedAtFallback(rootFD int, relative string, flags int, mode uint32) (int, error) {
+	clean, err := cleanSecureRelative(relative)
+	if err != nil {
+		return -1, err
+	}
+	parts := strings.Split(clean, string(os.PathSeparator))
+	parent, err := unix.Openat(rootFD, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, err
+	}
+	defer func() { _ = unix.Close(parent) }()
+	for _, part := range parts[:len(parts)-1] {
+		next, err := unix.Openat(parent, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != nil {
+			return -1, err
+		}
+		_ = unix.Close(parent)
+		parent = next
+	}
+	return unix.Openat(parent, parts[len(parts)-1], flags|unix.O_NOFOLLOW|unix.O_CLOEXEC, mode)
+}
+
 func secureOpenManaged(root, relative string, flags int, mode os.FileMode) (*os.File, error) {
 	clean, err := cleanSecureRelative(relative)
 	if err != nil {
@@ -47,6 +71,9 @@ func secureOpenManaged(root, relative string, flags int, mode os.FileMode) (*os.
 	flags |= unix.O_NONBLOCK
 	how := &unix.OpenHow{Flags: uint64(flags | unix.O_CLOEXEC | unix.O_NOFOLLOW), Mode: uint64(mode.Perm()), Resolve: managedResolveFlags}
 	fd, err := unix.Openat2(rootFD, clean, how)
+	if errors.Is(err, unix.ENOSYS) {
+		fd, err = openManagedAtFallback(rootFD, clean, flags, uint32(mode.Perm()))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("open managed path: %w", err)
 	}
@@ -74,6 +101,9 @@ func secureParent(root, relative string) (int, string, error) {
 	parent := filepath.Dir(clean)
 	how := &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_DIRECTORY | unix.O_CLOEXEC | unix.O_NOFOLLOW, Resolve: managedResolveFlags}
 	parentFD, err := unix.Openat2(rootFD, parent, how)
+	if errors.Is(err, unix.ENOSYS) {
+		parentFD, err = openManagedAtFallback(rootFD, parent, unix.O_RDONLY|unix.O_DIRECTORY, 0)
+	}
 	_ = unix.Close(rootFD)
 	if err != nil {
 		return -1, "", fmt.Errorf("open managed parent: %w", err)

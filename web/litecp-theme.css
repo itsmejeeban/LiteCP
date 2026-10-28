@@ -356,6 +356,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
   display:block;width:20px;height:20px;min-width:20px;flex:0 0 20px;
   fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
 }
+:root[data-theme] .row-actions button.danger>svg,
+:root[data-theme] .row-actions button.danger>svg>* {color:#fff!important;stroke:#fff!important;opacity:1;}
+:root[data-theme] .main-content .panel {scroll-margin-top:76px;}
 :root[data-theme] #sitesTable .row-actions button,
 :root[data-theme] #sitesTable .row-actions button:hover {
   background:transparent!important;
