@@ -282,7 +282,7 @@ func (s *Store) Initialize(username, password string) error {
 	s.cfg = Config{
 		SchemaVersion:      5,
 		Admin:              Admin{Username: username, PasswordHash: hash},
-		Settings:           Settings{Timezone: "UTC", BackupRetention: 14, EmailHostingEnabled: true, Resolvers: []string{"8.8.8.8", "8.8.4.4"}},
+		Settings:           Settings{Timezone: "Asia/Kolkata", BackupRetention: 14, EmailHostingEnabled: true, Resolvers: []string{"8.8.8.8", "8.8.4.4"}},
 		Sites:              []Site{},
 		Backups:            []Backup{},
 		BackupDestinations: []BackupDestination{},
