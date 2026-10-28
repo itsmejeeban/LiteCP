@@ -4,7 +4,7 @@ class SnapshotTests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);s.BASE=self.root/'snapshots';s.BASE.mkdir();s.ROOTS={'panel':str(self.root/'panel'),'websites':str(self.root/'websites')};s.EXCLUDE={};s.osinfo=lambda:('testos','1')
   for p in s.ROOTS.values():pathlib.Path(p).mkdir()
-  pathlib.Path(s.ROOTS['panel'],'config.json').write_text('{"admin":{"username":"qa","passwordHash":"test-hash"},"sites":[],"databases":[],"mailboxes":[]}');pathlib.Path(s.ROOTS['websites'],'index.php').write_text('<?php echo "snapshot";')
+  pathlib.Path(s.ROOTS['panel'],'config.json').write_text('{"admin":{"username":"qa","passwordHash":"pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000"},"sites":[],"databases":[],"mailboxes":[]}');pathlib.Path(s.ROOTS['websites'],'index.php').write_text('<?php echo "snapshot";')
   s.config=lambda:json.loads(pathlib.Path(s.ROOTS['panel'],'config.json').read_text());s.managed_configs=lambda:[]
  def tearDown(self):self.tmp.cleanup()
  def test_round_trip_checksums_modes_and_stage(self):

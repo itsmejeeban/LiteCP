@@ -175,12 +175,15 @@ def inspect(source,stage=None):
         if set(m['configs'])!=config_paths:raise ValueError('Configuration manifest mismatch')
         if 'data/panel/config.json' not in seen:raise ValueError('Panel configuration missing')
         panel=json.loads(z.read('data/panel/config.json'))
-        if not panel.get('admin',{}).get('username') or not panel.get('admin',{}).get('passwordHash'):raise ValueError('Snapshot administrator credentials are missing')
+        import re
+        password_hash=panel.get('admin',{}).get('passwordHash','')
+        if not panel.get('admin',{}).get('username') or not re.fullmatch(r'pbkdf2-sha256\$[0-9]+\$[a-fA-F0-9]{32}\$[a-fA-F0-9]{64}',password_hash):raise ValueError('Snapshot administrator credentials are missing or invalid')
         return m
 
 def restore(source,confirmation):
     if confirmation!='RESTORE ENTIRE LITECP':raise ValueError('Explicit restore confirmation required')
     stage=pathlib.Path(tempfile.mkdtemp(prefix='restore-stage-',dir=BASE));m=inspect(source,stage)
+    if m.get('testFixture'):raise ValueError('An inspection-only QA fixture cannot be restored')
     destination_cfg=config()
     cfg=json.loads((stage/'data/panel/config.json').read_text())
     if m.get('mysqlMajor') and run(['mysql','--protocol=socket','--user=root','--batch','--skip-column-names','-e','SELECT VERSION()']).decode().strip().split('.')[0]!=m['mysqlMajor']:raise ValueError('Install the same MySQL major version before restore')
