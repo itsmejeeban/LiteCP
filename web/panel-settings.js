@@ -54,6 +54,8 @@
   sidebar.addEventListener("click",event=>{if(!mobile.matches&&document.body.classList.contains("sidebar-collapsed")&&event.target.closest('.sidebar-group-toggle'))toggle.click();},true);
   mobile.addEventListener("change",()=>{sidebar.classList.remove("open");scrim.classList.remove("visible");syncSidebar();});
   syncSidebar();
+  const mobileOpen=document.createElement('button');mobileOpen.type='button';mobileOpen.className='icon-button mobile-navigation-toggle';mobileOpen.setAttribute('aria-label','Open navigation');mobileOpen.setAttribute('aria-controls','sidebar');mobileOpen.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';
+  document.querySelector('.topbar').prepend(mobileOpen);mobileOpen.addEventListener('click',()=>{if(mobile.matches)toggle.click();});
 
   const select=$("#settingsTimezone");
   select.setAttribute("aria-label","Display timezone");

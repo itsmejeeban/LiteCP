@@ -1,4 +1,4 @@
-/* File Manager styles. The final scoped reference rules isolate this workspace. */
+/* File Manager styles. The final scoped theme rules isolate this workspace. */
 .fm-html-tools{background:#eee;color:#333;border-bottom:1px solid #ccc;padding:7px 10px}
 .fm-html-tabs,.fm-html-format{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .fm-html-tabs{margin-bottom:7px}.fm-html-tabs span{margin-left:auto;color:#555;font:12px Arial}
@@ -155,7 +155,7 @@
 :root[data-theme] body .fm-page .fm-mode{font:14px/20px Arial,sans-serif!important;color:#333!important;background:transparent!important;border:0!important}
 :root[data-theme] body .fm-page .fm-footer{display:none!important}
 :root[data-theme] body .fm-page input[type=checkbox]{appearance:auto!important;width:14px!important;height:14px!important;min-height:0!important;margin:0!important;padding:0!important;accent-color:#428bca}
-@media(max-width:1000px){:root[data-theme] body .fm-page .cpfm-header{flex-wrap:wrap;height:auto;min-height:50px}:root[data-theme] body .fm-page .file-manager-panel{grid-template-rows:auto auto 44px 44px minmax(0,1fr)}:root[data-theme] body .fm-page .cpfm-header form{order:3;width:100%;padding-bottom:8px}:root[data-theme] body .fm-page .cpfm-navigation .fm-tool span{display:none}}
+@media(max-width:1280px){:root[data-theme] body .fm-page .cpfm-header{flex-wrap:wrap;height:auto;min-height:50px}:root[data-theme] body .fm-page .file-manager-panel{grid-template-rows:auto auto 44px 44px minmax(0,1fr)}:root[data-theme] body .fm-page .cpfm-header form{order:3;width:100%;min-width:0;padding-bottom:8px}:root[data-theme] body .fm-page .cpfm-header input{min-width:0;flex:1}:root[data-theme] body .fm-page .cpfm-navigation .fm-tool span{display:none}}
 .fm-page > .page-heading {display:none;}
 .fm-page .page-heading h1 {font-size:30px;}
 .fm-page .compact-select select {font-size:13px;min-width:230px;}
@@ -334,3 +334,27 @@ body.fm-fullscreen-open { overflow: hidden; }
 .fm-page.fm-fullscreen{padding:0!important;background:#fff!important}.fm-page.fm-fullscreen .file-manager-panel{height:100vh}.fm-page.fm-fullscreen .fm-body{height:auto!important;min-height:0!important}
 @media(max-width:900px){.fm-page .file-manager-panel{grid-template-columns:260px minmax(0,1fr)}.cpfm-header{flex-wrap:wrap;padding:8px}.cpfm-header form{order:3;width:100%}.cpfm-header input{flex:1;width:auto}.fm-page .fm-address{grid-template-columns:42px 1fr 48px}.cpfm-navigation .fm-tool span{display:none}.cpfm-navigation .fm-tool{padding:8px}.fm-page .fm-body{--fm-tree-width:260px;min-height:420px!important}}
 @media(max-width:650px){.fm-page .file-manager-panel{display:block}.cpfm-header form label,.cpfm-header form span,.cpfm-header select{display:none}.cpfm-settings{padding:0 9px}.cpfm-settings{font-size:0}.cpfm-navigation{height:auto;min-height:45px}.fm-page .fm-address,.cpfm-collapse{display:none!important}.fm-page .fm-body{display:block!important;height:calc(100vh - 205px)!important}.fm-page .fm-folders,.fm-resizer{display:none!important}.fm-page .fm-table th:nth-child(4),.fm-page .fm-table td:nth-child(4),.fm-page .fm-table th:nth-child(5),.fm-page .fm-table td:nth-child(5){display:none!important}}
+
+/* Keep the established file layout while following the panel's dark-only theme. */
+:root[data-theme="dark"] body .fm-page {--paper:#0d0d0d;--ink:#e6e6e6;--muted:#aaa;--line:#333;--surface-soft:#171717;--teal:#7e9fbe;--mint:#253849;--mint-2:#253849;color-scheme:dark;color:var(--ink)!important;background:var(--paper)!important;}
+:root[data-theme="dark"] body .fm-page :is(.file-manager-panel,.fm-body,.fm-folders,.fm-content,.fm-address,.fm-tree-row,.fm-tree-row.active,.fm-resizer,.cpfm-navigation,.fm-cards) {background:#0d0d0d!important;color:#e6e6e6!important;border-color:#333!important;}
+:root[data-theme="dark"] body .fm-page :is(.file-toolbar,.fm-table th,.cpfm-collapse,.fm-address label,.fm-address .fm-home,.fm-address .button) {background:#171717!important;color:#cbd5df!important;border-color:#3b3b3b!important;}
+:root[data-theme="dark"] body .fm-page .cpfm-header :is(input,select),:root[data-theme="dark"] body .fm-page .fm-address input {background:#171717!important;color:#e6e6e6!important;border-color:#444!important;}
+:root[data-theme="dark"] body .fm-page :is(.fm-tree-row button,.fm-name,.fm-mode,.fm-table td) {color:#e6e6e6!important;background:transparent!important;border-color:#333!important;}
+:root[data-theme="dark"] body .fm-page .fm-table,:root[data-theme="dark"] body .fm-page .fm-table tbody tr {background:#0d0d0d!important;color:#e6e6e6!important;}
+:root[data-theme="dark"] body .fm-page .fm-table tbody tr:nth-child(even) {background:#141414!important;}
+:root[data-theme="dark"] body .fm-page .fm-table tbody tr:hover,:root[data-theme="dark"] body .fm-page .fm-tree-row:hover {background:#202a34!important;}
+:root[data-theme="dark"] body .fm-page .fm-table tbody tr.fm-selected {background:#253849!important;}
+:root[data-theme="dark"] body .fm-page .file-toolbar .fm-tool {color:#ddd!important;}
+:root[data-theme="dark"] body .fm-page .file-toolbar .fm-tool:disabled {color:#777!important;}
+:root[data-theme="dark"] body .fm-page .file-toolbar .fm-tool:hover:not(:disabled) {color:#fff!important;background:#293548!important;}
+:root[data-theme="dark"] body .fm-page .cpfm-navigation .fm-tool {color:#8cb0ce!important;}
+:root[data-theme="dark"] body .fm-page .fm-tree-root-icons .fm-icon:last-child {color:#bbb!important;}
+:root[data-theme="dark"] body .fm-page .fm-context,:root[data-theme="dark"] body .fm-page .fm-context button {color:#ddd!important;background:#171717!important;border-color:#444!important;}
+:root[data-theme="dark"] body .fm-page .fm-context button:hover {background:#293548!important;}
+:root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog),:root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) .fm-dialog-body {background:#111!important;color:#ddd!important;color-scheme:dark;border-color:#444!important;}
+:root[data-theme="dark"] #fmActionDialog :is(.fm-dialog-body>p,.fm-field,.fm-path-list,.fm-permission-grid) {color:#ddd!important;}
+:root[data-theme="dark"] #fmActionDialog .fm-field :is(input,select),:root[data-theme="dark"] #fmActionDialog .fm-path-input {background:#1c1c1c!important;color:#eee!important;border-color:#444!important;}
+:root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer {background:#171717!important;border-color:#444!important;}
+:root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer .button {background:#293548!important;color:#fff!important;border-color:#4b596b!important;}
+:root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer .fm-danger-button {background:#b83030!important;color:#fff!important;}

@@ -359,6 +359,11 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] .row-actions button.danger>svg,
 :root[data-theme] .row-actions button.danger>svg>* {color:#fff!important;stroke:#fff!important;opacity:1;}
 :root[data-theme] .main-content .panel {scroll-margin-top:76px;}
+.table-scroll {min-width:0;max-width:100%;overflow:auto;scrollbar-gutter:stable;}
+.table-scroll:focus-visible {outline:2px solid var(--teal);outline-offset:-2px;}
+#extensionsTable {min-width:0;max-width:100%;overflow:auto;scrollbar-gutter:stable;}
+.panel-head>* {min-width:0;}
+@media(max-width:720px){.table-panel .panel-head{min-width:0;flex-wrap:wrap;}.panel-head .search-box,.panel-head .search-box input{max-width:100%;}}
 :root[data-theme] #sitesTable .row-actions button,
 :root[data-theme] #sitesTable .row-actions button:hover {
   background:transparent!important;

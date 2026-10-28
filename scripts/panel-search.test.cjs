@@ -47,9 +47,9 @@ test('resource searches open the correct page and website result applies its dom
   const ui=panel();ui.query('MY.EXAMPLE.TEST');ui.click('my.example.test');
   assert.deepEqual(ui.navigations,['websites']);assert.equal(ui.node('#siteSearch').value,'my.example.test');assert.deepEqual(ui.eventTypes,['input']);
   ui.query('customer_database');ui.click('customer_database');assert.equal(ui.navigations.at(-1),'databases');
-  ui.query('admin@example.test');ui.click('admin@example.test');assert.equal(ui.navigations.at(-1),'email');
+  ui.query('admin@example.test');ui.click('admin@example.test');assert.equal(ui.navigations.at(-1),'email/mailboxes');
   ui.query('DNS resolvers');ui.click('DNS resolvers');assert.equal(ui.navigations.at(-1),'settings/dns');
-  ui.query('remote backup destinations');ui.click('Remote backup destinations');assert.equal(ui.navigations.at(-1),'settings/backups');
+  ui.query('remote backup destinations');ui.click('Remote backup destinations');assert.equal(ui.navigations.at(-1),'backups/add-destination');
 });
 test('keyboard selection, Enter, Escape and Ctrl+K work without invoking settings actions',()=>{
   const ui=panel();ui.query('hosting');assert.equal(ui.input.attributes['aria-expanded'],'true');
@@ -73,7 +73,7 @@ test('result labels use text nodes rather than interpreting domain markup',()=>{
 });
 test('search sits below the logo and results are outside the scrolling sidebar',()=>{
   const ui=panel();assert.ok(ui.node('.sidebar-brand').insertedAfter);assert.ok(ui.document.body.children.includes(ui.dropdown));
-  ui.query('dns');assert.equal(ui.dropdown.style.width,'420px');assert.equal(ui.dropdown.style.left,'12px');assert.equal(ui.dropdown.style.top,'118px');
+  ui.query('dns');assert.equal(ui.dropdown.style.width,'440px');assert.equal(ui.dropdown.style.left,'12px');assert.equal(ui.dropdown.style.top,'118px');
   ui.node('#sidebar').handlers.scroll();assert.equal(ui.dropdown.hidden,true);
 });
 test('keyboard shortcut reveals hidden navigation and narrow results stay inside the viewport',()=>{
