@@ -910,7 +910,7 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) (content string) {
- defer func(){content=suspensionConfig(content,site.Suspended)}()
+ defer func(){content=suspensionSiteConfig(content,site,site.Suspended)}()
  if site.Application!=nil {return s.applicationNginx(site)}
 	applicationRules := `    location = /configuration.php { deny all; }
     location ^~ /crons/ { deny all; }`

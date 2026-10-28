@@ -5,9 +5,19 @@ func suspensionConfig(content string,suspended bool)string{
  content=strings.ReplaceAll(content,suspensionDirective,"")
  if suspended{content=strings.ReplaceAll(content,"server {","server {"+suspensionDirective)};return content
 }
+const suspensionTLSMarker = "# LITECP_SUSPENSION_TLS_GUARD\n"
+func suspensionSiteConfig(content string, site Site, suspended bool) string {
+ if i:=strings.Index(content,suspensionTLSMarker);i>=0 {content=content[:i]}
+ content=suspensionConfig(content,suspended)
+ // An HTTP-only domain must never fall through to another website's TLS host.
+ if suspended && !strings.Contains(content,"ssl_certificate ") && domainPattern.MatchString(site.Domain) {
+  content+=suspensionTLSMarker+"server {\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    server_name "+site.Domain+";\n    ssl_reject_handshake on;\n}\n"
+ }
+ return content
+}
 func(s *System) setSuspension(ctx context.Context,site Site,suspended bool)error{
  if s.demo{return nil};path,_:=s.nginxPaths(site.Domain);old,err:=os.ReadFile(path);if err!=nil{return err}
- updated:=suspensionConfig(string(old),suspended);if updated==string(old){return nil}
+ updated:=suspensionSiteConfig(string(old),site,suspended);if updated==string(old){return nil}
  if err=writeAtomic(path,[]byte(updated),0644);err!=nil{return err}
  rollback:=func(cause error)error{restore:=writeAtomic(path,old,0644);_,reload:=runCommand(context.Background(),15*time.Second,"systemctl","reload","nginx");return fmt.Errorf("suspension change failed: %v (restore: %v, reload: %v)",cause,restore,reload)}
  if _,err=runCommand(ctx,15*time.Second,"nginx","-t");err!=nil{return rollback(err)}
