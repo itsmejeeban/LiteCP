@@ -18,3 +18,10 @@
   body.sidebar-collapsed #sidebar .sidebar-group-chevron {display:none!important;}
   body.sidebar-collapsed #sidebar .nav-item {font-size:0;}
 }
+
+/* Show only the sidebar collapse/expand glyph. */
+:root[data-theme] #sidebarBottomToggle,
+:root[data-theme] #sidebarBottomToggle:hover,
+:root[data-theme] #sidebarBottomToggle:active {
+ background:transparent!important;border-color:transparent!important;box-shadow:none;
+}
