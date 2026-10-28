@@ -516,6 +516,7 @@ func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
 		return nil
 	}
 	_, err = runCommand(ctx, 90*time.Second, "certbot", "--nginx", "--domain", site.Domain, "--non-interactive", "--agree-tos", "--email", email, "--redirect")
+ if err == nil && site.Suspended { return s.setSuspension(ctx, site, true) }
 	return err
 }
 
