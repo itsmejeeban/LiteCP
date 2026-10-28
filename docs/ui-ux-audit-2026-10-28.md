@@ -34,7 +34,7 @@ All rows below are **FIXED AND VERIFIED** through browser observations, focused 
 | 8 | Functional: `web/overview-environment.js` | Environment inventory requested protected data before authenticated state existed, producing an initial 401. Wait for panel state. | Final browser run has no failed API responses. |
 | 9 | Encoding: `web/overview-environment.js`, `scripts/text-encoding.test.cjs` | An invalid UTF-8 byte corrupted a placeholder. Replaced it and made the encoding regression check reject malformed UTF-8. | Encoding test and syntax checks pass. |
 | 10 | Functional: `web/website-ftp.js` | Successful creation closed the dialog before cleanup, leaving its busy state set. Cleanup now matches request/site identity independently of dialog visibility while preserving stale-request protection. | Existing popup regression tests pass, including subsequent operations. No real FTP account was created. |
-| 11 | Dark-theme CSS: `web/file-manager.css` | Legacy light File Manager rules overrode panel theme, including alternating white rows. Added scoped dark surfaces/text for workspace, context menu and action dialogs. | Screenshot review and dialog geometry at phone, tablet and desktop widths. |
+| 11 | Dark-theme CSS: `web/file-manager.css` | Legacy light File Manager rules overrode panel theme, including alternating white rows and search-result buttons. Added scoped dark surfaces/text for workspace, context menu, search results and action dialogs. | Screenshot review and dialog geometry at phone, tablet and desktop widths; search-result text contrast visually rechecked. |
 
 `web/index.html` has new asset versions so existing browsers fetch the corrected files. `scripts/panel-search.test.cjs` was aligned with the already implemented submenu destinations and current result-panel width; this was a stale test expectation, not a search behavior change.
 
@@ -58,6 +58,8 @@ Five primary dialogs were opened separately: website creation, database creation
 `scripts/ui-browser-audit.cjs` launches isolated headless Chrome using Playwright, with credentials supplied only by environment variables. It blocks hosting API mutations, permits login/logout, waits for requests and finite animations, visits sidebar routes, records geometry/errors, and saves screenshots. Local-asset overrides allow checking candidate CSS/JS against real test-server data before deployment.
 
 Local evidence is under `docs/ui-audit-2026-10-28/`: `final/results.json` contains the 352-route matrix; `dialogs-final/results.json` contains extended dialog/navigation checks; `dark-final/` contains the final dark File Manager screenshots. Evidence screenshots are local artifacts, not bundled in a ZIP. The runner requires an existing Playwright installation and Chrome; it does not install dependencies.
+
+The `bc77ed5` build was deployed with the previous binary and configuration retained under `/var/backups/litecp/browser-audit-20261028-bc77ed5`. Only LiteCP restarted. The version endpoint reported the correct build, the service was active, and the hosted website returned HTTP 200. `deployed/results.json` repeats all 352 observations against delivered assets, with no JavaScript errors, failed API responses, page overflow, clipped controls or unnamed visible buttons. The subsequent search-dialog-only correction was candidate-tested separately in `search-verified/` before its deployment.
 
 ## Remaining verification limits
 

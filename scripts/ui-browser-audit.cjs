@@ -130,6 +130,10 @@ fs.mkdirSync(output, { recursive: true });
       await page.screenshot({path:path.join(output,`${width}-file-workspace.png`)});
     }
     await page.setViewportSize({width:1440,height:1000});
+    await page.locator('#cpfmSearchInput').fill('license.txt');
+    await page.locator('#cpfmSearch button[type="submit"]').click();await settle();
+    report.interactions.push({name:'file-search-results',open:await page.locator('#fmActionDialog').isVisible(),background:await page.locator('.fm-search-results .fm-dialog-body').evaluate(node=>getComputedStyle(node).backgroundColor)});
+    await page.screenshot({path:path.join(output,'1440-file-search.png')});await page.keyboard.press('Escape');
     await page.evaluate(()=>window.LiteCP.goToFilePath('public_html'));
     await settle();
     const license=page.locator('[data-fm-row]').filter({hasText:'license.txt'}).first();

@@ -358,3 +358,9 @@ body.fm-fullscreen-open { overflow: hidden; }
 :root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer {background:#171717!important;border-color:#444!important;}
 :root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer .button {background:#293548!important;color:#fff!important;border-color:#4b596b!important;}
 :root[data-theme="dark"] #fmActionDialog:not(.fm-search-dialog) footer .fm-danger-button {background:#b83030!important;color:#fff!important;}
+:root[data-theme="dark"] #fmActionDialog.fm-search-dialog,:root[data-theme="dark"] #fmActionDialog .fm-search-results,:root[data-theme="dark"] #fmActionDialog .fm-search-results :is(.fm-dialog-body,.fm-search-table,.fm-table td) {background:#111!important;color:#ddd!important;border-color:#444!important;color-scheme:dark;}
+:root[data-theme="dark"] #fmActionDialog .fm-search-results :is(footer,.fm-table th) {background:#171717!important;color:#cbd5df!important;border-color:#444!important;}
+:root[data-theme="dark"] #fmActionDialog .fm-search-results .fm-table tbody tr:nth-child(even) td {background:#171717!important;}
+:root[data-theme="dark"] #fmActionDialog .fm-search-results .fm-search-result {background:transparent!important;color:#ddd!important;}
+:root[data-theme="dark"] #fmActionDialog .fm-search-results .fm-search-result:hover {color:#fff!important;background:#293548!important;}
+:root[data-theme="dark"] #fmActionDialog::backdrop {background:rgb(0 0 0 / .65)!important;}
