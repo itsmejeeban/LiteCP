@@ -119,9 +119,10 @@ func (s *System) syncDKIM(ctx context.Context, domains []MailDomain) error {
 			return err
 		}
 	}
-	// The installer grants the OpenDKIM group access to this dedicated subtree.
+	// This subtree is writable in the panel's service sandbox. Run directly:
+	// passing service pipe descriptors through a nested transient unit can fail.
 	if _, err := os.Stat("/etc/litecp/mail/dkim"); err == nil {
-		if _, err := runHostCommand(ctx, 15*time.Second, "chown", "-R", "opendkim:opendkim", "/etc/litecp/mail/dkim"); err != nil {
+		if _, err := runCommand(ctx, 15*time.Second, "chown", "-R", "opendkim:opendkim", "/etc/litecp/mail/dkim"); err != nil {
 			return err
 		}
 	}

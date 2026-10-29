@@ -299,6 +299,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-ftp]::before {background-position:16.6667% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-backup]::before {background-position:33.3333% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-cron-jobs]::before,
 :root[data-theme] #sitesTable .row-actions button[data-site-action="cron"]::before {background-position:50% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="files"]::before {background-position:66.6667% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-image:url('assets/remove-website.svg');background-size:26px 26px;background-position:center;}
@@ -375,6 +376,24 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
   border-color:transparent!important;
   box-shadow:none!important;
 }
+
+/* Keep the website summary compact instead of distributing small columns
+   across the entire panel. Actions intentionally receive the spare width. */
+#sitesTable {max-width:100%;overflow-x:auto;}
+#sitesTable .websites-table {table-layout:fixed;min-width:1060px;}
+#sitesTable .website-col-domain {width:20%;}
+#sitesTable .website-col-application {width:10%;}
+#sitesTable .website-col-runtime {width:10%;}
+#sitesTable .website-col-size {width:7%;}
+#sitesTable .website-col-actions {width:53%;}
+#sitesTable .websites-table th:nth-child(2),
+#sitesTable .websites-table th:nth-child(3),
+#sitesTable .websites-table th:nth-child(4),
+#sitesTable .websites-table td:nth-child(2),
+#sitesTable .websites-table td:nth-child(3),
+#sitesTable .websites-table td:nth-child(4) {text-align:center;}
+#sitesTable .websites-table td:last-child {padding-left:10px;padding-right:10px;}
+#sitesTable .websites-table .row-actions {justify-content:flex-start;flex-wrap:nowrap;}
 
 /* Keep SSL action labels and controls centered within their column. */
 [data-ssl-table] th:last-child,

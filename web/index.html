@@ -14,10 +14,10 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=full-width-picker-6">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
-  <link rel="stylesheet" href="litecp-theme.css?v=suspension-native-11">
+  <link rel="stylesheet" href="litecp-theme.css?v=websites-compact-12">
   <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
-  <link rel="stylesheet" href="file-manager.css?v=responsive-audit-9">
+  <link rel="stylesheet" href="file-manager.css?v=server-explorer-1">
   <link rel="stylesheet" href="close-buttons.css?v=cpanel-dialog-2">
   <link rel="stylesheet" href="sidebar-icons.css?v=file-picker-5">
   <link rel="stylesheet" href="brand-logo.css?v=1">
@@ -29,7 +29,10 @@
   <link rel="stylesheet" href="backup-tabs.css?v=1">
   <link rel="stylesheet" href="migration-tabs.css?v=1">
   <link rel="stylesheet" href="overview-icons.css?v=1">
-  <link rel="stylesheet" href="analytics.css?v=aligned-controls-2">
+  <link rel="stylesheet" href="analytics.css?v=disk-donut-2">
+  <link rel="stylesheet" href="vendor/xterm/xterm.css">
+  <link rel="stylesheet" href="terminal.css?v=interactive-2">
+  <link rel="stylesheet" href="website-list.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
 <body>
@@ -88,6 +91,8 @@
         <a class="nav-item" href="#services" data-page="services"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/></svg><span>Services</span></a>
         <a class="nav-item" href="#backups" data-page="backups"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg><span>Backups</span></a>
         <a class="nav-item" href="#logs" data-page="logs"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg><span>Logs</span></a>
+        <a class="nav-item" href="#terminal" data-page="terminal"><img src="assets/sidebar/terminal.svg" alt="" width="22" height="22"><span>Terminal</span></a>
+        <a class="nav-item" href="#server-files" data-page="server-files"><img src="assets/sidebar/files.svg" alt="" width="22" height="22"><span>Server File Explorer</span></a>
         <a class="nav-item" href="#firewall" data-page="firewall"><svg viewBox="0 0 24 24"><path d="M4 4h16v5H4zM4 15h16v5H4zM7 9v6M17 9v6M12 4v5M12 15v5"/></svg><span>Firewall</span></a>
         <a class="nav-item" href="#settings" data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>Settings</span></a>
       </nav>
@@ -193,6 +198,14 @@
           <article class="panel log-panel"><div class="log-toolbar"><label><span>Log source</span><select id="logTarget"><option value="nginx-error">Nginx error log</option><option value="nginx-access">Nginx access log</option><option value="php">PHP-FPM journal</option><option value="database">Database journal</option><option value="mail">Postfix and Dovecot journal</option><option value="cron">Cron journal</option></select></label><span class="log-live"><span class="pulse-dot"></span>Last 100 entries</span></div><pre class="log-viewer" id="logViewer"><code>Select a source to load logs.</code></pre></article>
         </section>
 
+        <section class="page" data-page-view="terminal">
+          <div class="page-heading"><div><h1>Terminal</h1><p>Interactive server shell.</p></div></div>
+          <article class="panel terminal-panel">
+            <div class="terminal-actions"><button class="button button-primary" id="terminalConnect" type="button">Connect</button><button class="button button-danger" id="terminalDisconnect" type="button" disabled>Disconnect</button><button class="button button-secondary" id="terminalClear" type="button">Clear</button><button class="button button-secondary" id="terminalFullscreen" type="button">Full screen</button><span id="terminalStatus" role="status" aria-live="polite">Disconnected</span></div>
+            <div id="interactiveTerminal" aria-label="Interactive server terminal"></div>
+          </article>
+        </section>
+
         <section class="page" data-page-view="settings">
           <div class="page-heading"><div><span class="eyebrow">PREFERENCES</span><h1>Settings</h1><p>Configure safe defaults for LiteCP.</p></div></div>
           <div class="settings-grid">
@@ -234,12 +247,12 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=suspension-native-11" defer></script>
+  <script src="app.js?v=server-explorer-1" defer></script>
   <script src="features.js?v=single-mail-actions-2" defer></script>
   <script src="html-editor.js?v=2" defer></script>
-  <script src="file-manager.js?v=responsive-audit-8" defer></script>
+  <script src="file-manager.js?v=server-explorer-1" defer></script>
   <script src="panel-settings.js?v=responsive-audit-8" defer></script>
-  <script src="live-migration.js?v=compact-jobs-3" defer></script>
+  <script src="live-migration.js?v=1.0.25" defer></script>
   <script src="website-backups.js?v=concise-3" defer></script>
   <script src="activities.js?v=tooltip-2" defer></script>
   <script src="website-ftp.js?v=responsive-audit-8" defer></script>
@@ -247,7 +260,7 @@
   <script src="documentation.js?v=3" defer></script>
   <script src="application-hosting.js?v=dialogs-1" defer></script>
   <script src="database-popup.js?v=1" defer></script>
-  <script src="panel-search.js?v=backup-tabs-7" defer></script>
+  <script src="panel-search.js?v=server-explorer-1" defer></script>
   <script src="settings-tabs.js?v=backup-tabs-5" defer></script>
   <script src="security-pages.js?v=responsive-audit-8" defer></script>
   <script src="website-tool-pages.js?v=1" defer></script>
@@ -269,7 +282,10 @@
   <script src="update-notice.js?v=settings-2" defer></script>
   <script src="developer-mode.js?v=security-auth-2" defer></script>
   <script src="overview-environment.js?v=responsive-audit-8" defer></script>
-  <script src="analytics.js?v=1" defer></script>
-  <script src="migration-tabs.js?v=1" defer></script>
+  <script src="analytics.js?v=disk-donut-2" defer></script>
+  <script src="migration-tabs.js?v=completed-jobs-2" defer></script>
+  <script src="vendor/xterm/xterm.js" defer></script>
+  <script src="vendor/xterm/addon-fit.js" defer></script>
+  <script src="terminal.js?v=interactive-2" defer></script>
 </body>
 </html>

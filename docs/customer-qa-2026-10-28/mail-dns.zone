@@ -1,0 +1,4 @@
+$ORIGIN litimcsellcop.com.
+@ 300 IN TXT "v=spf1 mx -all"
+_dmarc 300 IN TXT "v=DMARC1; p=none; adkim=r; aspf=r"
+default._domainkey 300 IN TXT ("v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAx1tsuoviPjOC5yV8OkDWTjKOCsiPRvmDbzrBN8Th+WPosowsx6TtGHNRIrTgRUgma8N15iSRv1qnqDHO/3PZmht9mg0+ZAZlxmFtt8HhRbXB3uWcGvBXeV0efn7sCEDB+A5TqxcZfU" "l83nXvYigNOC9ts7Ev21rX98yTytJfzut4DZbH1CCpbQW3fzyp0z2asv6PDuNXgtjdApgjdrJtbq2hw+JKC8+fvE7L/CekuAU7x8pYMzTtEk98HJFbq6T8KCpXC9UdGaCAp+i1q4qy04RztqH37CSi1jiOII7ohB1QHF+MpzFCSUzjx15C5XnuMVjYeSHqT4DsheBWi9" "Ai/QIDAQAB")

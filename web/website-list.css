@@ -1,0 +1,1 @@
+.website-size{white-space:nowrap;color:var(--muted)}.website-pagination{display:flex;align-items:center;gap:14px}.website-pagination span{flex:1;text-align:center;color:var(--muted)}.website-pagination .button{min-width:96px}@media(max-width:720px){.website-pagination{flex-wrap:wrap;justify-content:center}.website-pagination span{order:-1;flex:0 0 100%}}

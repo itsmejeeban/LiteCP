@@ -41,4 +41,10 @@
 .live-capture-form .migration-source-website>span{min-width:0;flex:1;}
 .live-capture-form .migration-source-website>button{flex-shrink:0;margin-right:2px;}
 .live-capture-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:4px;}
+.migration-stage-list{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:6px;list-style:none;margin:8px 0 18px;padding:0;}
+.migration-stage-list li{min-width:0;color:var(--muted);font-size:10px;text-align:center;text-transform:capitalize;}
+.migration-stage-list li span{display:grid;place-items:center;width:24px;height:24px;margin:0 auto 5px;border:1px solid var(--line);border-radius:50%;background:var(--paper);font-size:11px;font-weight:700;}
+.migration-stage-list li.done span{border-color:#278060;background:#18372d;color:#9ad9be;}
+.migration-stage-list li.current{color:var(--ink);font-weight:700;}.migration-stage-list li.current span{border-color:#438de0;background:#17324e;color:#b9d9ff;box-shadow:0 0 0 2px rgba(67,141,224,.15);}
 @media(max-width:650px){.live-capture-form .migration-website-picker{grid-template-columns:minmax(0,1fr);}}
+@media(max-width:760px){.migration-stage-list{grid-template-columns:repeat(3,1fr);row-gap:12px;}}

@@ -1,0 +1,97 @@
+{
+  "startedAt": "2026-10-28T10:17:30.819Z",
+  "tests": [
+    {
+      "name": "Administrator login through browser",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Website creation UI: litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Website creation UI: qa20261028-a.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Website creation UI: qa20261028-b.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Duplicate domain rejected",
+      "status": "PASS",
+      "detail": "Duplicate rejected"
+    },
+    {
+      "name": "File Manager website picker and workspace",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Create directory through File Manager",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Create file through File Manager",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Edit text and verify saved content",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Directory traversal rejected",
+      "status": "PASS",
+      "detail": "Traversal rejected"
+    },
+    {
+      "name": "Cross-website path rejected",
+      "status": "PASS",
+      "detail": "Other website absolute path rejected"
+    },
+    {
+      "name": "Upload HTML and PHP through File Manager",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "PHP HTTP response executes database query",
+      "status": "PASS",
+      "detail": "Real HTTP request returned database row"
+    },
+    {
+      "name": "HTML browser rendering",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Session persists across refresh",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Unauthenticated API denied",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Cross-origin mutation rejected",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Independent runtime identities",
+      "status": "PASS",
+      "detail": "Distinct website runtime UIDs"
+    }
+  ],
+  "errors": [],
+  "completedAt": "2026-10-28T10:17:52.376Z"
+}

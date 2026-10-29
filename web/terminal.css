@@ -1,0 +1,7 @@
+.terminal-panel{max-width:none;overflow:hidden}.terminal-form{display:grid;gap:16px;padding:20px}.terminal-cwd{max-width:720px}.terminal-form textarea{min-height:88px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.terminal-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.terminal-actions #terminalStatus{color:var(--muted);font-size:13px}.terminal-output{min-height:360px;max-height:58vh;margin:0;padding:20px;overflow:auto;border-top:1px solid var(--line);background:#050505;color:#d7e2ed;font:14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:720px){.terminal-form{padding:16px}.terminal-output{min-height:300px;padding:16px}}
+.terminal-panel .terminal-actions{padding:12px 16px;border-bottom:1px solid var(--line)}
+#interactiveTerminal{height:calc(100vh - 255px);min-height:360px;background:#0b1017;padding:12px;box-sizing:border-box;overflow:hidden}
+.terminal-panel:fullscreen{display:flex;flex-direction:column;background:#0b1017;border:0;border-radius:0}
+.terminal-panel:fullscreen #interactiveTerminal{flex:1;height:auto;min-height:0}
+#interactiveTerminal .xterm{height:100%}
+#interactiveTerminal .xterm-viewport{scrollbar-width:thin}

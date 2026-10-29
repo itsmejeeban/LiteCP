@@ -1,0 +1,97 @@
+{
+  "startedAt": "2026-10-28T09:55:50.025Z",
+  "tests": [
+    {
+      "name": "Administrator login through browser",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Website creation UI: litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Already present; preserved, not recreated"
+    },
+    {
+      "name": "Website creation UI: qa20261028-a.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Stored website and associated database"
+    },
+    {
+      "name": "Website creation UI: qa20261028-b.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Stored website and associated database"
+    },
+    {
+      "name": "Duplicate domain rejected",
+      "status": "PASS",
+      "detail": "Duplicate rejected"
+    },
+    {
+      "name": "File Manager website picker and workspace",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Create directory through File Manager",
+      "status": "FAIL",
+      "detail": "Directory missing"
+    },
+    {
+      "name": "Create file through File Manager",
+      "status": "FAIL",
+      "detail": "page.evaluate: Error: resolve website path: lstat /home/litecp/qa20261028-a.litimcsellcop.com/public_html/qa20261028: no such file or directory\n    at Object.api (http://127.0.0.1:19190/app.js?v=panel-port-4321:94:21)\n    at async <anonymous>:337:30"
+    },
+    {
+      "name": "Edit text and verify saved content",
+      "status": "FAIL",
+      "detail": "page.evaluate: Error: open managed path: no such file or directory\n    at Object.api (http://127.0.0.1:19190/app.js?v=panel-port-4321:94:21)\n    at async <anonymous>:337:30"
+    },
+    {
+      "name": "Directory traversal rejected",
+      "status": "PASS",
+      "detail": "Traversal rejected"
+    },
+    {
+      "name": "Cross-website path rejected",
+      "status": "PASS",
+      "detail": "Other website absolute path rejected"
+    },
+    {
+      "name": "Upload HTML and PHP through File Manager",
+      "status": "FAIL",
+      "detail": "PHP upload missing"
+    },
+    {
+      "name": "PHP HTTP response executes database query",
+      "status": "FAIL",
+      "detail": "PHP/database response failed: HTTP 404"
+    },
+    {
+      "name": "HTML browser rendering",
+      "status": "FAIL",
+      "detail": "HTML content mismatch"
+    },
+    {
+      "name": "Session persists across refresh",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Unauthenticated API denied",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Cross-origin mutation rejected",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Independent runtime identities",
+      "status": "PASS",
+      "detail": "Distinct website runtime UIDs"
+    }
+  ],
+  "errors": [],
+  "completedAt": "2026-10-28T09:56:15.998Z"
+}

@@ -1,0 +1,185 @@
+{
+  "startedAt": "2026-10-28T09:21:01.381Z",
+  "routes": [
+    "files"
+  ],
+  "checks": [
+    {
+      "width": 320,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    }
+  ],
+  "dialogs": [
+    {
+      "name": "create-website",
+      "open": 1
+    },
+    {
+      "name": "create-database",
+      "open": 1
+    },
+    {
+      "name": "website-cron",
+      "open": 1
+    },
+    {
+      "name": "website-ftp",
+      "open": 1
+    },
+    {
+      "name": "website-backups",
+      "open": 1
+    }
+  ],
+  "errors": [],
+  "failedRequests": [],
+  "blockedMutations": [],
+  "interactions": [
+    {
+      "name": "file-new-file",
+      "width": 290,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 290,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 290,
+      "open": true,
+      "height": 343,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 290,
+      "open": true,
+      "height": 407,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-search-results",
+      "open": true,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-context-edit",
+      "visible": true
+    },
+    {
+      "name": "file-copy",
+      "open": true
+    },
+    {
+      "name": "file-move",
+      "open": true
+    },
+    {
+      "name": "file-rename",
+      "open": true
+    },
+    {
+      "name": "file-chmod",
+      "open": true
+    },
+    {
+      "name": "file-archive",
+      "open": true
+    },
+    {
+      "name": "mobile-navigation-open",
+      "open": true
+    },
+    {
+      "name": "mobile-navigation-route",
+      "active": true
+    }
+  ],
+  "completedAt": "2026-10-28T09:21:18.392Z"
+}

@@ -29,8 +29,29 @@ def digest(path):
 def describe(path):
     return {'path':str(path), 'size':path.stat().st_size, 'sha256':digest(path)}
 
+def cleanup_cpanel_export(root, account):
+    """Remove only the two archives created for this cPanel migration job."""
+    removed = []
+    for name in ('cpmove-' + account + '.tar.gz', 'cpanel-website.tar.gz'):
+        archive = root / name
+        if archive.is_symlink():
+            raise RuntimeError('Refusing to remove a symbolic-link migration archive')
+        if archive.exists():
+            if not archive.is_file():
+                raise RuntimeError('Refusing to remove an unexpected migration archive path')
+            archive.unlink()
+            removed.append(name)
+    return removed
+
 def cpanel_portable(archive, portable):
-    website_files, skipped = 0, 0
+    website_files, private_files, skipped = 0, 0, 0
+    # cPanel applications commonly keep private source/configuration beside
+    # public_html. Preserve application-owned directories, but never copy
+    # account mail, credentials, logs, caches or other cPanel-managed areas.
+    excluded_home_directories = {
+        'public_html', 'public_ftp', 'mail', 'etc', 'logs', 'ssl', 'tmp',
+        '.cpanel', '.cphorde', '.htpasswds', '.ssh', '.trash', '.softaculous',
+    }
     with tarfile.open(archive,'r:*') as original, tarfile.open(portable,'w:gz') as target:
         for member in original:
             parts = pathlib.PurePosixPath(member.name).parts
@@ -39,6 +60,11 @@ def cpanel_portable(archive, portable):
                 destination = '/'.join(parts[parts.index('public_html'):])
             elif 'mysql' in parts and member.name.lower().endswith('.sql') and parts[-1].lower() != 'mysql.sql':
                 destination = 'mysql/' + parts[-1]
+            elif 'homedir' in parts:
+                home_index = parts.index('homedir')
+                relative = parts[home_index + 1:]
+                if relative and relative[0] not in excluded_home_directories and not relative[0].startswith('.'):
+                    destination = 'private_home/' + '/'.join(relative)
             if not destination:
                 continue
             if not (member.isfile() or member.isdir()):
@@ -58,7 +84,9 @@ def cpanel_portable(archive, portable):
                 target.addfile(info)
             if destination.startswith('public_html/') and member.isfile():
                 website_files += 1
-    return website_files, skipped
+            elif destination.startswith('private_home/') and member.isfile():
+                private_files += 1
+    return website_files, private_files, skipped
 
 def export(request):
     if os.geteuid() != 0:
@@ -85,7 +113,7 @@ def export(request):
         raise RuntimeError('Unsupported source platform')
     if mode == 'discover':
         return {'accounts':accounts, 'platform':platform, 'python':sys.version.split()[0]}
-    if mode != 'capture' or request.get('account') not in [x['id'] for x in accounts]:
+    if mode not in ('capture', 'cleanup') or request.get('account') not in [x['id'] for x in accounts]:
         raise RuntimeError('Select an account discovered on this source')
     account, job = request['account'], request['job']
     if not re.fullmatch(r'[A-Za-z0-9_-]{16,64}',job):
@@ -93,6 +121,13 @@ def export(request):
     if not re.fullmatch(r'[a-zA-Z0-9_.-]{1,253}', account) or account.startswith('-'):
         raise RuntimeError('Invalid account identifier')
     root = pathlib.Path('/root') / ('litecp-export-' + job)
+    if mode == 'cleanup':
+        if platform != 'cpanel':
+            raise RuntimeError('Source archive cleanup is supported only for cPanel migrations')
+        if not root.is_dir() or root.is_symlink():
+            raise RuntimeError('The cPanel migration export directory is missing or unsafe')
+        removed = cleanup_cpanel_export(root, account)
+        return {'sourceExport':str(root), 'warnings':['Removed verified source archive(s): ' + ', '.join(removed)] if removed else []}
     root.mkdir(mode=0o700, exist_ok=False)
     log = open(root/'export.log','x')
     os.chmod(root/'export.log',0o600)
@@ -138,7 +173,7 @@ def export(request):
             raise RuntimeError('The cPanel native archive was not created at its expected location')
         result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['The native archive retains account data. Website import does not activate mail, DNS, SSL, package settings or arbitrary cron jobs.']}
         portable = root/'cpanel-website.tar.gz'
-        website_files, skipped = cpanel_portable(archive, portable)
+        website_files, private_files, skipped = cpanel_portable(archive, portable)
         os.chmod(portable,0o600)
         if website_files:
             result['portable'] = describe(portable)
@@ -146,6 +181,8 @@ def export(request):
             result['warnings'].append('Primary public_html files were not found in a compatible native layout. The complete native archive is retained for manual review.')
         if skipped:
             result['warnings'].append(str(skipped) + ' website links/special entries require review; native account data remains retained.')
+        if private_files:
+            result['warnings'].append(str(private_files) + ' private application files beside public_html were captured for automatic restore.')
         return result
     # Preserve a complete native subscription backup, including Plesk's local
     # backup copy. The portable supplement is separate from that native backup.

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "1.0.10"
+var version = "1.0.28"
 var buildRevision = ""
 
 //go:embed web/*
@@ -56,22 +56,39 @@ type App struct {
 }
 
 func main() {
-	if len(os.Args)==3 && os.Args[1]=="capture-worker" {if err:=runLiveCaptureWorker(os.Args[2]);err!=nil{log.Fatal(err)};return}
-	if len(os.Args)>1 && os.Args[1]=="scan-server" { if err:=runServerScan();err!=nil{log.Fatal(err)};return }
+	if len(os.Args) == 3 && os.Args[1] == "capture-worker" {
+		if err := runLiveCaptureWorker(os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "scan-server" {
+		if err := runServerScan(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
- if len(os.Args)>1 && os.Args[1]=="ensure-default-resolvers" {
-  if os.Geteuid()!=0 {log.Fatal("ensure-default-resolvers requires root")}
-  ctx,cancel:=context.WithTimeout(context.Background(),2*time.Minute);defer cancel()
-  wanted:=[]string{"8.8.8.8","8.8.4.4"}
-  if !defaultResolversMatch(currentSystemResolvers()) {
-   if err:=NewSystem(dataDir).applyHostResolvers(ctx,wanted);err!=nil{log.Fatal(err)}
-   if err:=waitForDefaultResolvers(ctx,currentSystemResolvers);err!=nil{log.Fatal(err)}
-   log.Print("Restored Google DNS resolvers: 8.8.8.8, 8.8.4.4")
-  }
+	if len(os.Args) > 1 && os.Args[1] == "ensure-default-resolvers" {
+		if os.Geteuid() != 0 {
+			log.Fatal("ensure-default-resolvers requires root")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		wanted := []string{"8.8.8.8", "8.8.4.4"}
+		if !defaultResolversMatch(currentSystemResolvers()) {
+			if err := NewSystem(dataDir).applyHostResolvers(ctx, wanted); err != nil {
+				log.Fatal(err)
+			}
+			if err := waitForDefaultResolvers(ctx, currentSystemResolvers); err != nil {
+				log.Fatal(err)
+			}
+			log.Print("Restored Google DNS resolvers: 8.8.8.8, 8.8.4.4")
+		}
 
-  return
- }
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "host-resolvers" {
 		if os.Geteuid() != 0 {
 			log.Fatal("host-resolvers requires root")
@@ -123,26 +140,51 @@ func main() {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "snapshot-reconcile" {
-		if os.Geteuid() != 0 { log.Fatal("snapshot-reconcile requires root") }
-		ctx,cancel:=context.WithTimeout(context.Background(),10*time.Minute);defer cancel()
-		system:=NewSystem(dataDir)
-		if err:=system.reconcileWebsiteCron(store.Sites());err!=nil{log.Fatal(err)}
-		for _,site:=range store.Sites(){
-			if !domainPattern.MatchString(site.Domain){log.Fatal("invalid snapshot domain")}
-			path,enabled:=system.nginxPaths(site.Domain)
-			if enabled!=""{if _,err:=os.Lstat(enabled);os.IsNotExist(err){if err=os.Symlink(path,enabled);err!=nil{log.Fatal(err)}}}
-			if err:=system.reconcileSiteRuntime(ctx,site,path);err!=nil{log.Fatal(err)}
+		if os.Geteuid() != 0 {
+			log.Fatal("snapshot-reconcile requires root")
 		}
-		for _,site:=range store.Sites(){
-			if site.Application==nil || !site.Application.Enabled {continue}
-			app:=*site.Application
-			if err:=validateApplicationHosting(site,app);err!=nil{log.Fatal(err)}
-			if _,err:=runCommand(ctx,15*time.Second,"podman","container","exists",app.Container);err==nil{
-				_,_ = runCommand(ctx,30*time.Second,"podman","stop",app.Container)
-				if _,err=runCommand(ctx,15*time.Second,"podman","rename",app.Container,app.Container+"-recovery-"+time.Now().Format("20060102150405"));err!=nil{log.Fatal(err)}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		system := NewSystem(dataDir)
+		if err := system.reconcileWebsiteCron(store.Sites()); err != nil {
+			log.Fatal(err)
+		}
+		for _, site := range store.Sites() {
+			if !domainPattern.MatchString(site.Domain) {
+				log.Fatal("invalid snapshot domain")
 			}
-			if _,err:=runCommand(ctx,2*time.Minute,"podman",applicationContainerArgs(site,app,app.Container,app.Command,true)...);err!=nil{log.Fatal(err)}
-			if _,err:=runCommand(ctx,15*time.Second,"podman","update","--restart=always",app.Container);err!=nil{log.Fatal(err)}
+			path, enabled := system.nginxPaths(site.Domain)
+			if enabled != "" {
+				if _, err := os.Lstat(enabled); os.IsNotExist(err) {
+					if err = os.Symlink(path, enabled); err != nil {
+						log.Fatal(err)
+					}
+				}
+			}
+			if err := system.reconcileSiteRuntime(ctx, site, path); err != nil {
+				log.Fatal(err)
+			}
+		}
+		for _, site := range store.Sites() {
+			if site.Application == nil || !site.Application.Enabled {
+				continue
+			}
+			app := *site.Application
+			if err := validateApplicationHosting(site, app); err != nil {
+				log.Fatal(err)
+			}
+			if _, err := runCommand(ctx, 15*time.Second, "podman", "container", "exists", app.Container); err == nil {
+				_, _ = runCommand(ctx, 30*time.Second, "podman", "stop", app.Container)
+				if _, err = runCommand(ctx, 15*time.Second, "podman", "rename", app.Container, app.Container+"-recovery-"+time.Now().Format("20060102150405")); err != nil {
+					log.Fatal(err)
+				}
+			}
+			if _, err := runCommand(ctx, 2*time.Minute, "podman", applicationContainerArgs(site, app, app.Container, app.Command, true)...); err != nil {
+				log.Fatal(err)
+			}
+			if _, err := runCommand(ctx, 15*time.Second, "podman", "update", "--restart=always", app.Container); err != nil {
+				log.Fatal(err)
+			}
 		}
 		return
 	}
@@ -207,6 +249,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/system/reboot", only(http.MethodPost, a.withAuth(a.systemReboot)))
 	mux.HandleFunc("/api/services/action", only(http.MethodPost, a.withAuth(a.serviceAction)))
 	mux.HandleFunc("/api/sites", only(http.MethodPost, a.withAuth(a.createSite)))
+	mux.HandleFunc("/api/sites/sizes", only(http.MethodGet, a.withAuth(a.siteSizes)))
 	mux.HandleFunc("/api/sites/suspension", only(http.MethodPut, a.withAuth(a.siteSuspension)))
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
@@ -217,12 +260,13 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
 	mux.HandleFunc("/api/environment-inventory", a.withAuth(a.environmentInventory))
 	mux.HandleFunc("/api/analytics/usage", a.withAuth(a.usageAnalytics))
+	mux.HandleFunc("/api/analytics/disk-usage", a.withAuth(a.directoryDiskUsage))
 	mux.HandleFunc("/api/website-ftp", a.withAuth(a.websiteFTP))
 	mux.HandleFunc("/api/website-cron/run", only(http.MethodPost, a.withAuth(a.runWebsiteCron)))
 	mux.HandleFunc("/api/website-cron", a.withAuth(a.websiteCron))
 	mux.HandleFunc("/api/website-backups", a.withAuth(a.websiteBackups))
-	mux.HandleFunc("/api/website-backups/upload", only(http.MethodPost,a.withAuth(a.websiteBackupUpload)))
-	mux.HandleFunc("/api/website-backups/restore", only(http.MethodPost,a.withAuth(a.websiteBackupRestore)))
+	mux.HandleFunc("/api/website-backups/upload", only(http.MethodPost, a.withAuth(a.websiteBackupUpload)))
+	mux.HandleFunc("/api/website-backups/restore", only(http.MethodPost, a.withAuth(a.websiteBackupRestore)))
 	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
@@ -240,6 +284,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/system-snapshots/restore", only(http.MethodPost, a.withAuth(a.restoreSystemSnapshot)))
 	mux.HandleFunc("/internal/webmail-ticket", only(http.MethodPost, a.consumeWebmailTicket))
 	mux.HandleFunc("/api/live-migrations", a.withAuth(a.liveMigrations))
+	mux.HandleFunc("/api/live-migrations/cancel", only(http.MethodPost, a.withAuth(a.liveMigrationCancellation)))
 	mux.HandleFunc("/api/live-migrations/download", only(http.MethodGet, a.withAuth(a.liveMigrationDownload)))
 	mux.HandleFunc("/api/migrations/database", only(http.MethodPost, a.withAuth(a.migrationDatabaseImport)))
 	mux.HandleFunc("/api/migrations/import", only(http.MethodPost, a.withAuth(a.migrationImport)))
@@ -247,7 +292,9 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/files/create", only(http.MethodPost, a.withAuth(a.createFile)))
 	mux.HandleFunc("/api/files/transfer", only(http.MethodPost, a.withAuth(a.transferFiles)))
 	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
-	mux.HandleFunc("/api/files/encodings", only(http.MethodGet,a.withAuth(func(w http.ResponseWriter,r *http.Request){writeJSON(w,200,map[string]any{"encodings":availableEditorEncodings(),"maxBytes":maxEditableFileSize})})))
+	mux.HandleFunc("/api/files/encodings", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"encodings": availableEditorEncodings(), "maxBytes": maxEditableFileSize})
+	})))
 	mux.HandleFunc("/api/files/upload", only(http.MethodPost, a.withAuth(a.uploadFiles)))
 	mux.HandleFunc("/api/files/directory", only(http.MethodPost, a.withAuth(a.createDirectory)))
 	mux.HandleFunc("/api/files/rename", only(http.MethodPost, a.withAuth(a.renameFile)))
@@ -270,12 +317,20 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/mail/mailboxes/password", only(http.MethodPut, a.withAuth(a.resetMailboxPassword)))
 	mux.HandleFunc("/api/mail/mailboxes/", only(http.MethodDelete, a.withAuth(a.deleteMailbox)))
 	mux.HandleFunc("/api/mail/aliases", only(http.MethodPost, a.withAuth(a.createMailAlias)))
+	mux.HandleFunc("/api/terminal", only(http.MethodPost, a.withAuth(a.terminalCommand)))
+	mux.HandleFunc("/api/terminal/session", a.withAuth(a.interactiveTerminal))
 	mux.HandleFunc("/api/mail/aliases/", only(http.MethodDelete, a.withAuth(a.deleteMailAlias)))
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
 	mux.HandleFunc("/api/updates/install", only(http.MethodPost, a.withAuth(a.startPanelUpdate)))
-	mux.HandleFunc("/api/developer-mode", a.withAuth(func(w http.ResponseWriter,r *http.Request){if r.Method!=http.MethodGet && r.Method!=http.MethodPut {writeError(w,405,"Use GET or PUT");return};a.developerMode(w,r)}))
+	mux.HandleFunc("/api/developer-mode", a.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodPut {
+			writeError(w, 405, "Use GET or PUT")
+			return
+		}
+		a.developerMode(w, r)
+	}))
 	mux.HandleFunc("/api/updates/status", only(http.MethodGet, a.withAuth(a.panelUpdateStatus)))
 	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, checkRelease(version)) })))
 	mux.HandleFunc("/api/version", only(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
@@ -313,7 +368,7 @@ func (a *App) securityHeaders(next http.Handler) http.Handler {
 				formSources += " https://" + webmail.Host
 			}
 		}
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action " + formSources)
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action "+formSources)
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Cache-Control", "no-store")
 		}
@@ -344,7 +399,7 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		// Serialize state-changing operations so file, service and config writes cannot race.
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" && r.URL.Path != "/api/live-migrations/cancel" && r.URL.Path != "/api/terminal/session" {
 			a.mutationMu.Lock()
 			defer a.mutationMu.Unlock()
 			if (cookie == nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
@@ -389,7 +444,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.store.twoFactor().Enabled && strings.TrimSpace(input.Code) == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"error":"Enter your authenticator or recovery code to finish signing in.", "twoFactorRequired":true})
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "Enter your authenticator or recovery code to finish signing in.", "twoFactorRequired": true})
 		return
 	}
 	if a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
@@ -417,7 +472,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
-	a.forgetBrowser(w,r)
+	a.forgetBrowser(w, r)
 	if cookie, err := r.Cookie("litecp_session"); err == nil {
 		a.mu.Lock()
 		delete(a.sessions, cookie.Value)

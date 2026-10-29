@@ -1,0 +1,807 @@
+{
+  "startedAt": "2026-10-28T09:08:52.060Z",
+  "routes": [
+    "website-ssl",
+    "waf",
+    "extensions",
+    "files"
+  ],
+  "checks": [
+    {
+      "width": 320,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 73,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    }
+  ],
+  "dialogs": [
+    {
+      "name": "create-website",
+      "open": 1
+    },
+    {
+      "name": "create-database",
+      "open": 1
+    },
+    {
+      "name": "website-cron",
+      "open": 1
+    },
+    {
+      "name": "website-ftp",
+      "open": 1
+    },
+    {
+      "name": "website-backups",
+      "open": 1
+    }
+  ],
+  "errors": [],
+  "failedRequests": [],
+  "blockedMutations": [],
+  "interactions": [
+    {
+      "name": "file-new-file",
+      "width": 290,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 290,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 290,
+      "open": true,
+      "height": 343,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 290,
+      "open": true,
+      "height": 407,
+      "overflow": 0,
+      "left": 15,
+      "right": 305,
+      "viewport": 320,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 345,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 15,
+      "right": 360,
+      "viewport": 375,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 345,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 15,
+      "right": 360,
+      "viewport": 375,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 345,
+      "open": true,
+      "height": 319,
+      "overflow": 0,
+      "left": 15,
+      "right": 360,
+      "viewport": 375,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 345,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 15,
+      "right": 360,
+      "viewport": 375,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 395,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 15,
+      "right": 410,
+      "viewport": 425,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 395,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 15,
+      "right": 410,
+      "viewport": 425,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 395,
+      "open": true,
+      "height": 319,
+      "overflow": 0,
+      "left": 15,
+      "right": 410,
+      "viewport": 425,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 395,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 15,
+      "right": 410,
+      "viewport": 425,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 134,
+      "right": 634,
+      "viewport": 768,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 134,
+      "right": 634,
+      "viewport": 768,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 134,
+      "right": 634,
+      "viewport": 768,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 134,
+      "right": 634,
+      "viewport": 768,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 262,
+      "right": 762,
+      "viewport": 1024,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 262,
+      "right": 762,
+      "viewport": 1024,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 262,
+      "right": 762,
+      "viewport": 1024,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 262,
+      "right": 762,
+      "viewport": 1024,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 390,
+      "right": 890,
+      "viewport": 1280,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 390,
+      "right": 890,
+      "viewport": 1280,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 390,
+      "right": 890,
+      "viewport": 1280,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 390,
+      "right": 890,
+      "viewport": 1280,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 470,
+      "right": 970,
+      "viewport": 1440,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-file",
+      "width": 500,
+      "open": true,
+      "height": 254,
+      "overflow": 0,
+      "left": 710,
+      "right": 1210,
+      "viewport": 1920,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-new-folder",
+      "width": 500,
+      "open": true,
+      "height": 231,
+      "overflow": 0,
+      "left": 710,
+      "right": 1210,
+      "viewport": 1920,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-upload",
+      "width": 500,
+      "open": true,
+      "height": 299,
+      "overflow": 0,
+      "left": 710,
+      "right": 1210,
+      "viewport": 1920,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-settings",
+      "width": 500,
+      "open": true,
+      "height": 371,
+      "overflow": 0,
+      "left": 710,
+      "right": 1210,
+      "viewport": 1920,
+      "background": "rgb(17, 17, 17)"
+    },
+    {
+      "name": "file-context-edit",
+      "visible": true
+    },
+    {
+      "name": "file-copy",
+      "open": true
+    },
+    {
+      "name": "file-move",
+      "open": true
+    },
+    {
+      "name": "file-rename",
+      "open": true
+    },
+    {
+      "name": "file-chmod",
+      "open": true
+    },
+    {
+      "name": "file-archive",
+      "open": true
+    },
+    {
+      "name": "mobile-navigation-open",
+      "open": true
+    },
+    {
+      "name": "mobile-navigation-route",
+      "active": true
+    }
+  ],
+  "completedAt": "2026-10-28T09:09:54.645Z"
+}

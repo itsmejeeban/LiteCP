@@ -89,6 +89,8 @@ func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
 	}
 	listing := FileListing{Home: managedSiteRoot(site), PublicPath: sitePublicPath(site), SiteID: site.ID, Domain: site.Domain, Path: clean, Entries: make([]FileEntry, 0, len(entries))}
 	for _, entry := range entries {
+		// Never open sockets, devices or FIFOs when enumerating server paths.
+		if !entry.IsDir() && !entry.Type().IsRegular() { continue }
 		entryPath := entry.Name()
 		if clean != "" {
 			entryPath = clean + "/" + entry.Name()

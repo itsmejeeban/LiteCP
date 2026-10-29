@@ -1,0 +1,4317 @@
+{
+  "startedAt": "2026-10-28T09:02:39.505Z",
+  "routes": [
+    "dashboard",
+    "websites",
+    "file-manager",
+    "databases",
+    "website-backups",
+    "website-cron",
+    "website-ftp",
+    "website-ssl",
+    "email/add-domain",
+    "email/create-mailbox",
+    "email/create-alias",
+    "email/webmail",
+    "email/domains",
+    "email/mailboxes",
+    "email/aliases",
+    "security-dashboard",
+    "firewall",
+    "security",
+    "waf",
+    "applications",
+    "extensions",
+    "services",
+    "backups/create",
+    "backups/add-destination",
+    "backups/settings",
+    "backups/destinations",
+    "backups/history",
+    "logs",
+    "migrations/cpanel",
+    "migrations/plesk",
+    "migrations/litecp",
+    "migrations/upload",
+    "analytics",
+    "activities",
+    "settings/password",
+    "settings/email",
+    "settings/timezone",
+    "settings/hostname",
+    "settings/dns",
+    "settings/developer",
+    "settings/update",
+    "settings/reboot",
+    "documentation",
+    "files"
+  ],
+  "checks": [
+    {
+      "width": 320,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 575,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 520,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 375,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 470,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 425,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 73,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [
+        {
+          "control": "\nSettings",
+          "ancestor": "panel file-manager-panel",
+          "axis": "x"
+        },
+        {
+          "control": "",
+          "ancestor": "panel file-manager-panel",
+          "axis": "x"
+        }
+      ],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1280,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "dashboard",
+      "activePages": [
+        "dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "file-manager",
+      "activePages": [
+        "file-manager"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "website-backups",
+      "activePages": [
+        "website-backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "website-cron",
+      "activePages": [
+        "website-cron"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "website-ftp",
+      "activePages": [
+        "website-ftp"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/add-domain",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/create-mailbox",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/create-alias",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/webmail",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/domains",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/mailboxes",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 9,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "email/aliases",
+      "activePages": [
+        "email"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "firewall",
+      "activePages": [
+        "firewall"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 8,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "security",
+      "activePages": [
+        "security"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "applications",
+      "activePages": [
+        "applications"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 7,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "extensions",
+      "activePages": [
+        "extensions"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 939,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "services",
+      "activePages": [
+        "services"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "backups/create",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "backups/add-destination",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 12,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "backups/settings",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "backups/destinations",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "backups/history",
+      "activePages": [
+        "backups"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 0,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "logs",
+      "activePages": [
+        "logs"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "migrations/cpanel",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "migrations/plesk",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 14,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "migrations/litecp",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "migrations/upload",
+      "activePages": [
+        "migrations"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 11,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "analytics",
+      "activePages": [
+        "analytics"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "activities",
+      "activePages": [
+        "activities"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 6,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/password",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 10,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/email",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/timezone",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/hostname",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/dns",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/developer",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 3,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/update",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 2,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "settings/reboot",
+      "activePages": [
+        "settings"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 1,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "documentation",
+      "activePages": [
+        "documentation"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 35,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1920,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    }
+  ],
+  "dialogs": [
+    {
+      "name": "create-website",
+      "open": 4
+    },
+    {
+      "name": "create-database",
+      "open": 4
+    },
+    {
+      "name": "website-cron",
+      "open": 3
+    },
+    {
+      "name": "website-ftp",
+      "open": 3
+    },
+    {
+      "name": "website-backups",
+      "open": 3
+    }
+  ],
+  "errors": [],
+  "failedRequests": [
+    {
+      "url": "/api/environment-inventory",
+      "status": 401
+    }
+  ],
+  "blockedMutations": [],
+  "completedAt": "2026-10-28T09:04:55.403Z"
+}

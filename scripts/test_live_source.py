@@ -12,17 +12,45 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
-    def test_cpanel_portable_keeps_website_sql_and_excludes_mail_links(self):
+    def test_cpanel_cleanup_removes_only_created_archives(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            native = root/'cpmove-example.tar.gz'
+            portable = root/'cpanel-website.tar.gz'
+            log = root/'export.log'
+            other = root/'unrelated-backup.tar.gz'
+            for path in (native, portable, log, other):
+                path.write_bytes(b'test')
+            self.assertEqual(source.cleanup_cpanel_export(root, 'example'), ['cpmove-example.tar.gz', 'cpanel-website.tar.gz'])
+            self.assertFalse(native.exists())
+            self.assertFalse(portable.exists())
+            self.assertTrue(log.exists())
+            self.assertTrue(other.exists())
+
+    def test_cpanel_cleanup_rejects_archive_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            target = root/'outside.tar.gz'
+            target.write_bytes(b'test')
+            try:
+                (root/'cpmove-example.tar.gz').symlink_to(target)
+            except OSError:
+                self.skipTest('symbolic links are unavailable')
+            with self.assertRaisesRegex(RuntimeError, 'symbolic-link'):
+                source.cleanup_cpanel_export(root, 'example')
+            self.assertTrue(target.exists())
+
+    def test_cpanel_portable_keeps_website_sql_private_app_and_excludes_account_data(self):
         with tempfile.TemporaryDirectory() as directory:
             archive=pathlib.Path(directory)/'native.tar.gz'
             portable=pathlib.Path(directory)/'portable.tar.gz'
             with tarfile.open(archive,'w:gz') as target:
-                for name in ['cpmove-user/homedir/public_html/index.php','cpmove-user/mysql/user_db.sql','cpmove-user/homedir/mail/new/1:2,S','cpmove-user/mysql.sql']:
+                for name in ['cpmove-user/homedir/public_html/index.php','cpmove-user/mysql/user_db.sql','cpmove-user/homedir/sitemap-app/src/Crawler.php','cpmove-user/homedir/mail/new/1:2,S','cpmove-user/homedir/.ssh/id_rsa','cpmove-user/mysql.sql']:
                     info=tarfile.TarInfo(name);info.size=4;target.addfile(info,io.BytesIO(b'test'))
                 link=tarfile.TarInfo('cpmove-user/homedir/public_html/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/shadow';target.addfile(link)
-            self.assertEqual(source.cpanel_portable(archive,portable),(1,1))
+            self.assertEqual(source.cpanel_portable(archive,portable),(1,1,1))
             with tarfile.open(portable) as result:
-                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql'])
+                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php'])
 
     @patch.object(source.os,'geteuid',return_value=0)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)

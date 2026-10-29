@@ -7,6 +7,11 @@
   let activityPage = 1, activityRequest = 0, listing = null, editor = null, aceLoading = null, preview = null;
   const icon = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12h8M12 8v8"/></svg>';
   const fileManagerIcon = '<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 9h18"/></svg>';
+  const navIcons = {
+    migrations: '<svg viewBox="0 0 24 24"><path d="M4 7h16m-5-5 5 5-5 5M20 17H4m5-5-5 5 5 5"/></svg>',
+    extensions: '<svg viewBox="0 0 24 24"><path d="M9 3v5m6-5v5M6 8h12v4a6 6 0 0 1-12 0V8Zm6 10v3"/></svg>',
+    security: '<svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m8 12 3 3 5-6"/></svg>'
+  };
   const page = (id, title, copy, content) => `<section class="page" data-page-view="${id}"><div class="page-heading"><div><span class="eyebrow">LITECP MANAGEMENT</span><h1>${title}</h1><p>${copy}</p></div></div>${content}</section>`;
   const field = (label, input) => `<label class="field"><span>${label}</span>${input}</label>`;
   const resultBox = id => `<pre class="feature-output hidden" id="${id}" role="status"></pre>`;
@@ -18,7 +23,7 @@
   const nav = $(".nav");
   [["migrations", "Migration"], ["extensions", "PHP extensions"], ["security", "Website security"]].forEach(([id, title]) => {
     const link = document.createElement("a"); link.href = `#${id}`; link.dataset.page = id; link.className = "nav-item";
-    link.innerHTML = `${icon}<span>${title}</span>`; link.addEventListener("click", () => cp.navigate(id)); nav.insertBefore(link, $(".nav-label-second"));
+    link.innerHTML = `${navIcons[id]}<span>${title}</span>`; link.addEventListener("click", () => cp.navigate(id)); nav.insertBefore(link, $(".nav-label-second"));
   });
   $(".main-content").insertAdjacentHTML("beforeend", page("extensions", "PHP extensions", "Manage optional extension packages per runtime. Core application modules remain protected.", `
     <article class="panel"><div class="panel-head"><div><h2>Installed runtimes</h2><p>Changes restart all websites using the selected PHP version. PHP 7.3 container modules require an image rebuild.</p></div><button class="button button-secondary" id="extensionsRefresh">Refresh</button></div><div id="extensionsTable"></div></article>`));

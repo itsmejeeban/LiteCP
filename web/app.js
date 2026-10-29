@@ -237,7 +237,7 @@
     $("#copyCredentials").addEventListener("click", copyCredentials);
     $("#sitesTable").addEventListener("click", handleSiteAction);
     $("#sitesTable").addEventListener("change", handlePHPChange);
-    $("#siteSearch").addEventListener("input", renderSites);
+    $("#siteSearch").addEventListener("input", () => { sitesPage = 1; renderSites(); });
     $("#servicesGrid").addEventListener("click", handleServiceAction);
     $("#restartAll").addEventListener("click", restartAll);
     $$('[data-quick-backup]').forEach(button => button.addEventListener("click", runBackup));
@@ -420,6 +420,25 @@
     $("#activityList").innerHTML = activities.map(item => `<div class="activity-row"><span class="activity-dot ${item.kind === "warning" ? "warning" : ""}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.detail)}</small></div><span class="activity-time">${relativeTime(item.createdAt)}</span></div>`).join("");
   }
 
+  let sitesPage = 1;
+  const sitesPerPage = 10;
+  let siteSizes = {};
+  let siteSizesLoading = false;
+
+  async function loadSiteSizes(force = false) {
+    if (siteSizesLoading || (!force && Object.keys(siteSizes).length)) return;
+    siteSizesLoading = true;
+    try {
+      const result = await api("/api/sites/sizes");
+      siteSizes = result.sizes || {};
+      renderSites();
+    } catch (error) {
+      if (error.status !== 401) showToast("Website sizes unavailable", error.message, "error");
+    } finally {
+      siteSizesLoading = false;
+    }
+  }
+
   function renderSites() {
     const query = $("#siteSearch").value.trim().toLowerCase();
     const sites = currentState.sites.filter(site => site.domain.includes(query));
@@ -430,7 +449,11 @@
       if (emptyButton) emptyButton.addEventListener("click", openSiteModal);
       return;
     }
-    $("#sitesTable").innerHTML = `<table class="data-table"><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>ACTIONS</th></tr></thead><tbody>${sites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td><span class="row-actions"><button type="button" class="site-suspension-action" data-site-suspend="${escapeHTML(site.id)}" title="${site.suspended ? "Restore website access" : "Suspend website access"}" aria-label="${site.suspended ? "Unsuspend" : "Suspend"} ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true">${site.suspended ? '<path d="m8 5 11 7-11 7Z"/>' : '<path d="M8 5v14M16 5v14"/>'}</svg><span class="site-action-label">${site.suspended ? "Unsuspend" : "Suspend"}</span></button><button class="site-domain-edit" aria-label="Edit domain ${escapeHTML(site.domain)}" title="Edit domain" data-site-action="domain" data-id="${escapeHTML(site.id)}">${icons.edit}<span class="site-action-label">Domain</span></button>${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>`;
+    const totalPages = Math.max(1, Math.ceil(sites.length / sitesPerPage));
+    sitesPage = Math.min(Math.max(1, sitesPage), totalPages);
+    const visibleSites = sites.slice((sitesPage - 1) * sitesPerPage, sitesPage * sitesPerPage);
+    $("#sitesTable").innerHTML = `<table class="data-table websites-table"><colgroup><col class="website-col-domain"><col class="website-col-application"><col class="website-col-runtime"><col class="website-col-size"><col class="website-col-actions"></colgroup><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>SIZE</th><th>ACTIONS</th></tr></thead><tbody>${visibleSites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td class="website-size">${Object.prototype.hasOwnProperty.call(siteSizes, site.id) ? formatBytes(siteSizes[site.id]) : siteSizesLoading ? "Calculating…" : "—"}</td><td><span class="row-actions"><button type="button" data-site-cron-jobs="${escapeHTML(site.id)}" title="Manage cron jobs" aria-label="Manage cron jobs for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 10a8.5 8.5 0 1 1-5-6M12 7v5l3 2M19 2v6m-3-3h6"/></svg><span class="site-action-label">Cron jobs</span></button><button type="button" data-site-ftp="${escapeHTML(site.id)}" title="Manage FTP accounts" aria-label="Manage FTP accounts for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3M7 8h10m-3-3 3 3-3 3M17 16H7m3-3-3 3 3 3"/></svg><span class="site-action-label">FTP</span></button><button type="button" data-site-backup="${escapeHTML(site.id)}" title="Manage website backups" aria-label="Manage backups for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M12 17v-6m-3 3 3-3 3 3"/></svg><span class="site-action-label">Backup</span></button><button type="button" class="site-suspension-action" data-site-suspend="${escapeHTML(site.id)}" title="${site.suspended ? "Restore website access" : "Suspend website access"}" aria-label="${site.suspended ? "Unsuspend" : "Suspend"} ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true">${site.suspended ? '<path d="m8 5 11 7-11 7Z"/>' : '<path d="M8 5v14M16 5v14"/>'}</svg><span class="site-action-label">${site.suspended ? "Unsuspend" : "Suspend"}</span></button><button class="site-domain-edit" aria-label="Edit domain ${escapeHTML(site.domain)}" title="Edit domain" data-site-action="domain" data-id="${escapeHTML(site.id)}">${icons.edit}<span class="site-action-label">Domain</span></button>${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button type="button" data-site-action="files" data-id="${escapeHTML(site.id)}" title="Open file manager" aria-label="Open file manager for ${escapeHTML(site.domain)}">${icons.folder}<span class="site-action-label">Files</span></button><button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>${totalPages > 1 ? `<div class="pagination website-pagination"><button class="button button-secondary" type="button" data-sites-page="${sitesPage - 1}" ${sitesPage === 1 ? "disabled" : ""}>Previous</button><span>Page ${sitesPage} of ${totalPages} · ${sites.length} websites</span><button class="button button-secondary" type="button" data-sites-page="${sitesPage + 1}" ${sitesPage === totalPages ? "disabled" : ""}>Next</button></div>` : ""}`;
+    $$('[data-sites-page]', $("#sitesTable")).forEach(button => button.addEventListener("click", () => { sitesPage = Number(button.dataset.sitesPage); renderSites(); $("#sitesTable").scrollIntoView({ behavior: "smooth", block: "start" }); }));
   }
 
   function renderPHPSelect(site) {
@@ -464,6 +487,7 @@
     const select = $("#fileSiteSelect");
     const selected = select.value;
     select.innerHTML = (currentState.sites || []).map(site => `<option value="${escapeHTML(site.id)}">${escapeHTML(site.domain)}</option>`).join("");
+	if (location.hash === '#server-files') { select.add(new Option('Server File Explorer', 'server-explorer')); select.value='server-explorer'; }
     if ((currentState.sites || []).some(site => site.id === selected)) select.value = selected;
   }
 
@@ -504,6 +528,10 @@
   }
 
   function navigate(page, updateHash = true) {
+	const serverExplorer = page === 'server-files';
+	if(serverExplorer){page='files';const select=$('#fileSiteSelect');if(!select.querySelector('option[value="server-explorer"]'))select.add(new Option('Server File Explorer','server-explorer'));select.value='server-explorer';currentFilePath='';}
+	else if(page==='files' && $('#fileSiteSelect').value==='server-explorer'){$('#fileSiteSelect option[value="server-explorer"]')?.remove();currentFilePath='';}
+	document.querySelector('[data-page-view="files"]').classList.toggle('server-file-explorer',serverExplorer);
     if(page==="settings/backups")page="backups/settings";
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
     const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
@@ -513,19 +541,19 @@
     const backupRoute=["create","add-destination","settings","destinations","history","system-snapshot"].includes(backupPart)?`backups/${backupPart}`:"";
     if(backupRoute)page="backups";
     const migrationPart=String(page).startsWith("migrations/")?String(page).slice(11):"";
-    const migrationRoute=["cpanel","plesk","litecp","upload","jobs"].includes(migrationPart)?`migrations/${migrationPart}`:"";
+    const migrationRoute=["cpanel","plesk","litecp","upload","jobs","completed"].includes(migrationPart)?`migrations/${migrationPart}`:"";
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "security-dashboard", "two-factor", "analytics", "activities", "documentation", "applications"];
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "security-dashboard", "two-factor", "analytics", "disk-usage", "activities", "documentation", "applications"];
     if (!allowed.includes(page)) page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
-      const active = link.dataset.page === page;
+      const active = serverExplorer ? link.dataset.page === 'server-files' : link.dataset.page === page;
       link.classList.toggle("active", active);
       if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
     });
-    const route=settingsRoute||emailRoute||backupRoute||migrationRoute||page;
+    const route=serverExplorer?'server-files':settingsRoute||emailRoute||backupRoute||migrationRoute||page;
     if (updateHash && location.hash !== `#${route}`) history.pushState(null, "", `#${route}`);
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -535,6 +563,7 @@
       logTimer = setInterval(loadLogs, 30000);
     }
     if (page === "files") loadFiles();
+    if (page === "websites") loadSiteSizes(true);
     window.LiteCPFeatures?.navigate(page);
   }
 

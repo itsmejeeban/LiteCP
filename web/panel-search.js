@@ -3,6 +3,7 @@
   const cp = window.LiteCP;
   const normalize = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const features = [
+    ["server-files", "Server File Explorer", "Browse server directories and view or download files", "", "server root filesystem explorer path read only"],
     ["settings/update", "LiteCP update", "Check for and install stable LiteCP releases", "#updateSettingsPanel", "update upgrade version panel release"],
     ["dashboard", "Overview", "CPU, memory, disk and uptime", "", "dashboard resources monitoring status"],
     ["websites", "Websites", "Add and manage WordPress, WHMCS and regular websites", "#sitesTable", "domain hosting php version"],
@@ -28,6 +29,7 @@
     ["backups/system-snapshot", "System Snapshot", "Create or restore a complete LiteCP data ZIP", "#systemSnapshotPanel", "snapshot full backup restore migration settings websites databases mail"],
     ["extensions", "PHP extensions", "Search extension packages and filter by PHP version", "#extensionsTable", "install remove modules ioncube redis imagick mbstring curl zip"],
     ["analytics", "Usage graphs", "Live and historical CPU, memory and disk usage", "#usageView", "analytics graph cpu ram memory disk hourly daily weekly monthly"],
+    ["disk-usage", "Disk Usages", "Directory-wise managed website storage pie chart", "", "analytics disk directory usage storage pie chart"],
     ["security", "Malware scan", "Scan a website with the antivirus service", "#scanForm", "virus clamav antivirus infected files"],
     ["waf", "Web application firewall", "Configure website WAF detection and blocking", "#wafTable", "waf modsecurity security protection"],
     ["firewall", "Firewall rules", "Manage inbound and outbound network access", "#firewallForm", "port ip tcp udp allow deny block network"],

@@ -86,7 +86,7 @@
   };
   let preferences = readPreferences();
   let listing = null, selected = new Set(), folders = new Map(), expanded = new Set([""]), loadingFolders = new Set(), folderErrors = new Map(), site = "", view = "list", descending = false, history = [], historyIndex = -1, historyNavigation = false, lastIndex = -1;
-  const displayPath = (path = "") => (listing?.home || "/public") + (path ? "/" + path : "");
+  const displayPath = (path = "") => (listing?.home || "/public").replace(/\/$/, "") + (path ? "/" + path : "") || "/";
   const inputPath = value => normalizePath(value, listing?.home || "/public");
   let searchRequest = 0;
   const siteID = () => $("#fileSiteSelect").value;
@@ -137,12 +137,16 @@
     [$("#fmSelectAll"),$("#fmSelectVisible")].filter(Boolean).forEach(all=>{ all.checked = visible.length > 0 && visible.every(x=>selected.has(x.path)); all.indeterminate = !all.checked && visible.some(x=>selected.has(x.path)); });
   }
   function render(value) {
-    if(!site && preferences.start==="domain" && preferences.startSite && preferences.startSite!==value.siteId && cp.state()?.sites.some(item=>item.id===preferences.startSite)) {
+	const serverMode=value.siteId==="server-explorer";
+	page.classList.toggle("server-file-explorer",serverMode);
+	const brand=panel.querySelector('.cpfm-brand');
+	if(brand?.lastChild?.nodeType===Node.TEXT_NODE)brand.lastChild.textContent=serverMode?' Server File Explorer · Read only':' File Manager';
+    if(value.siteId!=="server-explorer" && !site && preferences.start==="domain" && preferences.startSite && preferences.startSite!==value.siteId && cp.state()?.sites.some(item=>item.id===preferences.startSite)) {
       $("#fileSiteSelect").value=preferences.startSite;$("#fileSiteSelect").dispatchEvent(new Event("change"));return;
     }
     const changed = !listing || listing.siteId !== value.siteId || listing.path !== value.path;
     const siteChanged=site !== value.siteId;
-    const startupPath=siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : ["public","domain"].includes(preferences.start) ? (value.publicPath || "") : preferences.start==="ftp" ? "public_ftp" : "";
+    const startupPath=value.siteId==="server-explorer" ? "" : siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : ["public","domain"].includes(preferences.start) ? (value.publicPath || "") : preferences.start==="ftp" ? "public_ftp" : "";
     if (siteChanged) { folders.clear(); expanded=new Set([""]); folderErrors.clear(); loadingFolders.clear(); history=[]; historyIndex=-1; site=value.siteId; }
     if (changed) { selected.clear(); lastIndex=-1; if (!historyNavigation) { history=history.slice(0,historyIndex+1); history.push(value.path || ""); historyIndex=history.length-1; } historyNavigation=false; }
     listing=value; selected=new Set([...selected].filter(path=>(value.entries || []).some(x=>x.path===path)));
@@ -204,9 +208,14 @@
     if (!selected.has(path)) selectOne(path);
     const current=picked(), singleFile=current.length===1 && current[0].type==="file";
     const actions=[...(singleFile ? [["download","Download","download"],["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
-    menu.innerHTML=actions.map(([action,label,name])=>button(action,label,name)).join("");
+    menu.innerHTML=actions.filter(([action])=>siteID()!=="server-explorer" || ["download","view"].includes(action)).map(([action,label,name])=>button(action,label,name)).join("");
     menu.querySelectorAll("button").forEach(b=>{ const peer=page.querySelector(`[data-fm-action="${b.dataset.fmAction}"]`); b.disabled=peer?.disabled || false; b.setAttribute("role","menuitem"); });
-    menu.classList.remove("hidden"); menu.style.left=Math.max(8,Math.min(x,window.innerWidth-menu.offsetWidth-12))+"px"; menu.style.top=Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-12))+"px"; menu.querySelector("button:not(:disabled)")?.focus({preventScroll:true});
+    menu.classList.remove("hidden");
+    const gap=8, left=Math.max(gap,Math.min(x,window.innerWidth-menu.offsetWidth-gap));
+    menu.style.left=left+"px";
+    menu.style.top=Math.max(gap,y)+"px";
+    menu.style.maxHeight=Math.max(120,window.innerHeight-Math.max(gap,y)-gap)+"px";
+    menu.querySelector("button:not(:disabled)")?.focus({preventScroll:true});
   }
   function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
     if (dialog.open) return;
@@ -264,6 +273,7 @@
   async function refresh() { closeMenu(); await cp.loadFiles(); }
   async function action(name) {
     closeMenu(); const items=picked(), item=items[0], activeSite=siteID(), currentPath=cp.path();
+    if(activeSite==="server-explorer" && !["home","up","back","forward","refresh","reload","view","download","settings","select-all","unselect-all","clear","list","grid"].includes(name))return;
     if (!activeSite) { cp.showToast("Choose a website","Add or select a website before managing files.","error"); return; }
     if (["copy","move","archive","delete"].includes(name) && !items.length) return;
     if (["rename","chmod","edit","html-edit","view","download","extract"].includes(name) && items.length!==1) return;
@@ -320,6 +330,7 @@
     catch(error){$("#trashTable").textContent=error.message;}
   }
   function upload(files) {
+	if(siteID()==="server-explorer")return;
     if (!files.length) return;
     if(new Set(files.map(file=>file.name)).size!==files.length){cp.showToast("Duplicate filenames","Choose files with unique names.","error");return;}
     const current=cp.path(), activeSite=siteID();
@@ -356,7 +367,7 @@
   menu.addEventListener("keydown",event=>{if(event.key==="Escape"){closeMenu();$(".fm-content").focus();}else if(event.key==="ArrowDown" || event.key==="ArrowUp"){event.preventDefault();const buttons=[...menu.querySelectorAll("button:not(:disabled)")],index=buttons.indexOf(document.activeElement);buttons[(index+(event.key==="ArrowDown" ? 1 : buttons.length-1))%buttons.length]?.focus();}});
   document.addEventListener("click",event=>{if(!event.target.closest(".fm-context,[data-fm-menu]"))closeMenu();});
   window.addEventListener("resize",closeMenu);window.addEventListener("scroll",closeMenu,true);
-  $("#fileTable").addEventListener("dblclick",event=>{const row=event.target.closest("[data-fm-row]");if(!row || event.target.closest("input,button.fm-more,.fm-mode"))return;selectOne(row.dataset.fmRow);const entry=picked()[0];if(entry.type==="directory")cp.goToFilePath(entry.path);else run("edit");});
+  $("#fileTable").addEventListener("dblclick",event=>{const row=event.target.closest("[data-fm-row]");if(!row || event.target.closest("input,button.fm-more,.fm-mode"))return;selectOne(row.dataset.fmRow);const entry=picked()[0];if(entry.type==="directory")cp.goToFilePath(entry.path);else run(siteID()==="server-explorer"?"view":"edit");});
   $("#fileTable").addEventListener("contextmenu",event=>{const row=event.target.closest("[data-fm-row]");if(!row)return;event.preventDefault();showMenu(row.dataset.fmRow,event.clientX,event.clientY);});
   $("#fileTable").addEventListener("change",event=>{if(event.target.id==="fmSelectAll"){selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();}});
   $("#fmSelectVisible").onchange=event=>{selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();};

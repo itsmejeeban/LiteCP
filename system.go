@@ -113,7 +113,7 @@ func (s *System) Snapshot(ctx context.Context, sites []Site) SystemSnapshot {
 	snapshot := SystemSnapshot{
 		OS: s.os.Name, OSID: s.os.ID, Hostname: hostname, IPAddress: primaryIP(), Demo: s.demo,
 		CurrentResolvers: currentSystemResolvers(),
-		Memory: memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
+		Memory:           memoryUsage(), Disk: diskUsage(ctx), PHPVersions: s.installedPHPVersions(),
 		DatabaseEngine: s.DatabaseEngine(), FirewallBackend: s.FirewallBackend(),
 		WAFEngine: s.WAFEngine(), AntivirusAvailable: s.AntivirusAvailable(), WebmailAvailable: s.WebmailAvailable(), WebmailURL: s.WebmailURL(),
 	}
@@ -350,14 +350,18 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 			_ = os.Remove(filepath.Join(site.Root, "index.html"))
 		}
 	}()
-	if err := s.ensureSiteHome(site); err != nil { return Site{},nil,err }
+	if err := s.ensureSiteHome(site); err != nil {
+		return Site{}, nil, err
+	}
 	if err := os.MkdirAll(site.Root, 0750); err != nil {
 		return Site{}, nil, fmt.Errorf("create website root: %w", err)
 	}
 	if err := chownSitePath(site.Root, site, 0750, s.webUser()); err != nil {
 		return Site{}, nil, err
 	}
-	if err := s.labelSiteHome(ctx,site); err != nil { return Site{},nil,err }
+	if err := s.labelSiteHome(ctx, site); err != nil {
+		return Site{}, nil, err
+	}
 	placeholder := filepath.Join(site.Root, "index.html")
 	if _, err := os.Stat(placeholder); errors.Is(err, os.ErrNotExist) {
 		appName := applicationName(site.AppType)
@@ -504,7 +508,9 @@ func demoCredentials(domain string) DBCredentials {
 }
 
 func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
- if site.Application!=nil&&site.Application.Enabled{return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")}
+	if site.Application != nil && site.Application.Enabled {
+		return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")
+	}
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
@@ -516,7 +522,9 @@ func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
 		return nil
 	}
 	_, err = runCommand(ctx, 90*time.Second, "certbot", "--nginx", "--domain", site.Domain, "--non-interactive", "--agree-tos", "--email", email, "--redirect")
- if err == nil && site.Suspended { return s.setSuspension(ctx, site, true) }
+	if err == nil && site.Suspended {
+		return s.setSuspension(ctx, site, true)
+	}
 	return err
 }
 
@@ -557,7 +565,9 @@ func (s *System) SetCron(site Site, enabled bool) error {
 }
 
 func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
- if site.Application!=nil&&site.Application.Enabled{return errors.New("disable the application runtime before changing PHP")}
+	if site.Application != nil && site.Application.Enabled {
+		return errors.New("disable the application runtime before changing PHP")
+	}
 	phpVersion = strings.TrimSpace(phpVersion)
 	if err := validatePHPVersionSwitch(phpVersion); err != nil {
 		return err
@@ -644,8 +654,8 @@ func replaceFastCGISocket(config, socket string) (string, error) {
 }
 
 type siteConfigBackup struct {
-	nginx []byte
-	cron  []byte
+	nginx      []byte
+	cron       []byte
 	customCron []byte
 }
 
@@ -663,7 +673,9 @@ func (s *System) snapshotSiteConfig(site Site) (siteConfigBackup, error) {
 		return siteConfigBackup{}, fmt.Errorf("read cron configuration: %w", err)
 	}
 	customCron, err := os.ReadFile(s.websiteCronPath(site.ID))
-	if err != nil && !errors.Is(err, os.ErrNotExist) { return siteConfigBackup{}, fmt.Errorf("read custom cron configuration: %w", err) }
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return siteConfigBackup{}, fmt.Errorf("read custom cron configuration: %w", err)
+	}
 	return siteConfigBackup{nginx: nginx, cron: cron, customCron: customCron}, nil
 }
 
@@ -671,7 +683,11 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 	if s.demo {
 		return nil
 	}
-	if len(backup.customCron)>0 { if err:=writeAtomic(s.websiteCronPath(site.ID),backup.customCron,0600);err!=nil{return fmt.Errorf("restore custom cron configuration: %w",err)} }
+	if len(backup.customCron) > 0 {
+		if err := writeAtomic(s.websiteCronPath(site.ID), backup.customCron, 0600); err != nil {
+			return fmt.Errorf("restore custom cron configuration: %w", err)
+		}
+	}
 	if err := s.ensureSitePHPPool(ctx, site); err != nil {
 		return fmt.Errorf("restore isolated PHP pool: %w", err)
 	}
@@ -713,8 +729,14 @@ func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
 	if s.demo {
 		return nil
 	}
-	if err:=s.pauseWebsiteCron(site.ID);err!=nil{return fmt.Errorf("pause custom cron jobs: %w",err)}
- if site.Application!=nil&&site.Application.Container!="" {if err:=s.stopApplicationContainer(ctx,site.Application.Container);err!=nil{return errors.New("stop the application before detaching this website")}}
+	if err := s.pauseWebsiteCron(site.ID); err != nil {
+		return fmt.Errorf("pause custom cron jobs: %w", err)
+	}
+	if site.Application != nil && site.Application.Container != "" {
+		if err := s.stopApplicationContainer(ctx, site.Application.Container); err != nil {
+			return errors.New("stop the application before detaching this website")
+		}
+	}
 	configPath, enabledPath := s.nginxPaths(site.Domain)
 	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove nginx configuration: %w", err)
@@ -911,8 +933,10 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) (content string) {
- defer func(){content=suspensionSiteConfig(content,site,site.Suspended)}()
- if site.Application!=nil {return s.applicationNginx(site)}
+	defer func() { content = suspensionSiteConfig(content, site, site.Suspended) }()
+	if site.Application != nil {
+		return s.applicationNginx(site)
+	}
 	applicationRules := `    location = /configuration.php { deny all; }
     location ^~ /crons/ { deny all; }`
 	if site.AppType == "wordpress" {
@@ -1014,7 +1038,10 @@ func (s *System) phpPoolConfigPath(site Site) string {
 
 func (s *System) phpPoolConfig(site Site) string {
 	allowed, temporary := site.Root, "/tmp"
-	if home:=siteHome(site);home!="" { allowed=home;temporary=filepath.Join(home,"tmp") }
+	if home := siteHome(site); home != "" {
+		allowed = home
+		temporary = filepath.Join(home, "tmp")
+	}
 	webUser := s.webUser()
 	socketOwner, socketGroup := webUser, webUser
 	if s.usesPHP73Container(site.PHPVersion) {
@@ -1055,8 +1082,21 @@ func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0750); err != nil {
 		return err
 	}
-	if err := writeAtomic(configPath, []byte(s.phpPoolConfig(site)), 0640); err != nil {
-		return err
+	desiredConfig := s.phpPoolConfig(site)
+	existingConfig, readErr := os.ReadFile(configPath)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
+	}
+	configUnchanged := readErr == nil && string(existingConfig) == desiredConfig
+	if !configUnchanged {
+		if err := writeAtomic(configPath, []byte(desiredConfig), 0640); err != nil {
+			return err
+		}
+	}
+	if configUnchanged {
+		if _, err := os.Stat(s.sitePHPSocket(site)); err == nil {
+			return nil
+		}
 	}
 	if s.usesPHP73Container(site.PHPVersion) {
 		if err := s.syncPHP73Pools(); err != nil {
@@ -1119,10 +1159,14 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 	if s.demo {
 		return nil
 	}
-	if err:=s.reconcileWebsiteCron(sites);err!=nil{return fmt.Errorf("reconcile custom cron jobs: %w",err)}
+	if err := s.reconcileWebsiteCron(sites); err != nil {
+		return fmt.Errorf("reconcile custom cron jobs: %w", err)
+	}
 	for _, site := range sites {
 		configPath, _ := s.nginxPaths(site.Domain)
-		if err := s.reconcileSiteRuntime(ctx, site, configPath); err != nil { return err }
+		if err := s.reconcileSiteRuntime(ctx, site, configPath); err != nil {
+			return err
+		}
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
 		return err
@@ -1132,39 +1176,55 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 }
 
 func (s *System) reconcileSiteRuntime(ctx context.Context, site Site, configPath string) error {
-		if siteHome(site)!="" { if err:=s.ensureSiteHome(site);err!=nil{return err} } else if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
-			return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
+	if siteHome(site) != "" {
+		if err := s.ensureSiteHome(site); err != nil {
+			return err
 		}
-		if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {
-			return fmt.Errorf("secure %s ownership: %w", site.Domain, err)
+	} else if err := chownSitePath(filepath.Dir(site.Root), site, 0750, s.webUser()); err != nil {
+		return fmt.Errorf("secure %s parent ownership: %w", site.Domain, err)
+	}
+	if err := chownSiteTree(site.Root, site, s.webUser()); err != nil {
+		return fmt.Errorf("secure %s ownership: %w", site.Domain, err)
+	}
+	if site.Application != nil {
+		if err := s.reconcileSiteNginx(site, configPath); err != nil {
+			return fmt.Errorf("prepare %s application routing: %w", site.Domain, err)
 		}
-		if site.Application != nil {
-			if err := s.reconcileSiteNginx(site, configPath); err != nil { return fmt.Errorf("prepare %s application routing: %w", site.Domain, err) }
-			return nil
+		return nil
+	}
+	if err := s.ensureSitePHPPool(ctx, site); err != nil {
+		return fmt.Errorf("prepare %s PHP pool: %w", site.Domain, err)
+	}
+	if _, err := os.Stat(configPath); err == nil {
+		if err := s.reconcileSiteNginx(site, configPath); err != nil {
+			return err
 		}
-		if err := s.ensureSitePHPPool(ctx, site); err != nil {
-			return fmt.Errorf("prepare %s PHP pool: %w", site.Domain, err)
-		}
-		if _, err := os.Stat(configPath); err == nil {
-			if err := s.reconcileSiteNginx(site, configPath); err != nil { return err }
-		}
+	}
 	return nil
 }
 
 func (s *System) reconcileSiteNginx(site Site, configPath string) error {
 	content, err := os.ReadFile(configPath)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	var updated string
 	if site.Application != nil {
 		app := *site.Application
-		if err := updateApplicationCertificates(site, &app, content); err != nil { return err }
+		if err := updateApplicationCertificates(site, &app, content); err != nil {
+			return err
+		}
 		site.Application = &app
 		updated = s.applicationNginx(site)
 	} else {
 		updated, err = replaceFastCGISocket(string(content), s.sitePHPSocket(site))
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
-	if updated == string(content) { return nil }
+	if updated == string(content) {
+		return nil
+	}
 	return writeAtomic(configPath, []byte(updated), 0644)
 }
 
@@ -1654,5 +1714,8 @@ func firstAvailableCommand(names ...string) string {
 }
 
 func validatePHPVersionSwitch(version string) error {
- if !containsString(supportedPHPVersions, version) { return errors.New("choose an available PHP version") }; return nil
+	if !containsString(supportedPHPVersions, version) {
+		return errors.New("choose an available PHP version")
+	}
+	return nil
 }

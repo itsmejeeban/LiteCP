@@ -1,0 +1,97 @@
+{
+  "startedAt": "2026-10-28T10:14:10.353Z",
+  "tests": [
+    {
+      "name": "Administrator login through browser",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Website creation UI: litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Website creation UI: qa20261028-a.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Website creation UI: qa20261028-b.litimcsellcop.com",
+      "status": "PASS",
+      "detail": "Existing website preserved"
+    },
+    {
+      "name": "Duplicate domain rejected",
+      "status": "PASS",
+      "detail": "Duplicate rejected"
+    },
+    {
+      "name": "File Manager website picker and workspace",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Create directory through File Manager",
+      "status": "FAIL",
+      "detail": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#fmActionDialog') to be hidden\u001b[22m\n\u001b[2m    43 × locator resolved to visible <dialog open=\"\" class=\"fm-dialog\" id=\"fmActionDialog\" aria-labelledby=\"fmDialogTitle\">…</dialog>\u001b[22m\n"
+    },
+    {
+      "name": "Create file through File Manager",
+      "status": "FAIL",
+      "detail": "locator.click: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.file-toolbar [data-fm-action=\"new-file\"]')\u001b[22m\n\u001b[2m    - locator resolved to <button title=\"File\" type=\"button\" class=\"fm-tool \" data-fm-action=\"new-file\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <dialog open=\"\" class=\"fm-dialog\" id=\"fmActionDialog\" aria-labelledby=\"fmDialogTitle\">…</dia"
+    },
+    {
+      "name": "Edit text and verify saved content",
+      "status": "FAIL",
+      "detail": "page.evaluate: Error: open managed path: no such file or directory\n    at Object.api (http://127.0.0.1:19190/app.js?v=panel-port-4321:94:21)\n    at async <anonymous>:337:30"
+    },
+    {
+      "name": "Directory traversal rejected",
+      "status": "PASS",
+      "detail": "Traversal rejected"
+    },
+    {
+      "name": "Cross-website path rejected",
+      "status": "PASS",
+      "detail": "Other website absolute path rejected"
+    },
+    {
+      "name": "Upload HTML and PHP through File Manager",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "PHP HTTP response executes database query",
+      "status": "PASS",
+      "detail": "Real HTTP request returned database row"
+    },
+    {
+      "name": "HTML browser rendering",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Session persists across refresh",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Unauthenticated API denied",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Cross-origin mutation rejected",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "Independent runtime identities",
+      "status": "PASS",
+      "detail": "Distinct website runtime UIDs"
+    }
+  ],
+  "errors": [],
+  "completedAt": "2026-10-28T10:15:15.847Z"
+}

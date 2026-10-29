@@ -1,0 +1,343 @@
+{
+  "startedAt": "2026-10-28T09:00:34.001Z",
+  "routes": [
+    "websites",
+    "databases",
+    "website-ssl",
+    "security-dashboard",
+    "waf",
+    "files"
+  ],
+  "checks": [
+    {
+      "width": 320,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 575,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 575,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 38,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 73,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [
+        {
+          "control": "\nSettings",
+          "ancestor": "panel file-manager-panel",
+          "axis": "x"
+        },
+        {
+          "control": "",
+          "ancestor": "panel file-manager-panel",
+          "axis": "x"
+        }
+      ],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "websites",
+      "activePages": [
+        "websites"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 46,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "databases",
+      "activePages": [
+        "databases"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 21,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "website-ssl",
+      "activePages": [
+        "website-ssl"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "security-dashboard",
+      "activePages": [
+        "security-dashboard"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 4,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "waf",
+      "activePages": [
+        "waf"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 5,
+      "unnamedButtons": 0,
+      "errors": []
+    },
+    {
+      "width": 1440,
+      "route": "files",
+      "activePages": [
+        "files"
+      ],
+      "pageOverflow": 0,
+      "clips": [],
+      "controls": 74,
+      "unnamedButtons": 0,
+      "errors": []
+    }
+  ],
+  "dialogs": [
+    {
+      "name": "create-website",
+      "open": 1
+    },
+    {
+      "name": "create-database",
+      "open": 1
+    },
+    {
+      "name": "website-cron",
+      "open": 1
+    },
+    {
+      "name": "website-ftp",
+      "open": 2
+    },
+    {
+      "name": "website-backups",
+      "open": 3
+    }
+  ],
+  "errors": [],
+  "failedRequests": [
+    {
+      "url": "/api/environment-inventory",
+      "status": 401
+    }
+  ],
+  "blockedMutations": [],
+  "completedAt": "2026-10-28T09:00:51.661Z"
+}
