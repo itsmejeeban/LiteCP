@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+if exist "%~dp0update-local.bat" call "%~dp0update-local.bat"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\publish-update.ps1" %*
 set "result=%errorlevel%"
 echo.

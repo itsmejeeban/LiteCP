@@ -25,6 +25,12 @@ try {
     )
     $sshExe = Find-UpdateTool 'ssh.exe' @("$env:WINDIR\System32\OpenSSH\ssh.exe", "$env:WINDIR\Sysnative\OpenSSH\ssh.exe")
     $scpExe = Find-UpdateTool 'scp.exe' @("$env:WINDIR\System32\OpenSSH\scp.exe", "$env:WINDIR\Sysnative\OpenSSH\scp.exe")
+    $plinkExe = $null
+    $pscpExe = $null
+    if ($env:LITECP_UPDATE_PASSWORD) {
+        $plinkExe = Find-UpdateTool 'plink.exe' @("$env:ProgramFiles\PuTTY\plink.exe", "${env:ProgramFiles(x86)}\PuTTY\plink.exe")
+        $pscpExe = Find-UpdateTool 'pscp.exe' @("$env:ProgramFiles\PuTTY\pscp.exe", "${env:ProgramFiles(x86)}\PuTTY\pscp.exe")
+    }
     $env:PATH = (Split-Path $gitExe) + ';' + (Split-Path $sshExe) + ';' + (Split-Path $scpExe) + ';' + $env:PATH
     # Bundled Git may not include less.exe. Never launch a pager in this workflow.
     $env:GIT_PAGER = 'cat'
@@ -61,6 +67,7 @@ try {
     [IO.File]::WriteAllText($installPath, ([regex]::Replace($installer, 'LITECP_VERSION="[^"]+"', ('LITECP_VERSION="' + $version + '"'))), $utf8)
     Run-Step 'git' @('add','--all')
     $staged = @(& git diff --cached --name-only)
+    if ($staged -contains 'update-local.bat') { throw 'Private SSH settings are staged. Remove update-local.bat from Git staging before publishing.' }
     if ($staged | Where-Object { $_ -match '(^|/)(\.env|id_rsa|id_ed25519|password\.enc)(\.|$)|\.(pem|key|pfx)$' }) { throw 'Potential credential file staged. Review Git staging before publishing.' }
     Run-Step 'git' @('--no-pager','diff','--cached','--check')
     Write-Host "[3/6] Committing and publishing LiteCP $version..."
@@ -75,10 +82,17 @@ try {
     Run-Step 'git' @('archive','--format=tar',"--output=$archive",$revision)
     $remote = '/root/litecp-manual-update-' + [guid]::NewGuid().ToString('N')
     $destination = "$User@$Server"
-    Run-Step 'ssh' @('-p',"$Port",$destination,"umask 077; mkdir '$remote'")
-    Run-Step 'scp' @('-P',"$Port",$archive,"${destination}:${remote}/source.tar")
+    if ($plinkExe) {
+        Run-Step $plinkExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,"umask 077; mkdir '$remote'")
+        Run-Step $pscpExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$archive,"${destination}:${remote}/source.tar")
+    } else {
+        Run-Step 'ssh' @('-p',"$Port",$destination,"umask 077; mkdir '$remote'")
+        Run-Step 'scp' @('-P',"$Port",$archive,"${destination}:${remote}/source.tar")
+    }
     Write-Host '[5/6] Testing, building and deploying on the server...'
-    Run-Step 'ssh' @('-p',"$Port",$destination,"cd '$remote' && tar -xf source.tar && bash scripts/deploy-published-update.sh '$version' '$revision'")
+    $deployCommand = "cd '$remote' && tar -xf source.tar && bash scripts/deploy-published-update.sh '$version' '$revision'"
+    if ($plinkExe) { Run-Step $plinkExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,$deployCommand) }
+    else { Run-Step 'ssh' @('-p',"$Port",$destination,$deployCommand) }
     Write-Host '[6/6] UPDATE SUCCESS. GitHub and LiteCP are updated.'
     Write-Host "Local transfer files: $output"
     Write-Host "Server source and previous binary: $remote"
