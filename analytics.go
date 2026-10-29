@@ -247,6 +247,7 @@ func (a *App) directoryDiskUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const base = "/"
+	if r.URL.Query().Get("scope") == "litecp" { a.liteCPStorageUsage(w,r); return }
 	target, relative, err := safeDiskUsagePath(base, r.URL.Query().Get("path"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

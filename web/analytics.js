@@ -5,6 +5,10 @@
   const diskPage=document.createElement('section');diskPage.className='page';diskPage.dataset.pageView='disk-usage';
   diskPage.innerHTML='<div class="page-heading"><div><h1>Disk Usages</h1><p>Explore server disk usage by path. Open a directory to see its contents.</p></div><button class="button button-secondary" data-disk-refresh>Refresh</button></div><div class="disk-usage-layout"><article class="panel disk-chart-panel"><div class="panel-head"><div><h2>Directory usage</h2><p data-disk-location></p></div><strong data-disk-total>—</strong></div><div class="disk-pie" role="img" aria-label="Directory disk usage chart"><span>Loading…</span></div></article><article class="panel disk-directory-panel"><div class="panel-head"><h2>Directories</h2><button type="button" class="button button-secondary hidden" data-disk-up>Up one level</button></div><div class="disk-directory-list" data-disk-list></div><p class="feature-note" data-disk-status role="status"></p></article></div>';
   document.querySelector('.main-content').append(page,diskPage);
+  const storageControls=document.createElement('div');storageControls.className='panel analytics-controls';storageControls.innerHTML='<label class="field"><span>Directory view</span><select data-storage-scope><option value="server">All server directories</option><option value="litecp">LiteCP storage directories</option></select></label><p>See website, software, backup and migration storage.</p>';diskPage.querySelector('.page-heading').after(storageControls);
+  const storagePanel=document.createElement('article');storagePanel.className='panel litecp-storage-panel';storagePanel.hidden=true;storagePanel.innerHTML='<div class="panel-head"><h2>LiteCP storage directories</h2></div><p class="feature-note" data-storage-note></p><div class="litecp-storage-list"></div>';diskPage.append(storagePanel);
+  const storageScope=storageControls.querySelector('select');
+  storageScope.onchange=()=>loadDisk('');
   const group=document.createElement('div');group.className='sidebar-feature-group';group.innerHTML='<button type="button" class="nav-item sidebar-group-toggle" aria-controls="analyticsSubmenu" aria-expanded="false"><img src="assets/sidebar/activities.svg" alt="" width="22" height="22"><span>Analytics</span><svg class="sidebar-group-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button><nav id="analyticsSubmenu" class="settings-submenu hidden" aria-label="Analytics"><a class="nav-item" data-page="analytics" href="#analytics"><img src="assets/sidebar/cpu.svg" alt="" width="20" height="20"><span>Graph</span></a><a class="nav-item" data-page="disk-usage" href="#disk-usage"><img src="assets/sidebar/backups.svg" alt="" width="20" height="20"><span>Disk Usages</span></a></nav>';
   document.querySelector('.nav-item[data-page="migrations"]').after(group);
   const toggle=group.querySelector('button'),submenu=group.querySelector('nav');toggle.onclick=()=>{const open=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(open));submenu.classList.toggle('hidden',!open);};group.querySelectorAll('a').forEach(link=>link.onclick=event=>{event.preventDefault();cp.navigate(link.dataset.page);});
@@ -47,6 +51,17 @@
   }
   async function loadDisk(path=diskPath){
     const token=++diskRequest,status=diskPage.querySelector('[data-disk-status]');status.textContent='Calculating directory sizes…';
+    const panelMode=storageScope.value==='litecp';diskPage.querySelector('.disk-usage-layout').hidden=panelMode;storagePanel.hidden=!panelMode;
+    if(panelMode){
+      const list=storagePanel.querySelector('.litecp-storage-list');list.textContent='Calculating LiteCP storage…';
+      try{const result=await cp.api('/api/analytics/disk-usage?scope=litecp');if(token!==diskRequest)return;
+        storagePanel.querySelector('[data-storage-note]').textContent=result.note;
+        list.innerHTML='<table class="data-table"><thead><tr><th>Purpose</th><th>Directory / file path</th><th>Used space</th><th></th></tr></thead><tbody>'+(result.items||[]).map(item=>'<tr><td><strong>'+esc(item.name)+'</strong><small class="storage-category">'+esc(item.category)+'</small></td><td><code>'+esc(item.path)+'</code></td><td>'+(item.status==='not-created'?'Not created':item.status==='unavailable'?'Unavailable':formatBytes(item.bytes)+(item.status==='partial'?' · partial':''))+'</td><td>'+(item.isDir&&['measured','partial'].includes(item.status)?'<button class="button button-secondary" data-storage-open="'+esc(item.path)+'">Explore</button>':'')+'</td></tr>').join('')+'</tbody></table>';
+        list.querySelectorAll('[data-storage-open]').forEach(button=>button.onclick=()=>{storageScope.value='server';loadDisk(button.dataset.storageOpen.replace(/^\//,''));});
+        if(result.partial)storagePanel.querySelector('[data-storage-note]').textContent+=' Scan time limit reached; some paths could not be measured.';
+      }catch(error){if(token===diskRequest)list.textContent='Unable to measure LiteCP storage. '+error.message;}
+      return;
+    }
     try{
       const result=await cp.api('/api/analytics/disk-usage?path='+encodeURIComponent(path));if(token!==diskRequest)return;
       diskPath=result.path||'';diskPage.querySelector('[data-disk-location]').textContent=result.root+diskPath;

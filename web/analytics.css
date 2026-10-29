@@ -29,3 +29,6 @@
 .disk-chart-tooltip[hidden]{display:none;}
 .disk-space-summary{display:flex;justify-content:center;flex-wrap:wrap;gap:12px 20px;padding:12px 0;color:var(--muted);font-size:12px;}
 .disk-space-summary span{display:flex;align-items:center;gap:7px;}.disk-space-summary i{width:10px;height:10px;border-radius:50%;}.disk-space-summary b{font-weight:500;color:var(--ink);}
+.disk-usage-layout[hidden],.litecp-storage-panel[hidden]{display:none!important}
+.litecp-storage-panel{overflow:hidden}.litecp-storage-panel>.feature-note{padding:0 20px;color:var(--muted);font-size:12px;line-height:1.6}
+.litecp-storage-list{overflow:auto;padding:0 16px 16px}.litecp-storage-list td{vertical-align:middle}.litecp-storage-list code{font-size:12px;overflow-wrap:anywhere;white-space:normal}.litecp-storage-list strong{font-weight:500}.storage-category{display:block;color:var(--muted);font-size:11px;margin-top:5px}
