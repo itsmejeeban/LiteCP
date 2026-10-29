@@ -71,13 +71,23 @@ Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13
 
 ## Install
 
-Run this one-line command in an SSH terminal on the target server. It downloads the repository and starts installation. Git and sudo must already be installed; run as root without `sudo` on systems that do not provide it.
+Run as root on AlmaLinux or Ubuntu. Git is not required. This downloads the installer launcher, which downloads the source tarball, extracts it and starts installation:
 
 ```bash
-git clone https://github.com/itsmejeeban/LiteCP.git && sudo bash LiteCP/scripts/install.sh
+cd /root && curl -fL https://raw.githubusercontent.com/itsmejeeban/LiteCP/main/scripts/bootstrap-install.sh -o litecp-latest.sh && bash litecp-latest.sh
 ```
 
-This repository currently requires authenticated GitHub access. Use your GitHub username and a repository-read token when Git prompts for credentials (the token replaces your GitHub password), or use an existing authenticated Git credential helper. Public repositories need no token. Do not put tokens inside the command or repository URL. The source stays in the new `LiteCP` folder; an existing folder is not overwritten. A token-free public `curl` installer cannot access a private repository.
+If curl is missing, install it first with `dnf install -y curl` on AlmaLinux or `apt-get update && apt-get install -y curl` on Ubuntu. The launcher installs the remaining download tools, extracts into a new `/opt/litecp-install.*` folder and preserves existing source folders.
+
+**Private repository:** the public command above requires public access to this repository. For a private repository, download the launcher with a hidden token prompt instead (the token is kept in memory):
+
+```bash
+cd /root && read -rsp 'GitHub token: ' token && printf '\n' && printf 'header = "Authorization: Bearer %s"\n' "$token" | curl --config - -fL https://raw.githubusercontent.com/itsmejeeban/LiteCP/main/scripts/bootstrap-install.sh -o litecp-latest.sh && unset token && bash litecp-latest.sh
+```
+
+The launcher will request a read token again to download a private source tarball. Alternatively, copy `install-litecp.sh`, `LiteCP-2.0.1-source.tar.gz` and its `.sha256` file together onto the server and run `bash install-litecp.sh`; that uses the supplied archive without a GitHub login.
+
+To create the installation bundle from a local checkout, explicitly run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-source.ps1`. It creates a new, non-overwriting folder under `.staging/`, verifies the archive and opens the output folder. Private updater settings, Git history and audit screenshots are excluded.
 
 On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository. Ubuntu 22.04 and 24.04 use their distribution MySQL 8.0 packages; the installer does not automatically replace those with Oracle MySQL 8.4. MySQL binds to localhost on both platforms, and installation reports the actual running version when available. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
