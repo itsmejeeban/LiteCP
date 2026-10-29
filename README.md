@@ -4,9 +4,11 @@ LiteCP is a small, purpose-built control panel for self-hosted WHMCS, WordPress,
 
 The base panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScript interface. It does not require a Node.js process, a cache/message-queue service, or a second database. Optional Rspamd spam filtering adds Redis-compatible cache storage and a local DNS resolver.
 
-Release **0.5.1** adds failure-safe file extraction and migration, transactional mail configuration, MySQL-only installation, automatic security updates, mail-authentication bans, optional Rspamd filtering, and correctness fixes across demo, firewall, resolver, cron, WAF and PHP rollback paths. See [implementation boundaries, installation and validation status](docs/v0.5-development.md) before deploying optional services.
+**LiteCP 2.0.0** brings a compact dark interface, grouped navigation, website tools, migration workflows, storage analytics and administrator security controls. The panel runs as a Go service with locally served browser assets. Optional hosting runtimes use containers and remain disabled until enabled.
 
-![LiteCP dashboard](docs/dashboard-preview.png)
+![LiteCP 2.0.0 dashboard — demo data](docs/dashboard-v2-demo-ready.png)
+
+*Current interface rendered locally with demonstration data. This screenshot is not a production server health report.*
 
 ## Included
 
@@ -24,11 +26,24 @@ Release **0.5.1** adds failure-safe file extraction and migration, transactional
 - Postfix/Dovecot virtual mail domains, authenticated mailboxes, quotas, forwarding aliases, SMTP submission, and IMAPS
 - UFW or firewalld management for scoped custom inbound rules, with essential LiteCP ports protected
 - Allowlisted Nginx, PHP, database, mail, and cron log views
-- Parallel PHP 7.3, 7.4, 8.1, 8.2, 8.3, and 8.4 where native packages are available
+- Parallel PHP 7.3, 7.4, 8.1, 8.2, 8.3, 8.4 and 8.5 where packages are available
 - ionCube Loader, OPcache, and low-idle-memory FPM defaults for every runtime
 - HTTPS panel proxy on port `4321`
 - Loopback-only database access and a minimal host firewall enabled during installation
 - Fail2ban protection for repeated SSH authentication failures
+- Website suspension/unsuspension, domain changes, pagination and storage sizes
+- Multiple website cron jobs with manual test runs and application cron controls
+- Website FTP accounts and phpMyAdmin access from database listings
+- Separate Email pages for domains, mailboxes, aliases, webmail and delivery logs
+- Outbound SMTP connectivity checks on ports 25 and 465
+- Live cPanel, Plesk and LiteCP migration queues, cancellation, finished-job history and temporary-file cleanup
+- Backup schedules, retention, remote destinations, manual website ZIP restore and system snapshots
+- Live and historical CPU/memory/disk graphs, server directory analysis, free-space charts and LiteCP storage breakdown
+- Interactive PTY terminal and a read-only Server File Explorer using the file manager interface
+- Security Dashboard, administrator 2FA, firewall rules, Malware Scan, WAF and configurable SSH port
+- SSH port 369 on fresh installations; existing installations preserve their SSH port
+- Searchable documentation, quick search and collapsible sidebar groups
+- User-run `update.bat` publication and server deployment with retained recovery binaries
 
 LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS release or the official WordPress release to the provisioned document root.
 
@@ -43,11 +58,11 @@ Ubuntu 22.04 and 24.04 receive the requested PHP versions through the co-install
 
 The AlmaLinux 10 PHP 7.3 compatibility image is intentionally isolated because forcing Enterprise Linux 8 or 9 RPMs onto AlmaLinux 10 would mix incompatible system libraries. It still contains end-of-life software and receives no upstream PHP security fixes; migrate legacy applications to a supported runtime as quickly as possible.
 
-Application compatibility is enforced by the panel:
+PHP selectors expose installed versions. Choose a runtime supported by the installed application and its extensions; selecting a runtime does not establish application compatibility. Common application profiles include:
 
 - WHMCS 9.0: PHP 8.2 or 8.3.
 - WHMCS 8.13 LTS: PHP 7.3, 7.4, 8.1, 8.2, or 8.3.
-- WordPress: PHP 7.4, 8.1, 8.2, 8.3, or 8.4. PHP 8.3 or newer is recommended.
+- WordPress: choose a currently supported PHP version compatible with your WordPress core, plugins and themes.
 - Regular websites: any installed LiteCP PHP runtime; PHP 8.3 or newer is recommended for new applications.
 
 Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13/installation-guide/system-requirements/) and [WordPress requirements](https://wordpress.org/about/requirements/) before upgrading an application or changing its PHP version.
@@ -56,13 +71,13 @@ Always check the current [WHMCS system requirements](https://docs.whmcs.com/8-13
 
 ## Install
 
-Run this single command on the target server. It installs the download tools, downloads the latest LiteCP source from GitHub, extracts it into a new directory, and starts the installer. LiteCP installs Oracle MySQL 8.4 LTS on AlmaLinux and the distribution-provided MySQL package on Ubuntu. It refuses to mix or automatically replace an existing MariaDB installation:
+Run this one-line command in an SSH terminal on the target server. It downloads the repository and starts installation. Git and sudo must already be installed; run as root without `sudo` on systems that do not provide it.
 
 ```bash
-sudo bash -c 'set -e; if command -v apt-get >/dev/null; then apt-get update && apt-get install -y ca-certificates curl tar; elif command -v dnf >/dev/null; then dnf install -y ca-certificates curl tar; else echo "Ubuntu or AlmaLinux is required." >&2; exit 1; fi; workdir=$(mktemp -d /opt/litecp-install.XXXXXX); read -r -s -p "GitHub token (leave empty for a public repository): " token; printf "\n"; if [ -n "$token" ]; then printf "header = \"Authorization: Bearer %s\"\n" "$token" | curl --config - --fail --location --proto "=https" --proto-redir "=https" https://api.github.com/repos/itsmejeeban/LiteCP/tarball/main --output "$workdir/litecp.tar.gz"; else curl --fail --location --proto "=https" --proto-redir "=https" https://api.github.com/repos/itsmejeeban/LiteCP/tarball/main --output "$workdir/litecp.tar.gz"; fi; unset token; mkdir "$workdir/source"; tar -xzf "$workdir/litecp.tar.gz" -C "$workdir/source" --strip-components=1; cd "$workdir/source"; bash scripts/install.sh'
+git clone https://github.com/itsmejeeban/LiteCP.git && sudo bash LiteCP/scripts/install.sh
 ```
 
-For the private GitHub repository, enter a GitHub token with read access to this repository when prompted. The token is hidden while typing and is not saved. For a public repository, press Enter. The downloaded archive and extracted source remain in `/opt/litecp-install.*`; the command does not delete an existing source checkout. Run it in an interactive SSH terminal so the installer can ask for the panel administrator credentials.
+This repository currently requires authenticated GitHub access. Use your GitHub username and a repository-read token when Git prompts for credentials (the token replaces your GitHub password), or use an existing authenticated Git credential helper. Public repositories need no token. Do not put tokens inside the command or repository URL. The source stays in the new `LiteCP` folder; an existing folder is not overwritten. A token-free public `curl` installer cannot access a private repository.
 
 On AlmaLinux, the installer uses Oracle's MySQL 8.4 LTS repository. Ubuntu 22.04 and 24.04 use their distribution MySQL 8.0 packages; the installer does not automatically replace those with Oracle MySQL 8.4. MySQL binds to localhost on both platforms, and installation reports the actual running version when available. LiteCP only selects MySQL's legacy `mysql_native_password` authentication for sites running PHP 7.3 or 7.4; newer runtimes use the current MySQL default. Root administration remains protected by local Unix-socket authentication. Use strong generated passwords and do not expose port 3306 publicly.
 
@@ -166,7 +181,7 @@ Detaching a website removes its LiteCP-managed Nginx, isolated PHP pool, and cro
 - HTTP-only, SameSite=Strict, time-limited in-memory sessions; changing the password revokes all sessions
 - Reverse-proxy-aware login throttling and constant-time credential comparison
 - Same-origin checks for state-changing requests
-- A fixed command and service allowlist; no browser-provided shell commands
+- Fixed service-control actions; the administrator Terminal intentionally provides shell access with the panel service account's privileges
 - Descriptor-relative file operations that refuse symlinks, plus ZIP-member, archive-size, upload-size, and permission validation
 - AES-256-GCM encryption for stored remote-backup credentials
 - SFTP SHA256 host-key pinning and TLS-required FTPS support

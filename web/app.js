@@ -40,7 +40,7 @@
   };
 
   const demoState = {
-    version: "1.0.0",
+    version: "2.0.0",
     username: "admin",
     settings: { email: "admin@hostingtom.com", timezone: "Asia/Kolkata", backupRetention: 14, emailHostingEnabled: true, resolvers: ["8.8.8.8", "8.8.4.4"] },
     sites: [
@@ -102,6 +102,16 @@
   async function mockAPI(path, options) {
     await new Promise(resolve => setTimeout(resolve, options.method && options.method !== "GET" ? 420 : 100));
     if (path === "/api/state") return structuredClone(demoState);
+    if (path === "/api/environment-inventory") return {
+      software: [
+        {name:"Nginx",version:"Available (demo)",installed:true},
+        {name:"MySQL",version:"Available (demo)",installed:true},
+        {name:"Node.js (host)",version:"Not detected",installed:false},
+        {name:"Python (host)",version:"Available (demo)",installed:true},
+        {name:"Ruby (host)",version:"Not detected",installed:false},
+        {name:"Podman",version:"Available (demo)",installed:true}
+      ], images:{node:[],python:[],ruby:[]},imageStatus:"Checked",enabled:{node:false,python:false,ruby:false}
+    };
     if (path === "/api/login") return { ok: true };
     if (path.startsWith("/api/activities")) {
       const query = new URL(path, location.href).searchParams;
