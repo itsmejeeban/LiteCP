@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "1.0.31"
+var version = "1.0.32"
 var buildRevision = ""
 
 //go:embed web/*
@@ -278,6 +278,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))
 	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
 	mux.HandleFunc("/api/mail/delivery", only(http.MethodGet, a.withAuth(a.emailDeliveryLogs)))
+	mux.HandleFunc("/api/mail/smtp-port-check", only(http.MethodPost, a.withAuth(a.smtpPortCheck)))
 	mux.HandleFunc("/api/system-snapshots", a.withAuth(a.systemSnapshots))
 	mux.HandleFunc("/api/system-snapshots/upload", only(http.MethodPost, a.withAuth(a.uploadSystemSnapshot)))
 	mux.HandleFunc("/api/system-snapshots/inspect", only(http.MethodPost, a.withAuth(a.inspectSystemSnapshot)))

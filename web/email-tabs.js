@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const cp=window.LiteCP,page=document.querySelector('[data-page-view="email"]');
-  const entries=[['add-domain','Add Mail Domain','#mailDomainForm'],['create-mailbox','Create Mailbox','#mailboxForm'],['create-alias','Create Alias','#mailAliasForm'],['webmail','Open Webmail',null],['domains','Mail Domains','#mailDomainsTable'],['mailboxes','Mailboxes','#mailboxesTable'],['aliases','Aliases','#mailAliasesTable'],['delivery','Email Delivery','#mailDeliveryPanel']];
+  const entries=[['add-domain','Add Mail Domain','#mailDomainForm'],['create-mailbox','Create Mailbox','#mailboxForm'],['create-alias','Create Alias','#mailAliasForm'],['webmail','Open Webmail',null],['domains','Mail Domains','#mailDomainsTable'],['mailboxes','Mailboxes','#mailboxesTable'],['aliases','Aliases','#mailAliasesTable'],['delivery','Email Delivery','#mailDeliveryPanel'],['smtp-port-check','SMTP Port Check','#smtpPortCheckPanel']];
   const parent=document.querySelector('.nav-item[data-page="email"]'),group=document.createElement('div'),toggle=document.createElement('button'),submenu=document.createElement('nav');
   group.className='sidebar-feature-group';parent.replaceWith(group);toggle.type='button';toggle.className='nav-item sidebar-group-toggle';toggle.setAttribute('aria-controls','emailSubmenu');toggle.innerHTML='<img src="assets/sidebar/email.svg" alt="" width="22" height="22"><span>Email</span><svg class="sidebar-group-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
   submenu.id='emailSubmenu';submenu.className='settings-submenu hidden';submenu.setAttribute('aria-label','Email sections');group.append(toggle,submenu);
