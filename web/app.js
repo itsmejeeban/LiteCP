@@ -546,7 +546,7 @@
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "security-dashboard", "two-factor", "analytics", "disk-usage", "activities", "documentation", "applications"];
-    if (!allowed.includes(page)) page = "dashboard";
+    if (!allowed.includes(page) && page !== 'ssh-port') page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
       const active = serverExplorer ? link.dataset.page === 'server-files' : link.dataset.page === page;

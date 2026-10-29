@@ -135,6 +135,10 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ports := []string{}
+	if data, readErr := os.ReadFile(filepath.Join(a.system.dataDir,"ssh-port")); readErr == nil {
+		value := strings.TrimSpace(string(data))
+		if port, parseErr := strconv.Atoi(value); parseErr == nil && port > 0 && port <= 65535 { ports = append(ports,value) }
+	}
 	for _, line := range strings.Split(ssh, "\n") {
 		parts := strings.Fields(line)
 		if len(parts) == 2 && parts[0] == "port" {

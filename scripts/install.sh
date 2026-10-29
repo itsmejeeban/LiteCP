@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="1.0.30"
+LITECP_VERSION="1.0.31"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -40,7 +40,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   printf 'postfix postfix/mailname string %s\npostfix postfix/main_mailer_type select Internet Site\n' "$(hostname -f)" | debconf-set-selections
-  apt-get install -y ca-certificates curl gnupg openssh-client sshpass tar unzip bzip2 libc-bin software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd unattended-upgrades
+  apt-get install -y ca-certificates curl gnupg openssh-client openssh-server sshpass tar unzip bzip2 libc-bin software-properties-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cron golang-go ufw fail2ban postfix dovecot-core dovecot-imapd dovecot-lmtpd unattended-upgrades
   add-apt-repository -y ppa:ondrej/php
   apt-get update
   PHP_PACKAGES=()
@@ -67,7 +67,7 @@ else
   # AlmaLinux 10 advertises MariaDB 11.8 server packages as optional weak
   # dependencies. Installing those beside Oracle MySQL would cause file conflicts.
   DNF_INSTALL_OPTIONS+=(--setopt=install_weak_deps=False)
-  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl openssh-clients sshpass tar unzip bzip2 glibc-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot dnf-automatic
+  dnf install -y "${DNF_INSTALL_OPTIONS[@]}" ca-certificates curl openssh-clients openssh-server sshpass tar unzip bzip2 glibc-common openssl nginx "${DATABASE_PACKAGE}" certbot python3-certbot-nginx cronie golang policycoreutils-python-utils firewalld fail2ban fail2ban-firewalld postfix dovecot dnf-automatic
   if ! rpm -q remi-release >/dev/null 2>&1; then
     dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${EL_MAJOR}.rpm"
   fi
@@ -513,7 +513,12 @@ else
   systemctl enable --now firewalld
 fi
 
+if [[ "${FRESH_INSTALL}" -eq 1 ]]; then
+  info "Configuring SSH on port 369"
+  bash "${SCRIPT_DIR}/configure-ssh-port.sh" 369
+fi
 info "Enabling SSH brute-force protection"
+SSH_PROTECTION_PORTS="$(cat /var/lib/litecp/ssh-port 2>/dev/null || /usr/sbin/sshd -T | awk '$1=="port"{print $2;exit}')"
 install -d -m 0755 /etc/fail2ban/jail.d
 if [[ "${OS_ID}" == "ubuntu" ]]; then
   FAIL2BAN_ACTION="ufw"
@@ -523,6 +528,7 @@ fi
 cat > /etc/fail2ban/jail.d/litecp-sshd.local <<EOF
 [sshd]
 enabled = true
+port = ${SSH_PROTECTION_PORTS:-22}
 backend = systemd
 banaction = ${FAIL2BAN_ACTION}
 maxretry = 5
@@ -567,6 +573,7 @@ OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
 success "LiteCP - By Hostingtom is installed."
+printf 'SSH port: %s (allow this TCP port in any external cloud firewall).\n' "${SSH_PROTECTION_PORTS:-22}"
 printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
 printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 4321 and mail ports 25, 465, 587, 993 as needed.\n'

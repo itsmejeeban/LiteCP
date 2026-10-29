@@ -3,6 +3,7 @@
   const cp = window.LiteCP;
   const normalize = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const features = [
+    ["ssh-port", "SSH Port", "View or change the server SSH connection port", "", "security ssh port 369 connection remote access"],
     ["server-files", "Server File Explorer", "Browse server directories and view or download files", "", "server root filesystem explorer path read only"],
     ["settings/update", "LiteCP update", "Check for and install stable LiteCP releases", "#updateSettingsPanel", "update upgrade version panel release"],
     ["dashboard", "Overview", "CPU, memory, disk and uptime", "", "dashboard resources monitoring status"],

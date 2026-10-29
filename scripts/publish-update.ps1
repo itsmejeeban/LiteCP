@@ -2,6 +2,7 @@
 param([string]$Server = '2.31.109.187', [int]$Port = 22, [string]$User = 'root', [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
+if ($env:LITECP_UPDATE_PORT) { $Port = [int]$env:LITECP_UPDATE_PORT }
 function Run-Step([string]$Tool, [string[]]$Arguments) {
     & $Tool @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$Tool failed with exit code $LASTEXITCODE" }
