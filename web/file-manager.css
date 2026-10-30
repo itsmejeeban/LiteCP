@@ -396,3 +396,10 @@ body.fm-fullscreen-open { overflow: hidden; }
 #editorModal .modal-actions {display:flex!important;flex:0 0 auto!important;gap:10px;justify-content:flex-end;}
 #editorModal #editorForm {overflow:hidden;}
 #editorModal #editorForm>.modal-body {overflow:hidden;}
+
+/* The portaled context menu keeps its own readable cPanel-style palette. */
+:root[data-theme] body #fmContextMenu {background:#fff!important;color:#111!important;border:1px solid #b8b8b8!important;}
+:root[data-theme] body #fmContextMenu .fm-tool {background:#fff!important;color:#111!important;}
+:root[data-theme] body #fmContextMenu .fm-tool:not(:disabled):is(:hover,:focus-visible) {background:#d7edf9!important;color:#111!important;}
+:root[data-theme] body #fmContextMenu .fm-tool:disabled {background:#fff!important;color:#777!important;opacity:1;cursor:default;}
+:root[data-theme] body #fmContextMenu .fm-tool[data-fm-action="download"]:not(:disabled) {color:#226aab!important;}
