@@ -461,6 +461,10 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 #siteModal #wordpressInstallFields>label:last-child input {min-width:0;width:100%;}
 
 :root[data-theme] #backupDestinationsTable .row-actions button {display:inline-flex!important;align-items:center!important;justify-content:center!important;width:34px!important;height:34px!important;padding:0!important;box-sizing:border-box;}
+:root[data-theme] #backupDestinationsTable .row-actions {align-items:center;flex-wrap:nowrap;gap:8px;}
+:root[data-theme] #backupDestinationsTable .row-actions button {flex:0 0 auto;}
+:root[data-theme] #backupDestinationsTable .row-actions button[data-backup-destination-action="test"] {width:auto!important;min-width:128px;padding:0 12px!important;white-space:nowrap;line-height:1.2;}
+:root[data-theme] #backupDestinationsTable td:last-child {width:1%;white-space:nowrap;}
 :root[data-theme] #backupDestinationsTable .row-actions button svg {display:block!important;position:static!important;margin:0!important;width:18px!important;height:18px!important;stroke:currentColor!important;fill:none!important;}
 :root[data-theme] #backupDestinationsTable [data-backup-destination-action="delete"] {color:#fff!important;background:#dc2626!important;}
 

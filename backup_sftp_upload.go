@@ -75,14 +75,36 @@ func (s *System) runBackupSFTP(ctx context.Context, destination BackupDestinatio
 	command.Stdin = strings.NewReader(batch)
 	output, err := command.CombinedOutput()
 	if err != nil {
-		message := strings.ReplaceAll(strings.TrimSpace(string(output)), password, "[redacted]")
-		if len(message) > 600 {
-			message = message[len(message)-600:]
-		}
-		if message == "" {
-			message = "SFTP client failed"
-		}
-		return fmt.Errorf("SFTP operation failed: %s", message)
+		return backupSFTPFailure(output, password)
 	}
 	return nil
+}
+
+// SFTP prints its batch command prompt only after the SSH authentication and
+// subsystem startup succeeded. Separate remote filesystem errors from login
+// failures so users do not keep replacing an already valid saved password.
+func backupSFTPFailure(output []byte, password string) error {
+	message := strings.TrimSpace(string(output))
+	if password != "" {
+		message = strings.ReplaceAll(message, password, "[redacted]")
+	}
+	lower := strings.ToLower(message)
+	authenticated := strings.HasPrefix(lower, "sftp> ") || strings.Contains(lower, "\nsftp> ")
+	if authenticated {
+		if strings.Contains(lower, "no such file or directory") {
+			return errors.New("SFTP login succeeded, but the configured remote folder does not exist. Choose an existing folder or create it on the backup server. Backup uploads will try to create missing folders when the account has permission")
+		}
+		if strings.Contains(lower, "permission denied") {
+			return errors.New("SFTP login succeeded, but access to the remote folder or file was denied. Check that this account can access the configured backup folder")
+		}
+	} else if strings.Contains(lower, "permission denied") || strings.Contains(lower, "authentication failed") {
+		return errors.New("The remote SSH server rejected the saved login. This can also mean root password login is disallowed, the account is locked, or the source IP is blocked. Check the remote SSH authentication log; changing the backup folder will not fix a login rejection")
+	}
+	if len(message) > 600 {
+		message = message[len(message)-600:]
+	}
+	if message == "" {
+		message = "SFTP client failed"
+	}
+	return fmt.Errorf("SFTP operation failed: %s", message)
 }

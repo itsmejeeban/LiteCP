@@ -28,6 +28,12 @@ func backupConnectionCurlConfig(destination BackupDestination, password string) 
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
+func backupSFTPDirectoryProbe(remotePath string) string {
+	// OpenSSH's SFTP `ls` does not support the shell's -d flag. Entering
+	// the directory and printing its path verifies access without listing data.
+	return "cd " + sftpBatchQuote(remotePath) + "\npwd\n"
+}
+
 func (s *System) testBackupConnection(ctx context.Context, destination BackupDestination) error {
 	if err := validateBackupDestination(destination, true); err != nil {
 		return err
@@ -53,7 +59,7 @@ func (s *System) testBackupConnection(ctx context.Context, destination BackupDes
 	if destination.Protocol == "sftp" {
 		// These SFTP batch commands only read the configured directory. Reuse
 		// the uploader's pinned host key and anonymous credential pipe.
-		err = s.runBackupSFTP(ctx, destination, password, "cd "+sftpBatchQuote(destination.RemotePath)+"\nls -d .\n")
+		err = s.runBackupSFTP(ctx, destination, password, backupSFTPDirectoryProbe(destination.RemotePath))
 	} else {
 		var config string
 		config, err = backupConnectionCurlConfig(destination, password)

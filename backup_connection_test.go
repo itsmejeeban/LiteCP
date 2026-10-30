@@ -49,3 +49,15 @@ func TestBackupConnectionDemoDoesNotReportSuccess(t *testing.T) {
 		t.Fatalf("demo falsely reported a real connection: %v", err)
 	}
 }
+
+func TestBackupSFTPDirectoryProbeUsesSupportedReadOnlyCommands(t *testing.T) {
+	got := backupSFTPDirectoryProbe(`/backups/site "one"`)
+	if got != "cd \"/backups/site \\\"one\\\"\"\npwd\n" {
+		t.Fatalf("unexpected directory probe: %q", got)
+	}
+	for _, forbidden := range []string{"ls -d", "mkdir", "put ", "rm "} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("invalid or mutating probe: %q", got)
+		}
+	}
+}
