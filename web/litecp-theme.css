@@ -451,3 +451,6 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 :root[data-theme] #sitesTable .row-actions button[data-site-runtime]::before {display:none;}
 :root[data-theme] #sitesTable .row-actions button[data-site-runtime] img {display:block;width:28px;height:28px;object-fit:contain;}
+
+/* Files remains the leading website action even when modules add controls. */
+:root[data-theme] #sitesTable .row-actions [data-site-action="files"] {order:-100!important;}

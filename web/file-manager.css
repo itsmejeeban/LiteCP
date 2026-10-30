@@ -426,3 +426,6 @@ body.fm-fullscreen-open { overflow: hidden; }
 
 :root[data-theme] #sitesTable .row-actions button[data-ssl-renew="true"]::before {display:none!important;}
 :root[data-theme] #sitesTable .row-actions button[data-ssl-renew="true"] svg {display:block!important;width:24px;height:24px;color:#64b5e8;stroke:currentColor;fill:none;}
+
+/* Equal editor header actions, independent of global close-button sizing. */
+:root[data-theme] body #editorModal .modal-head :is(.editor-save,#closeEditor) {display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;flex:0 0 38px!important;width:38px!important;min-width:38px!important;max-width:38px!important;height:38px!important;min-height:38px!important;max-height:38px!important;padding:8px!important;border:0!important;border-radius:8px!important;align-self:center!important;}

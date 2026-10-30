@@ -333,6 +333,11 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		return site, nil, nil
 	}
 
+	if _, err := os.Lstat(managedSiteRoot(site)); err == nil {
+		return Site{}, nil, errors.New("retained website data already exists for this domain; review or remove the retained directory before creating a new website")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Site{}, nil, err
+	}
 	_, rootErr := os.Lstat(site.Root)
 	rootCreated := errors.Is(rootErr, os.ErrNotExist)
 	if rootErr != nil && !rootCreated {

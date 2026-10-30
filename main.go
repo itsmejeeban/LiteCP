@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.60"
+var version = "2.0.65"
 var buildRevision = ""
 
 //go:embed web/*
@@ -910,6 +910,21 @@ func (a *App) deleteSite(w http.ResponseWriter, r *http.Request) {
 	site := a.store.SiteByID(id)
 	if site == nil {
 		writeError(w, http.StatusNotFound, "Website not found.")
+		return
+	}
+	if r.URL.Query().Get("deleteData") == "true" {
+		var confirmation struct {
+			Domain string `json:"domain"`
+		}
+		if decodeJSON(r, &confirmation) != nil || confirmation.Domain != site.Domain {
+			writeError(w, 400, "Type the exact website domain to confirm permanent removal")
+			return
+		}
+		if err := a.terminateWebsite(r.Context(), *site); err != nil {
+			writeError(w, 409, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
 		return
 	}
 	backup, err := a.system.snapshotSiteConfig(*site)
