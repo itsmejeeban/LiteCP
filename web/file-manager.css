@@ -403,3 +403,15 @@ body.fm-fullscreen-open { overflow: hidden; }
 :root[data-theme] body #fmContextMenu .fm-tool:not(:disabled):is(:hover,:focus-visible) {background:#d7edf9!important;color:#111!important;}
 :root[data-theme] body #fmContextMenu .fm-tool:disabled {background:#fff!important;color:#777!important;opacity:1;cursor:default;}
 :root[data-theme] body #fmContextMenu .fm-tool[data-fm-action="download"]:not(:disabled) {color:#226aab!important;}
+
+/* Full-width editor with viewport-safe edges and explicit control contrast. */
+:root[data-theme] body #editorModal {display:flex;padding:8px!important;width:100%!important;max-width:100%!important;}
+:root[data-theme] body #editorModal.hidden {display:none!important;}
+:root[data-theme] body #editorModal .modal-card.editor-modal {width:100%!important;max-width:100%!important;flex:1 1 100%;height:calc(100dvh - 16px)!important;max-height:calc(100dvh - 16px)!important;margin:0!important;}
+:root[data-theme] body #editorModal .editor-tools button,
+:root[data-theme] body #editorModal .fm-html-tools button,
+:root[data-theme] body #editorModal .modal-actions button:not(.button-primary) {background:#e2e8f0!important;color:#243447!important;border:1px solid #94a3b8!important;}
+:root[data-theme] body #editorModal :is(.editor-tools,.fm-html-tools,.modal-actions) button:not(:disabled):hover {background:#cbd5e1!important;color:#142433!important;}
+:root[data-theme] body #editorModal button[data-editor-save] {background:#2879b7!important;color:#fff!important;border-color:#21689e!important;}
+:root[data-theme] body #editorModal button[data-editor-save]:not(:disabled):hover {background:#21689e!important;color:#fff!important;}
+:root[data-theme] body #editorModal button:disabled {opacity:.6;}
