@@ -690,7 +690,7 @@
         const modal=$("#credentialsModal");modal.querySelector(".modal-head p").textContent="Use your chosen WordPress administrator username and password.";
         $("#credentialList").innerHTML=`<div><dt>WordPress admin</dt><dd><a class="button button-primary" href="${escapeHTML(result.wordpressAdminURL)}" target="_blank" rel="noopener noreferrer">Open WordPress admin</a></dd></div><div><dt>Username</dt><dd>${escapeHTML(body.wordpressUsername)}</dd></div>`;
         modal.querySelector(".warning-callout").classList.add("hidden");$("#copyCredentials").classList.add("hidden");$("#closeCredentials").textContent="Done";modal.classList.remove("hidden");
-      } else if (result.database) showCredentials(result.database, result.site);
+      } else if (result.database) showCredentials(result.database, result.site, body.appType === "wordpress" && body.wordpressMode === "install");
       else showToast("Website provisioned", `${result.site.domain} is ready for ${applicationLabel(result.site.appType)} files.`);
       if(result.warning)handleError(new Error(result.warning));
       if(body.wordpressMode==="migrate")showToast("Ready for migration","Open Migration to transfer your existing WordPress site.");
@@ -698,11 +698,9 @@
     finally { submit.disabled = false; submit.innerHTML = 'Provision website <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>'; }
   }
 
-  function showCredentials(credentials, site) {
-
-
+  function showCredentials(credentials, site, wordpressIncomplete = false) {
     const rows = [["Website", site.domain], ["Database host", credentials.host], ["Database name", credentials.name], ["Database user", credentials.username], ["Database password", credentials.password]];
-    showOneTimeCredentials("Website provisioned", "Save these database credentials now. The password is not stored by LiteCP.", rows);
+    showOneTimeCredentials(wordpressIncomplete ? "WordPress setup incomplete" : "Website provisioned", wordpressIncomplete ? "Files and database were retained. Save these credentials, then use WP setup to finish installation." : "Save these database credentials now. The password is not stored by LiteCP.", rows);
   }
 
   function showOneTimeCredentials(title, description, rows) {

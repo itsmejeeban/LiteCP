@@ -248,7 +248,7 @@ func (s *System) finishWordPressSetup(ctx context.Context, site Site, input Crea
 		if diagnostic == "" {
 			diagnostic = "PHP exited without completing installation"
 			if err != nil {
-				diagnostic = err.Error()
+				diagnostic = wordPressSetupExitDiagnostic(err)
 			}
 		}
 		return fmt.Errorf("WordPress setup failed: %s. Files and database retained", diagnostic)
