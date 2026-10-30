@@ -499,7 +499,7 @@
     const destinations = currentState.backupDestinations || [];
     $("#backupDestination").innerHTML = '<option value="">Local storage only</option>' + destinations.map(destination => `<option value="${escapeHTML(destination.id)}">${escapeHTML(destination.name)} · ${escapeHTML(destination.protocol.toUpperCase())}</option>`).join("");
     if (destinations.some(item => item.id === destinationValue)) $("#backupDestination").value = destinationValue;
-    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button type="button" data-backup-destination-action="edit" data-id="${escapeHTML(destination.id)}" title="Edit destination" aria-label="Edit remote destination ${escapeHTML(destination.name)}">${icons.edit}</button><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
+    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button type="button" class="button button-secondary" data-backup-destination-action="test" data-id="${escapeHTML(destination.id)}">Test connection</button><button type="button" data-backup-destination-action="edit" data-id="${escapeHTML(destination.id)}" title="Edit destination" aria-label="Edit remote destination ${escapeHTML(destination.name)}">${icons.edit}</button><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
     const backups = currentState.backups || [];
     if (!backups.length) {
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
@@ -884,6 +884,14 @@
   async function handleBackupDestinationAction(event) {
     const button = event.target.closest("[data-backup-destination-action]");
     if(!button)return;
+    if(button.dataset.backupDestinationAction==="test"){
+      if(button.disabled)return;
+      button.disabled=true;button.textContent="Testing…";
+      try { const result=await api("/api/backup-destinations/test",{method:"POST",body:{id:button.dataset.id}});showToast("Connection successful",result.message); }
+      catch(error){handleError(error);}
+      finally {button.disabled=false;button.textContent="Test connection";}
+      return;
+    }
     if(button.dataset.backupDestinationAction==="edit"){
       const destination=currentState.backupDestinations.find(item=>item.id===button.dataset.id);if(!destination)return;
       const form=$("#backupDestinationForm");form.dataset.editID=destination.id;$("#cancelDestinationEdit").classList.remove("hidden");

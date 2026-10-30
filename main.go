@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.102"
+var version = "2.0.104"
 var buildRevision = ""
 
 //go:embed web/*
@@ -283,6 +283,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/website-backups/upload", only(http.MethodPost, a.withAuth(a.websiteBackupUpload)))
 	mux.HandleFunc("/api/website-backups/restore", only(http.MethodPost, a.withAuth(a.websiteBackupRestore)))
 	mux.HandleFunc("/api/backup-destinations", a.withAuth(a.createBackupDestination))
+	mux.HandleFunc("/api/backup-destinations/test", only(http.MethodPost, a.withAuth(a.testBackupDestination)))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
 	mux.HandleFunc("/api/files/search", only(http.MethodGet, a.withAuth(a.searchFiles)))
