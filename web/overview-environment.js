@@ -16,8 +16,28 @@
     const state=cp.state();if(!state)return;summary(state);if(pending)return pending;if(!force&&Date.now()-loaded<60000)return;
     const status=card.querySelector('[data-environment-status]'),button=card.querySelector('button');button.disabled=true;status.textContent='Checking installed software…';
     pending=(async()=>{try{const result=await cp.api('/api/environment-inventory');
-      card.querySelector('.environment-software').innerHTML='<h3>Installed software</h3><dl class="environment-summary">'+result.software.map(item=>row(item.name,item.version,item.installed?"environment-good":"environment-error")).join('')+'</dl><h3>Application hosting</h3><dl class="environment-summary">'+Object.entries({node:'Node.js',python:'Python',ruby:'Ruby'}).map(([key,name])=>row(name,(result.enabled?.[key]?'Enabled':'Disabled')+' · '+(result.imageStatus==='Checked'?(result.images?.[key]?.length?'Installed container versions: '+result.images[key].join(', '):'No runtime image installed'):'Image detection unavailable'))).join('')+'</dl>';
-      status.textContent='Host runtimes and installed hosting containers are listed separately. Additional versions download when an application starts.';loaded=Date.now();
+      const labels={node:'Node.js',python:'Python',ruby:'Ruby'};
+      const hosting=Object.entries(labels).map(([key,name])=>{
+        const enabled=!!result.enabled?.[key], versions=result.images?.[key]||[], checked=result.imageStatus==='Checked';
+        let value=enabled?'Enabled':'Disabled',status=enabled?'environment-good':'environment-error';
+        if(!checked){value+=' · Container detection unavailable';status='environment-error';}
+        else if(versions.length){value+=' · Installed container versions: '+versions.join(', ');}
+        else if(enabled){value+=' · Runtime downloads on first start';status='environment-info';}
+        else value+=' · No runtime image installed';
+        return row(name,value,status);
+      }).join('');
+      const software=result.software.map(item=>{
+        const key=Object.keys(labels).find(key=>item.name===labels[key]+' (host)');
+        if(key&&!item.installed){
+          const versions=result.images?.[key]||[];
+          if(versions.length)return row(labels[key],'Container runtime installed: '+versions.join(', '),'environment-good');
+          if(result.enabled?.[key])return row(labels[key],'Container hosting enabled · Downloads on first start',result.imageStatus==='Checked'?'environment-info':'environment-error');
+          return row(item.name,'Not installed on host', 'environment-error');
+        }
+        return row(item.name,item.version,item.installed?'environment-good':'environment-error');
+      }).join('');
+      card.querySelector('.environment-software').innerHTML='<h3>Installed software</h3><dl class="environment-summary">'+software+'</dl><h3>Application hosting</h3><dl class="environment-summary">'+hosting+'</dl>';
+      status.textContent='Host installations and container runtimes are detected separately. Enabling hosting does not install a runtime; its image downloads when you start an application.';loaded=Date.now();
     }catch(error){status.textContent='Unable to check installed software. '+error.message;}finally{button.disabled=false;pending=null;}})();return pending;
   }
   card.querySelector('button').onclick=()=>load(true);

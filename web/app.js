@@ -494,7 +494,7 @@
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
     }
-    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge success"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td></tr>`).join("")}</tbody></table>`;
+    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th><th>ACTIONS</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge ${/fail|error|interrupt/i.test(backup.status) ? "backup-status-failed" : "success"}"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td><td><span class="row-actions"><a class="button button-secondary" href="/api/backups/item?id=${encodeURIComponent(backup.id)}">Download</a><button type="button" class="button danger" data-remove-backup="${escapeHTML(backup.id)}">Remove</button></span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function renderFileSiteOptions() {
@@ -889,6 +889,19 @@
       showToast("Destination removed", "Stored remote credentials were removed from LiteCP.");
     } catch (error) { handleError(error); }
   }
+
+  $("#backupsTable").addEventListener("click", async event => {
+    const button = event.target.closest("[data-remove-backup]");
+    if (!button) return;
+    const backup = (currentState.backups || []).find(item => item.id === button.dataset.removeBackup);
+    if (!backup || !await window.LiteCPDialogs.confirm(`Permanently remove the local backup for ${backup.domain}?\n\n${backup.path}\n\nThe archive and its history entry will be removed. Remote copies are kept.`, {title:"Remove backup",confirmText:"Remove backup",danger:true})) return;
+    button.disabled = true;
+    try {
+      await api(`/api/backups/item?id=${encodeURIComponent(backup.id)}`, {method:"DELETE"});
+      currentState = await api("/api/state"); renderAll();
+      showToast("Backup removed", "The local archive and history entry were removed. Remote copies were kept.");
+    } catch (error) { handleError(error); } finally { button.disabled = false; }
+  });
 
   async function loadFiles() {
     if ($("#fileSiteSelect").value !== "server-explorer" && /^\.trash(?:\/|$)/.test(currentFilePath)) {

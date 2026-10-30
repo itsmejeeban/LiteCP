@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.74"
+var version = "2.0.88"
 var buildRevision = ""
 
 //go:embed web/*
@@ -267,8 +267,11 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites/php-settings", a.withAuth(a.sitePHPSettings))
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
+	mux.HandleFunc("/api/backups/counts", a.withAuth(a.backupCounts))
+	mux.HandleFunc("/api/backups/item", a.withAuth(a.backupHistoryItem))
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
+	mux.HandleFunc("/api/system-updates", a.withAuth(a.systemUpdates))
 	mux.HandleFunc("/api/environment-inventory", a.withAuth(a.environmentInventory))
 	mux.HandleFunc("/api/analytics/processes", a.withAuth(a.liveProcesses))
 	mux.HandleFunc("/api/analytics/usage", a.withAuth(a.usageAnalytics))
@@ -288,6 +291,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/phpmyadmin/", a.withAuth(a.phpMyAdmin))
 	mux.HandleFunc("/api/databases/phpmyadmin", only(http.MethodPost, a.withAuth(a.databaseAdminLaunch)))
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))
+	mux.HandleFunc("/api/mail/webmail-configure", a.withAuth(a.configureWebmail))
 	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
 	mux.HandleFunc("/api/mail/delivery", only(http.MethodGet, a.withAuth(a.emailDeliveryLogs)))
 	mux.HandleFunc("/api/mail/smtp-port-check", only(http.MethodPost, a.withAuth(a.smtpPortCheck)))

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="2.0.74"
+LITECP_VERSION="2.0.88"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -570,9 +570,11 @@ bash "${SCRIPT_DIR}/install-ftp.sh"
 systemctl is-active --quiet litecp-ftps || fail "FTPS did not start; inspect journalctl -u litecp-ftps."
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+# ClamAV and WAF are included by default. Explicit 0 keeps minimal/custom installs possible.
+info "Installing default security components (ClamAV signatures and WAF); signature downloads may take several minutes."
 OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)
-[[ "${LITECP_INSTALL_ANTIVIRUS:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antivirus)
+[[ "${LITECP_INSTALL_ANTIVIRUS:-1}" != 1 ]] || OPTIONAL_FEATURES+=(antivirus)
 [[ "${LITECP_INSTALL_WAF:-1}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi

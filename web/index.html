@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=full-width-picker-6">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
-  <link rel="stylesheet" href="litecp-theme.css?v=destination-edit-2.0.71">
+  <link rel="stylesheet" href="litecp-theme.css?v=system-updates-2.0.87">
   <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
   <link rel="stylesheet" href="file-manager.css?v=editor-action-size-2.0.62">
@@ -28,12 +28,13 @@
   <link rel="stylesheet" href="email-tabs.css?v=spacing-2">
   <link rel="stylesheet" href="backup-tabs.css?v=1">
   <link rel="stylesheet" href="migration-tabs.css?v=1">
-  <link rel="stylesheet" href="overview-icons.css?v=1">
+  <link rel="stylesheet" href="overview-icons.css?v=backup-counts-1">
   <link rel="stylesheet" href="analytics.css?v=storage-directories-3">
   <link rel="stylesheet" href="vendor/xterm/xterm.css">
-  <link rel="stylesheet" href="terminal.css?v=visible-cursor-2.0.47">
+  <link rel="stylesheet" href="terminal.css?v=clipboard-2.0.85">
   <link rel="stylesheet" href="website-list.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
+
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -133,6 +134,8 @@
             <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">—</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span></div><small>TOTAL WEBSITES</small><div class="metric-value"><strong id="totalWebsitesValue">0</strong></div></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span></div><small>TOTAL EMAIL ACCOUNTS</small><div class="metric-value"><strong id="totalEmailAccountsValue">0</strong></div></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">—</strong></div><p>Available local archives</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">—</strong></div><p>Recorded successful uploads</p></article>
           </div>
 
           <div class="dashboard-grid hidden">
@@ -248,7 +251,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=destination-edit-2.0.71" defer></script>
+  <script src="app.js?v=backup-history-2.0.75" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
   <script src="features.js?v=files-first-2.0.53" defer></script>
   <script src="html-editor.js?v=2" defer></script>
@@ -260,9 +263,9 @@
   <script src="website-ftp.js?v=responsive-audit-8" defer></script>
   <script src="website-cron.js?v=merged-app-cron-1" defer></script>
   <script src="documentation.js?v=3" defer></script>
-  <script src="application-hosting.js?v=dialogs-1" defer></script>
+  <script src="application-hosting.js?v=inventory-2.0.79" defer></script>
   <script src="database-popup.js?v=1" defer></script>
-  <script src="panel-search.js?v=no-shortcut-2.0.20" defer></script>
+  <script src="panel-search.js?v=system-updates-2.0.87" defer></script>
   <script src="settings-tabs.js?v=backup-tabs-5" defer></script>
   <script src="security-pages.js?v=responsive-audit-8" defer></script>
   <script src="website-tool-pages.js?v=1" defer></script>
@@ -280,20 +283,23 @@
   <script src="sidebar-groups.js?v=runtime-selectors-2.0.24" defer></script>
   <script src="email-delivery.js?v=1" defer></script>
   <script src="smtp-port-check.js?v=1" defer></script>
-  <script src="email-tabs.js?v=smtp-check-3" defer></script>
-  <script src="submenu-icons.js?v=smtp-icon-2.0.18" defer></script>
+  <script src="webmail-setup.js?v=2.0.77" defer></script>
+  <script src="email-tabs.js?v=webmail-setup-2.0.77" defer></script>
+  <script src="submenu-icons.js?v=webmail-setup-2.0.77" defer></script>
   <script src="system-snapshots.js?v=1" defer></script>
   <script src="backup-tabs.js?v=2" defer></script>
   <script src="backup-schedules.js?v=1" defer></script>
   <script src="site-suspension.js?v=2" defer></script>
   <script src="update-notice.js?v=settings-2" defer></script>
   <script src="developer-mode.js?v=security-auth-2" defer></script>
-  <script src="overview-environment.js?v=responsive-audit-8" defer></script>
+  <script src="overview-environment.js?v=inventory-2.0.79" defer></script>
   <script src="analytics.js?v=live-process-2.0.51-storage-directories-3" defer></script>
   <script src="migration-tabs.js?v=completed-jobs-2" defer></script>
   <script src="vendor/xterm/xterm.js" defer></script>
   <script src="vendor/xterm/addon-fit.js" defer></script>
-  <script src="terminal.js?v=visible-cursor-2.0.47" defer></script>
+  <script src="terminal.js?v=clipboard-2.0.85" defer></script>
 <script src="live-process.js?v=2.0.51" defer></script>
+<script src="backup-counts.js?v=2.0.83" defer></script>
+<script src="system-updates.js?v=2.0.87" defer></script>
 </body>
 </html>

@@ -463,3 +463,10 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #backupDestinationsTable .row-actions button {display:inline-flex!important;align-items:center!important;justify-content:center!important;width:34px!important;height:34px!important;padding:0!important;box-sizing:border-box;}
 :root[data-theme] #backupDestinationsTable .row-actions button svg {display:block!important;position:static!important;margin:0!important;width:18px!important;height:18px!important;stroke:currentColor!important;fill:none!important;}
 :root[data-theme] #backupDestinationsTable [data-backup-destination-action="delete"] {color:#fff!important;background:#dc2626!important;}
+
+/* Backup history statuses and actions. */
+#backupsTable .backup-status-failed{background:#7f2630!important;color:#fff!important;border:1px solid #b34450}#backupsTable .backup-status-failed .pulse-dot{background:#ff9ca5}#backupsTable .row-actions{display:inline-flex;gap:8px;white-space:nowrap}#backupsTable button.danger{background:#bc2835!important;color:white!important}
+
+#webmailSetupForm .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}#webmailSetupForm label{display:flex;flex-direction:column;gap:8px;min-width:0}#webmailSetupForm input{width:100%;box-sizing:border-box}#webmailSetupForm .row-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}#webmailSetupForm [data-setup-status]{white-space:normal;overflow-wrap:anywhere}@media(max-width:720px){#webmailSetupForm .form-grid{grid-template-columns:1fr}}
+
+[data-page-view="system-updates"]>.panel{margin-bottom:18px}.system-update-controls{display:flex;align-items:end;gap:14px;flex-wrap:wrap}.system-update-controls .field{min-width:180px}.system-update-controls input[type="search"]{min-width:220px;flex:1}.system-update-error{background:#742a34;color:#fff!important;padding:12px;border-radius:6px}[data-page-view="system-updates"] td{overflow-wrap:anywhere}

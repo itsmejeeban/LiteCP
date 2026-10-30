@@ -9,3 +9,10 @@
 /* Keep the fallback DOM cursor readable and immune to shared UI colors. */
 #interactiveTerminal .xterm-cursor-layer {opacity:1!important;}
 #interactiveTerminal .xterm-cursor-layer .xterm-cursor {background-color:#f8fafc!important;color:#0b1017!important;border-color:#f8fafc!important;}
+
+#terminalContextMenu{position:fixed;z-index:10000;min-width:205px;padding:5px;border:1px solid #53647b;border-radius:8px;background:#17212f;box-shadow:0 8px 25px #0008}
+#terminalContextMenu[hidden]{display:none!important}
+#terminalContextMenu button{display:flex!important;justify-content:space-between;align-items:center;width:100%;padding:10px 12px!important;border:0!important;border-radius:4px;color:#f1f5f9!important;background:#17212f!important;text-align:left;font-size:14px;gap:20px}
+#terminalContextMenu button:hover,#terminalContextMenu button:focus-visible{background:#304660!important;outline:2px solid #7da7d9}
+#terminalContextMenu button:disabled{color:#8995a7!important;opacity:.65}#terminalContextMenu small{color:#aabbcf}
+.terminal-paste-dialog{width:min(520px,90vw);box-sizing:border-box;background:#17212f;color:#f1f5f9;border:1px solid #53647b;border-radius:10px;padding:20px}.terminal-paste-dialog::backdrop{background:#0009}.terminal-paste-dialog textarea{width:100%;box-sizing:border-box;color:#fff;background:#0b1017;border:1px solid #53647b;padding:10px}.terminal-paste-dialog form>div{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}

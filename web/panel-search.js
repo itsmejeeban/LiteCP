@@ -3,6 +3,8 @@
   const cp = window.LiteCP;
   const normalize = value => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const features = [
+    ["system-updates", "System Update", "Compare and update system packages; schedule automatic updates", "", "apt dnf operating system service package version update automatic"],
+    ["email/configure-webmail", "Configure Webmail", "Set up webmail for the first time", "", "roundcube hostname certificate tls mail setup install"],
     ["email/smtp-port-check", "SMTP Port Check", "Test outbound SMTP ports 25 and 465", "", "mail smtp provider blocked port connectivity firewall"],
     ["ssh-port", "SSH Port", "View or change the server SSH connection port", "", "security ssh port 369 connection remote access"],
     ["server-files", "Server File Explorer", "Browse server directories and view or download files", "", "server root filesystem explorer path read only"],

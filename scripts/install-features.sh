@@ -48,6 +48,7 @@ open_port() {
 }
 
 install_antivirus() {
+  echo "Installing ClamAV scanner and preparing malware signatures..."
   if [[ $ID == ubuntu ]]; then packages clamav clamav-freshclam
   elif dnf -q repoquery --available clamav-freshclam | grep -q .; then packages clamav clamav-freshclam
   else packages clamav clamav-update; fi
@@ -81,9 +82,13 @@ EOF
   systemctl daemon-reload
   systemctl enable --now litecp-clamav-update.timer
   clamscan --version
+  systemctl is-active --quiet litecp-clamav-update.timer || { echo 'ClamAV signature update timer did not start.' >&2; return 1; }
+  echo 'ClamAV is ready. Signatures update twice daily; scans never automatically delete files.'
 }
 
 install_mail() {
+  local webmail_port=${LITECP_WEBMAIL_PORT:-8444}
+  [[ $webmail_port =~ ^[0-9]+$ && $webmail_port -ge 1024 && $webmail_port -le 65535 ]] || { echo "Invalid webmail port." >&2; return 1; }
   local php pool unit webgroup panel host cert key version=1.7.5
   [[ -f /etc/litecp/mail/mailboxes ]] || { echo 'Install the base LiteCP mail stack first.' >&2; return 1; }
   if [[ $ID == ubuntu ]]; then panel=/etc/nginx/sites-available/litecp-panel.conf
@@ -191,8 +196,8 @@ EOF
   runuser -u litecp-webmail -- "$php" /opt/litecp/webmail/bin/updatedb.sh --dir=/opt/litecp/webmail/SQL --package=roundcube
   cat > /etc/nginx/conf.d/litecp-webmail.conf <<EOF
 server {
-    listen 8444 ssl;
-    listen [::]:8444 ssl;
+    listen $webmail_port ssl;
+    listen [::]:$webmail_port ssl;
     server_name $host;
     ssl_certificate $cert;
     ssl_certificate_key $key;
@@ -248,7 +253,7 @@ EOF
   postconf -P 'smtps/inet/smtpd_sender_restrictions=reject_authenticated_sender_login_mismatch'
   postfix check
   if [[ $ID == almalinux ]]; then
-    semanage port -a -t http_port_t -p tcp 8444 2>/dev/null || semanage port -m -t http_port_t -p tcp 8444
+    semanage port -a -t http_port_t -p tcp "$webmail_port" 2>/dev/null || semanage port -m -t http_port_t -p tcp "$webmail_port"
     semanage fcontext -a -t httpd_sys_content_t '/opt/litecp(/.*)?' 2>/dev/null || semanage fcontext -m -t httpd_sys_content_t '/opt/litecp(/.*)?'
     semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/litecp-webmail(/.*)?' 2>/dev/null || semanage fcontext -m -t httpd_sys_rw_content_t '/var/lib/litecp-webmail(/.*)?'
     restorecon -R /opt/litecp /var/lib/litecp-webmail
@@ -258,8 +263,8 @@ EOF
   bash "$(dirname "${BASH_SOURCE[0]}")/install-webmail-signon.sh"
   if [[ ! -e /etc/litecp/mail/disabled ]]; then systemctl enable --now opendkim; systemctl restart postfix dovecot; fi
   systemctl reload nginx
-  open_port 8444
-  printf 'https://%s:8444/\n' "$host" > /etc/litecp/mail/webmail-url
+  open_port "$webmail_port"
+  printf 'https://%s:%s/\n' "$host" "$webmail_port" > /etc/litecp/mail/webmail-url
   # A renewed certificate is not used by long-running TLS listeners until reload.
   if [[ $cert == /etc/letsencrypt/live/*/fullchain.pem ]]; then
     local lineage hook=/etc/letsencrypt/renewal-hooks/deploy/litecp-mail-reload
@@ -280,7 +285,7 @@ done
 EOF
     chmod 0755 "$hook"
   fi
-  echo "Webmail ready at https://$host:8444/; publish the panel's DNS records and test mail before changing MX."
+  echo "Webmail ready at https://$host:$webmail_port/; publish the panel's DNS records and test mail before changing MX."
 }
 
 install_antispam() {

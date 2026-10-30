@@ -6,3 +6,6 @@
 [data-page-view="dashboard"] .metric-card:has(#uptimeValue) {--overview-icon:url('assets/sidebar/activities.svg');}
 [data-page-view="dashboard"] .metric-card:has(#totalWebsitesValue) {--overview-icon:url('assets/sidebar/websites.svg');}
 [data-page-view="dashboard"] .metric-card:has(#totalEmailAccountsValue) {--overview-icon:url('assets/sidebar/email.svg');}
+
+[data-page-view="dashboard"] .metric-card:has(#totalLocalBackupsValue){--overview-icon:url('assets/sidebar/backups.svg')}
+[data-page-view="dashboard"] .metric-card:has(#totalRemoteBackupsValue){--overview-icon:url('assets/sidebar/migrations.svg')}

@@ -4,8 +4,51 @@
   const connect=document.getElementById('terminalConnect'),disconnect=document.getElementById('terminalDisconnect'),status=document.getElementById('terminalStatus'),panel=host.closest('.terminal-panel');
   const terminal=new Terminal({cursorBlink:false,cursorStyle:"block",cursorInactiveStyle:"outline",fontSize:14,fontFamily:'Consolas, "Liberation Mono", monospace',scrollback:10000,convertEol:false,theme:{background:'#0b1017',foreground:'#dce4ed',cursor:'#f8fafc',cursorAccent:'#0b1017',selectionBackground:'#385672'}});
   const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(host);
-  host.addEventListener("pointerdown",()=>terminal.focus());
+  host.addEventListener("pointerdown",event=>{if(event.button===0)terminal.focus();});
   let id=null,cursor=0,timer=null,pending='',sending=false,generation=0;
+  const menu=document.createElement('div');menu.id='terminalContextMenu';menu.hidden=true;menu.setAttribute('role','menu');
+  menu.innerHTML='<button type="button" role="menuitem" data-terminal-menu="select">Select All</button><button type="button" role="menuitem" data-terminal-menu="copy">Copy <small>Ctrl+C</small></button><button type="button" role="menuitem" data-terminal-menu="paste">Paste <small>Ctrl+V</small></button>';
+  panel.append(menu);
+  function closeMenu(){menu.hidden=true;}
+  async function copySelection(){
+    const text=terminal.getSelection();if(!text){status.textContent='Select terminal text to copy.';return;}
+    try{
+      if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(text);
+      else {
+        const input=document.createElement('textarea');input.value=text;input.style.position='fixed';input.style.opacity='0';panel.append(input);input.select();
+        try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable');}finally{input.remove();terminal.focus();}
+      }
+      status.textContent='Selected text copied.';
+    }catch(error){status.textContent='Copy was blocked by the browser. Allow clipboard access and try again.';}
+  }
+  function manualPaste(){
+    const dialog=document.createElement('dialog');dialog.className='terminal-paste-dialog';
+    dialog.innerHTML='<form method="dialog"><h2>Paste into terminal</h2><p>Press Ctrl+V in the box, then choose Paste.</p><textarea aria-label="Text to paste" rows="5"></textarea><div><button value="cancel">Cancel</button><button value="paste">Paste</button></div></form>';
+    panel.append(dialog);dialog.addEventListener('close',()=>{if(dialog.returnValue==='paste'&&id)terminal.paste(dialog.querySelector('textarea').value);dialog.remove();terminal.focus();});dialog.showModal();dialog.querySelector('textarea').focus();
+  }
+  async function pasteClipboard(){
+    if(!id){status.textContent='Connect the terminal before pasting.';return;}
+    try{const text=await navigator.clipboard.readText();if(!id)return;terminal.paste(text);terminal.focus();}
+    catch(error){manualPaste();}
+  }
+  terminal.attachCustomKeyEventHandler(event=>{
+    if(event.type==='keydown'&&(event.ctrlKey||event.metaKey)&&!event.altKey&&event.key.toLowerCase()==='c'&&terminal.hasSelection()){
+      event.preventDefault();copySelection();return false;
+    }
+    // Leave Ctrl+V to xterm's native paste event, and Ctrl+C without a
+    // selection to the shell's interrupt handler. This avoids duplicate input.
+    return true;
+  });
+  host.addEventListener('contextmenu',event=>{
+    event.preventDefault();menu.querySelector('[data-terminal-menu="copy"]').disabled=!terminal.hasSelection();menu.querySelector('[data-terminal-menu="paste"]').disabled=!id;
+    menu.hidden=false;const bounds=menu.getBoundingClientRect();menu.style.left=Math.max(4,Math.min(event.clientX,window.innerWidth-bounds.width-4))+'px';menu.style.top=Math.max(4,Math.min(event.clientY,window.innerHeight-bounds.height-4))+'px';
+    menu.querySelector('button:not(:disabled)').focus();
+  });
+  menu.addEventListener('pointerdown',event=>event.stopPropagation());
+  menu.addEventListener('click',event=>{const action=event.target.closest('[data-terminal-menu]')?.dataset.terminalMenu;if(!action)return;closeMenu();if(action==='select'){terminal.selectAll();terminal.focus();}else if(action==='copy')copySelection();else pasteClipboard();});
+  menu.addEventListener('keydown',event=>{if(event.key==='Escape'){closeMenu();terminal.focus();}if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();const items=[...menu.querySelectorAll('button:not(:disabled)')],index=items.indexOf(document.activeElement);items[(index+(event.key==='ArrowDown'?1:items.length-1))%items.length]?.focus();}});
+  document.addEventListener('pointerdown',event=>{if(!menu.contains(event.target))closeMenu();});window.addEventListener('resize',closeMenu);document.addEventListener('scroll',closeMenu,true);
+
   const encode=text=>{const bytes=new TextEncoder().encode(text);let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);};
   async function api(method,body,query=''){const response=await fetch('/api/terminal/session'+query,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const value=await response.json();if(!response.ok)throw new Error(value.error||'Terminal connection failed');return value;}
   function resize(){if(!host.getBoundingClientRect().width)return;fit.fit();if(id)api('POST',{cols:terminal.cols,rows:terminal.rows},'?id='+encodeURIComponent(id)).catch(()=>{});}

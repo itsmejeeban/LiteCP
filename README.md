@@ -268,3 +268,13 @@ LiteCP runs as root because it must update Nginx, cron, certificates, ownership,
 ## License
 
 Add the license appropriate for your distribution before publishing the project.
+
+### ClamAV during installation
+
+New installations include ClamAV, initial malware signatures and a twice-daily signature update timer. Scans run on demand or using the panel scan schedule; files are not automatically deleted. Installation reports an error if the initial signature download or update timer fails. For a deliberately minimal installation, set `LITECP_INSTALL_ANTIVIRUS=0`. Existing servers can install the same component from the source directory with `sudo bash scripts/install-features.sh antivirus`.
+
+### System Update
+
+The System Update page compares installed OS packages with upgrade candidates from the server's configured APT/DNF repositories. Check updates, update selected packages or all eligible packages, or enable a daily/weekly timer (disabled by default). Updates run in a background system service and do not request a reboot. Package maintainer scripts can restart services; take a recovery backup before updating. Existing OS security-update timers remain independent.
+
+Source-built WAF installations hold Nginx packages back in this updater so an ABI change does not strand the connector. LiteCP releases, Roundcube/phpMyAdmin, ionCube and hosting container images remain managed by their dedicated update tools. They are explicitly listed as separate components rather than claiming repository coverage. Diagnostics: `/var/lib/litecp/system-updates/operations.log` (private); schedule service: `litecp-system-update.timer`. Repository access and Linux package-manager integration require live validation before production use.
