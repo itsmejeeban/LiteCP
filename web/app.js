@@ -577,6 +577,15 @@
     window.LiteCPFeatures?.navigate(page);
   }
 
+  function syncWordPressSetup() {
+    const wordpress=$("#siteAppType").value==="wordpress",install=wordpress&&$("#wordpressMode").value==="install";
+    $("#wordpressModeField").classList.toggle("hidden",!wordpress);$("#wordpressMode").disabled=!wordpress;$("#wordpressMode").required=wordpress;
+    $("#wordpressInstallFields").classList.toggle("hidden",!install);
+    $$("#wordpressInstallFields input").forEach(input=>{input.disabled=!install;input.required=install;});
+    const database=$('#siteForm input[name="createDatabase"]');database.disabled=install;if(install)database.checked=true;
+    const email=$('#siteForm input[name="wordpressEmail"]');if(install&&!email.value)email.value=currentState?.settings?.email||"";
+  }
+  $("#wordpressMode").addEventListener("change",syncWordPressSetup);
   let siteCreationStep = 1;
   function setSiteCreationStep(step) {
     if (step === 2) {
@@ -628,6 +637,7 @@
     cronInput.disabled = appType === "regular";
     if (appType === "regular") cronInput.checked = false;
     else if (cronWasDisabled) cronInput.checked = true;
+    syncWordPressSetup();
     if (appType === "wordpress") {
       $("#phpCompatibilityNote").textContent = "WordPress recommends PHP 8.3 or newer and requires PHP 7.4 or newer.";
       $("#cronOptionTitle").textContent = "Enable WordPress system cron";
@@ -648,6 +658,10 @@
     const submit = $('button[type="submit"]', form);
     const data = new FormData(form);
     const body = { domain: String(data.get("domain")).trim().toLowerCase(), appType: String(data.get("appType")), appVersion: String(data.get("appVersion") || ""), phpVersion: String(data.get("phpVersion")), createDatabase: data.get("createDatabase") === "on", enableCron: data.get("enableCron") === "on" };
+    if(body.appType==="wordpress"){
+      body.wordpressMode=String(data.get("wordpressMode")||"");
+      if(body.wordpressMode==="install") {body.createDatabase=true;body.wordpressUsername=String(data.get("wordpressUsername")||"");body.wordpressPassword=String(data.get("wordpressPassword")||"");body.wordpressEmail=String(data.get("wordpressEmail")||"");}
+    }
     submit.disabled = true;
     submit.textContent = "Provisioning…";
     try {
@@ -656,18 +670,28 @@
       form.reset();
       currentState = await api("/api/state");
       renderAll();
-      if (result.database) showCredentials(result.database, result.site);
+      if(result.wordpressInstalled){
+        $("#credentialsTitle").textContent="WordPress installed";
+        const modal=$("#credentialsModal");modal.querySelector(".modal-head p").textContent="Use your chosen WordPress administrator username and password.";
+        $("#credentialList").innerHTML=`<div><dt>WordPress admin</dt><dd><a class="button button-primary" href="${escapeHTML(result.wordpressAdminURL)}" target="_blank" rel="noopener noreferrer">Open WordPress admin</a></dd></div><div><dt>Username</dt><dd>${escapeHTML(body.wordpressUsername)}</dd></div>`;
+        modal.querySelector(".warning-callout").classList.add("hidden");$("#copyCredentials").classList.add("hidden");$("#closeCredentials").textContent="Done";modal.classList.remove("hidden");
+      } else if (result.database) showCredentials(result.database, result.site);
       else showToast("Website provisioned", `${result.site.domain} is ready for ${applicationLabel(result.site.appType)} files.`);
+      if(result.warning)handleError(new Error(result.warning));
+      if(body.wordpressMode==="migrate")showToast("Ready for migration","Open Migration to transfer your existing WordPress site.");
     } catch (error) { handleError(error); }
     finally { submit.disabled = false; submit.innerHTML = 'Provision website <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>'; }
   }
 
   function showCredentials(credentials, site) {
+
+
     const rows = [["Website", site.domain], ["Database host", credentials.host], ["Database name", credentials.name], ["Database user", credentials.username], ["Database password", credentials.password]];
     showOneTimeCredentials("Website provisioned", "Save these database credentials now. The password is not stored by LiteCP.", rows);
   }
 
   function showOneTimeCredentials(title, description, rows) {
+    $("#credentialsModal .warning-callout").classList.remove("hidden");$("#copyCredentials").classList.remove("hidden");$("#closeCredentials").textContent="I’ve saved them";
     credentialText = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
     $("#credentialsTitle").textContent = title;
     $("#credentialsModal .modal-head p").textContent = description;

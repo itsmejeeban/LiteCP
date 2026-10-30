@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.65"
+var version = "2.0.66"
 var buildRevision = ""
 
 //go:embed web/*
@@ -633,6 +633,19 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if input.AppType == "wordpress" {
+		if input.WordPressMode != "install" && input.WordPressMode != "migrate" {
+			writeError(w, 400, "Choose Install new WordPress or Migrate existing WordPress")
+			return
+		}
+		if err := validateWordPressInstall(input); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		if input.WordPressMode == "install" {
+			input.CreateDatabase = true
+		}
+	}
 	appType := strings.ToLower(strings.TrimSpace(input.AppType))
 	if appType == "" {
 		appType = "whmcs"
@@ -701,8 +714,24 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	wordpressInstalled := false
+	wordpressAdminURL := ""
+	if input.AppType == "wordpress" && input.WordPressMode == "install" {
+		if credentials == nil {
+			warning = "Website created, but WordPress requires a managed database."
+		} else if err := a.system.installWordPress(r.Context(), site, *credentials, input); err != nil {
+			warning = "Website created, but WordPress installation failed: " + err.Error()
+		} else {
+			wordpressInstalled = true
+			scheme := "http"
+			if site.SSL {
+				scheme = "https"
+			}
+			wordpressAdminURL = scheme + "://" + site.Domain + "/wp-admin/"
+		}
+	}
 	a.store.AddActivity("Website added", site.Domain+" is ready for "+applicationName(site.AppType), "success")
-	writeJSON(w, http.StatusCreated, map[string]any{"site": site, "database": credentials, "warning": warning})
+	writeJSON(w, http.StatusCreated, map[string]any{"site": site, "database": credentials, "warning": warning, "wordpressInstalled": wordpressInstalled, "wordpressAdminURL": wordpressAdminURL})
 }
 
 func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {

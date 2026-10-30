@@ -25,12 +25,16 @@ import (
 )
 
 type CreateSiteInput struct {
-	Domain         string `json:"domain"`
-	AppType        string `json:"appType"`
-	AppVersion     string `json:"appVersion"`
-	PHPVersion     string `json:"phpVersion"`
-	CreateDatabase bool   `json:"createDatabase"`
-	EnableCron     bool   `json:"enableCron"`
+	WordPressMode     string `json:"wordpressMode"`
+	WordPressUsername string `json:"wordpressUsername"`
+	WordPressPassword string `json:"wordpressPassword"`
+	WordPressEmail    string `json:"wordpressEmail"`
+	Domain            string `json:"domain"`
+	AppType           string `json:"appType"`
+	AppVersion        string `json:"appVersion"`
+	PHPVersion        string `json:"phpVersion"`
+	CreateDatabase    bool   `json:"createDatabase"`
+	EnableCron        bool   `json:"enableCron"`
 }
 
 type DBCredentials struct {
