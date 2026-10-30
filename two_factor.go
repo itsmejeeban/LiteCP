@@ -110,14 +110,6 @@ func (a *App) verifySecondFactor(code string, allowRecovery bool) error {
 		if !value.Enabled {
 			return nil
 		}
-		secret, err := a.system.DecryptSecret(value.SecretCipher)
-		if err != nil {
-			return errAuthenticationCode
-		}
-		if step, ok := matchingTOTPStep(secret, code, time.Now(), value.LastStep); ok {
-			value.LastStep = step
-			return nil
-		}
 		if allowRecovery {
 			hash := recoveryHash(code)
 			for i, expected := range value.RecoveryHashes {
@@ -126,6 +118,15 @@ func (a *App) verifySecondFactor(code string, allowRecovery bool) error {
 					return nil
 				}
 			}
+		}
+		// Recovery must remain usable even when the authenticator seed is unavailable.
+		secret, err := a.system.DecryptSecret(value.SecretCipher)
+		if err != nil {
+			return errAuthenticationCode
+		}
+		if step, ok := matchingTOTPStep(secret, code, time.Now(), value.LastStep); ok {
+			value.LastStep = step
+			return nil
 		}
 		return errAuthenticationCode
 	})
@@ -184,7 +185,7 @@ func (a *App) twoFactorSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if state.Enabled && a.verifySecondFactor(input.Code, true) != nil {
 		a.authenticationEvent("failed", r)
-		writeError(w, 401, "Authentication failed.")
+		writeError(w, 401, "Enter a current authenticator code or an unused recovery code. A recovery code used to sign in cannot be used again.")
 		return
 	}
 	if !state.Enabled && (input.Action == "disable" || input.Action == "recovery") {
@@ -203,8 +204,10 @@ func (a *App) twoFactorSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "Could not protect authenticator setup.")
 			return
 		}
-		uri := url.URL{Scheme: "otpauth", Host: "totp", Path: "/LiteCP:" + a.store.Username()}
-		query := url.Values{"secret": {secret}, "issuer": {"LiteCP"}, "algorithm": {"SHA1"}, "digits": {"6"}, "period": {"30"}}
+		// Keep the label prefix and issuer identical for authenticator compatibility.
+		issuer := "LiteCP@" + primaryIP()
+		uri := url.URL{Scheme: "otpauth", Host: "totp", Path: "/" + issuer + ":" + a.store.Username()}
+		query := url.Values{"secret": {secret}, "issuer": {issuer}, "algorithm": {"SHA1"}, "digits": {"6"}, "period": {"30"}}
 		uri.RawQuery = query.Encode()
 		png, err := qrcode.Encode(uri.String(), qrcode.Medium, 256)
 		if err != nil {

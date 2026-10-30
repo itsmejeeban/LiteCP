@@ -51,6 +51,7 @@
 :root[data-theme] .avatar {border:1px solid var(--line);background:var(--surface-soft);color:var(--ink);box-shadow:none;border-radius:6px;font-weight:600;}
 :root[data-theme] .profile-button:hover,:root[data-theme] .icon-button:hover {background:var(--cf-hover);color:var(--ink);}
 :root[data-theme] .profile-menu {background:var(--paper);border-color:var(--line);border-radius:8px;}
+:root[data-theme] .profile-menu button + button {margin-top:6px;}
 :root[data-theme] .profile-menu button:hover,:root[data-theme] .profile-menu button:focus-visible {background:var(--cf-hover);color:var(--ink);}
 :root[data-theme] .documentation-tab {min-height:32px;padding:5px 9px;font-size:12px;font-weight:500;color:var(--ink);}
 :root[data-theme] .main-content {max-width:none;padding:24px;}

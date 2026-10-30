@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+	PHPSettings map[string]string `json:"phpSettings,omitempty"`
 	Suspended bool `json:"suspended,omitempty"`
  Application *ApplicationHosting `json:"application,omitempty"`
 	ID         string    `json:"id"`

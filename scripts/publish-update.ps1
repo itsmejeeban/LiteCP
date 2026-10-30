@@ -48,7 +48,7 @@ try {
     if (@(& git diff --name-only --diff-filter=U).Count) { throw 'Resolve Git merge conflicts first.' }
     if ($CheckOnly) {
         Run-Step 'git' @('--version')
-        Run-Step 'git' @('--no-pager','diff','--cached','--check')
+        Run-Step 'git' @('--no-pager','diff','--cached','--check','--','.',':(exclude)output/**')
         Write-Host 'CHECK PASSED. Tools and repository are ready. No files, commits or servers were changed.'
         exit 0
     }
@@ -70,7 +70,9 @@ try {
     $staged = @(& git diff --cached --name-only)
     if ($staged -contains 'update-local.bat') { throw 'Private SSH settings are staged. Remove update-local.bat from Git staging before publishing.' }
     if ($staged | Where-Object { $_ -match '(^|/)(\.env|id_rsa|id_ed25519|password\.enc)(\.|$)|\.(pem|key|pfx)$' }) { throw 'Potential credential file staged. Review Git staging before publishing.' }
-    Run-Step 'git' @('--no-pager','diff','--cached','--check')
+    # Generated QA output is not source text. It may already be staged by an
+    # earlier updater run; do not discard that staging or alter those files.
+    Run-Step 'git' @('--no-pager','diff','--cached','--check','--','.',':(exclude)output/**')
     Write-Host "[3/6] Committing and publishing LiteCP $version..."
     Run-Step 'git' @('commit','-m',"Update LiteCP to $version")
     Run-Step 'git' @('push','origin','main')

@@ -124,6 +124,39 @@ func fmtFactorBody(action, code string) string {
 	return string(data)
 }
 
+func TestDisableTwoFactorWithUnusedRecoveryAfterRecoveryLogin(t *testing.T) {
+	app := twoFactorTestApp(t)
+	if err := app.store.updateTwoFactor(func(state *twoFactorConfig) error {
+		state.Enabled = true
+		// Recovery must not depend on a decryptable authenticator seed.
+		state.SecretCipher = "unavailable-seed"
+		state.RecoveryHashes = []string{recoveryHash("login-code"), recoveryHash("disable-code")}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.verifySecondFactor("login-code", true); err != nil {
+		t.Fatal(err)
+	}
+	response := factorRequest(app, fmtFactorBody("disable", "login-code"))
+	if response.Code != 401 || !app.store.twoFactor().Enabled {
+		t.Fatal("used recovery code disabled 2FA")
+	}
+	response = factorRequest(app, `{"action":"disable","password":"wrong-password","code":"disable-code"}`)
+	if response.Code != 401 || len(app.store.twoFactor().RecoveryHashes) != 1 {
+		t.Fatal("wrong password accepted or consumed recovery code")
+	}
+	app.rememberSession("recovery-session", time.Now().Add(time.Hour))
+	response = factorRequest(app, fmtFactorBody("disable", "disable-code"))
+	if response.Code != 200 || app.store.twoFactor().Enabled || app.validSession("recovery-session") {
+		t.Fatalf("unused recovery disable failed: %d %s", response.Code, response.Body.String())
+	}
+	reopened, err := OpenStore(filepath.Dir(app.store.path))
+	if err != nil || reopened.twoFactor().Enabled {
+		t.Fatal("disabled state did not persist")
+	}
+}
+
 func TestLoginRequiresSecondFactorAndRejectsRecoveryReplay(t *testing.T) {
 	app := twoFactorTestApp(t)
 	cipher, err := app.system.EncryptSecret("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")

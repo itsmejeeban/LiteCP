@@ -1068,7 +1068,7 @@ security.limit_extensions = .php
 php_admin_value[open_basedir] = %s:/tmp
 php_admin_value[upload_tmp_dir] = %s
 php_admin_value[session.save_path] = %s
-`, safeSiteID(site.ID), site.RuntimeUID, site.RuntimeGID, s.sitePHPSocket(site), socketOwner, socketGroup, allowed, temporary, temporary)
+`, safeSiteID(site.ID), site.RuntimeUID, site.RuntimeGID, s.sitePHPSocket(site), socketOwner, socketGroup, allowed, temporary, temporary) + phpPoolSettings(site.PHPSettings)
 }
 
 func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
