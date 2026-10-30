@@ -158,15 +158,11 @@ func (s *System) UploadBackup(ctx context.Context, destination BackupDestination
 	}
 	remotePath := path.Join(destination.RemotePath, filepath.Base(localPath))
 	remoteURL := (&url.URL{Scheme: destination.Protocol, Host: net.JoinHostPort(destination.Host, strconv.Itoa(destination.Port)), Path: remotePath}).String()
-	config, err := os.CreateTemp(s.dataDir, ".curl-backup-*.conf")
-	if err != nil {
-		return "", err
+	if destination.Protocol == "sftp" {
+		return s.uploadSFTPBackup(ctx, destination, localPath, password, remoteURL)
 	}
-	configPath := config.Name()
-	defer os.Remove(configPath)
-	_ = os.Chmod(configPath, 0600)
 	lines := []string{
-		`fail`, `silent`, `show-error`, `connect-timeout = 20`, `retry = 2`,
+		`fail`, `silent`, `show-error`, `connect-timeout = 20`, `retry = 2`, `ftp-create-dirs`,
 		`user = "` + curlConfigEscape(destination.Username+":"+password) + `"`,
 		`url = "` + curlConfigEscape(remoteURL) + `"`,
 		`upload-file = "` + curlConfigEscape(localPath) + `"`,
@@ -174,19 +170,9 @@ func (s *System) UploadBackup(ctx context.Context, destination BackupDestination
 	if destination.Protocol == "ftps" {
 		lines = append(lines, "ssl-reqd")
 	}
-	if destination.Protocol == "sftp" {
-		fingerprint := strings.TrimPrefix(destination.HostKeySHA256, "SHA256:")
-		lines = append(lines, `hostpubsha256 = "`+curlConfigEscape(fingerprint)+`"`)
-	}
-	if _, err := config.WriteString(strings.Join(lines, "\n") + "\n"); err != nil {
-		_ = config.Close()
-		return "", err
-	}
-	if err := config.Close(); err != nil {
-		return "", err
-	}
-	if _, err := runCommand(ctx, 30*time.Minute, "curl", "--config", configPath); err != nil {
-		return "", fmt.Errorf("upload backup to %s: %w", destination.Name, err)
+
+	if _, err := runCommandInput(ctx, 30*time.Minute, strings.Join(lines, "\n")+"\n", "curl", "--disable", "--config", "-"); err != nil {
+		return "", fmt.Errorf("local backup retained; upload to %s failed: %s", destination.Name, strings.ReplaceAll(err.Error(), password, "[redacted]"))
 	}
 	return remoteURL, nil
 }

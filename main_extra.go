@@ -533,7 +533,12 @@ func (a *App) resetManagedDatabasePassword(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *App) createBackupDestination(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		writeError(w, 405, "Use POST or PUT")
+		return
+	}
 	var input struct {
+		ID            string `json:"id"`
 		Name          string `json:"name"`
 		Protocol      string `json:"protocol"`
 		Host          string `json:"host"`
@@ -547,32 +552,72 @@ func (a *App) createBackupDestination(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if len(input.Password) < 1 || len(input.Password) > 256 || strings.ContainsAny(input.Password, "\r\n") {
-		writeError(w, http.StatusBadRequest, "Backup password must contain 1 to 256 characters.")
+	var existing *BackupDestination
+	if r.Method == http.MethodPut {
+		existing = a.store.BackupDestinationByID(input.ID)
+		if existing == nil {
+			writeError(w, 404, "Destination not found")
+			return
+		}
+	}
+	ciphertext := ""
+	if input.Password != "" {
+		if len(input.Password) > 256 || strings.ContainsAny(input.Password, "\r\n") {
+			writeError(w, 400, "Backup password must contain 1 to 256 characters")
+			return
+		}
+		var err error
+		ciphertext, err = a.system.EncryptSecret(input.Password)
+		if err != nil {
+			writeError(w, 500, "Could not protect the credential")
+			return
+		}
+	} else if existing != nil {
+		if existing.Host != strings.TrimSpace(input.Host) || existing.Port != input.Port || existing.Username != strings.TrimSpace(input.Username) || existing.Protocol != strings.ToLower(strings.TrimSpace(input.Protocol)) {
+			writeError(w, 400, "Enter the password again when changing server, protocol, port or username")
+			return
+		}
+		ciphertext = existing.PasswordCipher
+	} else {
+		writeError(w, 400, "Enter a password")
 		return
 	}
-	ciphertext, err := a.system.EncryptSecret(input.Password)
+	id, err := randomToken(8)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Could not protect the backup credential.")
+		writeError(w, 500, "Cannot allocate destination")
 		return
 	}
-	id, _ := randomToken(8)
+	createdAt := time.Now().UTC()
+	if existing != nil {
+		id = existing.ID
+		createdAt = existing.CreatedAt
+	}
 	destination := BackupDestination{
 		ID: id, Name: strings.TrimSpace(input.Name), Protocol: strings.ToLower(strings.TrimSpace(input.Protocol)),
 		Host: strings.TrimSpace(input.Host), Port: input.Port, Username: strings.TrimSpace(input.Username),
 		RemotePath: strings.TrimSpace(input.RemotePath), HostKeySHA256: strings.TrimSpace(input.HostKeySHA256),
-		PasswordCipher: ciphertext, HasPassword: true, CreatedAt: time.Now().UTC(),
+		PasswordCipher: ciphertext, HasPassword: true, CreatedAt: createdAt,
 	}
 	if err := validateBackupDestination(destination, true); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := a.store.AddBackupDestination(destination); err != nil {
+	var saveErr error
+	if existing != nil {
+		saveErr = a.store.UpdateBackupDestination(destination)
+	} else {
+		saveErr = a.store.AddBackupDestination(destination)
+	}
+	if err := saveErr; err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
 	destination.PasswordCipher = ""
-	a.store.AddActivity("Backup destination added", destination.Name+" over "+strings.ToUpper(destination.Protocol), "success")
+	activity := "Backup destination added"
+	if existing != nil {
+		activity = "Backup destination updated"
+	}
+	a.store.AddActivity(activity, destination.Name+" over "+strings.ToUpper(destination.Protocol), "success")
 	writeJSON(w, http.StatusCreated, destination)
 }
 

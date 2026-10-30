@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/mail"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -170,16 +171,122 @@ func (s *System) installWordPress(ctx context.Context, site Site, db DBCredentia
 	if _, err := secureWriteManagedNoReplace(site.Root, "wp-config.php", strings.NewReader(config), int64(len(config)), 0640, uid, gid); err != nil {
 		return err
 	}
+	return s.finishWordPressSetup(ctx, site, input)
+}
+
+const wordPressSetupScript = `
+$litecpInput = json_decode(stream_get_contents(STDIN), true);
+if (!is_array($litecpInput)) { fwrite(STDERR, "Invalid setup input"); exit(1); }
+if (!chdir($litecpInput['root'])) { fwrite(STDERR, "Cannot enter WordPress directory"); exit(1); }
+define('WP_INSTALLING', true);
+$_SERVER['HTTP_HOST'] = $litecpInput['domain'];
+$_SERVER['SERVER_NAME'] = $litecpInput['domain'];
+$_SERVER['REQUEST_URI'] = '/wp-admin/install.php';
+$_SERVER['SCRIPT_NAME'] = '/wp-admin/install.php';
+$_SERVER['PHP_SELF'] = '/wp-admin/install.php';
+$_SERVER['SERVER_PROTOCOL'] = 'HTTP/1.1';
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_SERVER['HTTPS'] = strpos($litecpInput['url'], 'https://') === 0 ? 'on' : '';
+if (!extension_loaded('mysqli')) { fwrite(STDERR, "Missing mysqli extension"); exit(1); }
+fwrite(STDERR, "LITECP_STAGE:bootstrap\n");
+require $litecpInput['root'].'/wp-load.php';
+require_once ABSPATH.'wp-admin/includes/upgrade.php';
+require_once ABSPATH.'wp-admin/includes/translation-install.php';
+add_filter('pre_wp_mail', '__return_false');
+if (is_blog_installed()) {
+    fwrite(STDERR, "WordPress is already installed; no existing account changed"); exit(2);
+}
+fwrite(STDERR, "LITECP_STAGE:database\n");
+$litecpResult = wp_install($litecpInput['domain'], $litecpInput['user'], $litecpInput['email'], true, '', $litecpInput['password'], 'en_US');
+if (is_wp_error($litecpResult) || empty($litecpResult['user_id'])) { fwrite(STDERR, "Administrator creation failed"); exit(3); }
+update_option('siteurl', $litecpInput['url']);
+update_option('home', $litecpInput['url']);
+$litecpAdmin = wp_authenticate($litecpInput['user'], $litecpInput['password']);
+if (is_wp_error($litecpAdmin) || !user_can($litecpAdmin, 'manage_options')) { fwrite(STDERR, "Administrator verification failed"); exit(4); }
+echo 'LITECP_WORDPRESS_INSTALLED';
+`
+
+func (s *System) finishWordPressSetup(ctx context.Context, site Site, input CreateSiteInput) error {
+	if err := validateWordPressInstall(input); err != nil {
+		return err
+	}
+	uid, gid, err := s.siteFileOwnership(site)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"wp-config.php", "wp-load.php", "wp-admin/includes/upgrade.php"} {
+		file, err := secureOpenManaged(site.Root, name, os.O_RDONLY, 0)
+		if err != nil {
+			return errors.New("WordPress core files or wp-config.php are missing; no existing data changed")
+		}
+		file.Close()
+	}
 	scheme := "http"
 	if site.SSL {
 		scheme = "https"
 	}
-	url := scheme + "://" + site.Domain
-	payload, _ := json.Marshal(map[string]string{"root": site.Root, "url": url, "domain": site.Domain, "user": input.WordPressUsername, "password": input.WordPressPassword, "email": input.WordPressEmail})
-	script := `$v=json_decode(stream_get_contents(STDIN),true);if(!$v)exit(1);define('WP_INSTALLING',true);$_SERVER['HTTP_HOST']=$v['domain'];$_SERVER['SERVER_NAME']=$v['domain'];$_SERVER['REQUEST_URI']='/';require $v['root'].'/wp-load.php';require_once ABSPATH.'wp-admin/includes/upgrade.php';add_filter('pre_wp_mail','__return_false');if(is_blog_installed())exit(2);$r=wp_install($v['domain'],$v['user'],$v['email'],true,'',$v['password']);if(is_wp_error($r)||empty($r['user_id']))exit(3);update_option('siteurl',$v['url']);update_option('home',$v['url']);$u=wp_authenticate($v['user'],$v['password']);if(is_wp_error($u)||!user_can($u,'manage_options'))exit(4);echo 'LITECP_WORDPRESS_INSTALLED';`
-	output, err := runCommandInput(ctx, 3*time.Minute, string(payload), "setpriv", "--reuid="+strconv.Itoa(uid), "--regid="+strconv.Itoa(gid), "--clear-groups", s.phpBinary(site.PHPVersion), "-r", script)
-	if err != nil || !strings.Contains(output, "LITECP_WORDPRESS_INSTALLED") {
-		return errors.New("WordPress setup did not complete; website files and database were retained for review")
+	payload, _ := json.Marshal(map[string]string{"root": site.Root, "url": scheme + "://" + site.Domain, "domain": site.Domain, "user": input.WordPressUsername, "password": input.WordPressPassword, "email": input.WordPressEmail})
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, "setpriv", "--reuid="+strconv.Itoa(uid), "--regid="+strconv.Itoa(gid), "--clear-groups", s.phpBinary(site.PHPVersion), "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "zend.exception_ignore_args=1", "-r", wordPressSetupScript)
+	command.Dir = site.Root
+	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + managedSiteRoot(site), "LANG=C.UTF-8"}
+	command.Stdin = strings.NewReader(string(payload))
+	output, err := command.CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "LITECP_WORDPRESS_INSTALLED") {
+		if ctx.Err() != nil {
+			return errors.New("WordPress setup timed out; files and database retained")
+		}
+		diagnostic := strings.TrimSpace(string(output))
+		for _, secret := range []string{input.WordPressPassword, input.WordPressEmail, input.WordPressUsername} {
+			if secret != "" {
+				diagnostic = strings.ReplaceAll(diagnostic, secret, "[redacted]")
+			}
+		}
+		diagnostic = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(diagnostic, "")
+		if len(diagnostic) > 900 {
+			diagnostic = diagnostic[len(diagnostic)-900:]
+		}
+		if diagnostic == "" {
+			diagnostic = "PHP exited without completing installation"
+			if err != nil {
+				diagnostic = err.Error()
+			}
+		}
+		return fmt.Errorf("WordPress setup failed: %s. Files and database retained", diagnostic)
 	}
 	return nil
+}
+
+func (a *App) completeWordPressSetup(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, 400, "Invalid setup request")
+		return
+	}
+	site := a.store.SiteByID(input.ID)
+	if site == nil || site.AppType != "wordpress" {
+		writeError(w, 404, "WordPress website not found")
+		return
+	}
+	setup := CreateSiteInput{AppType: "wordpress", WordPressMode: "install", WordPressUsername: input.Username, WordPressPassword: input.Password, WordPressEmail: input.Email}
+	if a.system.demo {
+		writeError(w, 400, "WordPress setup requires the installed server")
+		return
+	}
+	if err := a.system.finishWordPressSetup(r.Context(), *site, setup); err != nil {
+		writeError(w, 409, err.Error())
+		return
+	}
+	scheme := "http"
+	if site.SSL {
+		scheme = "https"
+	}
+	a.store.AddActivity("WordPress installed", site.Domain+": administrator account verified", "success")
+	writeJSON(w, 200, map[string]string{"adminURL": scheme + "://" + site.Domain + "/wp-admin/"})
 }

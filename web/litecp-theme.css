@@ -454,3 +454,12 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 /* Files remains the leading website action even when modules add controls. */
 :root[data-theme] #sitesTable .row-actions [data-site-action="files"] {order:-100!important;}
+
+/* WordPress credentials: give the password and its controls a full row. */
+#siteModal #wordpressInstallFields>label:last-child {grid-column:1 / -1;min-width:0;}
+#siteModal #wordpressInstallFields>label:last-child .input-wrap {width:100%;box-sizing:border-box;}
+#siteModal #wordpressInstallFields>label:last-child input {min-width:0;width:100%;}
+
+:root[data-theme] #backupDestinationsTable .row-actions button {display:inline-flex!important;align-items:center!important;justify-content:center!important;width:34px!important;height:34px!important;padding:0!important;box-sizing:border-box;}
+:root[data-theme] #backupDestinationsTable .row-actions button svg {display:block!important;position:static!important;margin:0!important;width:18px!important;height:18px!important;stroke:currentColor!important;fill:none!important;}
+:root[data-theme] #backupDestinationsTable [data-backup-destination-action="delete"] {color:#fff!important;background:#dc2626!important;}

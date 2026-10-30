@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.66"
+var version = "2.0.74"
 var buildRevision = ""
 
 //go:embed web/*
@@ -260,6 +260,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites", only(http.MethodPost, a.withAuth(a.createSite)))
 	mux.HandleFunc("/api/sites/sizes", only(http.MethodGet, a.withAuth(a.siteSizes)))
 	mux.HandleFunc("/api/sites/suspension", only(http.MethodPut, a.withAuth(a.siteSuspension)))
+	mux.HandleFunc("/api/sites/wordpress/setup", only(http.MethodPost, a.withAuth(a.completeWordPressSetup)))
 	mux.HandleFunc("/api/sites/ssl", only(http.MethodPost, a.withAuth(a.enableSSL)))
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
@@ -278,7 +279,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/website-backups", a.withAuth(a.websiteBackups))
 	mux.HandleFunc("/api/website-backups/upload", only(http.MethodPost, a.withAuth(a.websiteBackupUpload)))
 	mux.HandleFunc("/api/website-backups/restore", only(http.MethodPost, a.withAuth(a.websiteBackupRestore)))
-	mux.HandleFunc("/api/backup-destinations", only(http.MethodPost, a.withAuth(a.createBackupDestination)))
+	mux.HandleFunc("/api/backup-destinations", a.withAuth(a.createBackupDestination))
 	mux.HandleFunc("/api/backup-destinations/", only(http.MethodDelete, a.withAuth(a.deleteBackupDestination)))
 	mux.HandleFunc("/api/files", a.withAuth(a.files))
 	mux.HandleFunc("/api/files/search", only(http.MethodGet, a.withAuth(a.searchFiles)))

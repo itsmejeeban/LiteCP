@@ -378,11 +378,50 @@ func (s *Store) RemoveMailAlias(id string) error {
 }
 
 // Commit the website's first mail routing domain and mailbox together.
-func(s *Store) AddMailboxWithDomain(mailbox Mailbox,domain *MailDomain)error{
- s.mu.Lock();defer s.mu.Unlock()
- for _,item:=range s.cfg.Mailboxes{if item.Address==mailbox.Address{return errors.New("mailbox already exists")}}
- originalDomains:=append([]MailDomain{},s.cfg.MailDomains...);originalMailboxes:=append([]Mailbox{},s.cfg.Mailboxes...)
- if domain!=nil{for _,item:=range s.cfg.MailDomains{if item.Domain==domain.Domain{return errors.New("mail domain already exists")}};s.cfg.MailDomains=append(s.cfg.MailDomains,*domain)}
- s.cfg.Mailboxes=append(s.cfg.Mailboxes,mailbox)
- if err:=s.saveLocked();err!=nil{s.cfg.MailDomains=originalDomains;s.cfg.Mailboxes=originalMailboxes;return err};return nil
+func (s *Store) AddMailboxWithDomain(mailbox Mailbox, domain *MailDomain) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, item := range s.cfg.Mailboxes {
+		if item.Address == mailbox.Address {
+			return errors.New("mailbox already exists")
+		}
+	}
+	originalDomains := append([]MailDomain{}, s.cfg.MailDomains...)
+	originalMailboxes := append([]Mailbox{}, s.cfg.Mailboxes...)
+	if domain != nil {
+		for _, item := range s.cfg.MailDomains {
+			if item.Domain == domain.Domain {
+				return errors.New("mail domain already exists")
+			}
+		}
+		s.cfg.MailDomains = append(s.cfg.MailDomains, *domain)
+	}
+	s.cfg.Mailboxes = append(s.cfg.Mailboxes, mailbox)
+	if err := s.saveLocked(); err != nil {
+		s.cfg.MailDomains = originalDomains
+		s.cfg.Mailboxes = originalMailboxes
+		return err
+	}
+	return nil
+}
+
+func (s *Store) UpdateBackupDestination(destination BackupDestination) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, item := range s.cfg.BackupDestinations {
+		if item.ID != destination.ID && strings.EqualFold(item.Name, destination.Name) {
+			return errors.New("a backup destination with that name already exists")
+		}
+	}
+	for i, item := range s.cfg.BackupDestinations {
+		if item.ID == destination.ID {
+			s.cfg.BackupDestinations[i] = destination
+			if err := s.saveLocked(); err != nil {
+				s.cfg.BackupDestinations[i] = item
+				return err
+			}
+			return nil
+		}
+	}
+	return errors.New("backup destination not found")
 }
