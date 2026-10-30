@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.40"
+var version = "2.0.60"
 var buildRevision = ""
 
 //go:embed web/*
@@ -69,9 +69,13 @@ func main() {
 		return
 	}
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
-	if len(os.Args)>1 && os.Args[1]=="reset-admin-password" {
-		if err:=validateResetPasswordArguments(os.Args);err!=nil {log.Fatal(err)}
-		if err:=resetAdminPasswordCommand(dataDir);err!=nil {log.Fatal(err)}
+	if len(os.Args) > 1 && os.Args[1] == "reset-admin-password" {
+		if err := validateResetPasswordArguments(os.Args); err != nil {
+			log.Fatal(err)
+		}
+		if err := resetAdminPasswordCommand(dataDir); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
@@ -265,6 +269,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
 	mux.HandleFunc("/api/environment-inventory", a.withAuth(a.environmentInventory))
+	mux.HandleFunc("/api/analytics/processes", a.withAuth(a.liveProcesses))
 	mux.HandleFunc("/api/analytics/usage", a.withAuth(a.usageAnalytics))
 	mux.HandleFunc("/api/analytics/disk-usage", a.withAuth(a.directoryDiskUsage))
 	mux.HandleFunc("/api/website-ftp", a.withAuth(a.websiteFTP))
@@ -702,6 +707,7 @@ func (a *App) createSite(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		Renew bool   `json:"renew"`
 		ID    string `json:"id"`
 		Email string `json:"email"`
 	}
@@ -718,7 +724,7 @@ func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Could not save the SSL state.")
 		return
 	}
-	if err := a.system.EnableSSL(r.Context(), *site, input.Email); err != nil {
+	if err := a.system.EnableSSL(r.Context(), *site, input.Email, input.Renew); err != nil {
 		if rollbackErr := a.store.UpdateSite(input.ID, func(value *Site) { value.SSL = site.SSL }); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "SSL setup failed and panel state rollback also failed: "+rollbackErr.Error())
 			return
@@ -726,7 +732,11 @@ func (a *App) enableSSL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	a.store.AddActivity("SSL enabled", site.Domain+" now redirects to HTTPS", "success")
+	action := "SSL enabled"
+	if input.Renew {
+		action = "SSL renewed"
+	}
+	a.store.AddActivity(action, site.Domain+" now redirects to HTTPS", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

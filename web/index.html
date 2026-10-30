@@ -14,10 +14,10 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=full-width-picker-6">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
-  <link rel="stylesheet" href="litecp-theme.css?v=editor-controls-2.0.39">
+  <link rel="stylesheet" href="litecp-theme.css?v=editor-icons-2.0.41">
   <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
-  <link rel="stylesheet" href="file-manager.css?v=editor-controls-2.0.39">
+  <link rel="stylesheet" href="file-manager.css?v=renew-ssl-2.0.57">
   <link rel="stylesheet" href="close-buttons.css?v=cpanel-dialog-2">
   <link rel="stylesheet" href="sidebar-icons.css?v=file-picker-5">
   <link rel="stylesheet" href="brand-logo.css?v=1">
@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="overview-icons.css?v=1">
   <link rel="stylesheet" href="analytics.css?v=storage-directories-3">
   <link rel="stylesheet" href="vendor/xterm/xterm.css">
-  <link rel="stylesheet" href="terminal.css?v=interactive-2">
+  <link rel="stylesheet" href="terminal.css?v=visible-cursor-2.0.47">
   <link rel="stylesheet" href="website-list.css?v=1">
   <script src="theme.js?v=dark-only-1"></script>
 </head>
@@ -242,19 +242,19 @@
     <div class="modal-card compact-modal"><div class="modal-head"><div><span class="success-seal"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><h2 id="credentialsTitle">Website provisioned</h2><p>Save these database credentials now. The password is not stored by LiteCP.</p></div></div><div class="modal-body"><dl class="credential-list" id="credentialList"></dl><div class="warning-callout"><strong>Shown once</strong><span>Copy these values into the application installer before closing.</span></div></div><div class="modal-actions"><button class="button button-secondary" id="copyCredentials">Copy credentials</button><button class="button button-primary" id="closeCredentials">I’ve saved them</button></div></div>
   </div>
 
-  <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="button button-primary editor-save" type="submit" form="editorForm" data-editor-save>Save file</button><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit" data-editor-save>Save file</button></div></form></div></div>
+  <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="button button-primary editor-save" type="submit" form="editorForm" data-editor-save aria-label="Save file" title="Save file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8"/></svg></button><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit" data-editor-save>Save file</button></div></form></div></div>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=trash-restore-2.0.32" defer></script>
+  <script src="app.js?v=renew-ssl-2.0.57" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
-  <script src="features.js?v=extension-descriptions-2.0.23" defer></script>
+  <script src="features.js?v=files-first-2.0.53" defer></script>
   <script src="html-editor.js?v=2" defer></script>
-  <script src="file-manager.js?v=trash-restore-2.0.32" defer></script>
+  <script src="file-manager.js?v=extract-confirm-2.0.45" defer></script>
   <script src="panel-settings.js?v=responsive-audit-8" defer></script>
   <script src="live-migration.js?v=1.0.25" defer></script>
-  <script src="website-backups.js?v=concise-3" defer></script>
+  <script src="website-backups.js?v=full-home-2.0.59" defer></script>
   <script src="activities.js?v=activity-age-2.0.19" defer></script>
   <script src="website-ftp.js?v=responsive-audit-8" defer></script>
   <script src="website-cron.js?v=merged-app-cron-1" defer></script>
@@ -288,10 +288,11 @@
   <script src="update-notice.js?v=settings-2" defer></script>
   <script src="developer-mode.js?v=security-auth-2" defer></script>
   <script src="overview-environment.js?v=responsive-audit-8" defer></script>
-  <script src="analytics.js?v=storage-directories-3" defer></script>
+  <script src="analytics.js?v=live-process-2.0.51-storage-directories-3" defer></script>
   <script src="migration-tabs.js?v=completed-jobs-2" defer></script>
   <script src="vendor/xterm/xterm.js" defer></script>
   <script src="vendor/xterm/addon-fit.js" defer></script>
-  <script src="terminal.js?v=interactive-2" defer></script>
+  <script src="terminal.js?v=visible-cursor-2.0.47" defer></script>
+<script src="live-process.js?v=2.0.51" defer></script>
 </body>
 </html>

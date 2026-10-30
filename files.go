@@ -33,12 +33,12 @@ type FileEntry struct {
 }
 
 type FileListing struct {
-	Home string `json:"home"`
-	PublicPath string `json:"publicPath"`
-	SiteID  string      `json:"siteId"`
-	Domain  string      `json:"domain"`
-	Path    string      `json:"path"`
-	Entries []FileEntry `json:"entries"`
+	Home       string      `json:"home"`
+	PublicPath string      `json:"publicPath"`
+	SiteID     string      `json:"siteId"`
+	Domain     string      `json:"domain"`
+	Path       string      `json:"path"`
+	Entries    []FileEntry `json:"entries"`
 }
 
 type FileSearchResult struct {
@@ -90,7 +90,9 @@ func (s *System) ListFiles(site Site, relative string) (FileListing, error) {
 	listing := FileListing{Home: managedSiteRoot(site), PublicPath: sitePublicPath(site), SiteID: site.ID, Domain: site.Domain, Path: clean, Entries: make([]FileEntry, 0, len(entries))}
 	for _, entry := range entries {
 		// Never open sockets, devices or FIFOs when enumerating server paths.
-		if !entry.IsDir() && !entry.Type().IsRegular() { continue }
+		if !entry.IsDir() && !entry.Type().IsRegular() {
+			continue
+		}
 		entryPath := entry.Name()
 		if clean != "" {
 			entryPath = clean + "/" + entry.Name()
@@ -313,7 +315,9 @@ func (s *System) CreateManagedDirectory(site Site, parent, name string) error {
 }
 
 func (s *System) RenameManagedPath(site Site, relative, destination string) error {
- if protectedSitePath(site,relative) || protectedSitePath(site,destination) {return errors.New("managed website folders cannot be renamed or replaced")}
+	if protectedSitePath(site, relative) || protectedSitePath(site, destination) {
+		return errors.New("managed website folders cannot be renamed or replaced")
+	}
 	_, sourceClean, err := resolveManagedPath(managedSiteRoot(site), relative, false)
 	if err != nil {
 		return err
@@ -335,7 +339,9 @@ func (s *System) RenameManagedPath(site Site, relative, destination string) erro
 }
 
 func (s *System) DeleteManagedPath(site Site, relative string) error {
- if protectedSitePath(site,relative) {return errors.New("managed website folders cannot be deleted")}
+	if protectedSitePath(site, relative) {
+		return errors.New("managed website folders cannot be deleted")
+	}
 	_, clean, err := resolveManagedPath(managedSiteRoot(site), relative, false)
 	if err != nil {
 		return err
@@ -350,7 +356,9 @@ func (s *System) DeleteManagedPath(site Site, relative string) error {
 }
 
 func (s *System) ChmodManagedPath(site Site, relative, modeText string) error {
- if protectedSitePath(site,relative) {return errors.New("managed website folder permissions are protected")}
+	if protectedSitePath(site, relative) {
+		return errors.New("managed website folder permissions are protected")
+	}
 	_, clean, err := resolveManagedPath(managedSiteRoot(site), relative, false)
 	if err != nil {
 		return err
@@ -375,7 +383,7 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	if len(paths) > 500 {
 		return FileEntry{}, errors.New("too many selected paths")
 	}
-	if managedArchiveFormat(destination)=="" {
+	if managedArchiveFormat(destination) == "" {
 		destination += ".zip"
 	}
 	if err := validateFileName(filepath.Base(destination)); err != nil {
@@ -406,8 +414,11 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
 	limitedDestination := &cappedArchiveWriter{destination: temporary, maximum: maxCreatedArchiveSize}
-	writer, err := newManagedArchiveOutput(ctx,limitedDestination,managedArchiveFormat(destination))
-	if err!=nil{_ = temporary.Close();return FileEntry{},err}
+	writer, err := newManagedArchiveOutput(ctx, limitedDestination, managedArchiveFormat(destination))
+	if err != nil {
+		_ = temporary.Close()
+		return FileEntry{}, err
+	}
 	seen := map[string]bool{}
 	members := 0
 	var addPath func(string) error
@@ -446,8 +457,11 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 				_ = file.Close()
 				return errors.New("archive contains too many entries")
 			}
-			destination,err:=writer.Header(info,archiveName)
-			if err!=nil{_ = file.Close();return err}
+			destination, err := writer.Header(info, archiveName)
+			if err != nil {
+				_ = file.Close()
+				return err
+			}
 			if !info.IsDir() {
 				_, copyErr := io.Copy(destination, file)
 				closeErr := file.Close()
@@ -515,23 +529,14 @@ func (s *System) ArchiveManagedPaths(ctx context.Context, site Site, paths []str
 	return FileEntry{Name: filepath.Base(cleanDestination), Path: filepath.ToSlash(cleanDestination), Type: "file", Size: info.Size(), Mode: "0640", Modified: info.ModTime().UTC()}, nil
 }
 
-func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRelative, destinationRelative string) error {
+func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRelative, destinationRelative string, overwriteConfirmed ...bool) error {
 	_, archiveClean, err := resolveManagedPath(managedSiteRoot(site), archiveRelative, false)
 	if err != nil {
 		return err
 	}
-	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destinationRelative, false)
+	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destinationRelative, true)
 	if err != nil {
 		return err
-	}
-	destinationFile, err := secureOpenManaged(managedSiteRoot(site), destinationClean, os.O_RDONLY, 0)
-	if err != nil {
-		return errors.New("extraction destination is not a directory")
-	}
-	info, err := destinationFile.Stat()
-	_ = destinationFile.Close()
-	if err != nil || !info.IsDir() {
-		return errors.New("extraction destination is not a directory")
 	}
 	archiveFile, err := secureOpenManaged(managedSiteRoot(site), archiveClean, os.O_RDONLY, 0)
 	if err != nil {
@@ -542,7 +547,7 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 	if err != nil || !archiveInfo.Mode().IsRegular() {
 		return errors.New("ZIP archive must be a regular file")
 	}
-	reader, cleanup, err := openManagedArchiveReader(ctx,archiveFile,archiveInfo.Size(),archiveClean,s.dataDir)
+	reader, cleanup, err := openManagedArchiveReader(ctx, archiveFile, archiveInfo.Size(), archiveClean, s.dataDir)
 	if err != nil {
 		return fmt.Errorf("open ZIP archive: %w", err)
 	}
@@ -603,6 +608,9 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 		directoryExisted[relative] = exists
 		return nil
 	}
+	if err := addDirectory(destinationClean); err != nil {
+		return err
+	}
 	var total int64
 	for _, member := range reader.File {
 		if member.UncompressedSize64 > uint64(maxExtractedSize-total) {
@@ -659,6 +667,18 @@ func (s *System) ExtractManagedArchive(ctx context.Context, site Site, archiveRe
 			mode = 0640
 		}
 		items = append(items, extractionItem{member: member, target: cleanTarget, mode: mode, existed: exists})
+	}
+
+	if len(overwriteConfirmed) == 0 || !overwriteConfirmed[0] {
+		var conflicts []string
+		for _, item := range items {
+			if item.existed {
+				conflicts = append(conflicts, item.target)
+			}
+		}
+		if len(conflicts) > 0 {
+			return fmt.Errorf("Replacement confirmation required. Existing files: %s", strings.Join(conflicts, ", "))
+		}
 	}
 
 	directories := make([]string, 0, len(directoryExisted))

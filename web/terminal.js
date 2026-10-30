@@ -2,8 +2,9 @@
   "use strict";
   const host=document.getElementById('interactiveTerminal');if(!host)return;
   const connect=document.getElementById('terminalConnect'),disconnect=document.getElementById('terminalDisconnect'),status=document.getElementById('terminalStatus'),panel=host.closest('.terminal-panel');
-  const terminal=new Terminal({cursorBlink:true,fontSize:14,fontFamily:'Consolas, "Liberation Mono", monospace',scrollback:10000,convertEol:false,theme:{background:'#0b1017',foreground:'#dce4ed',cursor:'#7dd3fc',selectionBackground:'#385672'}});
+  const terminal=new Terminal({cursorBlink:false,cursorStyle:"block",cursorInactiveStyle:"outline",fontSize:14,fontFamily:'Consolas, "Liberation Mono", monospace',scrollback:10000,convertEol:false,theme:{background:'#0b1017',foreground:'#dce4ed',cursor:'#f8fafc',cursorAccent:'#0b1017',selectionBackground:'#385672'}});
   const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(host);
+  host.addEventListener("pointerdown",()=>terminal.focus());
   let id=null,cursor=0,timer=null,pending='',sending=false,generation=0;
   const encode=text=>{const bytes=new TextEncoder().encode(text);let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);};
   async function api(method,body,query=''){const response=await fetch('/api/terminal/session'+query,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const value=await response.json();if(!response.ok)throw new Error(value.error||'Terminal connection failed');return value;}

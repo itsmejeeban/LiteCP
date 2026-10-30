@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="2.0.40"
+LITECP_VERSION="2.0.60"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -565,6 +565,10 @@ systemctl enable --now fail2ban
 
 bash "${SCRIPT_DIR}/install-phpmyadmin.sh"
 
+printf '\nInstalling encrypted website FTP (FTPS)...\n'
+bash "${SCRIPT_DIR}/install-ftp.sh"
+systemctl is-active --quiet litecp-ftps || fail "FTPS did not start; inspect journalctl -u litecp-ftps."
+
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WEBMAIL:-0}" != 1 ]] || OPTIONAL_FEATURES+=(mail)
@@ -576,7 +580,7 @@ success "LiteCP - By Hostingtom is installed."
 printf 'SSH port: %s (allow this TCP port in any external cloud firewall).\n' "${SSH_PROTECTION_PORTS:-22}"
 printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
 printf 'The first visit uses a self-signed panel certificate. Verify its fingerprint or replace it with a trusted certificate before regular use.\n'
-printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 4321 and mail ports 25, 465, 587, 993 as needed.\n'
+printf 'If an external cloud firewall is enabled, allow TCP 80, 443, 4321 mail ports 25, 465, 587, 993, and FTPS ports 21, 50000-50049 as needed.\n'
 DATABASE_VERSION="$(mysql --protocol=socket --user=root --batch --skip-column-names --execute 'SELECT VERSION()' 2>/dev/null || true)"
 if [[ -n "${DATABASE_VERSION}" ]]; then
   printf 'Database engine: MySQL %s.\n' "${DATABASE_VERSION}"

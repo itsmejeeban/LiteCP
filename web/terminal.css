@@ -5,3 +5,7 @@
 .terminal-panel:fullscreen #interactiveTerminal{flex:1;height:auto;min-height:0}
 #interactiveTerminal .xterm{height:100%}
 #interactiveTerminal .xterm-viewport{scrollbar-width:thin}
+
+/* Keep the fallback DOM cursor readable and immune to shared UI colors. */
+#interactiveTerminal .xterm-cursor-layer {opacity:1!important;}
+#interactiveTerminal .xterm-cursor-layer .xterm-cursor {background-color:#f8fafc!important;color:#0b1017!important;border-color:#f8fafc!important;}

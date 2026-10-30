@@ -415,3 +415,14 @@ body.fm-fullscreen-open { overflow: hidden; }
 :root[data-theme] body #editorModal button[data-editor-save] {background:#2879b7!important;color:#fff!important;border-color:#21689e!important;}
 :root[data-theme] body #editorModal button[data-editor-save]:not(:disabled):hover {background:#21689e!important;color:#fff!important;}
 :root[data-theme] body #editorModal button:disabled {opacity:.6;}
+
+:root[data-theme] body #editorModal .editor-save {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;min-height:38px;padding:8px!important;}
+:root[data-theme] body #editorModal .editor-save svg {width:22px;height:22px;fill:none!important;stroke:#fff!important;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+:root[data-theme] body #editorModal #closeEditor svg,
+:root[data-theme] body #editorModal #closeEditor svg path {color:#fff!important;stroke:#fff!important;opacity:1!important;fill:none!important;}
+
+/* Errors must override the generic dialog paragraph palette. */
+:root[data-theme] body #fmActionDialog .fm-dialog-body p.fm-error {background:#7f1d1d!important;color:#fff!important;border:1px solid #dc6464!important;opacity:1!important;line-height:1.5;overflow-wrap:anywhere;white-space:normal;}
+
+:root[data-theme] #sitesTable .row-actions button[data-ssl-renew="true"]::before {display:none!important;}
+:root[data-theme] #sitesTable .row-actions button[data-ssl-renew="true"] svg {display:block!important;width:24px;height:24px;color:#64b5e8;stroke:currentColor;fill:none;}

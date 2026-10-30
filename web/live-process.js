@@ -1,0 +1,11 @@
+(() => {
+ "use strict";
+ const cp=window.LiteCP,esc=cp.escapeHTML,page=document.createElement('section');page.className='page';page.dataset.pageView='live-process';
+ page.innerHTML='<div class="page-heading"><div><h1>Live Process</h1><p>Updates every 3 seconds. CPU per process can exceed 100% across multiple cores.</p></div><button class="button button-secondary" data-refresh>Refresh</button></div><div class="panel" style="padding:16px"><p data-summary role="status">Loading…</p><label class="field"><span>Search processes</span><input type="search" data-search placeholder="Process name, user or PID"></label><div style="overflow:auto;max-height:65vh"><table class="data-table" style="width:100%"><thead><tr><th>PID</th><th>User</th><th>Process</th><th>State</th><th>CPU</th><th>Memory</th><th>RAM</th></tr></thead><tbody></tbody></table></div></div>';
+ document.querySelector('.main-content').append(page);
+ let timer=null,busy=false,entries=[];
+ function render(){const q=page.querySelector('[data-search]').value.toLowerCase();page.querySelector('tbody').innerHTML=entries.filter(x=>`${x.pid} ${x.user} ${x.name}`.toLowerCase().includes(q)).map(x=>`<tr><td>${x.pid}</td><td>${esc(x.user)}</td><td>${esc(x.name)}</td><td>${esc(x.state)}</td><td>${x.cpu.toFixed(1)}%</td><td>${x.memory.toFixed(1)}%</td><td>${cp.formatBytes(x.rss)}</td></tr>`).join('');}
+ async function load(){if(busy||document.hidden||location.hash!=='#live-process')return;busy=true;try{const value=await cp.api('/api/analytics/processes');entries=value.processes;render();page.querySelector('[data-summary]').textContent=`CPU ${value.summary.cpu.toFixed(1)}% · Memory ${value.summary.memory.toFixed(1)}% · ${value.note} · Updated ${new Date(value.updatedAt).toLocaleTimeString()}`;}catch(error){page.querySelector('[data-summary]').textContent=error.message;}finally{busy=false;}}
+ function activate(){clearInterval(timer);if(location.hash==='#live-process'){load();timer=setInterval(load,3000);}}
+ page.querySelector('[data-refresh]').onclick=load;page.querySelector('[data-search]').oninput=render;window.addEventListener('hashchange',activate);document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});activate();
+})();

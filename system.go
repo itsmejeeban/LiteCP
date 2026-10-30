@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"net"
 	"net/mail"
 	"os"
@@ -507,7 +508,7 @@ func demoCredentials(domain string) DBCredentials {
 	return DBCredentials{Name: name, Username: name, Password: "saved-once-demo-password", Host: "localhost"}
 }
 
-func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
+func (s *System) EnableSSL(ctx context.Context, site Site, email string, renew ...bool) error {
 	if site.Application != nil && site.Application.Enabled {
 		return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")
 	}
@@ -521,7 +522,11 @@ func (s *System) EnableSSL(ctx context.Context, site Site, email string) error {
 	if s.demo {
 		return nil
 	}
-	_, err = runCommand(ctx, 90*time.Second, "certbot", "--nginx", "--domain", site.Domain, "--non-interactive", "--agree-tos", "--email", email, "--redirect")
+	args := []string{"--nginx", "--domain", site.Domain, "--non-interactive", "--agree-tos", "--email", email, "--redirect"}
+	if len(renew) > 0 && renew[0] {
+		args = append(args, "--force-renewal")
+	}
+	_, err = runCommand(ctx, 90*time.Second, "certbot", args...)
 	if err == nil && site.Suspended {
 		return s.setSuspension(ctx, site, true)
 	}
@@ -1152,7 +1157,10 @@ func (s *System) syncPHP73Pools() error {
 		content.Write(value)
 		content.WriteByte('\n')
 	}
-	return writeAtomic("/etc/litecp/php73-pools.conf", []byte(content.String()), 0640)
+	// This pre-created file is a writable systemd bind mount and a read-only
+	// container mount. Preserve its inode: atomic rename needs parent-directory
+	// access and would leave the running container attached to the old inode.
+	return writePHP73MountedConfig("/etc/litecp/php73-pools.conf", []byte(content.String()))
 }
 
 func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
@@ -1716,6 +1724,50 @@ func firstAvailableCommand(names ...string) string {
 func validatePHPVersionSwitch(version string) error {
 	if !containsString(supportedPHPVersions, version) {
 		return errors.New("choose an available PHP version")
+	}
+	return nil
+}
+
+// writePHP73MountedConfig updates only an existing regular file; it never
+// creates files in the protected configuration parent directory.
+func writePHP73MountedConfig(path string, content []byte) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("PHP 7.3 combined configuration is not a regular file")
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, opened) {
+		return errors.New("PHP 7.3 configuration changed while opening")
+	}
+	original, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+	write := func(value []byte) error {
+		if _, err := file.WriteAt(value, 0); err != nil {
+			return err
+		}
+		if err := file.Truncate(int64(len(value))); err != nil {
+			return err
+		}
+		return file.Sync()
+	}
+	if err := write(content); err != nil {
+		if recovery := write(original); recovery != nil {
+			return fmt.Errorf("write PHP 7.3 configuration: %v; restore previous content: %w", err, recovery)
+		}
+		return err
 	}
 	return nil
 }

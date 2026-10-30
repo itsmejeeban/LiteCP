@@ -194,7 +194,7 @@ func TestZIPExtractionOverwritesTransactionallyAndRemovesBackup(t *testing.T) {
 	_ = writer.Close()
 	_ = archive.Close()
 	system := &System{dataDir: t.TempDir(), demo: true}
-	if err := system.ExtractManagedArchive(context.Background(), Site{Root: root}, "update.zip", ""); err != nil {
+	if err := system.ExtractManagedArchive(context.Background(), Site{Root: root}, "update.zip", "", true); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(root, "replace.txt"))

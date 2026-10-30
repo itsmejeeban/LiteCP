@@ -15,12 +15,16 @@ import (
 
 func (a *App) requestSite(r *http.Request) (*Site, error) {
 	siteID := strings.TrimSpace(r.URL.Query().Get("siteId"))
-	if siteID == "server-explorer" && (r.Method != http.MethodGet || a.system.demo) { return nil, errors.New("Server File Explorer is read-only and requires the installed server") }
+	if siteID == "server-explorer" && (r.Method != http.MethodGet || a.system.demo) {
+		return nil, errors.New("Server File Explorer is read-only and requires the installed server")
+	}
 	if siteID == "server-explorer" && r.Method == http.MethodGet && !a.system.demo {
 		for _, key := range []string{"path", "root"} {
 			path := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(r.URL.Query().Get(key))), "/")
 			for _, virtual := range []string{"proc", "sys", "dev", "run"} {
-				if path == virtual || strings.HasPrefix(path, virtual+"/") { return nil, errors.New("virtual runtime filesystems are unavailable in Server File Explorer") }
+				if path == virtual || strings.HasPrefix(path, virtual+"/") {
+					return nil, errors.New("virtual runtime filesystems are unavailable in Server File Explorer")
+				}
 			}
 		}
 		return &Site{ID: "server-explorer", Domain: "Server File Explorer", Root: "/"}, nil
@@ -327,9 +331,10 @@ func (a *App) archiveFiles(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) extractArchive(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		SiteID      string `json:"siteId"`
-		Path        string `json:"path"`
-		Destination string `json:"destination"`
+		OverwriteConfirmed bool   `json:"overwriteConfirmed"`
+		SiteID             string `json:"siteId"`
+		Path               string `json:"path"`
+		Destination        string `json:"destination"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -340,7 +345,7 @@ func (a *App) extractArchive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
-	if err := a.system.ExtractManagedArchive(r.Context(), *site, input.Path, input.Destination); err != nil {
+	if err := a.system.ExtractManagedArchive(r.Context(), *site, input.Path, input.Destination, input.OverwriteConfirmed); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
