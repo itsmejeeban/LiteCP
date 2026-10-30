@@ -38,12 +38,16 @@ func (s *System) trashRoot() string {
 }
 
 func (s *System) siteTrashRoot(site Site) string {
-	if home := siteHome(site); home != "" { return filepath.Join(home, ".trash") }
+	if home := siteHome(site); home != "" {
+		return filepath.Join(home, ".trash")
+	}
 	return filepath.Join(s.trashRoot(), safeSiteID(site.ID))
 }
 
 func (s *System) MoveManagedPathToTrash(site Site, relative string) (TrashEntry, error) {
- if protectedSitePath(site,relative) {return TrashEntry{},errors.New("managed website folders cannot be moved to trash")}
+	if protectedSitePath(site, relative) {
+		return TrashEntry{}, errors.New("managed website folders cannot be moved to trash")
+	}
 	_, clean, err := resolveManagedPath(managedSiteRoot(site), relative, false)
 	if err != nil {
 		return TrashEntry{}, err
@@ -154,6 +158,26 @@ func (s *System) ListTrash(site Site) ([]TrashEntry, error) {
 			result = append(result, entry)
 		}
 	}
+	// Assign recognizable versions oldest first, including legacy payload entries.
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].DeletedAt.Equal(result[j].DeletedAt) {
+			return result[i].ID < result[j].ID
+		}
+		return result[i].DeletedAt.Before(result[j].DeletedAt)
+	})
+	counts := make(map[string]int)
+	for i := range result {
+		name := filepath.Base(result[i].OriginalPath)
+		counts[name]++
+		result[i].Name = name
+		if counts[name] > 1 {
+			ext := filepath.Ext(name)
+			if result[i].Type == "directory" {
+				ext = ""
+			}
+			result[i].Name = fmt.Sprintf("%s (v%d)%s", strings.TrimSuffix(name, ext), counts[name], ext)
+		}
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].DeletedAt.After(result[j].DeletedAt) })
 	return result, nil
 }
@@ -193,7 +217,7 @@ func (s *System) DeleteTrashEntry(site Site, id string) error {
 
 func (s *System) EmptyTrash(site Site) error {
 	root := s.siteTrashRoot(site)
-	if siteHome(site)=="" && !pathWithinRoot(s.trashRoot(), root) {
+	if siteHome(site) == "" && !pathWithinRoot(s.trashRoot(), root) {
 		return errors.New("invalid trash root")
 	}
 	if err := os.RemoveAll(root); err != nil {
@@ -351,7 +375,9 @@ func (s *System) MoveManagedPaths(site Site, paths []string, destination string)
 	targets := make([]string, len(paths))
 	cleans := make([]string, len(paths))
 	for i, source := range paths {
-  if protectedSitePath(site,source) {return errors.New("managed website folders cannot be moved or replaced")}
+		if protectedSitePath(site, source) {
+			return errors.New("managed website folders cannot be moved or replaced")
+		}
 		_, clean, err := resolveManagedPath(managedSiteRoot(site), source, false)
 		if err != nil || clean == "" {
 			return errors.New("move source is invalid")

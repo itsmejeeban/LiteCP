@@ -14,10 +14,10 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=full-width-picker-6">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
-  <link rel="stylesheet" href="litecp-theme.css?v=profile-menu-gap-2.0.2">
+  <link rel="stylesheet" href="litecp-theme.css?v=runtime-selectors-2.0.24">
   <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
-  <link rel="stylesheet" href="file-manager.css?v=server-explorer-1">
+  <link rel="stylesheet" href="file-manager.css?v=manual-save-2.0.31">
   <link rel="stylesheet" href="close-buttons.css?v=cpanel-dialog-2">
   <link rel="stylesheet" href="sidebar-icons.css?v=file-picker-5">
   <link rel="stylesheet" href="brand-logo.css?v=1">
@@ -242,25 +242,26 @@
     <div class="modal-card compact-modal"><div class="modal-head"><div><span class="success-seal"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><h2 id="credentialsTitle">Website provisioned</h2><p>Save these database credentials now. The password is not stored by LiteCP.</p></div></div><div class="modal-body"><dl class="credential-list" id="credentialList"></dl><div class="warning-callout"><strong>Shown once</strong><span>Copy these values into the application installer before closing.</span></div></div><div class="modal-actions"><button class="button button-secondary" id="copyCredentials">Copy credentials</button><button class="button button-primary" id="closeCredentials">I’ve saved them</button></div></div>
   </div>
 
-  <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit">Save file</button></div></form></div></div>
+  <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="button button-primary editor-save" type="submit" form="editorForm" data-editor-save>Save file</button><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit" data-editor-save>Save file</button></div></form></div></div>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=php-settings-2.0.6" defer></script>
-  <script src="features.js?v=single-mail-actions-2" defer></script>
+  <script src="app.js?v=trash-restore-2.0.32" defer></script>
+  <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
+  <script src="features.js?v=extension-descriptions-2.0.23" defer></script>
   <script src="html-editor.js?v=2" defer></script>
-  <script src="file-manager.js?v=server-explorer-1" defer></script>
+  <script src="file-manager.js?v=trash-restore-2.0.32" defer></script>
   <script src="panel-settings.js?v=responsive-audit-8" defer></script>
   <script src="live-migration.js?v=1.0.25" defer></script>
   <script src="website-backups.js?v=concise-3" defer></script>
-  <script src="activities.js?v=tooltip-2" defer></script>
+  <script src="activities.js?v=activity-age-2.0.19" defer></script>
   <script src="website-ftp.js?v=responsive-audit-8" defer></script>
   <script src="website-cron.js?v=merged-app-cron-1" defer></script>
   <script src="documentation.js?v=3" defer></script>
   <script src="application-hosting.js?v=dialogs-1" defer></script>
   <script src="database-popup.js?v=1" defer></script>
-  <script src="panel-search.js?v=server-explorer-1" defer></script>
+  <script src="panel-search.js?v=no-shortcut-2.0.20" defer></script>
   <script src="settings-tabs.js?v=backup-tabs-5" defer></script>
   <script src="security-pages.js?v=responsive-audit-8" defer></script>
   <script src="website-tool-pages.js?v=1" defer></script>
@@ -269,15 +270,17 @@
   <script src="security-dashboard.js?v=1" defer></script>
   <script src="ssh-port.js?v=1" defer></script>
   <script src="two-factor.js?v=2.0.5" defer></script>
-  <script src="firewall-profile.js?v=1" defer></script>
+  <script src="firewall-profile.js?v=2.0.15" defer></script>
   <script src="firewall-popup.js?v=1" defer></script>
   <script src="server-scan.js?v=1" defer></script>
-  <script src="php-settings.js?v=2.0.6" defer></script>
-  <script src="sidebar-groups.js?v=2.0.6" defer></script>
+  <script src="php-settings.js?v=2.0.17" defer></script>
+  <script src="panel-port.js?v=2.0.14" defer></script>
+  <script src="website-runtime-selectors.js?v=2.0.24" defer></script>
+  <script src="sidebar-groups.js?v=runtime-selectors-2.0.24" defer></script>
   <script src="email-delivery.js?v=1" defer></script>
   <script src="smtp-port-check.js?v=1" defer></script>
   <script src="email-tabs.js?v=smtp-check-3" defer></script>
-  <script src="submenu-icons.js?v=1" defer></script>
+  <script src="submenu-icons.js?v=smtp-icon-2.0.18" defer></script>
   <script src="system-snapshots.js?v=1" defer></script>
   <script src="backup-tabs.js?v=2" defer></script>
   <script src="backup-schedules.js?v=1" defer></script>

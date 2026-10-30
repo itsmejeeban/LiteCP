@@ -299,6 +299,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button svg {display:none;}
 :root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-ftp]::before {background-position:16.6667% center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-php-settings]::before {background-image:url('logo-php.svg');background-size:contain;background-position:center;width:36px;}
 :root[data-theme] #sitesTable .row-actions button[data-site-backup]::before {background-position:33.3333% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-cron-jobs]::before,
 :root[data-theme] #sitesTable .row-actions button[data-site-action="cron"]::before {background-position:50% center;}
@@ -442,3 +443,11 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions .site-suspension-action::before {display:none;}
 :root[data-theme] #sitesTable .row-actions .site-suspension-action svg {display:block;width:28px;height:28px;fill:none;stroke:#d4a75d;stroke-width:2.5;stroke-linecap:round;}
 :root[data-theme] #sitesTable .row-actions .site-suspension-action[title="Restore website access"] svg {stroke:#7fc99a;fill:#7fc99a;stroke-width:1;}
+
+/* Keep relative age directly below the exact activity timestamp. */
+.activity-time [data-activity-relative] {display:block;font-size:inherit;line-height:1.6;margin-top:3px;color:var(--muted);}
+
+#extensionsTable .extension-description {min-width:220px;max-width:440px;white-space:normal;overflow-wrap:anywhere;line-height:1.5;}
+
+:root[data-theme] #sitesTable .row-actions button[data-site-runtime]::before {display:none;}
+:root[data-theme] #sitesTable .row-actions button[data-site-runtime] img {display:block;width:28px;height:28px;object-fit:contain;}

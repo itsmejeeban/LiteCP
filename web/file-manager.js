@@ -95,7 +95,7 @@
   const join = (a,b) => a ? `${a}/${b}` : b;
   page.classList.add("fm-page");
   panel.insertAdjacentHTML("afterbegin", `<header class="cpfm-header"><div class="cpfm-brand"><img class="litecp-logo" src="assets/litecp-cloud-logo-v2.png" alt="LiteCP" width="2029" height="775"> File Manager</div><form id="cpfmSearch"><label>Search</label><select id="cpfmSearchScope" aria-label="Search location"><option value="all">All Your Files</option><option value="root">Web Root (public_html)</option><option value="current">Current Directory</option></select><span>for</span><input id="cpfmSearchInput" type="search" aria-label="Search files" autocomplete="off"><button type="submit">Go</button></form><button type="button" class="cpfm-settings" data-fm-action="settings">${icon("settings")} Settings</button></header>`);
-  $(".file-toolbar").innerHTML = `${button("new-file","File","plus")}${button("new-folder","Folder","folder")}${button("copy","Copy","copy")}${button("move","Move","move")}${button("upload","Upload","upload")}${button("download","Download","download")}${button("delete","Delete","trash")}${button("trash","Restore","refresh")}${button("rename","Rename","edit")}${button("edit","Edit","edit")}${button("html-edit","HTML Editor","edit")}${button("chmod","Permissions","lock")}${button("view","View","eye")}${button("extract","Extract","extract")}${button("archive","Compress","archive")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
+  $(".file-toolbar").innerHTML = `${button("new-file","File","plus")}${button("new-folder","Folder","folder")}${button("copy","Copy","copy")}${button("move","Move","move")}${button("upload","Upload","upload")}${button("upload-url","Upload via URL","upload")}${button("download","Download","download")}${button("delete","Delete","trash")}${button("trash","Restore","refresh")}${button("rename","Rename","edit")}${button("edit","Edit","edit")}${button("html-edit","HTML Editor","edit")}${button("chmod","Permissions","lock")}${button("view","View","eye")}${button("extract","Extract","extract")}${button("archive","Compress","archive")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
   fullscreen.innerHTML = `${icon("grid")}<span>Full screen</span>`;
   fullscreen.setAttribute('aria-label','Toggle File Manager full screen');
   $(".cpfm-header").append(fullscreen);
@@ -116,9 +116,12 @@
   panel.insertAdjacentHTML("beforeend", '<footer class="fm-footer"><span id="fmStatus" role="status">Select a website to begin.</span><span>Double-click to open · F2 to rename</span></footer>');
   const trashPanel = $("#trashPanel");
   trashPanel.innerHTML = `<div class="panel-head"><div><h2>Trash</h2><p>Recoverable items stored outside your public website.</p></div><div class="feature-actions">${button("close-trash","Close","close")}${button("empty-trash","Empty trash","trash","fm-danger")}</div></div><div id="trashTable"></div>`;
-  const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); page.append(menu);
+  // clientX/clientY use viewport coordinates. Keep the fixed menu outside page
+  // containers whose transforms/animations can create a different containing block.
+  const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); document.body.append(menu);
   const dialog = document.createElement("dialog"); dialog.id="fmActionDialog"; dialog.className = "fm-dialog"; page.append(dialog);
-  page.append($("#editorModal"));
+  // Keep the editor in viewport coordinates, outside the file page's layout.
+  document.body.append($("#editorModal"));
   dialog.setAttribute("aria-labelledby","fmDialogTitle");
   dialog.addEventListener("cancel", event => { if (dialog.querySelector('button[type="submit"]')?.disabled) event.preventDefault(); });
   function closeMenu() { menu.classList.add("hidden"); }
@@ -128,7 +131,8 @@
     page.querySelectorAll("[data-fm-action]").forEach(el => {
       const a = el.dataset.fmAction;
       if (["copy","move","archive","delete","clear"].includes(a)) el.disabled = !items.length;
-      if (["rename","chmod","edit","html-edit","view","download","extract"].includes(a)) el.disabled = !one || (["view","download"].includes(a) && current?.type !== "file") || (a==="edit"&&!editableFile(current)) || (a==="html-edit"&&!htmlFile(current)) || (a === "extract" && !extractableFile(current));
+      if(a==="download")el.disabled=!items.length||items.some(item=>item.type!=="file")||items.length>250||(siteID()==="server-explorer"&&items.length>1);
+      if (["rename","chmod","edit","html-edit","view","extract"].includes(a)) el.disabled = !one || (["view","download"].includes(a) && current?.type !== "file") || (a==="edit"&&!editableFile(current)) || (a==="html-edit"&&!htmlFile(current)) || (a === "extract" && !extractableFile(current));
     });
     $("#fmInspector").innerHTML = one ? `<div class="fm-detail-icon ${current.type === "directory" ? "is-folder" : ""}">${icon(current.type === "directory" ? "folder" : kind(current)==="Archive" ? "archive" : "file")}</div><h3>${esc(current.name)}</h3><span class="fm-kind">${esc(kind(current))}</span><dl><dt>Location</dt><dd>${esc(displayPath(current.path))}</dd><dt>Size</dt><dd>${current.type === "directory" ? "Folder" : cp.formatBytes(current.size)}</dd><dt>Permissions</dt><dd><code>${esc(current.mode)}</code></dd><dt>Modified</dt><dd>${esc(cp.formatDateTime(current.modified))}</dd></dl><p>Changes apply immediately to this website.</p>` : `<div class="fm-detail-icon">${icon(items.length ? "copy" : "info")}</div><h3>${items.length ? `${items.length} items selected` : "File details"}</h3><p>${items.length ? "Use the toolbar to copy, move, compress or move the selection to Trash." : "Select a file or folder to view its details and available actions."}</p>`;
     page.querySelectorAll("[data-fm-row]").forEach(row => row.classList.toggle("fm-selected",selected.has(row.dataset.fmRow)));
@@ -178,6 +182,7 @@
     else $("#fileTable").innerHTML=`<table class="fm-table"><thead><tr><th><input id="fmSelectAll" type="checkbox" aria-label="Select all visible items"></th>${[["name","Name"],["size","Size"],["modified","Last Modified"],["type","Type"],["mode","Permissions"]].map(([key,label])=>`<th aria-sort="${$("#fileSort").value===key ? (descending ? "descending" : "ascending") : "none"}"><button type="button" class="fm-sort-heading" data-fm-sort="${key}">${label}${$("#fileSort").value===key ? (descending ? " ▾" : " ▴") : ""}</button></th>`).join("")}</tr></thead><tbody>${visible.map(x=>`<tr data-fm-row="${esc(x.path)}" tabindex="0"><td><input type="checkbox" data-file-select value="${esc(x.path)}" aria-label="Select ${esc(x.name)}"></td><td>${name(x)}</td><td>${cp.formatBytes(x.size)}</td><td>${esc(cp.formatDateTime(x.modified))}</td><td>${esc(kind(x))}</td><td><button type="button" class="fm-mode" data-fm-permissions="${esc(x.path)}" title="Change permissions">${esc(x.mode)}</button></td></tr>`).join("")}</tbody></table>`;
     $("#fmStatus").textContent=`${visible.length} of ${count} items · ${(value.entries || []).filter(x=>x.type==="directory").length} folders · ${cp.formatBytes((value.entries || []).reduce((n,x)=>n+(x.type==="file" ? x.size : 0),0))} in files`;
     $("#fmOrder").textContent=descending ? "↓" : "↑";
+    page.querySelectorAll('[data-fm-row]').forEach(row=>row.draggable=siteID()!=="server-explorer");
     syncSelection(); renderTree();
     if (!folders.has("") && !loadingFolders.has("")) loadFolder("");
   }
@@ -191,6 +196,7 @@
     $("#fmTree").innerHTML=branch("","public",0);
   }
   async function loadFolder(path) {
+    if(siteID()!=="server-explorer" && /^\.trash(?:\/|$)/.test(path)){await showTrash();return;}
     const expected=site; loadingFolders.add(path); folderErrors.delete(path);
     try { const value=await cp.api(`/api/files?siteId=${encodeURIComponent(expected)}&path=${encodeURIComponent(path)}`); if (site!==expected) return; folders.set(path,value.entries.filter(x=>x.type==="directory")); }
     catch(error) { if (site===expected) folderErrors.set(path,"Unable to load. Collapse and expand to retry."); }
@@ -207,27 +213,37 @@
   function showMenu(path,x,y) {
     if (!selected.has(path)) selectOne(path);
     const current=picked(), singleFile=current.length===1 && current[0].type==="file";
-    const actions=[...(singleFile ? [["download","Download","download"],["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
+    const actions=[...(current.length&&current.every(item=>item.type==="file") ? [["download","Download","download"]] : []),...(singleFile ? [["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
     menu.innerHTML=actions.filter(([action])=>siteID()!=="server-explorer" || ["download","view"].includes(action)).map(([action,label,name])=>button(action,label,name)).join("");
     menu.querySelectorAll("button").forEach(b=>{ const peer=page.querySelector(`[data-fm-action="${b.dataset.fmAction}"]`); b.disabled=peer?.disabled || false; b.setAttribute("role","menuitem"); });
     menu.classList.remove("hidden");
-    const gap=8, left=Math.max(gap,Math.min(x,window.innerWidth-menu.offsetWidth-gap));
-    menu.style.left=left+"px";
-    menu.style.top=Math.max(gap,y)+"px";
-    menu.style.maxHeight=Math.max(120,window.innerHeight-Math.max(gap,y)-gap)+"px";
+    const gap=8;
+    menu.style.maxHeight=Math.max(1,window.innerHeight-gap*2)+"px";
+    menu.style.maxWidth=Math.max(1,window.innerWidth-gap*2)+"px";
+    menu.style.left="0px";menu.style.top="0px";
+    const rect=menu.getBoundingClientRect();
+    const position=contextMenuPosition(x,y,rect.width,rect.height,window.innerWidth,window.innerHeight);
+    menu.style.left=position.left+"px";menu.style.top=position.top+"px";
     menu.querySelector("button:not(:disabled)")?.focus({preventScroll:true});
   }
-  function openDialog({title,description,fields="",submit="Save",danger=false,perform}) {
+  function contextMenuPosition(x,y,width,height,viewportWidth,viewportHeight) {
+    const gap=8,offset=2;
+    const left=x+offset+width<=viewportWidth-gap ? x+offset : x-width-offset;
+    const top=y+offset+height<=viewportHeight-gap ? y+offset : y-height-offset;
+    return {left:Math.max(gap,Math.min(left,Math.max(gap,viewportWidth-width-gap))),top:Math.max(gap,Math.min(top,Math.max(gap,viewportHeight-height-gap)))};
+  }
+  function openDialog({title,description,fields="",submit="Save",danger=false,perform,onCancel}) {
     if (dialog.open) return;
     dialog.classList.remove("fm-search-dialog","fm-preferences-dialog");
     const expectedSite=siteID(), expectedPath=cp.path();
     dialog.innerHTML=`<form><header><h2 id="fmDialogTitle">${esc(title)}</h2><button type="button" data-fm-cancel aria-label="Close dialog">${icon("close")}</button></header><div class="fm-dialog-body">${description ? `<p>${esc(description)}</p>` : ""}${fields}<p class="fm-error hidden" role="alert"></p></div><footer>${submit ? `<button type="submit" class="button ${danger ? "fm-danger-button" : "button-primary"}">${esc(submit)}</button>` : ""}<button type="button" class="button button-ghost" data-fm-cancel>Cancel</button></footer></form>`;
-    dialog.querySelectorAll("[data-fm-cancel]").forEach(b=>b.onclick=()=>dialog.close());
+    dialog.querySelectorAll("[data-fm-cancel]").forEach(b=>b.onclick=()=>{if(!onCancel || onCancel()!==false)dialog.close();});
     dialog.querySelector("form").onsubmit=async event=>{
       event.preventDefault(); if (!event.target.reportValidity()) return;
-      const buttons=dialog.querySelectorAll("button"); buttons.forEach(b=>b.disabled=true); dialog.querySelector(".fm-error").classList.add("hidden");
-      try { if (siteID()!==expectedSite || cp.path()!==expectedPath) throw new Error("The website or folder changed. Close this dialog and try again."); await perform(new FormData(event.target)); dialog.close(); }
-      catch(error) { const output=dialog.querySelector(".fm-error"); output.textContent=error.message; output.classList.remove("hidden"); }
+      const submittedForm=event.target;
+      const buttons=dialog.querySelectorAll("button"); buttons.forEach(b=>b.disabled=!(onCancel && b.hasAttribute("data-fm-cancel"))); dialog.querySelector(".fm-error").classList.add("hidden");
+      try { if (siteID()!==expectedSite || cp.path()!==expectedPath) throw new Error("The website or folder changed. Close this dialog and try again."); await perform(new FormData(submittedForm)); if(dialog.contains(submittedForm))dialog.close(); }
+      catch(error) { const output=submittedForm.querySelector(".fm-error"); if(dialog.open&&dialog.contains(submittedForm)){output.textContent=error.message;output.classList.remove("hidden");} }
       finally { buttons.forEach(b=>b.disabled=false); }
     };
     dialog.showModal(); dialog.querySelector("input:not([type=checkbox])")?.focus();
@@ -288,7 +304,36 @@
     if (name==="back" || name==="forward") { const next=historyIndex+(name==="back" ? -1 : 1); if (next<0 || next>=history.length) return; historyIndex=next; historyNavigation=true; await cp.goToFilePath(history[next]); return; }
     if (name==="edit" || name==="html-edit") { if (item.type==="file") await editFile(item,name==="html-edit"); return; }
     if (name==="view") { if (!cp.demo && item.type==="file") window.open(`/api/files/download?preview=1&siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`,"_blank","noopener"); return; }
-    if (name==="download") { if (!cp.demo && item.type==="file") window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`); return; }
+    if (name==="download") {
+      if(cp.demo)throw new Error('Downloads require the installed server.');
+      if(!items.length||items.some(entry=>entry.type!=="file"))throw new Error('Select files to download. Use Compress for folders.');
+      if(items.length===1){window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`);return;}
+      if(items.length>250)throw new Error('Select at most 250 files per ZIP download.');
+      const form=document.createElement('form');form.method='POST';form.action='/api/files/download-selected?siteId='+encodeURIComponent(activeSite);form.target='_blank';form.hidden=true;
+      for(const entry of items){const input=document.createElement('input');input.type='hidden';input.name='paths';input.value=entry.path;form.append(input);}
+      document.body.append(form);form.submit();form.remove();return;
+    }
+    if(name==="upload-url") {
+      let controller=null,running=false;
+      openDialog({title:"Upload via URL",description:`Download a public HTTP/HTTPS file into ${displayPath(currentPath)}. Existing files will not be replaced. Links must point to the file, not a website download page.`,fields:'<label class="fm-field"><span>File URL</span><input name="url" type="url" required maxlength="8192" placeholder="https://example.com/archive.zip"></label><label class="fm-field"><span>Save as (optional)</span><input name="filename" maxlength="255" placeholder="Use the filename from the URL"></label><progress data-url-progress max="100" value="0"></progress><p data-url-status role="status"></p>',submit:"Download file",onCancel:()=>{controller?.abort();return true;},perform:async data=>{
+        if(cp.demo)throw new Error('URL uploads require the installed server.');
+        controller=new AbortController();running=true;const output=dialog.querySelector('[data-url-status]'),progress=dialog.querySelector('[data-url-progress]');
+        const cancelEscape=()=>controller.abort();dialog.addEventListener('cancel',cancelEscape);
+        const cancelClose=()=>{if(running)controller.abort();};dialog.addEventListener('close',cancelClose);
+        let completed=false;
+        try{
+          output.textContent='Connecting to download server…';progress.removeAttribute('value');
+          const response=await fetch('/api/files/upload-url',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({siteId:activeSite,path:currentPath,url:String(data.get('url')),name:String(data.get('filename')||'')})});
+          if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.error||`Download failed (${response.status})`);}
+          const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+          const update=line=>{if(!line.trim())return;const state=JSON.parse(line);if(state.status==='error')throw new Error(state.error);if(state.status==='complete')completed=true;if(state.total>0){progress.value=Math.min(100,state.bytes/state.total*100);}else progress.removeAttribute('value');output.textContent=state.status==='complete'?'Download complete.':`Downloaded ${cp.formatBytes(state.bytes)}${state.total>0?' of '+cp.formatBytes(state.total):''}`;};
+          while(true){const {done,value}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});let end;while((end=buffer.indexOf('\n'))>=0){update(buffer.slice(0,end));buffer=buffer.slice(end+1);}if(done){if(buffer.trim())update(buffer);break;}}
+          if(!completed)throw new Error('Download interrupted before completion. Refresh before retrying.');
+          if(siteID()===activeSite&&cp.path()===currentPath)await refresh();cp.showToast('URL upload complete','File saved in the selected directory.');
+        }catch(error){controller.abort();if(error.name==='AbortError')throw new Error('Download cancelled. Refresh to check whether the file completed.');throw error;}
+        finally{running=false;dialog.removeEventListener('cancel',cancelEscape);dialog.removeEventListener('close',cancelClose);}
+      }});return;
+    }
     if (name==="upload") {
       openDialog({title:"File Upload",description:`Select the file you want to upload to “${displayPath(currentPath)}”.`,fields:'<div class="fm-upload-drop" id="fmUploadDrop"><p>Drop files here to start uploading</p><p>or</p><button type="button" class="button" id="fmChooseUpload">Select File</button></div>',submit:null});
       $("#fmChooseUpload").onclick=()=>$("#fileUploadInput").click();
@@ -326,7 +371,7 @@
   }
   async function showTrash() {
     trashPanel.classList.remove("hidden"); $("#trashTable").innerHTML='<div class="fm-empty"><p>Loading Trash…</p></div>'; trashPanel.scrollIntoView({behavior:"smooth",block:"nearest"});
-    try {const result=cp.demo ? {entries:[]} : await cp.api(`/api/files/trash?siteId=${encodeURIComponent(siteID())}`);$("#trashTable").innerHTML=result.entries.length ? `<table class="fm-table"><thead><tr><th>Original location</th><th>Size</th><th>Moved to Trash</th><th>Actions</th></tr></thead><tbody>${result.entries.map(x=>`<tr><td>${esc(x.originalPath)}</td><td>${cp.formatBytes(x.size)}</td><td>${esc(cp.formatDateTime(x.deletedAt))}</td><td><button class="button button-secondary" data-fm-restore="${esc(x.id)}">Restore</button><button class="button fm-danger" data-fm-purge="${esc(x.id)}">Delete permanently</button></td></tr>`).join("")}</tbody></table>` : '<div class="fm-empty"><h3>Trash is empty</h3><p>Items moved to Trash will appear here.</p></div>';}
+    try {const result=cp.demo ? {entries:[]} : await cp.api(`/api/files/trash?siteId=${encodeURIComponent(siteID())}`);$("#trashTable").innerHTML=result.entries.length ? `<table class="fm-table"><thead><tr><th>File name</th><th>Original location</th><th>Size</th><th>Moved to Trash</th><th>Actions</th></tr></thead><tbody>${result.entries.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.originalPath)}</td><td>${cp.formatBytes(x.size)}</td><td>${esc(cp.formatDateTime(x.deletedAt))}</td><td><button class="button button-secondary" data-fm-restore="${esc(x.id)}">Restore</button><button class="button fm-danger" data-fm-purge="${esc(x.id)}">Delete permanently</button></td></tr>`).join("")}</tbody></table>` : '<div class="fm-empty"><h3>Trash is empty</h3><p>Items moved to Trash will appear here.</p></div>';}
     catch(error){$("#trashTable").textContent=error.message;}
   }
   function upload(files) {
@@ -335,22 +380,44 @@
     if(new Set(files.map(file=>file.name)).size!==files.length){cp.showToast("Duplicate filenames","Choose files with unique names.","error");return;}
     const current=cp.path(), activeSite=siteID();
     if (!activeSite) return;
+    if(dialog.open)return;
+    let activeXHR=null,cancelled=false,running=false,uploadProgress,uploadStatus;
+    const cancelUpload=()=>{
+      if(cancelled||!running)return;
+      cancelled=true;
+      if(uploadStatus)uploadStatus.textContent='Upload cancelled.';
+      activeXHR?.abort();
+      cp.showToast('Upload cancelled','Remaining files will not be uploaded. Completed files were retained; refresh to check the current file.','info');
+    };
     const conflicts=files.filter(file=>listing?.entries.some(x=>x.name===file.name));
-    openDialog({title:"Upload files",description:`Destination: ${displayPath(current)}.${conflicts.length ? " Existing names detected: a single-file upload may replace its existing file; multi-file uploads reject conflicts." : " Review the files before uploading."}`,fields:`<ul class="fm-upload-list">${files.map(file=>`<li>${icon("file")}<span>${esc(file.name)}</span><small>${cp.formatBytes(file.size)}</small></li>`).join("")}</ul><progress id="fmUploadProgress" value="0" max="100"></progress><p id="fmUploadStatus" role="status">Ready to upload ${files.length} file(s).</p>`,submit:"Upload files",perform:async()=>{
+    if(conflicts.length){cp.showToast("Existing filenames","Rename existing or selected files before uploading: "+conflicts.map(file=>file.name).join(', '),"error");return;}
+    openDialog({title:"Upload files",description:`Destination: ${displayPath(current)}.${conflicts.length ? " Existing names detected: a single-file upload may replace its existing file; multi-file uploads reject conflicts." : " Upload starts automatically."}`,fields:`<ul class="fm-upload-list">${files.map(file=>`<li>${icon("file")}<span>${esc(file.name)}</span><small>${cp.formatBytes(file.size)}</small></li>`).join("")}</ul><progress id="fmUploadProgress" value="0" max="100"></progress><p id="fmUploadStatus" role="status">Ready to upload ${files.length} file(s).</p>`,submit:"Upload files",onCancel:()=>{cancelUpload();return true;},perform:async()=>{
+      running=true;try{
       if(cp.demo)throw new Error("Uploads are unavailable in demo mode.");
       if(files.length>1&&conflicts.length)throw new Error("Rename existing files before uploading multiple files with the same names.");
       for(let index=0;index<files.length;index++){
+        if(cancelled)throw new Error("Upload cancelled. Completed files were retained.");
         const file=files[index];await new Promise((resolve,reject)=>{
-          const data=new FormData();data.append("siteId",activeSite);data.append("path",current);if(files.length>1)data.append("noReplace","1");data.append("files",file,file.name);
-          const xhr=new XMLHttpRequest();xhr.open("POST","/api/files/upload");xhr.responseType="json";
-          xhr.upload.onprogress=event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);$("#fmUploadProgress").value=(index+event.loaded/event.total)/files.length*100;$("#fmUploadStatus").textContent=`File ${index+1} of ${files.length}: ${file.name} — ${percent}%`;}};
+          const data=new FormData();data.append("siteId",activeSite);data.append("path",current);data.append("noReplace","1");data.append("files",file,file.name);
+          const xhr=new XMLHttpRequest();activeXHR=xhr;xhr.onabort=()=>reject(new Error("Upload cancelled. Earlier files were retained; refresh to check the current file."));xhr.open("POST","/api/files/upload");xhr.responseType="json";
+          xhr.upload.onprogress=event=>{if(event.lengthComputable){if(cancelled)return;const percent=Math.round(event.loaded/event.total*100);uploadProgress.value=(index+event.loaded/event.total)/files.length*100;uploadStatus.textContent=`File ${index+1} of ${files.length}: ${file.name} — ${percent}%`;}};
           xhr.onerror=()=>reject(new Error(`Connection interrupted at ${file.name}. ${index} earlier file(s) uploaded; refresh before retrying.`));
           xhr.onload=()=>xhr.status>=200&&xhr.status<300?resolve():reject(new Error(xhr.response?.error||`Upload failed at ${file.name}; ${index} earlier file(s) uploaded.`));xhr.send(data);
         });
       }
-      await refresh();cp.showToast("Upload complete",`${files.length} file(s) uploaded.`);
+      if(cancelled)throw new Error('Upload cancelled.');
+      if(siteID()===activeSite&&cp.path()===current)await refresh();
+      if(!cancelled)cp.showToast("Upload complete",`${files.length} file(s) uploaded.`);
+      }finally{running=false;activeXHR=null;}
     }});
+    const uploadForm=dialog.querySelector('form');
+    uploadProgress=dialog.querySelector('#fmUploadProgress');uploadStatus=dialog.querySelector('#fmUploadStatus');
+    const onEscape=()=>cancelUpload();
+    dialog.addEventListener('cancel',onEscape);dialog.addEventListener('close',()=>{cancelUpload();dialog.removeEventListener('cancel',onEscape);},{once:true});
+    uploadForm.querySelector('[type="submit"]').hidden=true;
+    uploadForm.requestSubmit();
   }
+  document.addEventListener("litecp:open-trash",()=>showTrash().catch(cp.handleError));
   function run(name) { action(name).catch(error=>cp.handleError(error)); }
   page.addEventListener("click",event=>{
     const control=event.target.closest("[data-fm-action]");if(control){event.preventDefault();event.stopImmediatePropagation();run(control.dataset.fmAction);return;}
@@ -377,6 +444,41 @@
   ["fileSearch","showHidden","fileSort"].forEach(id=>$("#"+id).addEventListener(id==="fileSearch" ? "input" : "change",()=>{selected.clear();lastIndex=-1;if(id==="fileSort")descending=["size","modified"].includes($("#fileSort").value);if(listing)render(listing);}));
   $("#fmOrder").onclick=()=>{descending=!descending;$("#fmOrder").textContent=descending ? "↓" : "↑";if(listing)render(listing);};
   $("#fileUploadInput").onchange=event=>{if(event.target.files.length && dialog.open)dialog.close();upload([...event.target.files]);event.target.value="";};
+  let internalDrag=null,movePending=false;
+  function dropDirectory(target){
+    const tree=target.closest('[data-fm-folder]');if(tree)return {path:tree.dataset.fmFolder,node:tree.closest('.fm-tree-row')||tree};
+    const row=target.closest('[data-fm-row]');if(!row)return null;
+    const entry=(listing?.entries||[]).find(item=>item.path===row.dataset.fmRow);
+    return entry?.type==='directory'?{path:entry.path,node:row}:null;
+  }
+  function validMoveTarget(paths,destination){
+    return paths.length>0&&paths.every(path=>destination!==path&&!destination.startsWith(path+'/')&&destination!==path.split('/').slice(0,-1).join(''));
+  }
+  function clearDropHighlight(){page.querySelectorAll('.fm-drop-target').forEach(node=>node.classList.remove('fm-drop-target'));}
+  page.addEventListener('dragstart',event=>{
+    const row=event.target.closest('[data-fm-row]');if(!row||siteID()==='server-explorer'||movePending)return;
+    if(!selected.has(row.dataset.fmRow))selectOne(row.dataset.fmRow);
+    internalDrag={site:siteID(),source:cp.path(),paths:picked().map(item=>item.path)};
+    event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-litecp-files',JSON.stringify(internalDrag));
+  });
+  page.addEventListener('dragend',()=>{internalDrag=null;clearDropHighlight();});
+  page.addEventListener('dragover',event=>{
+    if(!internalDrag)return;const target=dropDirectory(event.target);clearDropHighlight();
+    if(target&&siteID()===internalDrag.site&&validMoveTarget(internalDrag.paths,target.path)){event.preventDefault();event.dataTransfer.dropEffect='move';target.node.classList.add('fm-drop-target');}
+    else event.dataTransfer.dropEffect='none';
+  });
+  page.addEventListener('drop',async event=>{
+    if(!internalDrag)return;event.preventDefault();event.stopPropagation();
+    const drag=internalDrag,target=dropDirectory(event.target);internalDrag=null;clearDropHighlight();
+    if(movePending||!target||siteID()!==drag.site||cp.path()!==drag.source||!validMoveTarget(drag.paths,target.path))return;
+    movePending=true;
+    try{
+      if(!await window.LiteCPDialogs.confirm(`Move ${drag.paths.length} selected item(s) into ${displayPath(target.path)}?`))return;
+      if(siteID()!==drag.site||cp.path()!==drag.source)throw new Error('Website or folder changed. Drag the items again.');
+      await cp.api('/api/files/transfer',{method:'POST',body:{siteId:drag.site,paths:drag.paths,destination:target.path,operation:'move'}});
+      selected.clear();folders.clear();folderErrors.clear();await refresh();cp.showToast('Items moved',`Moved ${drag.paths.length} item(s) into ${displayPath(target.path)}.`);
+    }catch(error){cp.handleError(error);}finally{movePending=false;}
+  },true);
   let dragDepth=0;
   panel.addEventListener("dragenter",event=>{if(!event.dataTransfer.types.includes("Files"))return;event.preventDefault();dragDepth++;panel.classList.add("fm-dragging");});
   panel.addEventListener("dragover",event=>{if(event.dataTransfer.types.includes("Files"))event.preventDefault();});

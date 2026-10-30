@@ -372,3 +372,27 @@ body.fm-fullscreen-open { overflow: hidden; }
 :root[data-theme="dark"] #fmActionDialog .fm-search-results .fm-search-result:hover {color:#fff!important;background:#293548!important;}
 :root[data-theme="dark"] #fmActionDialog::backdrop {background:rgb(0 0 0 / .65)!important;}
 .server-file-explorer [data-fm-action="new-file"],.server-file-explorer [data-fm-action="new-folder"],.server-file-explorer [data-fm-action="copy"],.server-file-explorer [data-fm-action="move"],.server-file-explorer [data-fm-action="upload"],.server-file-explorer [data-fm-action="delete"],.server-file-explorer [data-fm-action="trash"],.server-file-explorer [data-fm-action="rename"],.server-file-explorer [data-fm-action="edit"],.server-file-explorer [data-fm-action="html-edit"],.server-file-explorer [data-fm-action="chmod"],.server-file-explorer [data-fm-action="extract"],.server-file-explorer [data-fm-action="archive"],.server-file-explorer [data-fm-action="empty-trash"],.server-file-explorer .fm-trash-panel{display:none!important}
+
+/* Context menu is portaled to body so viewport coordinates stay exact. */
+#fmContextMenu {position:fixed!important;margin:0!important;transform:none!important;box-sizing:border-box;z-index:10000;overflow-y:auto;}
+
+.fm-page .fm-drop-target {outline:2px solid #3b9de0!important;outline-offset:-2px;background:#24485d!important;}
+
+/* Constrain the editor itself; long lines must scroll inside Ace, not the page. */
+#editorModal {position:fixed!important;inset:0!important;width:auto!important;max-width:100vw!important;padding:16px!important;box-sizing:border-box;overflow:hidden;align-items:center!important;justify-content:center!important;}
+#editorModal .editor-modal {width:min(1200px,100%)!important;max-width:100%!important;min-width:0!important;height:calc(100dvh - 32px)!important;max-height:calc(100dvh - 32px)!important;margin:auto!important;box-sizing:border-box;overflow:hidden;}
+#editorModal .editor-modal.expanded {width:100%!important;max-width:100%!important;}
+#editorModal :is(form,.modal-body,.modal-head,.editor-tools,.modal-actions) {min-width:0;max-width:100%;box-sizing:border-box;}
+#editorModal .modal-head {flex:0 0 auto;gap:12px;}
+#editorModal .modal-head>div {min-width:0;overflow-wrap:anywhere;}
+#editorModal .modal-head button[aria-label^="Close"] {flex:0 0 auto;}
+#editorModal .editor-tools {flex-wrap:wrap;flex:0 0 auto;}
+#editorModal :is(.ace_editor,.code-editor,.fm-html-canvas) {min-width:0!important;max-width:100%!important;box-sizing:border-box;}
+@media(max-width:600px){#editorModal{padding:8px!important;}#editorModal .editor-modal{height:calc(100dvh - 16px)!important;max-height:calc(100dvh - 16px)!important;}}
+
+/* Keep manual save controls visible in source and visual HTML editors. */
+#editorModal .editor-save {flex:0 0 auto;margin-left:auto;background:#428bca!important;color:#fff!important;}
+#editorModal .modal-head>div:first-child {flex:1;min-width:0;}
+#editorModal .modal-actions {display:flex!important;flex:0 0 auto!important;gap:10px;justify-content:flex-end;}
+#editorModal #editorForm {overflow:hidden;}
+#editorModal #editorForm>.modal-body {overflow:hidden;}

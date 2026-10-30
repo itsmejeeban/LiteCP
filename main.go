@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.12"
+var version = "2.0.36"
 var buildRevision = ""
 
 //go:embed web/*
@@ -69,6 +69,11 @@ func main() {
 		return
 	}
 	dataDir := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
+	if len(os.Args)>1 && os.Args[1]=="reset-admin-password" {
+		if err:=validateResetPasswordArguments(os.Args);err!=nil {log.Fatal(err)}
+		if err:=resetAdminPasswordCommand(dataDir);err!=nil {log.Fatal(err)}
+		return
+	}
 	bind := envOr("LITECP_BIND", "127.0.0.1:9090")
 	if len(os.Args) > 1 && os.Args[1] == "ensure-default-resolvers" {
 		if os.Geteuid() != 0 {
@@ -293,6 +298,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/migrations/", only(http.MethodDelete, a.withAuth(a.migrationDelete)))
 	mux.HandleFunc("/api/files/create", only(http.MethodPost, a.withAuth(a.createFile)))
 	mux.HandleFunc("/api/files/transfer", only(http.MethodPost, a.withAuth(a.transferFiles)))
+	mux.HandleFunc("/api/files/upload-url", only(http.MethodPost, a.withAuth(a.uploadFileURL)))
+	mux.HandleFunc("/api/files/download-selected", only(http.MethodPost, a.withAuth(a.downloadSelectedFiles)))
 	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
 	mux.HandleFunc("/api/files/encodings", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"encodings": availableEditorEncodings(), "maxBytes": maxEditableFileSize})
@@ -322,6 +329,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/terminal", only(http.MethodPost, a.withAuth(a.terminalCommand)))
 	mux.HandleFunc("/api/terminal/session", a.withAuth(a.interactiveTerminal))
 	mux.HandleFunc("/api/security/ssh-port", a.withAuth(a.sshPortSettings))
+	mux.HandleFunc("/api/security/panel-port", a.withAuth(a.panelPortSettings))
 	mux.HandleFunc("/api/mail/aliases/", only(http.MethodDelete, a.withAuth(a.deleteMailAlias)))
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
@@ -402,7 +410,7 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		// Serialize state-changing operations so file, service and config writes cannot race.
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" && r.URL.Path != "/api/live-migrations/cancel" && r.URL.Path != "/api/terminal/session" {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" && r.URL.Path != "/api/live-migrations/cancel" && r.URL.Path != "/api/terminal/session" && r.URL.Path != "/api/files/upload-url" {
 			a.mutationMu.Lock()
 			defer a.mutationMu.Unlock()
 			if (cookie == nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {

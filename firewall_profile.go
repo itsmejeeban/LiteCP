@@ -39,7 +39,16 @@ func requiredFirewallProfile(sshPorts []string, mail, ftp bool, webmailPort stri
 // expose MySQL, PHP-FPM, internal DNS or application backend ports.
 // Current runtime rules are persisted before the required policy reload.
 func applyRequiredFirewall(p litecpFirewallProfile, backend string, run securityProbe) error {
-	call := func(args ...string) error { _, err := run("firewall-cmd", args...); return err }
+	if backend != "ufw" && backend != "firewalld" {
+		return fmt.Errorf("unsupported firewall backend: %s", backend)
+	}
+	call := func(args ...string) error {
+		_, err := run("firewall-cmd", args...)
+		if err != nil {
+			return fmt.Errorf("firewalld %s: %w", strings.Join(args, " "), err)
+		}
+		return nil
+	}
 	if backend == "ufw" {
 		status, err := run("ufw", "status")
 		if err != nil {
@@ -83,7 +92,9 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 		}
 		names = append(names, strings.TrimSpace(zone))
 	}
-	if err := call("--runtime-to-permanent"); err != nil { return err }
+	if err := call("--runtime-to-permanent"); err != nil {
+		return err
+	}
 	for _, permanent := range []bool{true} {
 		prefix := []string{}
 		if permanent {
@@ -127,17 +138,22 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Firewall changes require the installed Linux server.")
 		return
 	}
+	// withAuth already serializes this mutation.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
-	ssh, err := runCommand(ctx, 10*time.Second, "sshd", "-T")
+	// Inspect sshd on the host, outside ProtectHome/PrivateDevices and with an
+	// absolute path (service PATH may not contain /usr/sbin).
+	ssh, err := runHostCommand(ctx, 20*time.Second, "/usr/sbin/sshd", "-T")
 	if err != nil {
-		writeError(w, 502, "Cannot verify SSH ports; firewall was not changed.")
+		writeError(w, 502, "Cannot verify SSH ports; firewall was not changed: "+err.Error())
 		return
 	}
 	ports := []string{}
-	if data, readErr := os.ReadFile(filepath.Join(a.system.dataDir,"ssh-port")); readErr == nil {
+	if data, readErr := os.ReadFile(filepath.Join(a.system.dataDir, "ssh-port")); readErr == nil {
 		value := strings.TrimSpace(string(data))
-		if port, parseErr := strconv.Atoi(value); parseErr == nil && port > 0 && port <= 65535 { ports = append(ports,value) }
+		if port, parseErr := strconv.Atoi(value); parseErr == nil && port > 0 && port <= 65535 {
+			ports = append(ports, value)
+		}
 	}
 	for _, line := range strings.Split(ssh, "\n") {
 		parts := strings.Fields(line)
@@ -166,11 +182,20 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	profile := requiredFirewallProfile(ports, a.store.Settings().EmailHostingEnabled, ftpErr == nil, webmailPort)
-	err = applyRequiredFirewall(profile, a.system.firewallBackend(), func(cmd string, args ...string) (string, error) {
-		if cmd == "firewall-cmd" {
-			return runCommand(ctx, 15*time.Second, cmd, args...)
+	profile.Inbound = append(profile.Inbound, strconv.Itoa(currentPanelPort())+"/tcp")
+	// Protect the new listener while a panel-port change awaits confirmation.
+	if b, e := os.ReadFile("/var/lib/litecp/panel-port-pending"); e == nil {
+		fields := strings.Fields(string(b))
+		if len(fields) == 3 {
+			if p, e := strconv.Atoi(fields[1]); e == nil && p >= 1024 && p <= 65535 {
+				profile.Inbound = append(profile.Inbound, strconv.Itoa(p)+"/tcp")
+			}
 		}
-		return runHostCommand(ctx, 15*time.Second, cmd, args...)
+	}
+	profile.Inbound = uniqueFirewallPorts(profile.Inbound)
+	profile.Outbound = uniqueFirewallPorts(profile.Outbound)
+	err = applyRequiredFirewall(profile, a.system.firewallBackend(), func(cmd string, args ...string) (string, error) {
+		return runHostCommand(ctx, 25*time.Second, cmd, args...)
 	})
 	if err != nil {
 		writeError(w, 502, "Firewall profile was not fully applied; existing rules were preserved. Reapply to finish: "+err.Error())
@@ -178,4 +203,16 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 	}
 	a.store.AddActivity("LiteCP firewall applied", "Required inbound and outbound ports allowed; existing rules preserved.", "success")
 	writeJSON(w, 200, profile)
+}
+
+func uniqueFirewallPorts(ports []string) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, port := range ports {
+		if !seen[port] {
+			result = append(result, port)
+			seen[port] = true
+		}
+	}
+	return result
 }

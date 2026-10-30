@@ -12,6 +12,21 @@ The base panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScrip
 
 ## Included
 
+File Manager's **Upload via URL** downloads a direct public HTTP/HTTPS file link
+into the currently selected directory. It supports progress and cancellation,
+uses the URL filename or a supplied filename, and refuses existing destinations.
+Private/reserved addresses, embedded credentials, nonstandard ports and HTTPS
+downgrades are blocked. The destination is confined to the website home and
+downloaded code is not executed by the downloader. Two downloads may run at once,
+with a 30-minute timeout. Authenticated third-party download pages are not supported.
+
+Per-website PHP.ini Settings includes standard controls and an Advanced custom
+directives field. Enter one supported `directive = value` per line; the editor
+lists supported directives. Custom values persist with the website and are
+applied to its PHP-FPM pool. Security boundaries, extension loading, and script
+or filesystem paths remain protected. Duplicate/invalid directives are rejected
+before changing the runtime. This edits managed overrides, not the global php.ini.
+
 - Responsive, session-protected administrator dashboard
 - CPU, memory, disk, load, uptime, and essential service health
 - Safe start/restart actions for Nginx, every installed PHP-FPM runtime, MySQL, Postfix, Dovecot, and cron
@@ -48,6 +63,35 @@ The base panel is a single Go binary with an embedded vanilla HTML/CSS/JavaScrip
 LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS release or the official WordPress release to the provisioned document root.
 
 ## Supported systems
+
+### Forgotten administrator password
+
+From a root SSH terminal on the installed server, run:
+
+```bash
+sudo /usr/local/bin/litecp reset-admin-password
+```
+
+Enter and confirm the new password at the hidden prompts (12-1024 bytes).
+The command briefly stops and restarts the running `litecp.service` to avoid
+concurrent state writes and end existing panel sessions. Hosted websites stay
+running. It preserves the administrator username, authenticator configuration,
+and remaining recovery codes. If 2FA is enabled, login still requires an
+authenticator code or an unused recovery code; this command does not bypass it.
+The password is not accepted as a command argument or saved in plaintext.
+For a non-default installation, set `LITECP_DATA_DIR` to the service's actual
+data directory when invoking the command. Check that LiteCP restarts successfully.
+
+### Change the panel HTTPS port
+
+Open Security -> Panel Port. Allow the new TCP port in any provider firewall,
+then select an unused port between 1024 and 65535. LiteCP adds host firewall
+access, prepares SELinux HTTP port policy when enabled, validates Nginx, and
+temporarily serves both ports. Open the new URL and confirm there within three
+minutes to close the old listener. If not confirmed, the scheduled recovery
+restores the original proxy configuration. Existing firewall rules and recovery
+configuration copies are retained. Changing the port does not replace strong
+passwords, 2FA or network access restrictions.
 
 - Ubuntu 22.04 or 24.04 (x86_64 or aarch64)
 - AlmaLinux 8, 9, or 10 (x86_64 or aarch64)

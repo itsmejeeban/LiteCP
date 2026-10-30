@@ -1,9 +1,31 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
+
+func TestFirewallProfileFailureIncludesCommandAndStops(t *testing.T) {
+	calls := 0
+	err := applyRequiredFirewall(requiredFirewallProfile([]string{"369"}, false, false, ""), "firewalld", func(cmd string, args ...string) (string, error) {
+		calls++
+		return "", errors.New("permission denied")
+	})
+	if err == nil || !strings.Contains(err.Error(), "--state") || calls != 1 {
+		t.Fatalf("unexpected failure: %v, calls %d", err, calls)
+	}
+	if err := applyRequiredFirewall(litecpFirewallProfile{}, "unknown", func(string, ...string) (string, error) {
+		t.Fatal("unsupported backend executed command")
+		return "", nil
+	}); err == nil {
+		t.Fatal("unknown backend accepted")
+	}
+	ports := uniqueFirewallPorts([]string{"369/tcp", "4321/tcp", "369/tcp"})
+	if len(ports) != 2 {
+		t.Fatal(ports)
+	}
+}
 
 func TestRequiredFirewallProfile(t *testing.T) {
 	p := requiredFirewallProfile([]string{"2222"}, false, false, "")

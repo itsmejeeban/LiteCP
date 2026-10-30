@@ -61,7 +61,7 @@
     }).filter(result => result.score >= 0).sort((a,b) => b.score-a.score || a.index-b.index).map(result => result.item);
   }
   const search = document.createElement("div"); search.className = "panel-search";
-  search.innerHTML = '<div class="panel-search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="panelSearchInput" type="search" placeholder="Quick search…" aria-label="Search the panel" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="panelSearchResults" autocomplete="off" spellcheck="false" maxlength="150"><kbd aria-hidden="true">Ctrl K</kbd></div><div class="panel-search-dropdown" hidden><p class="panel-search-status" role="status" aria-live="polite"></p><div id="panelSearchResults" role="listbox" aria-label="Panel search results"></div></div>';
+  search.innerHTML = '<div class="panel-search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="panelSearchInput" type="search" placeholder="Quick search…" aria-label="Search the panel" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="panelSearchResults" autocomplete="off" spellcheck="false" maxlength="150"></div><div class="panel-search-dropdown" hidden><p class="panel-search-status" role="status" aria-live="polite"></p><div id="panelSearchResults" role="listbox" aria-label="Panel search results"></div></div>';
   document.querySelector(".sidebar-brand").after(search);
   const input = search.querySelector("input"), dropdown = search.querySelector(".panel-search-dropdown"), list = search.querySelector("#panelSearchResults"), status = search.querySelector(".panel-search-status");
   // Keep results outside the scrolling sidebar so they are never clipped.
@@ -96,11 +96,6 @@
     const top=Math.max(8,Math.min(rect.bottom+8,window.innerHeight-120));
     dropdown.style.width=width+"px";dropdown.style.left=Math.max(12,Math.min(rect.left,window.innerWidth-width-12))+"px";
     dropdown.style.top=top+"px";dropdown.style.maxHeight=Math.max(100,Math.min(420,window.innerHeight-top-12))+"px";
-  }
-  function focusSearch() {
-    const sidebar=document.querySelector("#sidebar");
-    if(window.innerWidth<=900 ? !sidebar.classList.contains("open") : document.body.classList.contains("sidebar-collapsed"))document.querySelector("#mobileMenu").click();
-    search.scrollIntoView({block:"nearest"});input.focus({preventScroll:true});input.select();
   }
   function select(index) {
     selected = (index+results.length)%results.length;
@@ -143,16 +138,12 @@
   input.addEventListener("focus",()=>{show();loadManual();});input.addEventListener("input",show);
   input.addEventListener("keydown",event=>{
     event.stopPropagation();
-    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"){event.preventDefault();input.select();return;}
     if(event.key==="Escape"){event.preventDefault();close();return;}
     if(event.key==="ArrowDown"||event.key==="ArrowUp"){event.preventDefault();if(dropdown.hidden)show();if(results.length)select(selected+(event.key==="ArrowDown"?1:-1));}
     if(event.key==="Enter"){event.preventDefault();if(!dropdown.hidden&&results[selected])open(results[selected]);}
     if(event.key==="Tab")close();
   });
   document.addEventListener("click",event=>{if(!search.contains(event.target)&&!dropdown.contains(event.target))close();});
-  document.addEventListener("keydown",event=>{
-    if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==="k"&&!document.querySelector('dialog[open],.modal-layer:not(.hidden)')){event.preventDefault();focusSearch();}
-  });
   document.querySelector("#sidebar").addEventListener("scroll",close);
   window.addEventListener("resize",()=>{if(!dropdown.hidden)positionResults();});
   window.addEventListener("hashchange",close);

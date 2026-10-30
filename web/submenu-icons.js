@@ -4,6 +4,7 @@
     'email/add-domain':'add-mail-domain','email/create-mailbox':'create-mailbox',
     'email/create-alias':'create-alias','email/webmail':'webmail','email/domains':'mail-domains',
     'email/mailboxes':'mailboxes','email/aliases':'aliases','email/delivery':'webmail',
+    'email/smtp-port-check':'smtp-port-check',
     'settings/password':'admin-password','settings/email':'admin-email',
     'settings/timezone':'timezone','settings/hostname':'hostname','settings/dns':'dns',
     'settings/developer':'developer','settings/update':'update','settings/reboot':'reboot'

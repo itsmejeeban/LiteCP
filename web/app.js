@@ -427,7 +427,7 @@
       $("#activityList").innerHTML = '<div class="empty-state"><p>No panel activity yet.</p></div>';
       return;
     }
-    $("#activityList").innerHTML = activities.map(item => `<div class="activity-row"><span class="activity-dot ${item.kind === "warning" ? "warning" : ""}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.detail)}</small></div><span class="activity-time">${relativeTime(item.createdAt)}</span></div>`).join("");
+    $("#activityList").innerHTML = activities.map(item => `<div class="activity-row"><span class="activity-dot ${item.kind === "warning" ? "warning" : ""}"></span><div><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.detail)}</small></div><span class="activity-time">${activityTimestamp(item.createdAt)}</span></div>`).join("");
   }
 
   let sitesPage = 1;
@@ -462,7 +462,7 @@
     const totalPages = Math.max(1, Math.ceil(sites.length / sitesPerPage));
     sitesPage = Math.min(Math.max(1, sitesPage), totalPages);
     const visibleSites = sites.slice((sitesPage - 1) * sitesPerPage, sitesPage * sitesPerPage);
-    $("#sitesTable").innerHTML = `<table class="data-table websites-table"><colgroup><col class="website-col-domain"><col class="website-col-application"><col class="website-col-runtime"><col class="website-col-size"><col class="website-col-actions"></colgroup><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>SIZE</th><th>ACTIONS</th></tr></thead><tbody>${visibleSites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td class="website-size">${Object.prototype.hasOwnProperty.call(siteSizes, site.id) ? formatBytes(siteSizes[site.id]) : siteSizesLoading ? "Calculating…" : "—"}</td><td><span class="row-actions"><button type="button" data-site-cron-jobs="${escapeHTML(site.id)}" title="Manage cron jobs" aria-label="Manage cron jobs for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 10a8.5 8.5 0 1 1-5-6M12 7v5l3 2M19 2v6m-3-3h6"/></svg><span class="site-action-label">Cron jobs</span></button><button type="button" data-site-php-settings="${escapeHTML(site.id)}" title="PHP.ini Settings" aria-label="PHP settings for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6"/></svg><span class="site-action-label">PHP.ini</span></button><button type="button" data-site-ftp="${escapeHTML(site.id)}" title="Manage FTP accounts" aria-label="Manage FTP accounts for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3M7 8h10m-3-3 3 3-3 3M17 16H7m3-3-3 3 3 3"/></svg><span class="site-action-label">FTP</span></button><button type="button" data-site-backup="${escapeHTML(site.id)}" title="Manage website backups" aria-label="Manage backups for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M12 17v-6m-3 3 3-3 3 3"/></svg><span class="site-action-label">Backup</span></button><button type="button" class="site-suspension-action" data-site-suspend="${escapeHTML(site.id)}" title="${site.suspended ? "Restore website access" : "Suspend website access"}" aria-label="${site.suspended ? "Unsuspend" : "Suspend"} ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true">${site.suspended ? '<path d="m8 5 11 7-11 7Z"/>' : '<path d="M8 5v14M16 5v14"/>'}</svg><span class="site-action-label">${site.suspended ? "Unsuspend" : "Suspend"}</span></button><button class="site-domain-edit" aria-label="Edit domain ${escapeHTML(site.domain)}" title="Edit domain" data-site-action="domain" data-id="${escapeHTML(site.id)}">${icons.edit}<span class="site-action-label">Domain</span></button>${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button type="button" data-site-action="files" data-id="${escapeHTML(site.id)}" title="Open file manager" aria-label="Open file manager for ${escapeHTML(site.domain)}">${icons.folder}<span class="site-action-label">Files</span></button><button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>${totalPages > 1 ? `<div class="pagination website-pagination"><button class="button button-secondary" type="button" data-sites-page="${sitesPage - 1}" ${sitesPage === 1 ? "disabled" : ""}>Previous</button><span>Page ${sitesPage} of ${totalPages} · ${sites.length} websites</span><button class="button button-secondary" type="button" data-sites-page="${sitesPage + 1}" ${sitesPage === totalPages ? "disabled" : ""}>Next</button></div>` : ""}`;
+    $("#sitesTable").innerHTML = `<table class="data-table websites-table"><colgroup><col class="website-col-domain"><col class="website-col-application"><col class="website-col-runtime"><col class="website-col-size"><col class="website-col-actions"></colgroup><thead><tr><th>DOMAIN</th><th>APPLICATION</th><th>RUNTIME</th><th>SIZE</th><th>ACTIONS</th></tr></thead><tbody>${visibleSites.map(site => `<tr><td><span class="domain-cell">${renderSSLStatusIcon(site)}<span class="domain-copy"><strong><a class="website-link" href="${site.ssl ? "https" : "http"}://${escapeHTML(site.domain)}/" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHTML(site.domain)} in a new tab">${escapeHTML(site.domain)}</a></strong></span></span></td><td>${renderApplicationLogo(site)}</td><td>${renderPHPSelect(site)}</td><td class="website-size">${Object.prototype.hasOwnProperty.call(siteSizes, site.id) ? formatBytes(siteSizes[site.id]) : siteSizesLoading ? "Calculating…" : "—"}</td><td><span class="row-actions">${renderWebsiteRuntimeActions(site)}<button type="button" data-site-cron-jobs="${escapeHTML(site.id)}" title="Manage cron jobs" aria-label="Manage cron jobs for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 10a8.5 8.5 0 1 1-5-6M12 7v5l3 2M19 2v6m-3-3h6"/></svg><span class="site-action-label">Cron jobs</span></button><button type="button" data-site-php-settings="${escapeHTML(site.id)}" title="PHP.ini Settings" aria-label="PHP settings for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6"/></svg><span class="site-action-label">PHP.ini</span></button><button type="button" data-site-ftp="${escapeHTML(site.id)}" title="Manage FTP accounts" aria-label="Manage FTP accounts for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3M7 8h10m-3-3 3 3-3 3M17 16H7m3-3-3 3 3 3"/></svg><span class="site-action-label">FTP</span></button><button type="button" data-site-backup="${escapeHTML(site.id)}" title="Manage website backups" aria-label="Manage backups for ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M12 17v-6m-3 3 3-3 3 3"/></svg><span class="site-action-label">Backup</span></button><button type="button" class="site-suspension-action" data-site-suspend="${escapeHTML(site.id)}" title="${site.suspended ? "Restore website access" : "Suspend website access"}" aria-label="${site.suspended ? "Unsuspend" : "Suspend"} ${escapeHTML(site.domain)}"><svg viewBox="0 0 24 24" aria-hidden="true">${site.suspended ? '<path d="m8 5 11 7-11 7Z"/>' : '<path d="M8 5v14M16 5v14"/>'}</svg><span class="site-action-label">${site.suspended ? "Unsuspend" : "Suspend"}</span></button><button class="site-domain-edit" aria-label="Edit domain ${escapeHTML(site.domain)}" title="Edit domain" data-site-action="domain" data-id="${escapeHTML(site.id)}">${icons.edit}<span class="site-action-label">Domain</span></button>${site.ssl ? "" : `<button aria-label="Enable SSL for ${escapeHTML(site.domain)}" title="Enable SSL" data-site-action="ssl" data-id="${escapeHTML(site.id)}">${icons.shield}<span class="site-action-label">SSL</span></button>`}<button type="button" data-site-action="files" data-id="${escapeHTML(site.id)}" title="Open file manager" aria-label="Open file manager for ${escapeHTML(site.domain)}">${icons.folder}<span class="site-action-label">Files</span></button><button class="danger" aria-label="Detach ${escapeHTML(site.domain)}" title="Detach website" data-site-action="delete" data-id="${escapeHTML(site.id)}">${icons.trash}<span class="site-action-label">Remove</span></button></span></td></tr>`).join("")}</tbody></table>${totalPages > 1 ? `<div class="pagination website-pagination"><button class="button button-secondary" type="button" data-sites-page="${sitesPage - 1}" ${sitesPage === 1 ? "disabled" : ""}>Previous</button><span>Page ${sitesPage} of ${totalPages} · ${sites.length} websites</span><button class="button button-secondary" type="button" data-sites-page="${sitesPage + 1}" ${sitesPage === totalPages ? "disabled" : ""}>Next</button></div>` : ""}`;
     $$('[data-sites-page]', $("#sitesTable")).forEach(button => button.addEventListener("click", () => { sitesPage = Number(button.dataset.sitesPage); renderSites(); $("#sitesTable").scrollIntoView({ behavior: "smooth", block: "start" }); }));
   }
 
@@ -555,8 +555,8 @@
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "php-settings", "security-dashboard", "two-factor", "analytics", "disk-usage", "activities", "documentation", "applications"];
-    if (!allowed.includes(page) && page !== 'ssh-port') page = "dashboard";
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "two-factor", "analytics", "disk-usage", "activities", "documentation", "applications"];
+    if (!allowed.includes(page) && page !== 'ssh-port' && page !== 'panel-port') page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
       const active = serverExplorer ? link.dataset.page === 'server-files' : link.dataset.page === page;
@@ -846,6 +846,11 @@
   }
 
   async function loadFiles() {
+    if ($("#fileSiteSelect").value !== "server-explorer" && /^\.trash(?:\/|$)/.test(currentFilePath)) {
+      currentFilePath = lastFileListing?.path && !/^\.trash(?:\/|$)/.test(lastFileListing.path) ? lastFileListing.path : "";
+      document.dispatchEvent(new Event("litecp:open-trash"));
+      return;
+    }
     const request = ++fileListingRequest;
     const siteId = $("#fileSiteSelect").value;
     if (!siteId) { $("#fileTable").innerHTML = '<div class="empty-state"><p>Add a website before using the file manager.</p></div>'; return; }
@@ -968,10 +973,10 @@
   async function saveEditor(event) {
     event.preventDefault(); if (!editorFilePath || !editorSiteID || editorSaving) return;
     editorSaving = true;
-    const submit = $('button[type="submit"]', event.currentTarget); submit.disabled = true;
+    const saveButtons = $$("#editorModal [data-editor-save]"); saveButtons.forEach(button => { button.disabled = true; button.textContent = "Saving..."; });
     try { const content = window.LiteCPVisualEditor?.value() ?? window.LiteCPFeatures?.editorValue() ?? $("#editorContent").value; await api("/api/files/content", { method: "PUT", body: { siteId: editorSiteID, path: editorFilePath, content, encoding:editorEncoding } }); editorOriginal = content; await loadFiles(); showToast("File saved", "Changes are live on the website."); }
     catch (error) { handleError(error); }
-    finally { editorSaving = false; submit.disabled = false; }
+    finally { editorSaving = false; saveButtons.forEach(button => { button.disabled = false; button.textContent = "Save file"; }); }
   }
 
   async function createDatabase(event) {
@@ -1167,6 +1172,11 @@
     });
   }
 
+  function renderWebsiteRuntimeActions(site) {
+    if(site.appType!=="regular")return "";
+    const labels={node:"Node.js",python:"Python",ruby:"Ruby"},enabled=currentState?.settings?.applicationHosting||{};
+    return Object.keys(labels).filter(key=>enabled[key]).map(key=>`<button type="button" data-site-runtime="${key}" data-runtime-site="${escapeHTML(site.id)}" title="Select ${labels[key]} version" aria-label="${labels[key]} version for ${escapeHTML(site.domain)}"><img src="assets/sidebar/runtime-${key}.svg" width="28" height="28" alt=""><span class="site-action-label">${labels[key]}</span></button>`).join("");
+  }
   function renderApplicationLogo(site) {
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";
     const name = type === "wordpress" ? "WordPress" : type === "whmcs" ? "WHMCS" : "PHP";
@@ -1189,12 +1199,24 @@
   function displayTimezone() { return currentState?.settings?.timezone || "UTC"; }
   function formatDate(value) { return new Intl.DateTimeFormat(undefined, { timeZone: displayTimezone(), month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
   function formatDateTime(value) { return new Intl.DateTimeFormat(undefined, { timeZone: displayTimezone(), month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(new Date(value)); }
-  function relativeTime(value) { const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86400)}d ago`; }
+  function relativeTime(value) {
+    const timestamp=new Date(value).getTime();if(!Number.isFinite(timestamp))return "Time unavailable";
+    const seconds=Math.max(0,Math.floor((Date.now()-timestamp)/1000));
+    if(seconds<60)return "Just now";
+    const unit=seconds<3600?"minute":seconds<86400?"hour":"day";
+    const count=Math.floor(seconds/(unit==="minute"?60:unit==="hour"?3600:86400));
+    return `${count} ${unit}${count===1?"":"s"} ago`;
+  }
+  function activityTimestamp(value) {
+    const timestamp=new Date(value).getTime();if(!Number.isFinite(timestamp))return "Time unavailable";
+    return `<time datetime="${escapeHTML(new Date(timestamp).toISOString())}">${escapeHTML(formatDateTime(value))}</time><small data-activity-relative="${timestamp}">${escapeHTML(relativeTime(value))}</small>`;
+  }
+  setInterval(()=>{for(const node of document.querySelectorAll('[data-activity-relative]'))node.textContent=relativeTime(Number(node.dataset.activityRelative));},30000);
 
   window.LiteCP = { api, escapeHTML, showToast, handleError, navigate, renderAll, loadFiles, renderFileListing, openEditor,
     goToFilePath: path => { currentFilePath = path; return loadFiles(); },
     state: () => currentState, path: () => currentFilePath, demo: demoMode,
     refresh: async () => { currentState = await api("/api/state"); renderAll(); },
-    showOneTimeCredentials, formatBytes, formatDateTime };
+    showOneTimeCredentials, formatBytes, formatDateTime, activityTimestamp };
   initialize();
 })();

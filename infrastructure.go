@@ -343,7 +343,7 @@ func validateFirewallRule(rule FirewallRule) error {
 		}
 	}
 	if rule.Direction == "inbound" && (rule.Source == "" || rule.Source == "any") {
-		for _, protected := range []int{22, 25, 80, 443, 465, 587, 993, 4321, 8443} {
+		for _, protected := range []int{22, 25, 80, 443, 465, 587, 993, 4321, 8443, currentPanelPort()} {
 			if rule.Port == protected && rule.Protocol == "tcp" {
 				return errors.New("unscoped changes to essential LiteCP ports are protected by the installer")
 			}
