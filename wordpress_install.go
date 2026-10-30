@@ -10,10 +10,8 @@ import (
 	"net/http"
 	"net/mail"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -228,10 +226,10 @@ func (s *System) finishWordPressSetup(ctx context.Context, site Site, input Crea
 	payload, _ := json.Marshal(map[string]string{"root": site.Root, "url": scheme + "://" + site.Domain, "domain": site.Domain, "user": input.WordPressUsername, "password": input.WordPressPassword, "email": input.WordPressEmail})
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, "setpriv", "--reuid="+strconv.Itoa(uid), "--regid="+strconv.Itoa(gid), "--clear-groups", s.phpBinary(site.PHPVersion), "-d", "display_errors=stderr", "-d", "log_errors=0", "-d", "zend.exception_ignore_args=1", "-r", wordPressSetupScript)
-	command.Dir = site.Root
-	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + managedSiteRoot(site), "LANG=C.UTF-8"}
-	command.Stdin = strings.NewReader(string(payload))
+	command, err := wordPressSetupCommand(ctx, site.Root, managedSiteRoot(site), s.phpBinary(site.PHPVersion), uid, gid, payload)
+	if err != nil {
+		return err
+	}
 	output, err := command.CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "LITECP_WORDPRESS_INSTALLED") {
 		if ctx.Err() != nil {

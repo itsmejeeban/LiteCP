@@ -95,11 +95,11 @@
   const join = (a,b) => a ? `${a}/${b}` : b;
   page.classList.add("fm-page");
   panel.insertAdjacentHTML("afterbegin", `<header class="cpfm-header"><div class="cpfm-brand"><img class="litecp-logo" src="assets/litecp-cloud-logo-v2.png" alt="LiteCP" width="2029" height="775"> File Manager</div><form id="cpfmSearch"><label>Search</label><select id="cpfmSearchScope" aria-label="Search location"><option value="all">All Your Files</option><option value="root">Web Root (public_html)</option><option value="current">Current Directory</option></select><span>for</span><input id="cpfmSearchInput" type="search" aria-label="Search files" autocomplete="off"><button type="submit">Go</button></form><button type="button" class="cpfm-settings" data-fm-action="settings">${icon("settings")} Settings</button></header>`);
-  $(".file-toolbar").innerHTML = `${button("new-file","File","plus")}${button("new-folder","Folder","folder")}${button("copy","Copy","copy")}${button("move","Move","move")}${button("upload","Upload","upload")}${button("upload-url","Upload via URL","upload")}${button("download","Download","download")}${button("delete","Delete","trash")}${button("trash","Restore","refresh")}${button("rename","Rename","edit")}${button("edit","Edit","edit")}${button("html-edit","HTML Editor","edit")}${button("chmod","Permissions","lock")}${button("view","View","eye")}${button("extract","Extract","extract")}${button("archive","Compress","archive")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
+  $(".file-toolbar").innerHTML = `${button("new-file","File","plus")}${button("new-folder","Folder","folder")}${button("copy","Copy","copy")}${button("move","Move","move")}${button("upload","Upload","upload")}${button("upload-url","Upload via URL","upload")}${button("download","Download","download")}${button("delete","Delete","trash")}${button("restore-items","Restore","restore")}${button("rename","Rename","edit")}${button("edit","Edit","edit")}${button("html-edit","HTML Editor","edit")}${button("chmod","Permissions","lock")}${button("view","View","eye")}${button("extract","Extract","extract")}${button("archive","Compress","archive")}<input class="hidden" id="fileUploadInput" type="file" multiple>`;
   fullscreen.innerHTML = `${icon("grid")}<span>Full screen</span>`;
   fullscreen.setAttribute('aria-label','Toggle File Manager full screen');
   $(".cpfm-header").append(fullscreen);
-  $(".file-breadcrumb").insertAdjacentHTML("beforebegin", `<div class="cpfm-navigation">${button("home","Home","home")}${button("up","Up One Level","up")}${button("back","Back","back")}${button("forward","Forward","next")}${button("refresh","Reload","refresh")}${button("select-all","Select All","select")}${button("unselect-all","Unselect All","unselect")}${button("trash","View Trash","trash")}${button("empty-trash","Empty Trash","trash")}</div><form class="fm-address" id="fmAddressForm"><button type="button" class="fm-home" data-fm-action="home" aria-label="Home">${icon("home")}</button><label><input id="fmAddress" aria-label="Folder path" placeholder="/public" autocomplete="off" spellcheck="false"></label><button class="button button-secondary" type="submit">Go</button></form><button type="button" class="cpfm-collapse" id="cpfmCollapse">Collapse All</button>`);
+  $(".file-breadcrumb").insertAdjacentHTML("beforebegin", `<div class="cpfm-navigation">${button("home","Home","home")}${button("up","Up One Level","up")}${button("back","Back","back")}${button("forward","Forward","next")}${button("refresh","Reload","refresh")}${button("select-all","Select All","select")}${button("unselect-all","Unselect All","unselect")}${button("trash","View Trash","trash")}</div><form class="fm-address" id="fmAddressForm"><button type="button" class="fm-home" data-fm-action="home" aria-label="Home">${icon("home")}</button><label><input id="fmAddress" aria-label="Folder path" placeholder="/public" autocomplete="off" spellcheck="false"></label><button class="button button-secondary" type="submit">Go</button></form><button type="button" class="cpfm-collapse" id="cpfmCollapse">Collapse All</button>`);
   const filters = $(".file-filters");
   filters.innerHTML = `<label class="fm-search">${icon("search")}<input id="fileSearch" type="search" placeholder="Search this folder…" aria-label="Search this folder"></label><label class="fm-hidden"><input type="checkbox" id="showHidden" ${preferences.hidden ? "checked" : ""}> Hidden files</label><select id="fileSort" aria-label="Sort files"><option value="name">Name</option><option value="type">Type</option><option value="modified">Modified</option><option value="size">Size</option><option value="mode">Permissions</option></select><button type="button" class="fm-order" id="fmOrder" aria-label="Reverse sort order">↑</button><div class="fm-view-switch" role="group" aria-label="File view">${button("list","List view","list")}${button("grid","Grid view","grid")}</div>`;
   const body = document.createElement("div"); body.className = "fm-body";
@@ -115,7 +115,7 @@
   resizer.addEventListener("keydown",event=>{if(!["ArrowLeft","ArrowRight"].includes(event.key))return;event.preventDefault();const current=parseInt(getComputedStyle(body).getPropertyValue("--fm-tree-width"),10)||400;localStorage.setItem("litecpFileTreeWidth",String(setTreeWidth(current+(event.key==="ArrowLeft" ? -20 : 20))));});
   panel.insertAdjacentHTML("beforeend", '<footer class="fm-footer"><span id="fmStatus" role="status">Select a website to begin.</span><span>Double-click to open · F2 to rename</span></footer>');
   const trashPanel = $("#trashPanel");
-  trashPanel.innerHTML = `<div class="panel-head"><div><h2>Trash</h2><p>Recoverable items stored outside your public website.</p></div><div class="feature-actions">${button("close-trash","Close","close")}${button("empty-trash","Empty trash","trash","fm-danger")}</div></div><div id="trashTable"></div>`;
+  trashPanel.classList.add("hidden");
   // clientX/clientY use viewport coordinates. Keep the fixed menu outside page
   // containers whose transforms/animations can create a different containing block.
   const menu = document.createElement("div"); menu.id = "fmContextMenu"; menu.className = "fm-context hidden"; menu.setAttribute("role","menu"); menu.setAttribute("aria-label","File actions"); document.body.append(menu);
@@ -130,10 +130,12 @@
     $("#fmSelectionLabel").textContent = items.length ? `${items.length} selected · ${cp.formatBytes(items.reduce((sum,x)=>sum+(x.type === "file" ? x.size : 0),0))}` : "Select items to manage them";
     page.querySelectorAll("[data-fm-action]").forEach(el => {
       const a = el.dataset.fmAction;
+      if(a==="restore-items")el.disabled=!listing?.trash||!items.length;
       if (["copy","move","archive","delete","clear"].includes(a)) el.disabled = !items.length;
       if(a==="download")el.disabled=!items.length||items.some(item=>item.type!=="file")||items.length>250||(siteID()==="server-explorer"&&items.length>1);
       if (["rename","chmod","edit","html-edit","view","extract"].includes(a)) el.disabled = !one || (["view","download"].includes(a) && current?.type !== "file") || (a==="edit"&&!editableFile(current)) || (a==="html-edit"&&!htmlFile(current)) || (a === "extract" && !extractableFile(current));
     });
+    if(listing?.trash)page.querySelectorAll('[data-fm-action]').forEach(el=>{if(!['home','up','back','forward','refresh','settings','select-all','unselect-all','list','grid','trash','clear','restore-items'].includes(el.dataset.fmAction))el.disabled=true;});
     $("#fmInspector").innerHTML = one ? `<div class="fm-detail-icon ${current.type === "directory" ? "is-folder" : ""}">${icon(current.type === "directory" ? "folder" : kind(current)==="Archive" ? "archive" : "file")}</div><h3>${esc(current.name)}</h3><span class="fm-kind">${esc(kind(current))}</span><dl><dt>Location</dt><dd>${esc(displayPath(current.path))}</dd><dt>Size</dt><dd>${current.type === "directory" ? "Folder" : cp.formatBytes(current.size)}</dd><dt>Permissions</dt><dd><code>${esc(current.mode)}</code></dd><dt>Modified</dt><dd>${esc(cp.formatDateTime(current.modified))}</dd></dl><p>Changes apply immediately to this website.</p>` : `<div class="fm-detail-icon">${icon(items.length ? "copy" : "info")}</div><h3>${items.length ? `${items.length} items selected` : "File details"}</h3><p>${items.length ? "Use the toolbar to copy, move, compress or move the selection to Trash." : "Select a file or folder to view its details and available actions."}</p>`;
     page.querySelectorAll("[data-fm-row]").forEach(row => row.classList.toggle("fm-selected",selected.has(row.dataset.fmRow)));
     page.querySelectorAll("[data-file-select]").forEach(input => input.checked=selected.has(input.value));
@@ -150,14 +152,14 @@
     }
     const changed = !listing || listing.siteId !== value.siteId || listing.path !== value.path;
     const siteChanged=site !== value.siteId;
-    const startupPath=value.siteId==="server-explorer" ? "" : siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : ["public","domain"].includes(preferences.start) ? (value.publicPath || "") : preferences.start==="ftp" ? "public_ftp" : "";
+    const startupPath=value.trash ? ".trash" : value.siteId==="server-explorer" ? "" : siteChanged && preferences.start==="last" ? (localStorage.getItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`) || "") : ["public","domain"].includes(preferences.start) ? (value.publicPath || "") : preferences.start==="ftp" ? "public_ftp" : "";
     if (siteChanged) { folders.clear(); expanded=new Set([""]); folderErrors.clear(); loadingFolders.clear(); history=[]; historyIndex=-1; site=value.siteId; }
     if (changed) { selected.clear(); lastIndex=-1; if (!historyNavigation) { history=history.slice(0,historyIndex+1); history.push(value.path || ""); historyIndex=history.length-1; } historyNavigation=false; }
     listing=value; selected=new Set([...selected].filter(path=>(value.entries || []).some(x=>x.path===path)));
     historyNavigation=false;
     if(history[historyIndex] !== (value.path || "")){const historyMatch=history.lastIndexOf(value.path || "");if(historyMatch>=0)historyIndex=historyMatch;}
     page.querySelectorAll("[data-fm-action]").forEach(button=>button.disabled=false);
-    folders.set(value.path || "",(value.entries || []).filter(x=>x.type==="directory"));
+    folders.set(value.path || "",value.trash ? [] : (value.entries || []).filter(x=>x.type==="directory"));
     if(siteChanged && startupPath!==(value.path || "")) setTimeout(()=>cp.goToFilePath(startupPath).catch(cp.handleError),0);
     else localStorage.setItem(`litecpFileManagerLastPath:${value.siteId}:${value.home || "legacy"}`,value.path || "");
     const visible=rows(), count=(value.entries || []).length;
@@ -176,13 +178,13 @@
       const type=entry.type==="directory" ? "folder" : kind(entry)==="Archive" ? "archive" : kind(entry)==="Image" ? "image" : ext==="pdf" ? "pdf" : ["mp3","wav","ogg","flac","m4a"].includes(ext) ? "audio" : ["mp4","webm","mov","avi"].includes(ext) ? "video" : ["html","htm","css","js","json","xml"].includes(ext) ? "code" : ["php","txt","md","ini","conf","sql","log","htaccess"].includes(ext) ? "text" : "file";
       return `<span class="fm-entry-icon is-${type}">${icon(type==="folder" || type==="file" ? type : "file-"+type)}</span>`;
     };
-    const name = entry => `<button type="button" class="fm-name" data-fm-open="${esc(entry.path)}" title="${entry.type==="directory" ? "Select folder; double-click to open" : "Select file; double-click to edit"}">${entryIcon(entry)}<span>${esc(entry.name)}</span></button>`;
+    const name = entry => `<button type="button" class="fm-name" data-fm-open="${esc(entry.path)}" title="${entry.originalPath ? esc("Original location: "+entry.originalPath) : entry.type==="directory" ? "Select folder; double-click to open" : "Select file; double-click to edit"}">${entryIcon(entry)}<span>${esc(entry.name)}</span></button>`;
     if (!visible.length) $("#fileTable").innerHTML=`<div class="fm-empty">${icon($("#fileSearch").value ? "search" : "folder")}<h3>${count ? "No matching items" : "This folder is empty"}</h3><p>${count ? "Try another search or show hidden files." : "Upload files or create a new folder to get started."}</p></div>`;
     else if (view==="grid") $("#fileTable").innerHTML=`<div class="fm-cards">${visible.map(x=>`<article class="fm-card" data-fm-row="${esc(x.path)}" tabindex="0"><input type="checkbox" data-file-select value="${esc(x.path)}" aria-label="Select ${esc(x.name)}">${name(x)}<small>${x.type==="directory" ? "Folder" : cp.formatBytes(x.size)}</small><button class="fm-more" type="button" data-fm-menu="${esc(x.path)}" aria-label="Actions for ${esc(x.name)}">${icon("more")}</button></article>`).join("")}</div>`;
     else $("#fileTable").innerHTML=`<table class="fm-table"><thead><tr><th><input id="fmSelectAll" type="checkbox" aria-label="Select all visible items"></th>${[["name","Name"],["size","Size"],["modified","Last Modified"],["type","Type"],["mode","Permissions"]].map(([key,label])=>`<th aria-sort="${$("#fileSort").value===key ? (descending ? "descending" : "ascending") : "none"}"><button type="button" class="fm-sort-heading" data-fm-sort="${key}">${label}${$("#fileSort").value===key ? (descending ? " ▾" : " ▴") : ""}</button></th>`).join("")}</tr></thead><tbody>${visible.map(x=>`<tr data-fm-row="${esc(x.path)}" tabindex="0"><td><input type="checkbox" data-file-select value="${esc(x.path)}" aria-label="Select ${esc(x.name)}"></td><td>${name(x)}</td><td>${cp.formatBytes(x.size)}</td><td>${esc(cp.formatDateTime(x.modified))}</td><td>${esc(kind(x))}</td><td><button type="button" class="fm-mode" data-fm-permissions="${esc(x.path)}" title="Change permissions">${esc(x.mode)}</button></td></tr>`).join("")}</tbody></table>`;
     $("#fmStatus").textContent=`${visible.length} of ${count} items · ${(value.entries || []).filter(x=>x.type==="directory").length} folders · ${cp.formatBytes((value.entries || []).reduce((n,x)=>n+(x.type==="file" ? x.size : 0),0))} in files`;
     $("#fmOrder").textContent=descending ? "↓" : "↑";
-    page.querySelectorAll('[data-fm-row]').forEach(row=>row.draggable=siteID()!=="server-explorer");
+    page.querySelectorAll('[data-fm-row]').forEach(row=>row.draggable=!listing?.trash&&siteID()!=="server-explorer");
     syncSelection(); renderTree();
     if (!folders.has("") && !loadingFolders.has("")) loadFolder("");
   }
@@ -196,7 +198,7 @@
     $("#fmTree").innerHTML=branch("","public",0);
   }
   async function loadFolder(path) {
-    if(siteID()!=="server-explorer" && /^\.trash(?:\/|$)/.test(path)){await showTrash();return;}
+    if(siteID()!=="server-explorer" && /^\.trash(?:\/|$)/.test(path)){folders.set(path,[]);renderTree();return;}
     const expected=site; loadingFolders.add(path); folderErrors.delete(path);
     try { const value=await cp.api(`/api/files?siteId=${encodeURIComponent(expected)}&path=${encodeURIComponent(path)}`); if (site!==expected) return; folders.set(path,value.entries.filter(x=>x.type==="directory")); }
     catch(error) { if (site===expected) folderErrors.set(path,"Unable to load. Collapse and expand to retry."); }
@@ -213,7 +215,7 @@
   function showMenu(path,x,y) {
     if (!selected.has(path)) selectOne(path);
     const current=picked(), singleFile=current.length===1 && current[0].type==="file";
-    const actions=[...(current.length&&current.every(item=>item.type==="file") ? [["download","Download","download"]] : []),...(singleFile ? [["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
+    const actions=listing?.trash ? [["restore-items","Restore","restore"],["purge-items","Delete permanently","delete"]] : [...(current.length&&current.every(item=>item.type==="file") ? [["download","Download","download"]] : []),...(singleFile ? [["view","View","eye"]] : []),...(singleFile&&editableFile(current[0]) ? [["edit","Edit","edit"]] : []),...(singleFile&&htmlFile(current[0]) ? [["html-edit","HTML Editor","html-edit"]] : []),["move","Move","move"],["copy","Copy","copy"],["rename","Rename","rename"],["chmod","Change Permissions","lock"],["delete","Delete","delete"],...(singleFile && extractableFile(current[0]) ? [["extract","Extract","extract"]] : []),["archive","Compress","archive"]];
     menu.innerHTML=actions.filter(([action])=>siteID()!=="server-explorer" || ["download","view"].includes(action)).map(([action,label,name])=>button(action,label,name)).join("");
     menu.querySelectorAll("button").forEach(b=>{ const peer=page.querySelector(`[data-fm-action="${b.dataset.fmAction}"]`); b.disabled=peer?.disabled || false; b.setAttribute("role","menuitem"); });
     menu.classList.remove("hidden");
@@ -266,6 +268,7 @@
   async function searchFiles() {
     const query=$("#cpfmSearchInput").value.trim();
     if(!query) { $("#cpfmSearchInput").focus(); return; }
+    if(listing?.trash){$("#fileSearch").value=query;render(listing);return;}
     const scope=$("#cpfmSearchScope").value;
     const root=scope==="current" ? cp.path() : scope==="root" ? (listing?.publicPath || "") : "";
     const expectedSite=siteID(), expectedPath=cp.path(), request=++searchRequest;
@@ -289,6 +292,15 @@
   async function refresh() { closeMenu(); await cp.loadFiles(); }
   async function action(name) {
     closeMenu(); const items=picked(), item=items[0], activeSite=siteID(), currentPath=cp.path();
+    if(listing?.trash && ['restore-items','purge-items'].includes(name)) {
+      if(!items.length)return;
+      const restore=name==='restore-items';
+      openDialog({title:restore?'Restore from Trash':'Permanently delete items?',description:restore?`Restore ${items.length} item(s) to their original locations. Existing files are never overwritten.`:`Permanently delete ${items.length} selected item(s)? This cannot be undone.`,fields:restore?'':field('Type DELETE to confirm','confirmation'),submit:restore?'Restore':'Delete permanently',danger:!restore,perform:async form=>{
+        if(!restore&&form.get('confirmation')!=='DELETE')throw new Error('Type DELETE exactly to confirm.');
+        try{for(const entry of items)await cp.api('/api/files/trash',{method:restore?'POST':'DELETE',body:{siteId:activeSite,id:entry.trashId,destination:''}});}finally{if(siteID()===activeSite)await refresh();}
+      }});return;
+    }
+    if(listing?.trash&&!['home','up','back','forward','refresh','settings','select-all','unselect-all','clear','list','grid','trash'].includes(name))return;
     if(activeSite==="server-explorer" && !["home","up","back","forward","refresh","reload","view","download","settings","select-all","unselect-all","clear","list","grid"].includes(name))return;
     if (!activeSite) { cp.showToast("Choose a website","Add or select a website before managing files.","error"); return; }
     if (["copy","move","archive","delete"].includes(name) && !items.length) return;
@@ -370,12 +382,12 @@
     if (name==="empty-trash") openDialog({title:"Permanently empty Trash?",description:"Every item in this website’s Trash will be permanently removed. This cannot be undone.",fields:field("Type EMPTY to confirm","confirmation"),submit:"Delete permanently",danger:true,perform:async form=>{if(form.get("confirmation")!=="EMPTY")throw new Error("Type EMPTY exactly to confirm.");await api("/api/files/trash","DELETE",{id:""});await showTrash();}});
   }
   async function showTrash() {
-    trashPanel.classList.remove("hidden"); $("#trashTable").innerHTML='<div class="fm-empty"><p>Loading Trash…</p></div>'; trashPanel.scrollIntoView({behavior:"smooth",block:"nearest"});
-    try {const result=cp.demo ? {entries:[]} : await cp.api(`/api/files/trash?siteId=${encodeURIComponent(siteID())}`);$("#trashTable").innerHTML=result.entries.length ? `<table class="fm-table"><thead><tr><th>File name</th><th>Original location</th><th>Size</th><th>Moved to Trash</th><th>Actions</th></tr></thead><tbody>${result.entries.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.originalPath)}</td><td>${cp.formatBytes(x.size)}</td><td>${esc(cp.formatDateTime(x.deletedAt))}</td><td><button class="button button-secondary" data-fm-restore="${esc(x.id)}">Restore</button><button class="button fm-danger" data-fm-purge="${esc(x.id)}">Delete permanently</button></td></tr>`).join("")}</tbody></table>` : '<div class="fm-empty"><h3>Trash is empty</h3><p>Items moved to Trash will appear here.</p></div>';}
-    catch(error){$("#trashTable").textContent=error.message;}
+    trashPanel.classList.add('hidden');
+    if(siteID()&&siteID()!=='server-explorer')await cp.goToFilePath('.trash');
   }
+
   function upload(files) {
-	if(siteID()==="server-explorer")return;
+	if(siteID()==="server-explorer"||listing?.trash)return;
     if (!files.length) return;
     if(new Set(files.map(file=>file.name)).size!==files.length){cp.showToast("Duplicate filenames","Choose files with unique names.","error");return;}
     const current=cp.path(), activeSite=siteID();
@@ -434,7 +446,7 @@
   menu.addEventListener("keydown",event=>{if(event.key==="Escape"){closeMenu();$(".fm-content").focus();}else if(event.key==="ArrowDown" || event.key==="ArrowUp"){event.preventDefault();const buttons=[...menu.querySelectorAll("button:not(:disabled)")],index=buttons.indexOf(document.activeElement);buttons[(index+(event.key==="ArrowDown" ? 1 : buttons.length-1))%buttons.length]?.focus();}});
   document.addEventListener("click",event=>{if(!event.target.closest(".fm-context,[data-fm-menu]"))closeMenu();});
   window.addEventListener("resize",closeMenu);window.addEventListener("scroll",closeMenu,true);
-  $("#fileTable").addEventListener("dblclick",event=>{const row=event.target.closest("[data-fm-row]");if(!row || event.target.closest("input,button.fm-more,.fm-mode"))return;selectOne(row.dataset.fmRow);const entry=picked()[0];if(entry.type==="directory")cp.goToFilePath(entry.path);else run(siteID()==="server-explorer"?"view":"edit");});
+  $("#fileTable").addEventListener("dblclick",event=>{const row=event.target.closest("[data-fm-row]");if(!row || event.target.closest("input,button.fm-more,.fm-mode"))return;selectOne(row.dataset.fmRow);const entry=picked()[0];if(listing?.trash){run("restore-items");return;}if(entry.type==="directory")cp.goToFilePath(entry.path);else run(siteID()==="server-explorer"?"view":"edit");});
   $("#fileTable").addEventListener("contextmenu",event=>{const row=event.target.closest("[data-fm-row]");if(!row)return;event.preventDefault();showMenu(row.dataset.fmRow,event.clientX,event.clientY);});
   $("#fileTable").addEventListener("change",event=>{if(event.target.id==="fmSelectAll"){selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();}});
   $("#fmSelectVisible").onchange=event=>{selected=event.target.checked ? new Set(rows().map(x=>x.path)) : new Set();syncSelection();};
@@ -446,6 +458,7 @@
   $("#fileUploadInput").onchange=event=>{if(event.target.files.length && dialog.open)dialog.close();upload([...event.target.files]);event.target.value="";};
   let internalDrag=null,movePending=false;
   function dropDirectory(target){
+    if(listing?.trash)return null;
     const tree=target.closest('[data-fm-folder]');if(tree)return {path:tree.dataset.fmFolder,node:tree.closest('.fm-tree-row')||tree};
     const row=target.closest('[data-fm-row]');if(!row)return null;
     const entry=(listing?.entries||[]).find(item=>item.path===row.dataset.fmRow);
@@ -456,7 +469,7 @@
   }
   function clearDropHighlight(){page.querySelectorAll('.fm-drop-target').forEach(node=>node.classList.remove('fm-drop-target'));}
   page.addEventListener('dragstart',event=>{
-    const row=event.target.closest('[data-fm-row]');if(!row||siteID()==='server-explorer'||movePending)return;
+    const row=event.target.closest('[data-fm-row]');if(!row||listing?.trash||siteID()==='server-explorer'||movePending)return;
     if(!selected.has(row.dataset.fmRow))selectOne(row.dataset.fmRow);
     internalDrag={site:siteID(),source:cp.path(),paths:picked().map(item=>item.path)};
     event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('application/x-litecp-files',JSON.stringify(internalDrag));
@@ -484,7 +497,7 @@
   panel.addEventListener("dragover",event=>{if(event.dataTransfer.types.includes("Files"))event.preventDefault();});
   panel.addEventListener("dragleave",()=>{if(--dragDepth<=0){dragDepth=0;panel.classList.remove("fm-dragging");}});
   panel.addEventListener("drop",event=>{event.preventDefault();dragDepth=0;panel.classList.remove("fm-dragging");upload([...event.dataTransfer.files]);});
-  page.addEventListener("keydown",event=>{if(event.target.closest("input,select,textarea,[contenteditable]"))return;if((event.ctrlKey || event.metaKey)&&event.key.toLowerCase()==="a"){event.preventDefault();selected=new Set(rows().map(x=>x.path));syncSelection();}else if(event.key==="Escape"){closeMenu();selected.clear();syncSelection();}else if(event.key==="F2"&&picked().length===1){event.preventDefault();run("rename");}else if(event.key==="Delete"&&picked().length){event.preventDefault();run("delete");}});
+  page.addEventListener("keydown",event=>{if(event.target.closest("input,select,textarea,[contenteditable]"))return;if((event.ctrlKey || event.metaKey)&&event.key.toLowerCase()==="a"){event.preventDefault();selected=new Set(rows().map(x=>x.path));syncSelection();}else if(event.key==="Escape"){closeMenu();selected.clear();syncSelection();}else if(event.key==="F2"&&picked().length===1){event.preventDefault();run("rename");}else if(event.key==="Delete"&&picked().length){event.preventDefault();run(listing?.trash?"purge-items":"delete");}});
   $("#fileSiteSelect").addEventListener("change",()=>{selected.clear();closeMenu();trashPanel.classList.add("hidden");});
   window.LiteCPFileManager={render,loading:()=>{closeMenu();selected.clear();syncSelection();page.querySelectorAll("[data-fm-action]").forEach(button=>button.disabled=true);}};
   if(cp.state() && location.hash==="#files")cp.loadFiles();

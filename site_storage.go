@@ -18,7 +18,7 @@ func defaultSiteRoot(domain string) string {
 }
 
 // Derive the account boundary from the saved path, not the current domain: domain
-// renames intentionally preserve a website's existing files and home directory.
+// edits may need to relocate a home saved under an earlier domain.
 func siteHome(site Site) string {
 	root := filepath.Clean(site.Root)
 	home := filepath.Dir(root)

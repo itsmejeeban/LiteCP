@@ -55,3 +55,27 @@ func TestChangeSiteDomainRejectsDuplicate(t *testing.T) {
 		t.Fatal("duplicate domain request changed the website")
 	}
 }
+
+func TestChangeSiteDomainRelocatesManagedHome(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.cfg.Sites = []Site{{ID: "managed", Domain: "old.example.test", Root: defaultSiteRoot("old.example.test")}}
+	app := &App{store: store, system: &System{demo: true}}
+	response := httptest.NewRecorder()
+	app.changeSiteDomain(response, httptest.NewRequest(http.MethodPut, "/api/sites/domain", strings.NewReader(`{"id":"managed","domain":"new.example.test"}`)))
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	if got := store.SiteByID("managed").Root; got != defaultSiteRoot("new.example.test") {
+		t.Fatalf("root not updated: %s", got)
+	}
+	// An already renamed domain must also repair its previous saved home.
+	store.cfg.Sites[0].Root = defaultSiteRoot("old.example.test")
+	response = httptest.NewRecorder()
+	app.changeSiteDomain(response, httptest.NewRequest(http.MethodPut, "/api/sites/domain", strings.NewReader(`{"id":"managed","domain":"new.example.test"}`)))
+	if response.Code != http.StatusOK || store.SiteByID("managed").Root != defaultSiteRoot("new.example.test") {
+		t.Fatal("existing mismatch not repaired")
+	}
+}

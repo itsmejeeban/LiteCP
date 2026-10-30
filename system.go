@@ -771,19 +771,29 @@ func (s *System) ChangeSiteDomain(ctx context.Context, current, updated Site) er
 	if !domainPattern.MatchString(current.Domain) || !domainPattern.MatchString(updated.Domain) {
 		return errors.New("website domain is invalid")
 	}
-	if current.ID != updated.ID || current.Root != updated.Root {
+	if current.ID != updated.ID {
 		return errors.New("website identity cannot be changed")
 	}
-	if s.demo || current.Domain == updated.Domain {
+	if s.demo {
 		return nil
 	}
 	oldConfig, oldEnabled := s.nginxPaths(current.Domain)
 	newConfig, newEnabled := s.nginxPaths(updated.Domain)
-	if _, err := os.Lstat(newConfig); err == nil {
+	if _, err := os.Lstat(newConfig); newConfig != oldConfig && err == nil {
 		return errors.New("the new domain already has an Nginx configuration")
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else if newConfig != oldConfig && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect new domain configuration: %w", err)
 	}
+	undoHome, err := s.relocateDomainHome(ctx, current, updated)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			undoHome()
+		}
+	}()
 	suffix := fmt.Sprintf(".renamed-%d", time.Now().UnixNano())
 	archivedConfig := oldConfig + suffix
 	archivedEnabled := oldEnabled + suffix
@@ -829,6 +839,7 @@ func (s *System) ChangeSiteDomain(ctx context.Context, current, updated Site) er
 	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
 		return rollback(err)
 	}
+	committed = true
 	return nil
 }
 

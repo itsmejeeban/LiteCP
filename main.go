@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.88"
+var version = "2.0.100"
 var buildRevision = ""
 
 //go:embed web/*
@@ -902,7 +902,7 @@ func (a *App) changeSiteDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Website not found.")
 		return
 	}
-	if site.Domain == input.Domain {
+	if site.Domain == input.Domain && (siteHome(*site) == "" || site.Root == defaultSiteRoot(input.Domain)) {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
@@ -912,6 +912,9 @@ func (a *App) changeSiteDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	updated := *site
 	updated.Domain = input.Domain
+	if siteHome(*site) != "" {
+		updated.Root = defaultSiteRoot(input.Domain)
+	}
 	updated.SSL = false
 	if updated.Application != nil {
 		application := *updated.Application
@@ -923,7 +926,7 @@ func (a *App) changeSiteDomain(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if err := a.store.UpdateSiteDomain(site.ID, input.Domain); err != nil {
+	if err := a.store.UpdateSiteDomain(site.ID, input.Domain, updated.Root); err != nil {
 		if rollbackErr := a.system.ChangeSiteDomain(context.Background(), updated, *site); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "Domain change could not be saved and configuration rollback also failed: "+rollbackErr.Error())
 			return

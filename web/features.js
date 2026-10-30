@@ -118,6 +118,7 @@
   $("#openTrash").addEventListener("click",loadTrash); $("#closeTrash").addEventListener("click",()=>$("#trashPanel").classList.add("hidden"));
   $("#fileSiteSelect").addEventListener("change",()=>$("#trashPanel").classList.add("hidden"));
   async function loadTrash(){
+    if(window.LiteCPFileManager){await cp.goToFilePath(".trash");return;}
     if(!siteID())return;$("#trashPanel").classList.remove("hidden");
     try{const result=cp.demo?{entries:[]}:await cp.api(`/api/files/trash?siteId=${encodeURIComponent(siteID())}`);
       $("#trashTable").innerHTML=result.entries.length?`<table class="data-table"><thead><tr><th>ORIGINAL PATH</th><th>SIZE</th><th>DELETED</th><th>ACTIONS</th></tr></thead><tbody>${result.entries.map(item=>`<tr><td><code>${esc(item.originalPath)}</code></td><td>${cp.formatBytes(item.size)}</td><td>${cp.formatDateTime(item.deletedAt)}</td><td><span class="row-actions"><button class="text-action" data-trash="restore" data-id="${esc(item.id)}">Restore</button><button class="text-action danger" data-trash="delete" data-id="${esc(item.id)}">Delete permanently</button></span></td></tr>`).join("")}</tbody></table>`:'<div class="empty-state"><p>Trash is empty.</p></div>';

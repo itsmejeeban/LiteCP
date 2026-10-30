@@ -12,23 +12,23 @@ import (
 )
 
 type Site struct {
-	PHPSettings map[string]string `json:"phpSettings,omitempty"`
-	Suspended bool `json:"suspended,omitempty"`
- Application *ApplicationHosting `json:"application,omitempty"`
-	ID         string    `json:"id"`
-	Domain     string    `json:"domain"`
-	Root       string    `json:"root"`
-	AppType    string    `json:"appType"`
-	AppVersion string    `json:"appVersion,omitempty"`
-	PHPVersion string    `json:"phpVersion"`
-	RuntimeUID int       `json:"runtimeUid,omitempty"`
-	RuntimeGID int       `json:"runtimeGid,omitempty"`
-	SSL        bool      `json:"ssl"`
-	Cron       bool      `json:"cron"`
-	WAFMode    string    `json:"wafMode,omitempty"`
-	Database   string    `json:"database,omitempty"`
-	DBUser     string    `json:"dbUser,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
+	PHPSettings map[string]string   `json:"phpSettings,omitempty"`
+	Suspended   bool                `json:"suspended,omitempty"`
+	Application *ApplicationHosting `json:"application,omitempty"`
+	ID          string              `json:"id"`
+	Domain      string              `json:"domain"`
+	Root        string              `json:"root"`
+	AppType     string              `json:"appType"`
+	AppVersion  string              `json:"appVersion,omitempty"`
+	PHPVersion  string              `json:"phpVersion"`
+	RuntimeUID  int                 `json:"runtimeUid,omitempty"`
+	RuntimeGID  int                 `json:"runtimeGid,omitempty"`
+	SSL         bool                `json:"ssl"`
+	Cron        bool                `json:"cron"`
+	WAFMode     string              `json:"wafMode,omitempty"`
+	Database    string              `json:"database,omitempty"`
+	DBUser      string              `json:"dbUser,omitempty"`
+	CreatedAt   time.Time           `json:"createdAt"`
 
 	// Provisioning markers are request-scoped and never persisted. They allow
 	// the API to remove only files it created if durable state saving fails.
@@ -37,7 +37,7 @@ type Site struct {
 }
 
 type Backup struct {
-	ScheduleID string `json:"scheduleId,omitempty"`
+	ScheduleID      string    `json:"scheduleId,omitempty"`
 	ID              string    `json:"id"`
 	SiteID          string    `json:"siteId"`
 	Domain          string    `json:"domain"`
@@ -118,23 +118,23 @@ type Activity struct {
 }
 
 type Settings struct {
- ApplicationHosting map[string]bool `json:"applicationHosting,omitempty"`
- ActivityRetentionDays int `json:"activityRetentionDays"`
-	Email               string   `json:"email"`
-	Timezone            string   `json:"timezone"`
-	BackupRetention     int      `json:"backupRetention"`
-	EmailHostingEnabled bool     `json:"emailHostingEnabled"`
-	Resolvers           []string `json:"resolvers,omitempty"`
+	ApplicationHosting    map[string]bool `json:"applicationHosting,omitempty"`
+	ActivityRetentionDays int             `json:"activityRetentionDays"`
+	Email                 string          `json:"email"`
+	Timezone              string          `json:"timezone"`
+	BackupRetention       int             `json:"backupRetention"`
+	EmailHostingEnabled   bool            `json:"emailHostingEnabled"`
+	Resolvers             []string        `json:"resolvers,omitempty"`
 }
 
 type Admin struct {
-	Username     string `json:"username"`
-	PasswordHash string `json:"passwordHash"`
+	Username     string          `json:"username"`
+	PasswordHash string          `json:"passwordHash"`
 	TwoFactor    twoFactorConfig `json:"twoFactor,omitempty"`
 }
 
 type Config struct {
-	BackupSchedules []BackupSchedule `json:"backupSchedules,omitempty"`
+	BackupSchedules    []BackupSchedule    `json:"backupSchedules,omitempty"`
 	SchemaVersion      int                 `json:"schemaVersion"`
 	Admin              Admin               `json:"admin"`
 	Settings           Settings            `json:"settings"`
@@ -458,7 +458,7 @@ func (s *Store) UpdateSite(id string, update func(*Site)) error {
 	return errors.New("website not found")
 }
 
-func (s *Store) UpdateSiteDomain(id, domain string) error {
+func (s *Store) UpdateSiteDomain(id, domain string, roots ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, site := range s.cfg.Sites {
@@ -472,6 +472,20 @@ func (s *Store) UpdateSiteDomain(id, domain string) error {
 		}
 		originalSites := append([]Site{}, s.cfg.Sites...)
 		originalDatabases := append([]ManagedDatabase{}, s.cfg.Databases...)
+		originalBackups := append([]Backup{}, s.cfg.Backups...)
+		oldHome := siteHome(s.cfg.Sites[i])
+		if len(roots) > 0 {
+			s.cfg.Sites[i].Root = roots[0]
+		}
+		newHome := siteHome(s.cfg.Sites[i])
+		for j := range s.cfg.Backups {
+			if s.cfg.Backups[j].SiteID == id {
+				s.cfg.Backups[j].Domain = domain
+				if oldHome != "" && newHome != "" && strings.HasPrefix(s.cfg.Backups[j].Path, oldHome+string(filepath.Separator)) {
+					s.cfg.Backups[j].Path = newHome + strings.TrimPrefix(s.cfg.Backups[j].Path, oldHome)
+				}
+			}
+		}
 		s.cfg.Sites[i].Domain = domain
 		s.cfg.Sites[i].SSL = false
 		if s.cfg.Sites[i].Application != nil {
@@ -488,6 +502,7 @@ func (s *Store) UpdateSiteDomain(id, domain string) error {
 		if err := s.saveLocked(); err != nil {
 			s.cfg.Sites = originalSites
 			s.cfg.Databases = originalDatabases
+			s.cfg.Backups = originalBackups
 			return err
 		}
 		return nil
@@ -571,11 +586,15 @@ func (s *Store) AddActivity(title, detail, kind string) error {
 	activity := Activity{ID: id, Title: title, Detail: detail, Kind: kind, CreatedAt: time.Now().UTC()}
 	s.cfg.Activities = append([]Activity{activity}, s.cfg.Activities...)
 	if days := s.cfg.Settings.ActivityRetentionDays; days > 0 {
- cutoff := time.Now().UTC().AddDate(0,0,-days)
- kept := make([]Activity,0,len(s.cfg.Activities))
- for _,item := range s.cfg.Activities { if !item.CreatedAt.Before(cutoff) { kept=append(kept,item) } }
- s.cfg.Activities=kept
- }
+		cutoff := time.Now().UTC().AddDate(0, 0, -days)
+		kept := make([]Activity, 0, len(s.cfg.Activities))
+		for _, item := range s.cfg.Activities {
+			if !item.CreatedAt.Before(cutoff) {
+				kept = append(kept, item)
+			}
+		}
+		s.cfg.Activities = kept
+	}
 	if err := s.saveLocked(); err != nil {
 		s.cfg.Activities = original
 		return err
