@@ -1,5 +1,5 @@
 # Run through update.bat. Requires Git and Windows OpenSSH; Go is required on the server.
-param([string]$Server = '2.31.109.187', [int]$Port = 22, [string]$User = 'root', [switch]$CheckOnly)
+param([string]$Server = '162.55.50.122', [int]$Port = 369, [string]$User = 'root', [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 if ($env:LITECP_UPDATE_PORT) { $Port = [int]$env:LITECP_UPDATE_PORT }
