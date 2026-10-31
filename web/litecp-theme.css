@@ -541,3 +541,17 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #webmailSetupForm .webmail-setup-actions {justify-content:center;gap:12px;margin-top:18px;}
 :root[data-theme] #webmailSetupForm .webmail-setup-actions .button {width:auto!important;min-width:140px;min-height:38px;padding:8px 16px!important;flex:0 0 auto;white-space:nowrap;}
 @media(max-width:600px){#webmailSetupForm .two-column-fields {grid-template-columns:1fr;}}
+
+.webmail-setup-progress {margin:16px 0;border:1px solid #3c4653;border-radius:8px;padding:14px;}
+.webmail-setup-progress ol {display:flex;gap:12px;flex-wrap:wrap;list-style:none;padding:0;margin:0 0 12px;counter-reset:webmail-stage;}
+.webmail-setup-progress li {counter-increment:webmail-stage;flex:1;min-width:130px;color:#a7b2bf;padding:8px;border:1px solid #414752;border-radius:6px;}
+.webmail-setup-progress li::before {content:counter(webmail-stage) '. ';}
+.webmail-setup-progress li.is-current {color:#a6d1f5;border-color:#5596c9;}
+.webmail-setup-progress li.is-done {color:#94d5b3;border-color:#378360;}
+.webmail-setup-progress li.is-failed {color:#ffd0d0;border-color:#b44d55;}
+.webmail-stage-bar {height:5px;background:#26323e;border-radius:6px;overflow:hidden;margin-bottom:12px;}
+.webmail-stage-bar.is-running::after {content:'';display:block;height:100%;width:32%;background:linear-gradient(90deg,#4b92d1,#4ab48e);animation:webmail-working 1.6s ease-in-out infinite alternate;}
+@keyframes webmail-working {from{transform:translateX(0)}to{transform:translateX(210%)}}
+#webmailSetupPanel [data-setup-log] {max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#10151c;color:#dce5ef;border:1px solid #3b4754;padding:12px;font:12px/1.6 Consolas,monospace;}
+#webmailSetupPanel .webmail-setup-error {color:#ffc4c9;background:#57232a;padding:12px;border:1px solid #a84954;border-radius:6px;}
+@media(prefers-reduced-motion:reduce){.webmail-stage-bar.is-running::after{animation:none;}}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +19,9 @@ var webmailFeatureInstaller string
 
 //go:embed scripts/install-webmail-signon.sh
 var webmailSignonInstaller string
+
+//go:embed deploy/litecp_signon.php
+var webmailSignonPlugin string
 
 type webmailSetupInput struct {
 	Hostname    string `json:"hostname"`
@@ -73,7 +77,23 @@ func (a *App) configureWebmail(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		host := a.system.mailHostname(r.Context())
-		writeJSON(w, 200, map[string]any{"status": status(), "configured": a.system.WebmailAvailable(), "url": a.system.WebmailURL(), "hostname": host, "port": 8444, "certificate": "/etc/letsencrypt/live/" + host + "/fullchain.pem", "privateKey": "/etc/letsencrypt/live/" + host + "/privkey.pem", "logPath": filepath.Join(directory, "setup.log")})
+		port := 8444
+		var saved webmailSetupInput
+		if data, err := os.ReadFile(filepath.Join(directory, "request.json")); directory != "" && err == nil && json.Unmarshal(data, &saved) == nil {
+			host = saved.Hostname
+			port = saved.Port
+		}
+		var stageBytes []byte
+		if directory != "" {
+			stageBytes, _ = os.ReadFile(filepath.Join(directory, "progress"))
+		}
+		stage := strings.TrimSpace(string(stageBytes))
+		logLines := []string{}
+		if directory != "" {
+			logLines = webmailSetupLog(filepath.Join(directory, "setup.log"))
+		}
+		setupStatus := status()
+		writeJSON(w, 200, map[string]any{"status": setupStatus, "configured": a.system.WebmailAvailable() && setupStatus != "running", "url": a.system.WebmailURL(), "hostname": host, "stage": stage, "log": logLines, "port": port, "certificate": "/etc/letsencrypt/live/" + host + "/fullchain.pem", "privateKey": "/etc/letsencrypt/live/" + host + "/privkey.pem", "logPath": filepath.Join(directory, "setup.log")})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -132,22 +152,37 @@ func (a *App) configureWebmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Cannot record setup status.")
 		return
 	}
-	for name, content := range map[string]string{"install-features.sh": webmailFeatureInstaller, "install-webmail-signon.sh": webmailSignonInstaller} {
+	for name, content := range map[string]string{"install-features.sh": webmailFeatureInstaller, "install-webmail-signon.sh": webmailSignonInstaller, "litecp_signon.php": webmailSignonPlugin} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(strings.ReplaceAll(content, "\r\n", "\n")), 0700); err != nil {
 			writeError(w, 500, "Cannot prepare webmail installer.")
 			return
 		}
 	}
+	requestData, _ := json.Marshal(input)
+	if err := os.WriteFile(filepath.Join(directory, "request.json"), requestData, 0600); err != nil {
+		writeError(w, 500, "Cannot record setup details.")
+		return
+	}
 	// A system service keeps installation alive when the browser closes and runs
 	// outside the web service's read-only filesystem sandbox. Inputs are arguments.
 	wrapper := `set -e; umask 077; cd "$1"; trap 'result=$?; printf "%s\n" "$result" > result' EXIT; exec > setup.log 2>&1
+printf 'certificate' > progress
+echo '[1/3] Checking hostname certificate'
 export LITECP_MAIL_HOSTNAME="$2" LITECP_MAIL_CERT="$3" LITECP_MAIL_KEY="$4" LITECP_WEBMAIL_PORT="$5"
 if ! test -s "$3" || ! test -s "$4" || ! openssl x509 -in "$3" -noout -checkhost "$2" -checkend 86400; then
   echo "Obtaining a trusted TLS certificate for $2. DNS and HTTP port 80 must reach this server."
   certbot certonly --nginx --non-interactive --agree-tos --register-unsafely-without-email --cert-name "$2" -d "$2" --keep-until-expiring
 fi
 openssl x509 -in "$3" -noout -checkhost "$2" -checkend 0
-/bin/bash ./install-features.sh mail`
+printf 'install' > progress
+echo '[2/3] Installing and configuring webmail services'
+/bin/bash ./install-features.sh mail
+printf 'verify' > progress
+echo '[3/3] Verifying webmail services'
+nginx -t
+systemctl is-active --quiet dovecot
+printf 'complete' > progress
+echo 'Webmail configuration completed successfully.'`
 	_, err = runCommand(context.Background(), 15*time.Second, "systemd-run", "--quiet", "--collect", "--unit=litecp-webmail-setup", "--property=RuntimeMaxSec=3600", "--property=UMask=0077", "--", "/bin/bash", "-c", wrapper, "litecp-webmail-setup", directory, input.Hostname, input.Certificate, input.PrivateKey, strconv.Itoa(input.Port))
 	if err != nil {
 		writeError(w, 502, "Webmail setup could not start. Existing mailboxes were preserved; review server service logs.")
