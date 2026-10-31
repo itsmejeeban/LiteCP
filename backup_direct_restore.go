@@ -109,7 +109,13 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else {
-			preview, err = a.prepareManualBackupStage(ctx, *site, filepath.Join(a.restoreManualBackupRoot(*site), input.ID, "website.zip"))
+			var archive string
+			var cleanup func()
+			archive, cleanup, err = a.websiteBackupArchive(ctx, a.restoreManualBackupRoot(*site), input.ID, site.ID)
+			if err == nil {
+				preview, err = a.prepareManualBackupStage(ctx, *site, archive)
+				cleanup()
+			}
 		}
 		if err != nil {
 			fail(err)

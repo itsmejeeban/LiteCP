@@ -27,11 +27,14 @@ var websiteBackupWorkers = struct {
 }{active: map[string]bool{}}
 
 type websiteZIPBackup struct {
-	ID        string    `json:"id"`
-	SiteID    string    `json:"siteId"`
-	Domain    string    `json:"domain"`
-	Size      int64     `json:"size"`
-	CreatedAt time.Time `json:"createdAt"`
+	RemotePath    string    `json:"remotePath,omitempty"`
+	DestinationID string    `json:"destinationId,omitempty"`
+	RemoteOnly    bool      `json:"remoteOnly,omitempty"`
+	ID            string    `json:"id"`
+	SiteID        string    `json:"siteId"`
+	Domain        string    `json:"domain"`
+	Size          int64     `json:"size"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 func loadWebsiteZIPBackup(root, id, siteID string) (websiteZIPBackup, error) {
@@ -47,6 +50,9 @@ func loadWebsiteZIPBackup(root, id, siteID string) (websiteZIPBackup, error) {
 	content, err := os.ReadFile(filepath.Join(directory, "manifest.json"))
 	if err != nil || json.Unmarshal(content, &item) != nil || item.ID != id || item.SiteID != siteID {
 		return item, fmt.Errorf("backup not found for this website")
+	}
+	if item.RemoteOnly && item.RemotePath != "" && item.DestinationID != "" {
+		return item, nil
 	}
 	info, err = os.Lstat(filepath.Join(directory, "website.zip"))
 	if err != nil || !info.Mode().IsRegular() || info.Size() != item.Size || item.Size <= 0 {
@@ -163,7 +169,13 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 				writeError(w, 404, "Complete backup not found for this website")
 				return
 			}
-			file, err := secureOpenManaged(root, id+"/website.zip", os.O_RDONLY, 0)
+			archive, cleanup, err := a.websiteBackupArchive(r.Context(), root, id, site.ID)
+			if err != nil {
+				writeError(w, 502, err.Error())
+				return
+			}
+			defer cleanup()
+			file, err := os.Open(archive)
 			if err != nil {
 				writeError(w, 404, "Backup not found")
 				return
@@ -238,6 +250,29 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 	if a.system.demo {
 		writeError(w, 400, "Backup generation requires the installed server")
 		return
+	}
+	var input struct {
+		Storage       string `json:"storage"`
+		DestinationID string `json:"destinationId"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, 400, "Choose backup storage")
+		return
+	}
+	if input.Storage == "" {
+		input.Storage = "local"
+	}
+	if input.Storage != "local" && input.Storage != "remote" && input.Storage != "both" {
+		writeError(w, 400, "Invalid backup storage")
+		return
+	}
+	var destination *BackupDestination
+	if input.Storage != "local" {
+		destination = a.store.BackupDestinationByID(input.DestinationID)
+		if destination == nil {
+			writeError(w, 400, "Choose a configured remote destination")
+			return
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
 	available, err := migrationFreeBytes(ctx, root)
@@ -368,6 +403,18 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 		if err = writeAtomic(filepath.Join(directory, "manifest.json"), content, 0600); err != nil {
 			fail(err)
 			return
+		}
+		if destination != nil {
+			job.Message = "Uploading backup to remote storage"
+			_ = saveJob()
+			temporaryFiles := []string{}
+			for name := range dumps {
+				temporaryFiles = append(temporaryFiles, name)
+			}
+			if err = a.uploadWebsiteZIP(ctx, directory, &item, *destination, input.Storage == "remote", temporaryFiles); err != nil {
+				fail(err)
+				return
+			}
 		}
 		job.Status = "complete"
 		job.Message = "Backup ready"

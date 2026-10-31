@@ -135,8 +135,8 @@
             <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">-</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span></div><small>TOTAL WEBSITES</small><div class="metric-value"><strong id="totalWebsitesValue">0</strong></div></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span></div><small>TOTAL EMAIL ACCOUNTS</small><div class="metric-value"><strong id="totalEmailAccountsValue">0</strong></div></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">-</strong></div><p>Available local archives</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">-</strong></div><p>Recorded successful uploads</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">-</strong></div><p>Available local archives</p><p id="lastLocalBackupCreated">No backups yet</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">-</strong></div><p>Recorded successful uploads</p><p id="lastRemoteBackupCreated">No backups yet</p></article>
           </div>
 
           <div class="dashboard-grid hidden">
@@ -262,7 +262,7 @@
   <script src="file-manager.js?v=upload-close-race-3.3.19" defer></script>
   <script src="panel-settings.js?v=responsive-audit-8" defer></script>
   <script src="live-migration.js?v=1.0.25" defer></script>
-  <script src="website-backups.js?v=3.7.3" defer></script>
+  <script src="website-backups.js?v=3.7.18" defer></script>
   <script src="activities.js?v=activity-age-2.0.19" defer></script>
   <script src="website-ftp.js?v=responsive-audit-8" defer></script>
   <script src="website-cron.js?v=merged-app-cron-1" defer></script>
@@ -304,7 +304,7 @@
   <script src="vendor/xterm/addon-fit.js" defer></script>
   <script src="terminal.js?v=clipboard-2.0.85" defer></script>
 <script src="live-process.js?v=3.3.23" defer></script>
-<script src="backup-counts.js?v=2.0.83" defer></script>
+<script src="backup-counts.js?v=3.7.19" defer></script>
 <script src="system-updates.js?v=3.3.23" defer></script>
 <script src="list-pagination.js?v=2.0.113" defer></script>
 </body>

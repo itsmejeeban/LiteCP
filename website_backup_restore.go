@@ -187,7 +187,12 @@ func (a *App) stageWebsiteBackup(ctx context.Context, site Site, backupID string
 	if _, err := loadWebsiteZIPBackup(filepath.Dir(backupRoot), backupID, site.ID); err != nil {
 		return preview, err
 	}
-	return a.prepareManualBackupStage(ctx, site, filepath.Join(backupRoot, "website.zip"))
+	archive, cleanup, err := a.websiteBackupArchive(ctx, filepath.Dir(backupRoot), backupID, site.ID)
+	if err != nil {
+		return preview, err
+	}
+	defer cleanup()
+	return a.prepareManualBackupStage(ctx, site, archive)
 }
 func (a *App) prepareManualBackupStage(ctx context.Context, site Site, archive string) (MigrationPreview, error) {
 	var preview MigrationPreview

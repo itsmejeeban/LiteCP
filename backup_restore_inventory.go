@@ -75,7 +75,7 @@ func (a *App) backupRestoreInventory(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seenManual[b.ID] = true
-			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: true, WebsiteExists: a.store.SiteByDomain(site.Domain) != nil})
+			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: !b.RemoteOnly, Remote: b.RemotePath != "", Destination: b.DestinationID, WebsiteExists: a.store.SiteByDomain(site.Domain) != nil})
 		}
 	}
 	var mu sync.Mutex
