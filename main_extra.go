@@ -948,6 +948,66 @@ func (a *App) createMailAlias(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, alias)
 }
 
+func (a *App) updateMailAlias(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/mail/aliases/")
+	original := a.store.MailAliasByID(id)
+	if original == nil {
+		writeError(w, 404, "Mail forward not found.")
+		return
+	}
+	var input struct{ Source, Destination string }
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	input.Source = strings.ToLower(strings.TrimSpace(input.Source))
+	input.Destination = strings.TrimSpace(input.Destination)
+	if err := validateAliasAddress(input.Source, input.Destination); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	if !a.store.HasMailDomain(strings.Split(input.Source, "@")[1]) {
+		writeError(w, 400, "The source domain is not hosted by LiteCP.")
+		return
+	}
+	domains, mailboxes, aliases := a.store.MailConfig()
+	updated := *original
+	updated.Source = input.Source
+	updated.Destination = input.Destination
+	for _, item := range aliases {
+		if item.ID != id && item.Source == input.Source {
+			writeError(w, 409, "That source already has a forward.")
+			return
+		}
+	}
+	for _, item := range mailboxes {
+		if item.Address == input.Source {
+			writeError(w, 409, "That source address is already a mailbox.")
+			return
+		}
+	}
+	next := append([]MailAlias(nil), aliases...)
+	for i := range next {
+		if next[i].ID == id {
+			next[i] = updated
+		}
+	}
+	if err := a.system.SyncMailConfig(r.Context(), domains, mailboxes, next); err != nil {
+		writeError(w, 502, err.Error())
+		return
+	}
+	if err := a.store.UpdateMailAlias(updated); err != nil {
+		if rollbackErr := a.system.SyncMailConfig(context.Background(), domains, mailboxes, aliases); rollbackErr != nil {
+			writeError(w, 500, "Forward could not be saved and mail configuration rollback failed: "+rollbackErr.Error())
+			return
+		}
+		writeError(w, 500, "Forward could not be saved; previous configuration restored.")
+		return
+	}
+	a.store.AddActivity("Mail forward updated", updated.Source+" -> "+updated.Destination, "success")
+	writeJSON(w, 200, updated)
+}
+
 func (a *App) deleteMailAlias(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/api/mail/aliases/")
 	alias := a.store.MailAliasByID(id)

@@ -3,6 +3,7 @@
   const cp=window.LiteCP,page=document.querySelector('[data-page-view="backups"]');
   const entries=[
     ['create','Create Backup','#backupRunForm','backups'],
+    ['restore','Restore','#backupRestoreInventory','backups'],
     ['add-destination','Add Remote Destination','#backupDestinationForm','add-mail-domain'],
     ['settings','Backup Settings','#backupSettingsForm','settings'],
     ['destinations','Remote Destinations','#backupDestinationsTable','services-control'],

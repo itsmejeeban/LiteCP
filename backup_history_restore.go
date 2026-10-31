@@ -39,6 +39,9 @@ func (s *System) historyRemoteOperation(ctx context.Context, d *BackupDestinatio
 	}
 	if d.Protocol == "sftp" {
 		batch := "get " + sftpBatchQuote(remote) + " " + sftpBatchQuote(local) + "\n"
+		if operation == "stat" {
+			batch = "ls -l " + sftpBatchQuote(remote) + "\n"
+		}
 		if operation == "remove" {
 			batch = "rm " + sftpBatchQuote(remote) + "\n"
 		}
@@ -53,6 +56,8 @@ func (s *System) historyRemoteOperation(ctx context.Context, d *BackupDestinatio
 		directory := (&url.URL{Scheme: d.Protocol, Host: net.JoinHostPort(d.Host, strconv.Itoa(d.Port)), Path: path.Clean(d.RemotePath) + "/"}).String()
 		lines[6] = `url = "` + curlConfigEscape(directory) + `"`
 		lines = append(lines, `quote = "DELE `+curlConfigEscape(remote)+`"`, "list-only", `output = "/dev/null"`)
+	} else if operation == "stat" {
+		lines = append(lines, "head", `output = "/dev/null"`)
 	} else {
 		lines = append(lines, "max-filesize = "+strconv.FormatInt(b.Size, 10), `output = "`+curlConfigEscape(local)+`"`)
 	}
@@ -175,7 +180,7 @@ func (a *App) prepareHistoryBackup(ctx context.Context, b Backup) (MigrationPrev
 	if e != nil {
 		return p, e
 	}
-	if count >= 3 {
+	if count >= 3 && ctx.Value(directBackupRestoreContext{}) != true {
 		return p, errors.New("Review retained migration stages before inspecting another backup")
 	}
 	if !validScheduledBackupPath(b.Path) {

@@ -207,7 +207,7 @@ func (a *App) prepareManualBackupStage(ctx context.Context, site Site, archive s
 			}
 		}
 	}
-	if staged >= 3 {
+	if staged >= 3 && ctx.Value(directBackupRestoreContext{}) != true {
 		return preview, errors.New("three restore/migration stages are already retained; review existing stages before inspecting another backup")
 	}
 	info, err := os.Stat(archive)

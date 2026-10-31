@@ -425,3 +425,24 @@ func (s *Store) UpdateBackupDestination(destination BackupDestination) error {
 	}
 	return errors.New("backup destination not found")
 }
+
+func (s *Store) UpdateMailAlias(alias MailAlias) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, item := range s.cfg.MailAliases {
+		if item.ID != alias.ID && item.Source == alias.Source {
+			return errors.New("source already has a forward")
+		}
+	}
+	for i, item := range s.cfg.MailAliases {
+		if item.ID == alias.ID {
+			s.cfg.MailAliases[i] = alias
+			if err := s.saveLocked(); err != nil {
+				s.cfg.MailAliases[i] = item
+				return err
+			}
+			return nil
+		}
+	}
+	return errors.New("mail forward not found")
+}

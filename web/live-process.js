@@ -7,5 +7,8 @@
  function render(){const [field,direction]=page.querySelector('[data-sort]').value.split('-');const sign=direction==='asc'?1:-1;const q=page.querySelector('[data-search]').value.toLowerCase();page.querySelector('tbody').innerHTML=entries.filter(x=>`${x.pid} ${x.user} ${x.name}`.toLowerCase().includes(q)).sort((a,b)=>sign*(Number(a[field])-Number(b[field]))||Number(a.pid)-Number(b.pid)).map(x=>`<tr><td>${x.pid}</td><td>${esc(x.user)}</td><td>${esc(x.name)}</td><td>${esc(x.state)}</td><td>${x.cpu.toFixed(1)}%</td><td>${x.memory.toFixed(1)}%</td><td>${cp.formatBytes(x.rss)}</td></tr>`).join('');}
  async function load(){if(busy||document.hidden||location.hash!=='#live-process')return;busy=true;try{const value=await cp.api('/api/analytics/processes');entries=value.processes;render();page.querySelector('[data-summary]').textContent=`CPU ${value.summary.cpu.toFixed(1)}% · Memory ${value.summary.memory.toFixed(1)}% · ${value.note} · Updated ${new Date(value.updatedAt).toLocaleTimeString()}`;}catch(error){page.querySelector('[data-summary]').textContent=error.message;}finally{busy=false;}}
  function activate(){clearInterval(timer);if(location.hash==='#live-process'){load();timer=setInterval(load,3000);}}
+ const features=window.LiteCPFeatures;
+ if(features){const previousNavigate=features.navigate;features.navigate=function(...args){previousNavigate?.apply(this,args);activate();};}
  page.querySelector('[data-refresh]').onclick=load;page.querySelector('[data-search]').oninput=render;page.querySelector('[data-sort]').onchange=render;window.addEventListener('hashchange',activate);document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});activate();
+ if(cp.state()&&location.hash==='#live-process')cp.navigate('live-process',false);
 })();

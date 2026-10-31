@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.3.20"
+var version = "3.7.3"
 var buildRevision = ""
 
 //go:embed web/*
@@ -197,7 +197,9 @@ func main() {
 		}
 		return
 	}
-	if err := store.interruptBackupRequests(); err != nil { log.Fatal("Cannot reconcile backup requests: ", err) }
+	if err := store.interruptBackupRequests(); err != nil {
+		log.Fatal("Cannot reconcile backup requests: ", err)
+	}
 	app := &App{
 		store:    store,
 		system:   NewSystem(dataDir),
@@ -212,6 +214,7 @@ func main() {
 	reconcileCancel()
 	app.startUsageMonitor()
 	app.startBackupSchedules()
+	app.startCloudflareFirewallUpdates()
 	app.startAutoMigrationRestores()
 
 	server := &http.Server{
@@ -270,6 +273,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/backups/counts", a.withAuth(a.backupCounts))
+	mux.HandleFunc("/api/backups/restore-direct", a.withAuth(a.directBackupRestore))
+	mux.HandleFunc("/api/backups/restorable", only(http.MethodGet, a.withAuth(a.backupRestoreInventory)))
 	mux.HandleFunc("/api/backups/item", a.withAuth(a.backupHistoryItem))
 	mux.HandleFunc("/api/backups", only(http.MethodPost, a.withAuth(a.createBackup)))
 	mux.HandleFunc("/api/application-hosting", a.withAuth(a.applicationHosting))
@@ -343,7 +348,13 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/terminal/session", a.withAuth(a.interactiveTerminal))
 	mux.HandleFunc("/api/security/ssh-port", a.withAuth(a.sshPortSettings))
 	mux.HandleFunc("/api/security/panel-port", a.withAuth(a.panelPortSettings))
-	mux.HandleFunc("/api/mail/aliases/", only(http.MethodDelete, a.withAuth(a.deleteMailAlias)))
+	mux.HandleFunc("/api/mail/aliases/", a.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			a.updateMailAlias(w, r)
+			return
+		}
+		only(http.MethodDelete, a.deleteMailAlias)(w, r)
+	}))
 	mux.HandleFunc("/api/logs", only(http.MethodGet, a.withAuth(a.logs)))
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
@@ -365,7 +376,7 @@ func (a *App) routes() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	static := http.FileServer(http.FS(webFS))
+	static := cachedImageAssets(http.FileServer(http.FS(webFS)), webFS)
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
@@ -1018,7 +1029,10 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	job, err := a.enqueueBackup(*site, destination)
-	if err != nil { writeError(w, http.StatusConflict, err.Error()); return }
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusAccepted, job)
 }
 

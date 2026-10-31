@@ -297,14 +297,14 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 /* Generated multicolor website action image sprite. */
 :root[data-theme] #sitesTable .row-actions button svg {display:none;}
-:root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
+:root[data-theme] #sitesTable .row-actions button::before {content:"";display:block;width:28px;height:28px;background-image:url('website-action-icons.png?v=3.7.2');background-repeat:no-repeat;background-size:196px 72px;background-position:0 center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-ftp]::before {background-position:16.6667% center;}
-:root[data-theme] #sitesTable .row-actions button[data-site-php-settings]::before {background-image:url('logo-php.svg');background-size:contain;background-position:center;width:36px;}
+:root[data-theme] #sitesTable .row-actions button[data-site-php-settings]::before {background-image:url('logo-php.svg?v=3.7.2');background-size:contain;background-position:center;width:36px;}
 :root[data-theme] #sitesTable .row-actions button[data-site-backup]::before {background-position:33.3333% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-cron-jobs]::before,
 :root[data-theme] #sitesTable .row-actions button[data-site-action="cron"]::before {background-position:50% center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="files"]::before {background-position:66.6667% center;}
-:root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-image:url('assets/remove-website.svg');background-size:26px 26px;background-position:center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="delete"]::before {background-image:url('assets/remove-website.svg?v=3.7.2');background-size:26px 26px;background-position:center;}
 :root[data-theme] #sitesTable .row-actions button[data-site-action="ssl"]::before {background-position:100% center;}
 :root[data-theme] #sitesTable .row-actions button.site-domain-edit::before {display:none;}
 :root[data-theme] #sitesTable .row-actions button.site-domain-edit svg {display:block;width:28px;height:28px;stroke:#60a5fa;stroke-width:1.8;fill:none;}
@@ -572,3 +572,17 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 .service-controls { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .service-card { min-width:0; }
 .service-card-actions { flex-shrink:0; }
+
+/* System update schedule and pager: align controls without field margins. */
+[data-page-view="system-updates"] .system-update-schedule { align-items:flex-end; }
+[data-page-view="system-updates"] .system-update-schedule .field { margin:0; }
+[data-page-view="system-updates"] .system-update-schedule select,
+[data-page-view="system-updates"] .system-update-schedule input,
+[data-page-view="system-updates"] .system-update-schedule button { height:40px; min-height:40px; box-sizing:border-box; margin:0; }
+[data-page-view="system-updates"] .system-update-pagination { align-items:center; gap:14px; }
+[data-page-view="system-updates"] .system-update-pagination [data-pages] { display:inline-flex; align-items:center; min-height:40px; margin:0; line-height:1.4; }
+[data-page-view="system-updates"] .system-update-pagination button { margin:0; flex-shrink:0; }
+
+/* Non-running service badges must override the shared green status style. */
+:root[data-theme] .state-pill.stopped { background:#7f2630; color:#fff; border-color:#a13b47; }
+:root[data-theme] .state-pill.stopped .pulse-dot { background:#ffb4bc; }

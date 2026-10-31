@@ -579,7 +579,7 @@
     const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";
     const emailRoute=["forward","add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases","delivery","smtp-port-check","configure-webmail"].includes(emailPart)?`email/${emailPart}`:"";
     const backupPart=String(page).startsWith("backups/")?String(page).slice(8):"";
-    const backupRoute=["create","add-destination","settings","destinations","history","system-snapshot"].includes(backupPart)?`backups/${backupPart}`:"";
+    const backupRoute=["create","restore","add-destination","settings","destinations","history","system-snapshot"].includes(backupPart)?`backups/${backupPart}`:"";
     if(backupRoute)page="backups";
     const migrationPart=String(page).startsWith("migrations/")?String(page).slice(11):"";
     const migrationRoute=["cpanel","plesk","litecp","upload","jobs","completed"].includes(migrationPart)?`migrations/${migrationPart}`:"";
@@ -929,7 +929,7 @@
 
   $("#backupsTable").addEventListener("click", async event => {
     const restore = event.target.closest("[data-restore-history]");
-    if (restore) { const backup=(currentState.backups||[]).find(item=>item.id===restore.dataset.restoreHistory); if(backup) window.dispatchEvent(new CustomEvent("litecp:restore-history",{detail:backup})); return; }
+    if (restore) { const backup=(currentState.backups||[]).find(item=>item.id===restore.dataset.restoreHistory); if(backup) window.LiteCPBackupRestore({...backup,kind:"history"}); return; }
     const button = event.target.closest("[data-remove-backup]");
     if (!button) return;
     const backup = (currentState.backups || []).find(item => item.id === button.dataset.removeBackup);
@@ -1273,7 +1273,7 @@
   function renderWebsiteRuntimeActions(site) {
     if(site.appType!=="regular")return "";
     const labels={node:"Node.js",python:"Python",ruby:"Ruby"},enabled=currentState?.settings?.applicationHosting||{};
-    return Object.keys(labels).filter(key=>enabled[key]).map(key=>`<button type="button" data-site-runtime="${key}" data-runtime-site="${escapeHTML(site.id)}" title="Select ${labels[key]} version" aria-label="${labels[key]} version for ${escapeHTML(site.domain)}"><img src="assets/sidebar/runtime-${key}.svg" width="28" height="28" alt=""><span class="site-action-label">${labels[key]}</span></button>`).join("");
+    return Object.keys(labels).filter(key=>enabled[key]).map(key=>`<button type="button" data-site-runtime="${key}" data-runtime-site="${escapeHTML(site.id)}" title="Select ${labels[key]} version" aria-label="${labels[key]} version for ${escapeHTML(site.domain)}"><img src="assets/sidebar/runtime-${key}.svg?v=3.7.2" width="28" height="28" alt=""><span class="site-action-label">${labels[key]}</span></button>`).join("");
   }
   function renderApplicationLogo(site) {
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";

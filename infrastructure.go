@@ -321,6 +321,15 @@ func validateFirewallRule(rule FirewallRule) error {
 		address = rule.Destination
 		addressLabel = "destination"
 	}
+	if address == "cloudflare" {
+		if rule.Direction != "inbound" || rule.Action != "allow" {
+			return errors.New("Cloudflare sources require an inbound allow rule")
+		}
+		if rule.Port == 22 || rule.Port == currentPanelPort() {
+			return errors.New("Cloudflare-only access cannot be used for SSH or the LiteCP panel")
+		}
+		return nil
+	}
 	if address != "" && address != "any" {
 		if net.ParseIP(address) == nil {
 			if _, _, err := net.ParseCIDR(address); err != nil {
@@ -342,6 +351,9 @@ func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remov
 	rule = normalizeFirewallRule(rule)
 	if err := validateFirewallRule(rule); err != nil {
 		return err
+	}
+	if rule.Source == "cloudflare" {
+		return s.applyCloudflareFirewall(ctx, rule, remove)
 	}
 	if s.demo {
 		return nil

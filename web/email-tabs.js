@@ -4,16 +4,32 @@
   const forward=document.createElement('form');forward.id='emailForwardForm';forward.className='panel';
   forward.innerHTML='<div class="panel-head"><div><h2>Email Forward</h2><p>Forward incoming mail to another email address.</p></div></div><div class="settings-body"><label class="field"><span>Source email address</span><input type="email" name="source" placeholder="sales@example.com" required autocomplete="off"><small>Use a domain added to Mail Domains.</small></label><label class="field"><span>Forward to</span><input type="email" name="destination" placeholder="owner@example.net" required autocomplete="off"></label><div class="feature-actions"><button type="submit" class="button button-primary">Add forward</button><button type="button" class="button button-secondary" data-view-forwards>View forwards</button></div><p role="status" data-forward-status></p></div>';
   page.append(forward);
-  forward.querySelector('[data-view-forwards]').onclick=()=>cp.navigate('email/aliases');
+  let editingForward='';
+  const forwardList=document.createElement('article');forwardList.className='panel';
+  forward.append(forwardList);
+  function renderForwards(){
+    const values=cp.state()?.mailAliases||[],esc=cp.escapeHTML;
+    forwardList.innerHTML='<div class="panel-head"><h2>Email forwards</h2></div>'+ (values.length?'<div class="table-scroll"><table class="data-table"><thead><tr><th>Source email</th><th>Forward to</th><th>Actions</th></tr></thead><tbody>'+values.map(item=>`<tr><td>${esc(item.source)}</td><td>${esc(item.destination)}</td><td><span class="row-actions"><button type="button" class="button button-secondary" data-edit-forward="${esc(item.id)}">Edit</button><button type="button" class="button button-danger" data-delete-forward="${esc(item.id)}">Delete</button></span></td></tr>`).join('')+'</tbody></table></div>':'<div class="settings-body">No email forwards yet.</div>');
+  }
+  function resetForward(){editingForward='';forward.reset();forward.querySelector('[type="submit"]').textContent='Add forward';forward.querySelector('[data-view-forwards]').textContent='View forwards';}
+  forward.querySelector('[data-view-forwards]').onclick=()=>{if(editingForward){resetForward();return;}forwardList.scrollIntoView({behavior:'smooth',block:'nearest'});};
+  forwardList.addEventListener('click',async event=>{
+    const edit=event.target.closest('[data-edit-forward]'),remove=event.target.closest('[data-delete-forward]');
+    const id=edit?.dataset.editForward||remove?.dataset.deleteForward;
+    const item=(cp.state()?.mailAliases||[]).find(value=>value.id===id);if(!item)return;
+    if(edit){editingForward=id;forward.elements.source.value=item.source;forward.elements.destination.value=item.destination;forward.querySelector('[type="submit"]').textContent='Save changes';forward.querySelector('[data-view-forwards]').textContent='Cancel edit';forward.elements.source.focus();return;}
+    if(remove){if(!await window.LiteCPDialogs.confirm(`Delete the forward from ${item.source} to ${item.destination}?`,{title:'Delete email forward',confirmText:'Delete'}))return;remove.disabled=true;try{await cp.api('/api/mail/aliases/'+encodeURIComponent(id),{method:'DELETE'});if(editingForward===id)resetForward();await cp.refresh();renderForwards();cp.showToast('Email forward deleted','The forwarding rule was removed.');}catch(error){cp.handleError(error);remove.disabled=false;}}
+  });
   forward.addEventListener('submit',async event=>{
     event.preventDefault();if(!forward.reportValidity())return;
     const button=forward.querySelector('[type="submit"]'),status=forward.querySelector('[data-forward-status]');
     if(button.disabled)return;button.disabled=true;status.textContent='Saving forward...';
     const data=new FormData(forward);
     try{
-      await cp.api('/api/mail/aliases',{method:'POST',body:{source:String(data.get('source')).trim().toLowerCase(),destination:String(data.get('destination')).trim()}});
-      forward.reset();status.textContent='Email forward created. View forwards to manage it.';
-      await cp.refresh();cp.showToast('Email forward created','Incoming mail will be forwarded to the destination.');
+      const wasEditing=!!editingForward;
+      await cp.api('/api/mail/aliases'+(editingForward?'/'+encodeURIComponent(editingForward):''),{method:editingForward?'PUT':'POST',body:{source:String(data.get('source')).trim().toLowerCase(),destination:String(data.get('destination')).trim()}});
+      resetForward();status.textContent=wasEditing?'Email forward updated.':'Email forward created.';
+      await cp.refresh();renderForwards();cp.showToast(wasEditing?'Email forward updated':'Email forward created','Incoming mail will be forwarded to the destination.');
     }catch(error){status.textContent='Forward could not be created: '+error.message;cp.handleError(error);}
     finally{button.disabled=false;}
   });
@@ -55,7 +71,7 @@
       const target=pendingRoute;pendingRoute='';cp.navigate(target);
     }else sync();
   });
-  let lastRoute='';function sync(){const route=location.hash.slice(1),active=route==='email'||route.startsWith('email/'),selected=entries.find(entry=>entry[0]===route.split('/')[1])||entries[0];
+  let lastRoute='';function sync(){renderForwards();const route=location.hash.slice(1),active=route==='email'||route.startsWith('email/'),selected=entries.find(entry=>entry[0]===route.split('/')[1])||entries[0];
     const ready=configured??!!cp.state()?.system?.webmailAvailable;
     const blocked=active&&selected[0]!=='configure-webmail'&&!ready;
     setupNotice.classList.toggle('hidden',!blocked);
