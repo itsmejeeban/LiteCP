@@ -1127,7 +1127,7 @@
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
     try {
       const domain = String(data.get("domain")).trim().toLowerCase();
-      await api("/api/mail/mailboxes", { method: "POST", body: { domain, localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
+      const mailbox = await api("/api/mail/mailboxes", { method: "POST", body: { domain, localPart: String(data.get("localPart")).trim().toLowerCase(), password: data.get("password"), quotaMb: Number(data.get("quotaMb")) } }); form.reset(); form.dispatchEvent(new CustomEvent("mailbox-created", {bubbles:true,detail:mailbox})); currentState = await api("/api/state"); renderAll(); showToast("Mailbox created", "The address is ready for authenticated SMTP and IMAP."); }
     catch (error) { handleError(error); }
   }
 

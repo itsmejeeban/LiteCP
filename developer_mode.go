@@ -45,16 +45,7 @@ func (a *App) developerWrite(state developerSettings) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(a.system.dataDir, "developer-mode.json")
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if _, err = file.Write(data); err != nil {
-		return err
-	}
-	return file.Sync()
+	return writeAtomic(filepath.Join(a.system.dataDir, "developer-mode.json"), data, 0600)
 }
 func (a *App) credentialStamp() string {
 	a.store.mu.RLock()
@@ -78,6 +69,35 @@ func (a *App) trustedRequest(r *http.Request) bool {
 	browser, ok := state.Browsers[trustHash(cookie.Value)]
 	return state.Enabled && !state.RequirePassword && ok && time.Now().Before(browser.Expires) && browser.Credential == a.credentialStamp()
 }
+
+// Called only after password and any enabled second factor have been verified.
+// A fresh authenticated login can re-enrol a browser after explicit sign-out revoked it.
+func (a *App) trustAuthenticatedBrowser(w http.ResponseWriter, r *http.Request) (bool, error) {
+	if !requestIsHTTPS(r) || a.store.twoFactor().Enabled {
+		return false, nil
+	}
+	developerMu.Lock()
+	defer developerMu.Unlock()
+	state := a.developerRead()
+	if !state.Enabled || state.RequirePassword {
+		return false, nil
+	}
+	token, err := randomToken(32)
+	if err != nil {
+		return false, err
+	}
+	expires := time.Now().Add(30 * 24 * time.Hour)
+	if previous, err := r.Cookie("litecp_trusted"); err == nil {
+		delete(state.Browsers, trustHash(previous.Value))
+	}
+	state.Browsers[trustHash(token)] = trustedBrowser{Expires: expires, Credential: a.credentialStamp()}
+	if err = a.developerWrite(state); err != nil {
+		return false, err
+	}
+	http.SetCookie(w, &http.Cookie{Name: "litecp_trusted", Value: token, Path: "/api/", Expires: expires, MaxAge: 30 * 24 * 60 * 60, HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode})
+	return true, nil
+}
+
 func (a *App) forgetBrowser(w http.ResponseWriter, r *http.Request) {
 	developerMu.Lock()
 	defer developerMu.Unlock()
@@ -94,8 +114,8 @@ func (a *App) developerMode(w http.ResponseWriter, r *http.Request) {
 	state := a.developerRead()
 	if r.Method == http.MethodPut {
 		var input struct {
-			Enabled         bool `json:"enabled"`
-			RequirePassword bool `json:"requirePassword"`
+			Enabled         bool   `json:"enabled"`
+			RequirePassword bool   `json:"requirePassword"`
 			Password        string `json:"password"`
 		}
 		if decodeJSON(r, &input) != nil {
@@ -155,5 +175,10 @@ func (a *App) developerMode(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, cookie)
 		a.store.AddActivity("Developer mode updated", "Trusted-browser login settings changed", "info")
 	}
-	writeJSON(w, 200, map[string]bool{"enabled": state.Enabled, "requirePassword": state.RequirePassword})
+	trusted := false
+	if cookie, err := r.Cookie("litecp_trusted"); err == nil {
+		browser, ok := state.Browsers[trustHash(cookie.Value)]
+		trusted = state.Enabled && !state.RequirePassword && !a.store.twoFactor().Enabled && ok && time.Now().Before(browser.Expires) && browser.Credential == a.credentialStamp()
+	}
+	writeJSON(w, 200, map[string]bool{"enabled": state.Enabled, "requirePassword": state.RequirePassword, "browserTrusted": trusted})
 }

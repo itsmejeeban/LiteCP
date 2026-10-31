@@ -555,3 +555,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 #webmailSetupPanel [data-setup-log] {max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#10151c;color:#dce5ef;border:1px solid #3b4754;padding:12px;font:12px/1.6 Consolas,monospace;}
 #webmailSetupPanel .webmail-setup-error {color:#ffc4c9;background:#57232a;padding:12px;border:1px solid #a84954;border-radius:6px;}
 @media(prefers-reduced-motion:reduce){.webmail-stage-bar.is-running::after{animation:none;}}
+
+/* Mailbox text actions must not inherit the square icon-button dimensions. */
+:root[data-theme] #mailboxesTable .row-actions {display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:nowrap}
+:root[data-theme] #mailboxesTable .row-actions button:not(.danger) {display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;min-width:76px;height:36px!important;padding:0 12px!important;white-space:nowrap;flex:0 0 auto;box-sizing:border-box}

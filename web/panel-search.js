@@ -22,7 +22,7 @@
     ["email/create-mailbox", "Create mailbox", "Add an email account for a hosted or additional domain", "#mailboxForm", "mail email account password quota imap smtp"],
     ["email/add-domain", "Mail domains", "Add a separate email domain", "#mailDomainForm", "email routing hosted domain"],
     ["email/create-alias", "Email forwarding", "Create an alias that forwards mail to another address", "#mailAliasForm", "alias redirect email forward"],
-    ["email/webmail", "Webmail", "Open a mailbox using its Log in button", "#mailboxesTable", "roundcube email inbox login"],
+    ["email/mailboxes", "Webmail", "Open a mailbox using its Login Mailbox button", "#mailboxesTable", "roundcube email inbox login"],
     ["email/delivery", "Email Delivery", "View email delivery logs, statuses and failure details", "#mailDeliveryPanel", "mail logs sent delivered bounced deferred rejected queue smtp"],
     ["email/domains", "Email DNS records", "Use Configuration or DNS records to view the required mail records", "#mailDomainsTable", "dkim spf dmarc mx ptr deliverability spam"],
     ["email", "Email hosting", "Enable or disable the server's mail services", "#mailHostingToggle", "smtp imap postfix dovecot"],

@@ -44,3 +44,47 @@ func TestTrustedBrowserPersistsAndRevokes(t *testing.T) {
 		t.Fatal("raw token stored")
 	}
 }
+
+func TestAuthenticatedLoginEnrollsTrustedBrowser(t *testing.T) {
+	dir := t.TempDir()
+	a := &App{system: &System{dataDir: dir}, store: &Store{}}
+	a.store.cfg.Admin.PasswordHash = "password-hash"
+	if err := a.developerWrite(developerSettings{Enabled: true, RequirePassword: false, Browsers: map[string]trustedBrowser{}}); err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "https://panel/api/login", nil)
+	w := httptest.NewRecorder()
+	trusted, err := a.trustAuthenticatedBrowser(w, r)
+	if err != nil || !trusted {
+		t.Fatalf("enrolment: %v", err)
+	}
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "litecp_trusted" {
+			cookie = c
+		}
+	}
+	if cookie == nil || !cookie.HttpOnly || !cookie.Secure || cookie.MaxAge != 30*24*60*60 {
+		t.Fatal("invalid trust cookie")
+	}
+	restarted := &App{system: a.system, store: a.store}
+	request := httptest.NewRequest("GET", "https://panel/api/state", nil)
+	request.AddCookie(cookie)
+	if !restarted.trustedRequest(request) {
+		t.Fatal("trust did not survive panel restart")
+	}
+	restarted.forgetBrowser(httptest.NewRecorder(), request)
+	if restarted.trustedRequest(request) {
+		t.Fatal("sign-out did not revoke browser")
+	}
+}
+func TestAuthenticatedLoginDoesNotBypassPolicy(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{}}
+		a.developerWrite(developerSettings{Enabled: enabled, RequirePassword: true, Browsers: map[string]trustedBrowser{}})
+		ok, err := a.trustAuthenticatedBrowser(httptest.NewRecorder(), httptest.NewRequest("POST", "https://panel/api/login", nil))
+		if err != nil || ok {
+			t.Fatal("password requirement bypassed")
+		}
+	}
+}

@@ -87,7 +87,7 @@ func (a *App) webmailLaunch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Cannot start webmail.")
 		return
 	}
-	cookie, err := r.Cookie("litecp_session")
+	sessionToken, err := a.webmailSession(w, r)
 	if err != nil {
 		writeError(w, 401, "Sign in again.")
 		return
@@ -103,7 +103,7 @@ func (a *App) webmailLaunch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 429, "Too many pending mailbox logins.")
 		return
 	}
-	webmailTickets[token] = webmailLaunch{mailbox.ID, mailbox.Address, cookie.Value, time.Now().Add(30 * time.Second)}
+	webmailTickets[token] = webmailLaunch{mailbox.ID, mailbox.Address, sessionToken, time.Now().Add(30 * time.Second)}
 	webmailTicketMu.Unlock()
 	a.store.AddActivity("Webmail login", "Administrator opened "+mailbox.Address, "info")
 	writeJSON(w, 200, map[string]string{"ticket": token, "url": a.system.WebmailURL()})

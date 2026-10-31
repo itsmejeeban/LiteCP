@@ -177,22 +177,46 @@
 
   $("[data-page-view=email] .page-heading").insertAdjacentHTML("beforeend", '<div class="feature-actions"><a class="button button-secondary hidden" id="webmailLink" target="_blank" rel="noopener">Open webmail</a><button class="button button-primary" id="mailHostingToggle">Email hosting</button></div>');
   $("#mailboxesTable").addEventListener("click",event=>{if(event.target.closest('[data-webmail-unavailable]'))cp.showToast("Webmail setup required","Configure a public mail hostname with a matching TLS certificate and install webmail before logging in.","error");});
-  $("#mailboxesTable").addEventListener("click",async event=>{
+  $('[data-page-view="email"]').addEventListener("click",async event=>{
     const button=event.target.closest('[data-webmail-login]');if(!button)return;
     const target='litecp_webmail_'+Date.now(),tab=window.open('about:blank',target);
     if(!tab){cp.showToast('Tab blocked','Allow new tabs for LiteCP, then try again.','error');return;}
+    tab.document.title='Opening mailbox';
+    tab.document.body.textContent='Signing in to your mailbox…';
     button.disabled=true;
     try{
       const result=await cp.api('/api/mail/webmail-login',{method:'POST',body:{id:button.dataset.webmailLogin}});
       const url=new URL(result.url);if(url.protocol!=='https:')throw Error('Webmail requires HTTPS.');
-      const form=document.createElement('form');form.method='POST';form.action=url.href;form.target=target;
-      const ticket=document.createElement('input');ticket.type='hidden';ticket.name='litecp_ticket';ticket.value=result.ticket;form.append(ticket);
-      document.body.append(form);form.submit();form.remove();tab.opener=null;
+      if(tab.closed)throw Error('The mailbox tab was closed. Click Log in to try again.');
+      const form=tab.document.createElement('form');form.method='POST';form.action=url.href;form.target='_self';
+      const ticket=tab.document.createElement('input');ticket.type='hidden';ticket.name='litecp_ticket';ticket.value=result.ticket;form.append(ticket);
+      tab.document.body.append(form);tab.opener=null;form.submit();
     }catch(error){tab.close();cp.handleError(error);}finally{button.disabled=false;}
   });
+  $("#mailboxForm").addEventListener("mailbox-created",event=>{
+    const mailbox=event.detail;if(!mailbox?.id)return;
+    let result=$("[data-mailbox-created]",event.currentTarget);
+    if(!result){result=document.createElement("div");result.dataset.mailboxCreated="";result.className="settings-body mailbox-created-result";event.currentTarget.append(result);}
+    result.replaceChildren();
+    const message=document.createElement("p");message.setAttribute("role","status");message.textContent=`Mailbox created: ${mailbox.address}`;
+    const actions=document.createElement("div");actions.className="feature-actions";
+    const login=document.createElement("button");login.type="button";login.className="button button-primary";login.dataset.webmailLogin=mailbox.id;login.textContent="Login Mailbox";login.setAttribute("aria-label",`Log in to ${mailbox.address}`);
+    actions.append(login);result.append(message,actions);
+  });
   $("#mailHostingToggle").addEventListener("click",async()=>{const enabled=cp.state().settings.emailHostingEnabled!==false;if(!await window.LiteCPDialogs.confirm(`${enabled?"Disable":"Enable"} email hosting? ${enabled?"SMTP delivery and mailbox access will stop; messages and accounts will be kept.":"Postfix, Dovecot and DKIM services will start."}`))return;try{await cp.api("/api/mail/hosting",{method:"PUT",body:{enabled:!enabled}});await cp.refresh();}catch(error){notifyError(error);}});
-  $("[data-page-view=email] .stacked-panels").insertAdjacentHTML("beforeend", '<article class="panel hidden" id="mailDNSPanel"><div class="panel-head"><div><h2 id="mailDNSTitle">DNS records</h2><p>Publish these at your DNS provider. LiteCP does not change public DNS.</p></div></div><p class="feature-note" id="mailDNSConnection"></p><div id="mailDNSTable"></div><p class="feature-note" id="mailDNSNote"></p></article>');
-  $("[data-page-view=email]").addEventListener("click",async event=>{const button=event.target.closest("[data-dns-domain]");if(!button)return;try{if(cp.demo)throw new Error("DNS generation requires the installed mail server.");const data=await cp.api(`/api/mail/dns?domain=${encodeURIComponent(button.dataset.dnsDomain)}`);$("#mailDNSPanel").classList.remove("hidden");$("#mailDNSTitle").textContent=`DNS for ${button.dataset.dnsDomain}`;$("#mailDNSTable").innerHTML=`<table class="data-table dns-table"><thead><tr><th>TYPE</th><th>NAME</th><th>VALUE</th></tr></thead><tbody>${data.records.map(item=>`<tr><td>${esc(item.type)}</td><td><code>${esc(item.name)}</code></td><td><code>${esc(item.value)}</code></td></tr>`).join("")}</tbody></table>`;$("#mailDNSNote").textContent=(!data.dkimReady?"DKIM is not ready; install/configure OpenDKIM first. ":"")+data.note;const mailbox=button.dataset.mailboxAddress;$("#mailDNSConnection").textContent=`${mailbox ? "Username: " + mailbox + " · " : "Username: full email address · "}Incoming: ${data.hostname}, IMAP 993 (SSL/TLS). Outgoing: ${data.hostname}, SMTP 465 (SSL/TLS) or 587 (STARTTLS). Use the mailbox password and enable SMTP authentication.`;$("#mailDNSPanel").scrollIntoView({behavior:"smooth",block:"start"});}catch(error){notifyError(error);}});
+  let mailDNSExport=null;
+  $("[data-page-view=email] .stacked-panels").insertAdjacentHTML("beforeend", '<article class="panel hidden" id="mailDNSPanel"><div class="panel-head"><div><h2 id="mailDNSTitle">DNS records</h2><p>Publish these at your DNS provider. LiteCP does not change public DNS.</p></div><button type="button" class="button button-secondary" id="mailDNSExport">Export records</button></div><p class="feature-note" id="mailDNSConnection"></p><div id="mailDNSTable"></div><p class="feature-note" id="mailDNSNote"></p></article>');
+  $("#mailDNSExport").addEventListener("click",()=>{
+    if(!mailDNSExport)return;
+    try{
+      const content=window.LiteCPDNSExport.zone(mailDNSExport.domain,mailDNSExport.records);
+      const url=URL.createObjectURL(new Blob([content],{type:"text/plain;charset=utf-8"}));
+      const link=document.createElement("a");link.href=url;link.download=mailDNSExport.domain+"-mail-dns.txt";
+      document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      cp.showToast("DNS records exported","Import the file through your provider’s DNS import option. Keep the mail host DNS only.","success");
+    }catch(error){notifyError(error);}
+  });
+  $("[data-page-view=email]").addEventListener("click",async event=>{const button=event.target.closest("[data-dns-domain]");if(!button)return;try{if(cp.demo)throw new Error("DNS generation requires the installed mail server.");const data=await cp.api(`/api/mail/dns?domain=${encodeURIComponent(button.dataset.dnsDomain)}`);mailDNSExport={domain:button.dataset.dnsDomain,records:data.records};$("#mailDNSPanel").classList.remove("hidden");$("#mailDNSTitle").textContent=`DNS for ${button.dataset.dnsDomain}`;$("#mailDNSTable").innerHTML=`<table class="data-table dns-table"><thead><tr><th>TYPE</th><th>NAME</th><th>VALUE</th></tr></thead><tbody>${data.records.map(item=>`<tr><td>${esc(item.type)}</td><td><code>${esc(item.name)}</code></td><td><code>${esc(item.value)}</code></td></tr>`).join("")}</tbody></table>`;$("#mailDNSNote").textContent=(!data.dkimReady?"DKIM is not ready; install/configure OpenDKIM first. ":"")+data.note;const mailbox=button.dataset.mailboxAddress;$("#mailDNSConnection").textContent=`${mailbox ? "Username: " + mailbox + " · " : "Username: full email address · "}Incoming: ${data.hostname}, IMAP 993 (SSL/TLS). Outgoing: ${data.hostname}, SMTP 465 (SSL/TLS) or 587 (STARTTLS). Use the mailbox password and enable SMTP authentication.`;$("#mailDNSPanel").scrollIntoView({behavior:"smooth",block:"start"});}catch(error){notifyError(error);}});
 
   $("[data-page-view=settings] .settings-grid").insertAdjacentHTML("beforeend", `
     <form class="panel settings-card" id="hostnameForm"><div class="panel-head"><div><h2>Server hostname</h2><p>Changes the OS hostname, not public DNS or mail identity.</p></div></div><div class="settings-body">${field("Hostname",'<input name="hostname" id="hostnameInput" required maxlength="253">')}<button class="button button-secondary" type="submit">Change hostname</button></div></form>
@@ -257,8 +281,8 @@
     $$('#mailboxesTable [data-mail-action="mailbox-password"]').forEach(button=>{
       const mailbox=state.mailboxes.find(item=>item.id===button.dataset.id);if(!mailbox)return;
       const enabled=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;
-      let login='<button class="text-action" type="button" data-mail-enhancement data-webmail-unavailable>Log in</button>';
-      if(enabled){try{const url=new URL(state.system.webmailUrl,location.origin);if(url.protocol==='https:'){login=`<button type="button" class="button button-secondary" data-mail-enhancement data-webmail-login="${esc(mailbox.id)}" aria-label="Log in to ${esc(mailbox.address)}">Log in</button>`;}}catch(error){}}
+      let login='<button class="text-action" type="button" data-mail-enhancement data-webmail-unavailable>Login Mailbox</button>';
+      if(enabled){try{const url=new URL(state.system.webmailUrl,location.origin);if(url.protocol==='https:'){login=`<button type="button" class="button button-secondary" data-mail-enhancement data-webmail-login="${esc(mailbox.id)}" aria-label="Log in to ${esc(mailbox.address)}">Login Mailbox</button>`;}}catch(error){}}
       button.insertAdjacentHTML("beforebegin",`${login}<button class="text-action" type="button" data-mail-enhancement data-dns-domain="${esc(mailbox.domain)}" data-mailbox-address="${esc(mailbox.address)}">Configuration</button>`);
     });
     const available=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;$("#webmailLink").classList.toggle("hidden",!available);$("#webmailLink").href=state.system.webmailUrl||`https://${location.hostname}:8444/`;

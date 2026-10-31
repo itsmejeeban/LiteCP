@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.3.2"
+var version = "3.3.7"
 var buildRevision = ""
 
 //go:embed web/*
@@ -489,6 +489,9 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		Name: "litecp_session", Value: token, Path: "/api/", Expires: expires,
 		HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode,
 	})
+	if _, trustErr := a.trustAuthenticatedBrowser(w, r); trustErr != nil {
+		_ = a.store.AddActivity("Browser trust unavailable", "Signed in normally, but browser trust could not be persisted. Save Developer mode settings to retry.", "warning")
+	}
 	_ = a.store.AddActivity("Signed in", "Administrator session started", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
