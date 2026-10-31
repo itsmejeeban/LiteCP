@@ -544,7 +544,7 @@ func (s *Store) ExpiredBackups(cutoff time.Time) []Backup {
 	defer s.mu.RUnlock()
 	result := []Backup{}
 	for _, backup := range s.cfg.Backups {
-		if backup.ScheduleID == "" && backup.CreatedAt.Before(cutoff) {
+		if backup.ScheduleID == "" && !backupInProgress(backup.Status) && backup.CreatedAt.Before(cutoff) {
 			result = append(result, backup)
 		}
 	}

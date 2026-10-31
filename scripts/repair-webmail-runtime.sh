@@ -32,3 +32,19 @@ if [[ $changed == 1 || ! -S /run/litecp-webmail/webmail.sock ]]; then systemctl 
 [[ -S /run/litecp-webmail/webmail.sock ]] || { echo 'Webmail PHP socket is missing after restart.' >&2; exit 1; }
 systemctl reload nginx
 echo 'Webmail runtime socket verified.'
+
+# Refresh the installed sign-in plugin as part of panel updates, without
+# changing mailbox credentials or rewriting the mail-server configuration.
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+plugin_source="$script_dir/../deploy/litecp_signon.php"
+plugin_target=/opt/litecp/webmail/plugins/litecp_signon/litecp_signon.php
+if [[ -f $plugin_source && -f $plugin_target ]] && ! cmp -s "$plugin_source" "$plugin_target"; then
+  if [[ $unit == php83-php-fpm ]]; then php_cli=/opt/remi/php83/root/usr/bin/php; else php_cli=/usr/bin/php8.3; fi
+  "$php_cli" -l "$plugin_source"
+  recovery=$(mktemp "${plugin_target}.before-update.XXXXXX")
+  cp --preserve=mode,ownership,timestamps "$plugin_target" "$recovery"
+  install -m 0644 "$plugin_source" "$plugin_target"
+  if command -v restorecon >/dev/null; then restorecon "$plugin_target"; fi
+  systemctl reload "$unit"
+  echo 'Webmail sign-in plugin updated; previous plugin preserved.'
+fi

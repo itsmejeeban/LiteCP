@@ -50,7 +50,11 @@ class litecp_signon extends rcube_plugin
         // Commit a same-origin document before navigating, so Strict cookies
         // work even when the panel is reached by IP and webmail by hostname.
         header('Content-Type: text/html; charset=UTF-8');
-        echo '<!doctype html><html><head><meta http-equiv="refresh" content="0;url=/?_task=mail"><title>Opening mailbox</title></head><body><a href="/?_task=mail">Open mailbox</a></body></html>';
+        $nonce = base64_encode(random_bytes(18));
+        header("Content-Security-Policy: default-src 'none'; script-src 'nonce-" . $nonce . "'; base-uri 'none'; frame-ancestors 'none'");
+        // JavaScript navigation runs after this webmail-origin document commits.
+        // The meta refresh is a fallback; neither path needs another user click.
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/?_task=mail"><title>Mailbox</title></head><body><script nonce="' . $nonce . '">window.location.replace("/?_task=mail");</script></body></html>';
         exit;
     }
 }

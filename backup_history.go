@@ -27,6 +27,10 @@ func (a *App) backupHistoryItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Backup not found.")
 		return
 	}
+	if backupInProgress(selected.Status) {
+		writeError(w, http.StatusConflict, "Backup is still running. Wait until it finishes.")
+		return
+	}
 	if r.Method == http.MethodPost {
 		preview, err := a.prepareHistoryBackup(r.Context(), *selected)
 		if err != nil {

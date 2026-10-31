@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.3.9"
+var version = "3.3.13"
 var buildRevision = ""
 
 //go:embed web/*
@@ -197,6 +197,7 @@ func main() {
 		}
 		return
 	}
+	if err := store.interruptBackupRequests(); err != nil { log.Fatal("Cannot reconcile backup requests: ", err) }
 	app := &App{
 		store:    store,
 		system:   NewSystem(dataDir),
@@ -1016,43 +1017,9 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	backup, err := a.system.CreateBackup(r.Context(), *site)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-	if destination != nil {
-		remotePath, err := a.system.UploadBackup(r.Context(), *destination, backup.Path)
-		if err != nil {
-			backup.DestinationID = destination.ID
-			backup.DestinationName = destination.Name
-			backup.Status = "remote failed"
-			if saveErr := a.store.AddBackup(backup); saveErr != nil {
-				writeError(w, http.StatusInternalServerError, "Local backup completed, but its history could not be saved.")
-				return
-			}
-			_ = a.pruneExpiredBackups()
-			a.store.AddActivity("Remote backup failed", site.Domain+" was saved locally but could not upload to "+destination.Name, "warning")
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		backup.DestinationID = destination.ID
-		backup.DestinationName = destination.Name
-		backup.RemotePath = remotePath
-	}
-	if err := a.store.AddBackup(backup); err != nil {
-		writeError(w, http.StatusInternalServerError, "Backup completed, but its history could not be saved.")
-		return
-	}
-	if backup.RemotePath != "" {
-		if err := a.system.RemoveBackupFile(backup.Path); err != nil {
-			writeError(w, 500, "Remote backup saved, but local cleanup failed: "+err.Error())
-			return
-		}
-	}
-	_ = a.pruneExpiredBackups()
-	a.store.AddActivity("Backup completed", site.Domain+" files and database saved", "success")
-	writeJSON(w, http.StatusCreated, backup)
+	job, err := a.enqueueBackup(*site, destination)
+	if err != nil { writeError(w, http.StatusConflict, err.Error()); return }
+	writeJSON(w, http.StatusAccepted, job)
 }
 
 func (a *App) logs(w http.ResponseWriter, r *http.Request) {

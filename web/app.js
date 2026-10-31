@@ -1,5 +1,7 @@
 (() => {
   "use strict";
+  let backupHistoryTimer;
+  let backupHistoryRefreshing = false;
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -501,11 +503,25 @@
     if (destinations.some(item => item.id === destinationValue)) $("#backupDestination").value = destinationValue;
     $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td><span class="row-actions"><button type="button" class="button button-secondary" data-backup-destination-action="test" data-id="${escapeHTML(destination.id)}">Test connection</button><button type="button" data-backup-destination-action="edit" data-id="${escapeHTML(destination.id)}" title="Edit destination" aria-label="Edit remote destination ${escapeHTML(destination.name)}">${icons.edit}</button><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
     const backups = currentState.backups || [];
+    scheduleBackupHistoryRefresh(backups);
     if (!backups.length) {
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
     }
-    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th><th>ACTIONS</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge ${/fail|error|interrupt/i.test(backup.status) ? "backup-status-failed" : "success"}"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td><td><span class="row-actions"><a class="button button-secondary" href="/api/backups/item?id=${encodeURIComponent(backup.id)}">Download</a><button type="button" class="button button-secondary" data-restore-history="${escapeHTML(backup.id)}">Restore</button><button type="button" class="button danger" data-remove-backup="${escapeHTML(backup.id)}">Remove</button></span></td></tr>`).join("")}</tbody></table>`;
+    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th><th>ACTIONS</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${formatBytes(backup.size)}</td><td><span class="badge ${/fail|error|interrupt/i.test(backup.status) ? "backup-status-failed" : backupRequestActive(backup.status) ? "backup-status-running" : "success"}"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td><td><span class="row-actions">${backupRequestActive(backup.status) ? '<span>In progress…</span>' : backup.status === 'failed' || backup.status === 'interrupted' ? '<span>Review required</span>' : `<a class="button button-secondary" href="/api/backups/item?id=${encodeURIComponent(backup.id)}">Download</a><button type="button" class="button button-secondary" data-restore-history="${escapeHTML(backup.id)}">Restore</button><button type="button" class="button danger" data-remove-backup="${escapeHTML(backup.id)}">Remove</button>`}</span></td></tr>`).join("")}</tbody></table>`;
+  }
+
+  function backupRequestActive(status) { return ["queued", "creating", "uploading"].includes(status); }
+  function scheduleBackupHistoryRefresh(backups) {
+    clearTimeout(backupHistoryTimer);
+    if (!backups.some(item => backupRequestActive(item.status))) return;
+    backupHistoryTimer = setTimeout(async () => {
+      if (backupHistoryRefreshing) return;
+      backupHistoryRefreshing = true;
+      try { currentState = await api("/api/state"); renderAll(); }
+      catch (error) { handleError(error); }
+      finally { backupHistoryRefreshing = false; }
+    }, 4000);
   }
 
   function renderFileSiteOptions() {
@@ -838,10 +854,13 @@
     if (button) { button.disabled = true; button.textContent = "Creating backup…"; }
     showToast("Backup started", `Archiving ${site.domain}. This may take a moment.`, "info");
     try {
-      await api("/api/backups", { method: "POST", body: { siteId: site.id, destinationId } });
+      const job = await api("/api/backups", { method: "POST", body: { siteId: site.id, destinationId } });
+      currentState.backups = [job, ...(currentState.backups || []).filter(item => item.id !== job.id)];
+      renderAll();
+      navigate("backups/history");
+      showToast("Backup requested", `${site.domain}: follow progress in Backup History.`, "info");
       currentState = await api("/api/state");
       renderAll();
-      showToast("Backup completed", destinationId ? `${site.domain} was saved locally and uploaded off-server.` : `${site.domain} files and database were saved locally.`);
     } catch (error) { handleError(error); }
     finally { if (button) { button.disabled = false; button.textContent = "Create backup"; } }
   }
