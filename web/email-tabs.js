@@ -1,7 +1,23 @@
 (() => {
   "use strict";
   const cp=window.LiteCP,page=document.querySelector('[data-page-view="email"]');
-  const entries=[['create-mailbox','Create Mailbox','#mailboxForm'],['mailboxes','Mailboxes','#mailboxesTable'],['add-domain','Add Mail Domain','#mailDomainForm'],['create-alias','Create Alias','#mailAliasForm'],['domains','Mail Domains','#mailDomainsTable'],['aliases','Aliases','#mailAliasesTable'],['delivery','Email Delivery','#mailDeliveryPanel'],['smtp-port-check','SMTP Port Check','#smtpPortCheckPanel'],['configure-webmail','Configure Webmail','#webmailSetupPanel']];
+  const forward=document.createElement('form');forward.id='emailForwardForm';forward.className='panel';
+  forward.innerHTML='<div class="panel-head"><div><h2>Email Forward</h2><p>Forward incoming mail to another email address.</p></div></div><div class="settings-body"><label class="field"><span>Source email address</span><input type="email" name="source" placeholder="sales@example.com" required autocomplete="off"><small>Use a domain added to Mail Domains.</small></label><label class="field"><span>Forward to</span><input type="email" name="destination" placeholder="owner@example.net" required autocomplete="off"></label><div class="feature-actions"><button type="submit" class="button button-primary">Add forward</button><button type="button" class="button button-secondary" data-view-forwards>View forwards</button></div><p role="status" data-forward-status></p></div>';
+  page.append(forward);
+  forward.querySelector('[data-view-forwards]').onclick=()=>cp.navigate('email/aliases');
+  forward.addEventListener('submit',async event=>{
+    event.preventDefault();if(!forward.reportValidity())return;
+    const button=forward.querySelector('[type="submit"]'),status=forward.querySelector('[data-forward-status]');
+    if(button.disabled)return;button.disabled=true;status.textContent='Saving forward...';
+    const data=new FormData(forward);
+    try{
+      await cp.api('/api/mail/aliases',{method:'POST',body:{source:String(data.get('source')).trim().toLowerCase(),destination:String(data.get('destination')).trim()}});
+      forward.reset();status.textContent='Email forward created. View forwards to manage it.';
+      await cp.refresh();cp.showToast('Email forward created','Incoming mail will be forwarded to the destination.');
+    }catch(error){status.textContent='Forward could not be created: '+error.message;cp.handleError(error);}
+    finally{button.disabled=false;}
+  });
+  const entries=[['create-mailbox','Create Mailbox','#mailboxForm'],['mailboxes','Mailboxes','#mailboxesTable'],['add-domain','Add Mail Domain','#mailDomainForm'],['create-alias','Create Alias','#mailAliasForm'],['forward','Email Forward','#emailForwardForm'],['domains','Mail Domains','#mailDomainsTable'],['aliases','Aliases','#mailAliasesTable'],['delivery','Email Delivery','#mailDeliveryPanel'],['smtp-port-check','SMTP Port Check','#smtpPortCheckPanel'],['configure-webmail','Configure Webmail','#webmailSetupPanel']];
   const parent=document.querySelector('.nav-item[data-page="email"]'),group=document.createElement('div'),toggle=document.createElement('button'),submenu=document.createElement('nav');
   group.className='sidebar-feature-group';parent.replaceWith(group);toggle.type='button';toggle.className='nav-item sidebar-group-toggle';toggle.setAttribute('aria-controls','emailSubmenu');toggle.innerHTML='<img src="assets/sidebar/email.svg" alt="" width="22" height="22"><span>Email</span><svg class="sidebar-group-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>';
   submenu.id='emailSubmenu';submenu.className='settings-submenu hidden';submenu.setAttribute('aria-label','Email sections');group.append(toggle,submenu);

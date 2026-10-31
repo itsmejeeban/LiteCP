@@ -14,10 +14,10 @@
   <link rel="stylesheet" href="application-hosting.css?v=1">
   <link rel="stylesheet" href="live-migration.css?v=full-width-picker-6">
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
-  <link rel="stylesheet" href="litecp-theme.css?v=mailbox-login-3.3.13">
+  <link rel="stylesheet" href="litecp-theme.css?v=mailbox-login-3.3.18">
   <link rel="stylesheet" href="security-dashboard.css?v=1">
   <link rel="stylesheet" href="settings-tabs.css?v=ui-audit-2">
-  <link rel="stylesheet" href="file-manager.css?v=ssl-renew-2.0.109">
+  <link rel="stylesheet" href="file-manager.css?v=path-go-3.3.18">
   <link rel="stylesheet" href="close-buttons.css?v=cpanel-dialog-2">
   <link rel="stylesheet" href="sidebar-icons.css?v=file-picker-5">
   <link rel="stylesheet" href="brand-logo.css?v=1">
@@ -80,7 +80,7 @@
       <a class="brand brand-light sidebar-brand" href="#dashboard">
         <img class="litecp-logo" src="assets/litecp-cloud-logo-v2.png" alt="LiteCP" width="2029" height="775">
 
-        <span class="version-label sidebar-version" id="sideVersion" aria-label="LiteCP version">â€”</span>
+        <span class="version-label sidebar-version" id="sideVersion" aria-label="LiteCP version">-</span>
       </a>
       <nav class="nav" aria-label="Main navigation">
         <p class="nav-label">MANAGEMENT</p>
@@ -99,12 +99,12 @@
       </nav>
     </aside>
     <div class="sidebar-scrim" id="sidebarScrim"></div>
-    <div class="sidebar-toggle-bar"><button type="button" class="icon-button" id="sidebarBottomToggle" aria-controls="sidebar" aria-label="Collapse navigation"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><span class="version-label sidebar-copyright">Â© HostingTom.com - 2026</span></div>
+    <div class="sidebar-toggle-bar"><button type="button" class="icon-button" id="sidebarBottomToggle" aria-controls="sidebar" aria-label="Collapse navigation"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button><span class="version-label sidebar-copyright">(c) HostingTom.com - 2026</span></div>
 
     <div class="workspace">
       <header class="topbar">
         <button class="icon-button mobile-menu hidden" id="mobileMenu" aria-label="Open navigation"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-        <div class="server-identity"><span><small id="topOS">SERVER</small><strong id="topHostname">Loadingâ€¦</strong></span></div>
+        <div class="server-identity"><span><small id="topOS">SERVER</small><strong id="topHostname">Loading...</strong></span></div>
         <div class="topbar-actions">
           <span class="top-status hidden"><span class="pulse-dot"></span>System healthy</span>
           <a id="updateNotice" class="update-notice hidden" target="_blank" rel="noopener noreferrer" aria-live="polite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg><span></span></a>
@@ -117,7 +117,7 @@
       <main class="main-content">
         <section class="page active" data-page-view="dashboard" aria-label="Server overview">
           <div class="page-heading dashboard-heading">
-            <div class="hidden"><span class="eyebrow">SERVER OVERVIEW</span><h1>Good <span id="greetingTime">morning</span>, <span id="greetingName">Admin</span>.</h1><p>Hereâ€™s how your hosting server is performing right now.</p></div>
+            <div class="hidden"><span class="eyebrow">SERVER OVERVIEW</span><h1>Good <span id="greetingTime">morning</span>, <span id="greetingName">Admin</span>.</h1><p>Here's how your hosting server is performing right now.</p></div>
             <button class="button button-primary" data-open-site-modal><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add website</button>
           </div>
 
@@ -128,21 +128,21 @@
           </div>
 
           <div class="metrics-grid">
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon cpu"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3M10 10h4v4h-4z"/></svg></span><span class="metric-trend good">Low load</span></div><small>CPU USAGE</small><div class="metric-value"><strong id="cpuValue">â€”</strong><span>%</span></div><div class="progress"><span id="cpuBar"></span></div><p id="loadValue">Load average â€”</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon memory"><svg viewBox="0 0 24 24"><path d="M6 5h12v14H6zM9 2v3M15 2v3M9 19v3M15 19v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg></span><span class="metric-trend" id="memoryTrend">Available</span></div><small>MEMORY</small><div class="metric-value"><strong id="memoryValue">â€”</strong><span>%</span></div><div class="progress"><span id="memoryBar"></span></div><p id="memoryDetail">â€” of â€” used</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon disk"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 14h16M16 17h1M8 9h8"/></svg></span><span class="metric-trend good">Healthy</span></div><small>DISK STORAGE</small><div class="metric-value"><strong id="diskValue">â€”</strong><span>%</span></div><div class="progress"><span id="diskBar"></span></div><p id="diskDetail">â€” of â€” used</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">â€”</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon cpu"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3M10 10h4v4h-4z"/></svg></span><span class="metric-trend good">Low load</span></div><small>CPU USAGE</small><div class="metric-value"><strong id="cpuValue">-</strong><span>%</span></div><div class="progress"><span id="cpuBar"></span></div><p id="loadValue">Load average -</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon memory"><svg viewBox="0 0 24 24"><path d="M6 5h12v14H6zM9 2v3M15 2v3M9 19v3M15 19v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg></span><span class="metric-trend" id="memoryTrend">Available</span></div><small>MEMORY</small><div class="metric-value"><strong id="memoryValue">-</strong><span>%</span></div><div class="progress"><span id="memoryBar"></span></div><p id="memoryDetail">- of - used</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon disk"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 14h16M16 17h1M8 9h8"/></svg></span><span class="metric-trend good">Healthy</span></div><small>DISK STORAGE</small><div class="metric-value"><strong id="diskValue">-</strong><span>%</span></div><div class="progress"><span id="diskBar"></span></div><p id="diskDetail">- of - used</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">-</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">No interruptions detected</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span></div><small>TOTAL WEBSITES</small><div class="metric-value"><strong id="totalWebsitesValue">0</strong></div></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span></div><small>TOTAL EMAIL ACCOUNTS</small><div class="metric-value"><strong id="totalEmailAccountsValue">0</strong></div></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">â€”</strong></div><p>Available local archives</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">â€”</strong></div><p>Recorded successful uploads</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">-</strong></div><p>Available local archives</p></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">-</strong></div><p>Recorded successful uploads</p></article>
           </div>
 
           <div class="dashboard-grid hidden">
             <article class="panel services-panel"><div class="panel-head"><div><h2>Essential services</h2><p>The core stack powering your hosted applications.</p></div><button class="text-button" data-page-target="services">Manage all <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></div><div class="service-list" id="dashboardServices"></div></article>
             <article class="panel quick-panel"><div class="panel-head"><div><h2>Quick actions</h2><p>Common tasks, one click away.</p></div></div><div class="quick-grid"><button data-open-site-modal><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span><strong>Add website</strong><small>Provision an app vhost</small></span></button><button data-quick-backup><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M20 7v5a8 8 0 1 1-2.3-5.7L20 8"/><path d="M20 3v5h-5"/></svg></span><span><strong>Run backup</strong><small>Files and database</small></span></button><button data-page-target="logs"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg></span><span><strong>View logs</strong><small>Inspect recent activity</small></span></button><button data-page-target="settings"><span class="quick-icon"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/></svg></span><span><strong>Panel settings</strong><small>Security and defaults</small></span></button></div></article>
             <article class="panel activity-panel"><div class="panel-head"><div><h2>Recent activity</h2><p>Important changes made through LiteCP.</p></div></div><div class="activity-list" id="activityList"></div></article>
-            <article class="panel server-panel"><div class="panel-head"><div><h2>Server details</h2><p>At-a-glance environment information.</p></div></div><dl class="server-details"><div><dt>Operating system</dt><dd id="detailOS">â€”</dd></div><div><dt>Primary address</dt><dd id="detailIP">â€”</dd></div><div><dt>PHP runtime</dt><dd>8.3 Â· OPcache</dd></div><div><dt>Panel footprint</dt><dd class="positive">Single service</dd></div></dl></article>
+            <article class="panel server-panel"><div class="panel-head"><div><h2>Server details</h2><p>At-a-glance environment information.</p></div></div><dl class="server-details"><div><dt>Operating system</dt><dd id="detailOS">-</dd></div><div><dt>Primary address</dt><dd id="detailIP">-</dd></div><div><dt>PHP runtime</dt><dd>8.3 | OPcache</dd></div><div><dt>Panel footprint</dt><dd class="positive">Single service</dd></div></dl></article>
           </div>
         </section>
 
@@ -175,7 +175,7 @@
             <form class="panel compact-form-card" id="mailboxForm"><div class="panel-head"><div><h2>Create mailbox</h2><p>Secure SMTP and IMAP credentials.</p></div></div><div class="settings-body"><label class="field"><span>Domain</span><select name="domain" id="mailboxDomain" required></select><small>Website domains appear automatically. Creating their first mailbox also enables mail routing. Other domains can be added separately.</small></label><label class="field"><span>Local part</span><input name="localPart" placeholder="billing" required></label><label class="field"><span>Password</span><input name="password" type="password" minlength="12" required></label><label class="field"><span>Quota</span><span class="suffix-input"><input name="quotaMb" type="number" min="100" max="102400" value="2048" required><span>MB</span></span></label><button class="button button-primary" type="submit">Create mailbox</button></div></form>
             <form class="panel compact-form-card" id="mailAliasForm"><div class="panel-head"><div><h2>Create alias</h2><p>Forward one hosted address elsewhere.</p></div></div><div class="settings-body"><label class="field"><span>Source address</span><input name="source" type="email" placeholder="sales@example.com" required></label><label class="field"><span>Destination address</span><input name="destination" type="email" placeholder="owner@example.net" required></label><button class="button button-primary" type="submit">Create alias</button></div></form>
           </div>
-          <div class="stacked-panels"><article class="panel table-panel"><div class="panel-head"><div><h2>Mail domains</h2><p>Domains accepted by this server.</p></div></div><div id="mailDomainsTable"></div></article><article class="panel table-panel"><div class="panel-head"><div><h2>Mailboxes</h2><p>SMTP submission 465/587 Â· IMAPS 993.</p></div></div><div id="mailboxesTable"></div></article><article class="panel table-panel"><div class="panel-head"><div><h2>Aliases</h2><p>Virtual forwarding addresses.</p></div></div><div id="mailAliasesTable"></div></article></div>
+          <div class="stacked-panels"><article class="panel table-panel"><div class="panel-head"><div><h2>Mail domains</h2><p>Domains accepted by this server.</p></div></div><div id="mailDomainsTable"></div></article><article class="panel table-panel"><div class="panel-head"><div><h2>Mailboxes</h2><p>SMTP submission 465/587 | IMAPS 993.</p></div></div><div id="mailboxesTable"></div></article><article class="panel table-panel"><div class="panel-head"><div><h2>Aliases</h2><p>Virtual forwarding addresses.</p></div></div><div id="mailAliasesTable"></div></article></div>
         </section>
 
         <section class="page" data-page-view="services">
@@ -192,7 +192,7 @@
         </section>
 
         <section class="page" data-page-view="firewall">
-          <div class="page-heading"><div><span class="eyebrow">NETWORK SECURITY</span><h1>Firewall</h1><p>Add and remove scoped inbound rules without risking LiteCPâ€™s essential ports.</p></div><span class="engine-chip" id="firewallBackend">Firewall</span></div>
+          <div class="page-heading"><div><span class="eyebrow">NETWORK SECURITY</span><h1>Firewall</h1><p>Add and remove scoped inbound rules without risking LiteCP's essential ports.</p></div><span class="engine-chip" id="firewallBackend">Firewall</span></div>
           <div class="management-grid"><form class="panel compact-form-card" id="firewallForm"><div class="panel-head"><div><h2>Allow inbound traffic</h2><p>Use a CIDR source to restrict access.</p></div></div><div class="settings-body two-column-fields"><label class="field"><span>Port</span><input name="port" type="number" min="1" max="65535" required></label><label class="field"><span>Protocol</span><select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option></select></label><label class="field field-span"><span>Source</span><input name="source" value="any" placeholder="any or 203.0.113.0/24" required></label><label class="field field-span"><span>Label</span><input name="label" maxlength="64" placeholder="Monitoring agent"></label><button class="button button-primary field-span" type="submit">Add firewall rule</button></div></form><article class="panel table-panel management-table"><div class="panel-head"><div><h2>Inbound rules</h2><p>Core web, SSH, panel and mail rules are protected.</p></div></div><div id="firewallTable"></div></article></div>
         </section>
 
@@ -216,8 +216,8 @@
             <form class="panel settings-card" id="timezoneForm" data-settings-part="timezone"><div class="panel-head"><div><h2>Time zone</h2><p>Choose the time zone used for panel dates.</p></div></div><div class="settings-body"><label class="field"><span>Display timezone</span><select id="settingsTimezone" name="timezone"><option value="UTC">UTC</option><option value="Asia/Kolkata">Asia/Kolkata</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option></select></label><button class="button button-primary" type="submit">Save time zone</button></div></form>
             <form class="panel settings-card" id="backupSettingsForm" data-settings-part="backups"><div class="panel-head"><div><h2>Backup settings</h2><p>Configure automatic backup retention and remote destinations.</p></div></div><div class="settings-body"><label class="field"><span>Backup retention</span><span class="suffix-input"><input id="settingsRetention" name="backupRetention" type="number" min="1" max="90"><span>days</span></span><small>Expired local backups are removed after a successful backup or settings update.</small></label><button class="button button-primary" type="submit">Save retention</button></div></form>
             <form class="panel settings-card" id="passwordForm"><div class="panel-head"><div><h2>Administrator password</h2><p>Use at least 12 characters and a unique passphrase.</p></div></div><div class="settings-body"><label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label><label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="12" required></label><label class="field"><span>Authenticator or recovery code (if enabled)</span><input name="code" autocomplete="one-time-code" maxlength="32"></label><button class="button button-secondary" type="submit">Update password</button></div></form>
-            <form class="panel settings-card" id="developerModePanel"><div class="panel-head"><h2>Developer mode</h2></div><div class="settings-body"><label class="field"><span><input type="checkbox" id="developerEnabled"> Enable developer mode</span></label><label class="field"><span><input type="checkbox" id="developerRequirePassword" checked> Require password for next login</span></label><p>Turn password requirement off to trust this browser for 30 days across updates and reboots. New browsers still need a password. Signing out, changing the administrator password, or disabling this option revokes access.</p><button class="button button-primary" type="submit">Save developer settings</button><p id="developerStatus" role="status"></p></div></form><article class="panel settings-card" id="updateSettingsPanel"><div class="panel-head"><div><h2>LiteCP update</h2><p>Check for and install official stable LiteCP releases.</p></div></div><div class="settings-body"><p id="panelUpdateVersions">Checking the installed versionâ€¦</p><p id="panelUpdateMessage" role="status" aria-live="polite"></p><div class="button-row"><button type="button" class="button button-secondary" id="checkUpdatesButton">Check for updates</button><button type="button" class="button button-primary" id="installPanelUpdate" disabled>Update LiteCP</button></div><p class="muted">The panel restarts during installation. Hosted websites stay online. A copy of the previous binary and panel data is retained.</p></div></article>
-            <article class="panel settings-card environment-card hidden"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">â€”</dd></div><div><dt>Operating system</dt><dd id="settingsOS">â€”</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd id="settingsDatabase">â€”</dd></div><div><dt>Firewall</dt><dd id="settingsFirewall">â€”</dd></div><div><dt>PHP</dt><dd id="settingsPHP">Multi-PHP FPM</dd></div></dl></article>
+            <form class="panel settings-card" id="developerModePanel"><div class="panel-head"><h2>Developer mode</h2></div><div class="settings-body"><label class="field"><span><input type="checkbox" id="developerEnabled"> Enable developer mode</span></label><label class="field"><span><input type="checkbox" id="developerRequirePassword" checked> Require password for next login</span></label><p>Turn password requirement off to trust this browser for 30 days across updates and reboots. New browsers still need a password. Signing out, changing the administrator password, or disabling this option revokes access.</p><button class="button button-primary" type="submit">Save developer settings</button><p id="developerStatus" role="status"></p></div></form><article class="panel settings-card" id="updateSettingsPanel"><div class="panel-head"><div><h2>LiteCP update</h2><p>Check for and install official stable LiteCP releases.</p></div></div><div class="settings-body"><p id="panelUpdateVersions">Checking the installed version...</p><p id="panelUpdateMessage" role="status" aria-live="polite"></p><div class="button-row"><button type="button" class="button button-secondary" id="checkUpdatesButton">Check for updates</button><button type="button" class="button button-primary" id="installPanelUpdate" disabled>Update LiteCP</button></div><p class="muted">The panel restarts during installation. Hosted websites stay online. A copy of the previous binary and panel data is retained.</p></div></article>
+            <article class="panel settings-card environment-card hidden"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">-</dd></div><div><dt>Operating system</dt><dd id="settingsOS">-</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd id="settingsDatabase">-</dd></div><div><dt>Firewall</dt><dd id="settingsFirewall">-</dd></div><div><dt>PHP</dt><dd id="settingsPHP">Multi-PHP FPM</dd></div></dl></article>
           </div>
         </section>
       </main>
@@ -226,13 +226,13 @@
 
   <div class="modal-layer hidden" id="siteModal" role="dialog" aria-modal="true" aria-labelledby="siteModalTitle">
     <div class="modal-card">
-      <div class="modal-head"><div><h2 id="siteModalTitle">Add a website</h2><p id="siteStepLabel" aria-live="polite">Step 1 of 2 Â· Website details</p></div><button class="icon-button modal-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <div class="modal-head"><div><h2 id="siteModalTitle">Add a website</h2><p id="siteStepLabel" aria-live="polite">Step 1 of 2 | Website details</p></div><button class="icon-button modal-close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
       <form id="siteForm">
         <div class="modal-body"><div id="siteDetailsStep" class="site-step-grid">
           <label class="field"><span>Application</span><select name="appType" id="siteAppType"><option value="whmcs">WHMCS</option><option value="wordpress">WordPress</option><option value="regular" selected>Regular PHP/HTML Website</option></select><small>Applies application-specific security and cron rules.</small></label>
           <label class="field hidden" id="wordpressModeField"><span>WordPress setup</span><select name="wordpressMode" id="wordpressMode" disabled><option value="">Choose how to set up WordPress</option><option value="install">Install new WordPress</option><option value="migrate">Migrate an existing WordPress site</option></select></label>
           <label class="field" id="whmcsVersionField"><span>WHMCS version</span><select name="appVersion" id="siteAppVersion"><option value="9.0">WHMCS 9.0</option><option value="8.13">WHMCS 8.13 LTS</option></select><small>PHP choices are restricted to the selected WHMCS release.</small></label>
-          <label class="field"><span>Domain name</span><span class="input-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg><input name="domain" autocomplete="off" required></span><small>Point this domainâ€™s A record to <span id="modalServerIP">your server IP</span>.</small></label>
+          <label class="field"><span>Domain name</span><span class="input-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg><input name="domain" autocomplete="off" required></span><small>Point this domain's A record to <span id="modalServerIP">your server IP</span>.</small></label>
           <label class="field"><span>PHP version</span><select name="phpVersion" id="sitePHPVersion"></select><small id="phpCompatibilityNote">WHMCS supports PHP 7.3 through 8.3; PHP 8.3 requires WHMCS 8.13 or newer.</small></label>
           </div><div id="siteOptionsStep" class="hidden"><p id="siteReview" class="site-review"></p><div id="wordpressInstallFields" class="site-step-grid hidden"><label class="field"><span>WordPress admin username</span><input name="wordpressUsername" autocomplete="off" maxlength="60" pattern="[A-Za-z0-9_.@-]{1,60}" disabled></label><label class="field"><span>WordPress admin email</span><input name="wordpressEmail" type="email" autocomplete="email" disabled></label><label class="field"><span>WordPress admin password</span><input name="wordpressPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" disabled></label></div><div class="option-card selected"><label><input type="checkbox" name="createDatabase" checked><span class="custom-check"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></span><span><strong id="siteDatabaseLabel">Create an application database</strong><small>Generates secure credentials shown once after provisioning.</small></span></label></div>
           <div class="option-card selected" id="cronOptionCard"><label><input type="checkbox" name="enableCron" checked><span class="custom-check"><svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-9"/></svg></span><span><strong id="cronOptionTitle">Enable WHMCS automation cron</strong><small id="cronOptionHelp">Runs <code>crons/cron.php</code> every five minutes with the selected PHP version.</small></span></label></div>
@@ -243,7 +243,7 @@
   </div>
 
   <div class="modal-layer hidden" id="credentialsModal" role="dialog" aria-modal="true" aria-labelledby="credentialsTitle">
-    <div class="modal-card compact-modal"><div class="modal-head"><div><span class="success-seal"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><h2 id="credentialsTitle">Website provisioned</h2><p>Save these database credentials now. The password is not stored by LiteCP.</p></div></div><div class="modal-body"><dl class="credential-list" id="credentialList"></dl><div class="warning-callout"><strong>Shown once</strong><span>Copy these values into the application installer before closing.</span></div></div><div class="modal-actions"><button class="button button-secondary" id="copyCredentials">Copy credentials</button><button class="button button-primary" id="closeCredentials">Iâ€™ve saved them</button></div></div>
+    <div class="modal-card compact-modal"><div class="modal-head"><div><span class="success-seal"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span><h2 id="credentialsTitle">Website provisioned</h2><p>Save these database credentials now. The password is not stored by LiteCP.</p></div></div><div class="modal-body"><dl class="credential-list" id="credentialList"></dl><div class="warning-callout"><strong>Shown once</strong><span>Copy these values into the application installer before closing.</span></div></div><div class="modal-actions"><button class="button button-secondary" id="copyCredentials">Copy credentials</button><button class="button button-primary" id="closeCredentials">I've saved them</button></div></div>
   </div>
 
   <div class="modal-layer hidden" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="editorTitle"><div class="modal-card editor-modal"><div class="modal-head"><div><span class="eyebrow">TEXT EDITOR</span><h2 id="editorTitle">Edit file</h2><p id="editorPath"></p></div><button class="button button-primary editor-save" type="submit" form="editorForm" data-editor-save aria-label="Save file" title="Save file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8"/></svg></button><button class="icon-button" id="closeEditor" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><form id="editorForm"><div class="modal-body"><textarea class="code-editor" id="editorContent" spellcheck="false"></textarea></div><div class="modal-actions"><button class="button button-ghost" id="cancelEditor" type="button">Cancel</button><button class="button button-primary" type="submit" data-editor-save>Save file</button></div></form></div></div>
@@ -251,14 +251,14 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=red-actions-2" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=mailbox-created-login-3.3.13" defer></script>
+  <script src="app.js?v=mailbox-created-login-3.3.18" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
-  <script src="dns-export.js?v=3.3.13" defer></script>
-  <script src="mailbox-details-data.js?v=3.3.13" defer></script>
-  <script src="mailbox-details.js?v=3.3.13" defer></script>
-  <script src="features.js?v=mailbox-created-login-3.3.13" defer></script>
+  <script src="dns-export.js?v=3.3.18" defer></script>
+  <script src="mailbox-details-data.js?v=3.3.18" defer></script>
+  <script src="mailbox-details.js?v=3.3.18" defer></script>
+  <script src="features.js?v=mailbox-created-login-3.3.18" defer></script>
   <script src="html-editor.js?v=2" defer></script>
-  <script src="file-manager.js?v=trash-folder-2.0.95" defer></script>
+  <script src="file-manager.js?v=upload-close-race-3.3.18" defer></script>
   <script src="panel-settings.js?v=responsive-audit-8" defer></script>
   <script src="live-migration.js?v=1.0.25" defer></script>
   <script src="website-backups.js?v=backup-history-2.0.108" defer></script>
@@ -268,7 +268,7 @@
   <script src="documentation.js?v=3" defer></script>
   <script src="application-hosting.js?v=inventory-2.0.79" defer></script>
   <script src="database-popup.js?v=2.0.114" defer></script>
-  <script src="panel-search.js?v=mailbox-menu-3.3.13-system-updates-2.0.87" defer></script>
+  <script src="panel-search.js?v=email-forward-3.3.18" defer></script>
   <script src="settings-tabs.js?v=backup-tabs-5" defer></script>
   <script src="security-pages.js?v=responsive-audit-8" defer></script>
   <script src="website-tool-pages.js?v=1" defer></script>
@@ -277,7 +277,7 @@
   <script src="security-dashboard.js?v=1" defer></script>
   <script src="ssh-port.js?v=1" defer></script>
   <script src="two-factor.js?v=2.0.5" defer></script>
-  <script src="firewall-profile.js?v=3.3.13" defer></script>
+  <script src="firewall-profile.js?v=3.3.18" defer></script>
   <script src="firewall-popup.js?v=1" defer></script>
   <script src="server-scan.js?v=1" defer></script>
   <script src="php-settings.js?v=2.0.17" defer></script>
@@ -287,8 +287,8 @@
   <script src="email-delivery.js?v=1" defer></script>
   <script src="smtp-port-check.js?v=1" defer></script>
   <script src="webmail-setup.js?v=3.3.2" defer></script>
-  <script src="email-tabs.js?v=mailbox-menu-3.3.13" defer></script>
-  <script src="submenu-icons.js?v=webmail-setup-2.0.77" defer></script>
+  <script src="email-tabs.js?v=email-forward-3.3.18" defer></script>
+  <script src="submenu-icons.js?v=email-forward-3.3.18" defer></script>
   <script src="system-snapshots.js?v=1" defer></script>
   <script src="backup-tabs.js?v=2" defer></script>
   <script src="backup-schedules.js?v=1" defer></script>

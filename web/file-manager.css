@@ -437,3 +437,19 @@ body.fm-fullscreen-open { overflow: hidden; }
 :root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-icon {stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 :root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-shield {fill:#103e35;stroke:#48c99f;}
 :root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-arrow {fill:none;stroke:#8bd3ff;stroke-width:2;}
+
+/* Reserve space for path navigation controls even with a narrow folder pane. */
+:root[data-theme] body .fm-page #fmAddressForm {
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr) 52px!important;
+  gap:0!important;
+  width:100%;min-width:0;box-sizing:border-box;
+}
+:root[data-theme] body .fm-page #fmAddressForm label,
+:root[data-theme] body .fm-page #fmAddressForm input {min-width:0;width:100%;box-sizing:border-box;}
+:root[data-theme] body .fm-page #fmAddressForm button[type="submit"] {
+  display:flex!important;align-items:center;justify-content:center;
+  width:52px!important;min-width:52px!important;max-width:52px;
+  padding:0 10px!important;box-sizing:border-box;white-space:nowrap;
+  font-size:13px!important;line-height:1.2!important;overflow:visible;
+}

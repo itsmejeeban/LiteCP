@@ -2,7 +2,7 @@
   "use strict";
   const icons={
     'email/add-domain':'add-mail-domain','email/create-mailbox':'create-mailbox',
-    'email/create-alias':'create-alias','email/webmail':'webmail','email/domains':'mail-domains',
+    'email/forward':'create-alias','email/create-alias':'create-alias','email/webmail':'webmail','email/domains':'mail-domains',
     'email/mailboxes':'mailboxes','email/aliases':'aliases','email/delivery':'webmail',
     'email/smtp-port-check':'smtp-port-check','email/configure-webmail':'webmail',
     'settings/password':'admin-password','settings/email':'admin-email',

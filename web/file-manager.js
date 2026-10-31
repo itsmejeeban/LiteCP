@@ -424,8 +424,16 @@
     }});
     const uploadForm=dialog.querySelector('form');
     uploadProgress=dialog.querySelector('#fmUploadProgress');uploadStatus=dialog.querySelector('#fmUploadStatus');
-    const onEscape=()=>cancelUpload();
-    dialog.addEventListener('cancel',onEscape);dialog.addEventListener('close',()=>{cancelUpload();dialog.removeEventListener('cancel',onEscape);},{once:true});
+    const onEscape=()=>{if(dialog.contains(uploadForm))cancelUpload();};
+    const onClose=()=>{
+      // close() dispatches asynchronously. A file-picker close event may arrive
+      // after this same dialog has already reopened for the upload.
+      if(dialog.open)return;
+      cancelUpload();
+      dialog.removeEventListener('cancel',onEscape);
+      dialog.removeEventListener('close',onClose);
+    };
+    dialog.addEventListener('cancel',onEscape);dialog.addEventListener('close',onClose);
     uploadForm.querySelector('[type="submit"]').hidden=true;
     uploadForm.requestSubmit();
   }

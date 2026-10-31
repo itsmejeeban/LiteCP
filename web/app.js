@@ -577,7 +577,7 @@
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
     const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer"].includes(settingsPart)?`settings/${settingsPart}`:"";
     const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";
-    const emailRoute=["add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases","delivery","smtp-port-check","configure-webmail"].includes(emailPart)?`email/${emailPart}`:"";
+    const emailRoute=["forward","add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases","delivery","smtp-port-check","configure-webmail"].includes(emailPart)?`email/${emailPart}`:"";
     const backupPart=String(page).startsWith("backups/")?String(page).slice(8):"";
     const backupRoute=["create","add-destination","settings","destinations","history","system-snapshot"].includes(backupPart)?`backups/${backupPart}`:"";
     if(backupRoute)page="backups";
@@ -1138,7 +1138,7 @@
 
   async function createMailDomain(event) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    try { await api("/api/mail/domains", { method: "POST", body: { domain: String(data.get("domain")).trim().toLowerCase() } }); form.reset(); currentState = await api("/api/state"); renderAll(); showToast("Mail domain added", "Add mailboxes after the required DNS records are configured."); }
+    try { await api("/api/mail/domains", { method: "POST", body: { domain: String(data.get("domain")).trim().toLowerCase() } }); form.reset(); currentState = await api("/api/state"); renderAll(); navigate("email/domains"); showToast("Mail domain added", "Add mailboxes after the required DNS records are configured."); }
     catch (error) { handleError(error); }
   }
 
