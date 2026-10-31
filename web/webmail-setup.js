@@ -12,6 +12,7 @@
       const result=await cp.api('/api/mail/webmail-configure');
       if(!populated){for(const key of ['hostname','port','certificate','privateKey'])form.elements[key].value=result[key]||'';populated=true;}
       const running=result.status==='running',configured=result.configured;
+      window.dispatchEvent(new CustomEvent('litecp:webmail-status',{detail:{configured:!!configured,status:result.status}}));
       status.textContent=running?'Configuring webmail in the background. You can close this page.':configured?'Webmail is configured.':result.status==='failed'||result.status==='interrupted'?'Setup did not finish. Review '+result.logPath+' on the server, correct the details, then retry.':'Enter the details above to configure webmail.';
       submit.disabled=running||configured;for(const field of form.querySelectorAll('input'))field.disabled=running||configured;
       const open=panel.querySelector('[data-setup-open]');open.classList.toggle('hidden',!configured||!result.url);if(result.url&&/^https:\/\//.test(result.url))open.href=result.url;
@@ -25,5 +26,6 @@
     try{const body=Object.fromEntries(new FormData(form));body.port=Number(body.port);await cp.api('/api/mail/webmail-configure',{method:'POST',body});await refresh();}catch(error){status.textContent=error.message;submit.disabled=false;}
   };
   panel.querySelector('[data-setup-refresh]').onclick=refresh;
+  if(location.hash==='#email/configure-webmail')refresh();
   window.addEventListener('hashchange',()=>{if(location.hash==='#email/configure-webmail')refresh();else clearTimeout(timer);});
 })();

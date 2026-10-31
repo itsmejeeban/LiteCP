@@ -14,11 +14,42 @@
     const link=document.createElement('a');link.className='nav-item';link.href='#email/'+entry[0];link.textContent=entry[1];link.onclick=event=>{event.preventDefault();cp.navigate('email/'+entry[0]);};submenu.append(link);entry.link=link;
   }
   page.querySelector('.mail-form-grid').classList.add('hidden');page.querySelector('.stacked-panels').classList.add('email-dns-only');
+  const setupNotice=document.createElement('article');setupNotice.className='panel email-setup-notice hidden';
+  setupNotice.innerHTML='<div class="settings-body"><h2>Configure webmail first</h2><p data-email-setup-message>Complete webmail setup to use Email tools.</p><div class="feature-actions"><button class="button button-primary" type="button">Configure webmail</button></div></div>';
+  page.append(setupNotice);
+  let configured=null,prompting=false,promptedRoute='',pendingRoute='';
+  setupNotice.querySelector('button').onclick=()=>cp.navigate('email/configure-webmail');
+  async function requireSetup(route){
+    if(prompting||promptedRoute===route)return;
+    prompting=true;promptedRoute=route;
+    try {
+      const result=await cp.api('/api/mail/webmail-configure');configured=!!result.configured;
+      if(location.hash.slice(1)!==route)return;
+      if(configured){sync();return;}
+      const accepted=await window.LiteCPDialogs.confirm('Configure webmail before using Email tools.',{title:'Webmail setup required',confirmText:'Configure webmail'});
+      if(location.hash.slice(1)!==route)return;
+      if(accepted){pendingRoute=route;cp.navigate('email/configure-webmail');}
+      else cp.navigate('dashboard');
+    } catch(error){
+      if(location.hash.slice(1)===route)setupNotice.querySelector('[data-email-setup-message]').textContent='Unable to check webmail setup. Open Configure webmail to check its status. '+error.message;
+    } finally {prompting=false;}
+  }
+  window.addEventListener('litecp:webmail-status',event=>{
+    configured=!!event.detail.configured;
+    if(configured&&pendingRoute&&location.hash==='#email/configure-webmail'){
+      const target=pendingRoute;pendingRoute='';cp.navigate(target);
+    }else sync();
+  });
   let lastRoute='';function sync(){const route=location.hash.slice(1),active=route==='email'||route.startsWith('email/'),selected=entries.find(entry=>entry[0]===route.split('/')[1])||entries[4];
-    toggle.classList.toggle('active',active);for(const entry of entries){const current=active&&entry===selected;entry.panel.classList.toggle('hidden',!current);entry.link.classList.toggle('active',current);if(current)entry.link.setAttribute('aria-current','page');else entry.link.removeAttribute('aria-current');}
+    const ready=configured??!!cp.state()?.system?.webmailAvailable;
+    const blocked=active&&selected[0]!=='configure-webmail'&&!ready;
+    setupNotice.classList.toggle('hidden',!blocked);
+    if(!active)promptedRoute='';
+    toggle.classList.toggle('active',active);for(const entry of entries){const current=active&&entry===selected&&!blocked;entry.panel.classList.toggle('hidden',!current);entry.link.classList.toggle('active',current);if(current)entry.link.setAttribute('aria-current','page');else entry.link.removeAttribute('aria-current');}
     if(active){page.querySelector('h1').textContent=selected[1];if(route!==lastRoute)expand(true);}
     const state=cp.state();page.querySelector('[data-webmail-status]').textContent=state?.system?.webmailAvailable&&state?.settings?.emailHostingEnabled!==false?'Webmail is available.':'Webmail is not configured or email hosting is disabled.';
     if(route!==lastRoute)document.querySelector('#mailDNSPanel').classList.add('hidden');lastRoute=route;
+    if(blocked)requireSetup(route);
   }
   const navigate=window.LiteCPFeatures.navigate;window.LiteCPFeatures.navigate=id=>{navigate?.(id);sync();};
   const render=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{render(state);sync();};
