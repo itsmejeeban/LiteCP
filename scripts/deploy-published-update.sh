@@ -29,6 +29,7 @@ systemctl stop litecp
 switched=1
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 systemctl start litecp
+bash "$work/scripts/repair-webmail-runtime.sh"
 echo '[Server 4/4] Checking service...'
 systemctl is-active --quiet litecp
 echo "LiteCP $version deployed successfully. Recovery binary: $work/previous-litecp"

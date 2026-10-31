@@ -65,7 +65,7 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 			for _, port := range ports {
 				parts := strings.Split(port, "/")
 				number := strings.ReplaceAll(parts[0], "-", ":")
-				if _, err = run("ufw", "insert", "1", "allow", direction, "to", "any", "port", number, "proto", parts[1]); err != nil {
+				if _, err = run("ufw", "insert", "1", "allow", direction, "to", "any", "port", number, "proto", parts[1], "comment", "litecp-required"); err != nil {
 					return err
 				}
 			}

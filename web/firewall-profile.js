@@ -1,21 +1,23 @@
 (() => {
-  const heading = document.querySelector('[data-page-view="firewall"] .page-heading');
-  const button = document.createElement('button');
-  button.className = 'button button-primary';
-  button.textContent = 'Apply LiteCP Firewall';
-  button.type = 'button';
-  heading.insertBefore(button, document.getElementById('firewallBackend'));
-  const status=document.createElement('p');status.className='feature-note';status.setAttribute('role','status');status.setAttribute('aria-live','polite');heading.after(status);
-  button.addEventListener('click', async () => {
-    if (!await window.LiteCPDialogs.confirm('Allow the ports required by LiteCP and installed mail, webmail and FTP services? Existing active rules will be saved permanently before reloading the firewall. Required-port allow rules take precedence over custom blocks. External cloud firewalls must be configured separately.', {title:'Apply LiteCP Firewall', confirmText:'Apply firewall'})) return;
-    button.disabled = true;
-    button.textContent='Applying firewall…';
-    status.textContent='Applying required ports. Keep this page open; this may take a few minutes.';
-    try {
-      const result = await window.LiteCP.api('/api/firewall/apply-litecp', {method:'POST', body:{}});
-      status.textContent=`Firewall applied. Inbound: ${result.inbound.join(', ')}. Outbound: ${result.outbound.join(', ')}.`;
-      window.LiteCP.showToast('LiteCP firewall applied', `Inbound: ${result.inbound.join(', ')}. Outbound: ${result.outbound.join(', ')}.`);
-    } catch (error) { status.textContent=error.message;window.LiteCP.showToast('Firewall could not be fully applied', error.message,'error'); }
-    finally { button.disabled = false;button.textContent='Apply LiteCP Firewall'; }
-  });
+  const cp=window.LiteCP,heading=document.querySelector('[data-page-view="firewall"] .page-heading');
+  const button=document.createElement('button');button.type='button';button.className='button button-primary';button.textContent='Checking firewall…';button.disabled=true;
+  heading.insertBefore(button,document.getElementById('firewallBackend'));
+  const panel=document.createElement('article');panel.className='panel';heading.after(panel);
+  let enabled=false,busy=false;
+  function show(state){
+    enabled=state.enabled;button.textContent=enabled?'Disable LiteCP Firewall':'Apply LiteCP Firewall';button.disabled=false;
+    panel.replaceChildren();const body=document.createElement('div');body.className='settings-body';const title=document.createElement('h2');title.textContent='LiteCP required-port rules';body.append(title);
+    const note=document.createElement('p');note.textContent=enabled?'Active rules verified on the server. Custom rules are listed separately below.':'LiteCP profile is disabled. Installer access and custom rules remain in place.';body.append(note);
+    if(state.rules.length){const table=document.createElement('table');table.className='data-table';const head=document.createElement('thead');head.innerHTML='<tr><th>Direction</th><th>Action</th><th>Port</th><th>Zone</th></tr>';table.append(head);const tbody=document.createElement('tbody');for(const rule of state.rules){const row=document.createElement('tr');for(const text of [rule.direction,'Allow',rule.port,rule.zone||'Host']){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}tbody.append(row);}table.append(tbody);body.append(table);}panel.append(body);
+  }
+  async function refresh(){if(busy)return;try{show(await cp.api('/api/firewall/apply-litecp'));return true;}catch(error){button.disabled=true;panel.textContent='Cannot verify firewall state: '+error.message;return false;}}
+  button.onclick=async()=>{
+    const disable=enabled;
+    if(!await window.LiteCPDialogs.confirm(disable?'Disable the LiteCP required-port profile? SSH, web and panel access and unrelated rules stay enabled.':'Allow the ports required by LiteCP and installed services? External provider firewalls are configured separately.',{title:disable?'Disable LiteCP Firewall':'Apply LiteCP Firewall',confirmText:disable?'Disable profile':'Apply firewall',danger:disable}))return;
+    busy=true;button.disabled=true;button.textContent=disable?'Disabling…':'Applying…';
+    try{await cp.api('/api/firewall/apply-litecp',{method:disable?'DELETE':'POST',body:{}});busy=false;if(!await refresh())throw Error('Firewall status could not be verified. Refresh and check the rules.');if(enabled===disable)throw Error('Firewall state does not match the requested change. Review the rules.');cp.showToast(disable?'LiteCP firewall disabled':'LiteCP firewall applied','Server rules refreshed.');}catch(error){cp.handleError(error);}finally{busy=false;await refresh();}
+  };
+  window.addEventListener('hashchange',()=>{if(location.hash==='#firewall')refresh();});
+  const render=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{render?.(state);if(location.hash==='#firewall')refresh();};
+  refresh();
 })();

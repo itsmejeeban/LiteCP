@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.3.7"
+var version = "3.3.9"
 var buildRevision = ""
 
 //go:embed web/*
@@ -252,6 +252,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/backup-schedules", a.withAuth(a.backupSchedules))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
 	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
+	mux.HandleFunc("/api/sites/waf-logs", only(http.MethodGet, a.withAuth(a.wafLogs)))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
 	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))
 	mux.HandleFunc("/api/system/resolvers", only(http.MethodPut, a.withAuth(a.systemResolvers)))
@@ -325,7 +326,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/databases", only(http.MethodPost, a.withAuth(a.createManagedDatabase)))
 	mux.HandleFunc("/api/databases/password", only(http.MethodPut, a.withAuth(a.resetManagedDatabasePassword)))
 	mux.HandleFunc("/api/databases/", only(http.MethodDelete, a.withAuth(a.deleteManagedDatabase)))
-	mux.HandleFunc("/api/firewall/apply-litecp", only(http.MethodPost, a.withAuth(a.applyLiteCPFirewall)))
+	mux.HandleFunc("/api/firewall/apply-litecp", a.withAuth(a.litecpFirewallControl))
 	mux.HandleFunc("/api/backup-destinations/host-key", only(http.MethodPost, a.withAuth(a.backupHostKey)))
 	mux.HandleFunc("/api/firewall", only(http.MethodPost, a.withAuth(a.createFirewallRule)))
 	mux.HandleFunc("/api/firewall/", a.withAuth(a.firewallRuleAction))

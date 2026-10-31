@@ -559,3 +559,5 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 /* Mailbox text actions must not inherit the square icon-button dimensions. */
 :root[data-theme] #mailboxesTable .row-actions {display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:nowrap}
 :root[data-theme] #mailboxesTable .row-actions button:not(.danger) {display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;min-width:76px;height:36px!important;padding:0 12px!important;white-space:nowrap;flex:0 0 auto;box-sizing:border-box}
+
+.waf-log-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.waf-log-actions button{white-space:nowrap;min-width:116px} .waf-log-entry{padding:12px 0;border-bottom:1px solid #383838}.waf-log-entry pre{white-space:pre-wrap;overflow-wrap:anywhere;color:inherit}

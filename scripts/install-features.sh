@@ -168,11 +168,17 @@ EOF
   chmod 0640 /opt/litecp/webmail/config/mail-ca.pem
   chown root:litecp-webmail /opt/litecp/webmail/config/config.inc.php
   chmod 0640 /opt/litecp/webmail/config/config.inc.php
+  install -d -m 0755 /run/litecp-webmail
+  printf 'd /run/litecp-webmail 0755 root root -\n' > /etc/tmpfiles.d/litecp-webmail.conf
+  if command -v semanage >/dev/null && command -v selinuxenabled >/dev/null && selinuxenabled; then
+    semanage fcontext -a -t httpd_var_run_t '/run/litecp-webmail(/.*)?' 2>/dev/null || semanage fcontext -m -t httpd_var_run_t '/run/litecp-webmail(/.*)?'
+    restorecon -R /run/litecp-webmail
+  fi
   cat > "$pool" <<EOF
 [litecp-webmail]
 user = litecp-webmail
 group = litecp-webmail
-listen = /run/litecp/webmail.sock
+listen = /run/litecp-webmail/webmail.sock
 listen.owner = $webgroup
 listen.group = $webgroup
 listen.mode = 0660
@@ -219,7 +225,7 @@ server {
         fastcgi_param PATH_INFO \$fastcgi_path_info;
         fastcgi_param HTTPS on;
         fastcgi_param HTTP_PROXY '';
-        fastcgi_pass unix:/run/litecp/webmail.sock;
+        fastcgi_pass unix:/run/litecp-webmail/webmail.sock;
     }
     location ~ \.php { return 404; }
 }

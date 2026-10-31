@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="3.3.7"
+LITECP_VERSION="3.3.9"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
-info() { printf '\033[1;36m›\033[0m %s\n' "$*"; }
-success() { printf '\033[1;32m✓\033[0m %s\n' "$*"; }
+info() { printf '\033[1;36mâ€º\033[0m %s\n' "$*"; }
+success() { printf '\033[1;32mâœ“\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || fail "Run this installer as root."

@@ -70,6 +70,7 @@ install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 systemctl start litecp
+bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do
   if curl --fail --silent --max-time 2 http://127.0.0.1:9090/api/version | python3 -c 'import json,sys;sys.exit(json.load(sys.stdin).get("version")!=sys.argv[1])' "${tag#v}"; then
     status success "LiteCP was updated successfully. Sign in again if your session ended."
