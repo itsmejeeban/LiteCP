@@ -1,4 +1,6 @@
-# Run through update.bat. Requires Git and Windows OpenSSH; Go is required on the server.
+# Run through update.bat. Launching it authorizes publishing and deployment.
+# PuTTY batch mode retains cached host-key checks; unknown/changed keys fail safely.
+# -no-antispoof removes only PuTTY's interactive Return-key pause. Requires Git and Windows OpenSSH; Go is required on the server.
 param([string]$Server = '162.55.50.122', [int]$Port = 369, [string]$User = 'root', [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
@@ -34,6 +36,9 @@ try {
     }
     $env:PATH = (Split-Path $gitExe) + ';' + (Split-Path $sshExe) + ';' + (Split-Path $scpExe) + ';' + $env:PATH
     # Bundled Git may not include less.exe. Never launch a pager in this workflow.
+    # Use previously configured credentials; fail clearly instead of waiting for input.
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $env:GCM_INTERACTIVE = 'Never'
     $env:GIT_PAGER = 'cat'
     $env:PAGER = 'cat'
     $env:GIT_CONFIG_COUNT = '1'
@@ -55,7 +60,7 @@ try {
     Write-Host '[2/6] Reviewing local changes...'
     Run-Step 'git' @('status','--short')
     Write-Host 'This publishes all non-ignored changes to GitHub main and deploys that commit to LiteCP.'
-    if ((Read-Host 'Type UPDATE to continue') -cne 'UPDATE') { Write-Host 'Cancelled.'; exit 0 }
+    Write-Host 'Starting automatic update. No confirmation input is required.'
     $mainPath = Join-Path (Get-Location) 'main.go'
     $installPath = Join-Path (Get-Location) 'scripts/install.sh'
     $main = [IO.File]::ReadAllText($mainPath)
@@ -66,6 +71,9 @@ try {
     [IO.File]::WriteAllText($mainPath, $main.Replace($match.Value, ('var version = "' + $version + '"')), $utf8)
     $installer = [IO.File]::ReadAllText($installPath)
     [IO.File]::WriteAllText($installPath, ([regex]::Replace($installer, 'LITECP_VERSION="[^"]+"', ('LITECP_VERSION="' + $version + '"'))), $utf8)
+    $bootstrapPath = Join-Path (Get-Location) 'scripts/bootstrap-install.sh'
+    $bootstrap = [IO.File]::ReadAllText($bootstrapPath)
+    [IO.File]::WriteAllText($bootstrapPath, ([regex]::Replace($bootstrap, '(?m)^version=[^\r\n]+', ('version=' + $version))), $utf8)
     Run-Step 'git' @('add','--all')
     $staged = @(& git diff --cached --name-only)
     if ($staged -contains 'update-local.bat') { throw 'Private SSH settings are staged. Remove update-local.bat from Git staging before publishing.' }
@@ -86,16 +94,16 @@ try {
     $remote = '/root/litecp-manual-update-' + [guid]::NewGuid().ToString('N')
     $destination = "$User@$Server"
     if ($plinkExe) {
-        Run-Step $plinkExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,"umask 077; mkdir '$remote'")
-        Run-Step $pscpExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$archive,"${destination}:${remote}/source.tar")
+        Run-Step $plinkExe @('-batch','-no-antispoof','-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,"umask 077; mkdir '$remote'")
+        Run-Step $pscpExe @('-batch','-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$archive,"${destination}:${remote}/source.tar")
     } else {
-        Run-Step 'ssh' @('-p',"$Port",$destination,"umask 077; mkdir '$remote'")
-        Run-Step 'scp' @('-P',"$Port",$archive,"${destination}:${remote}/source.tar")
+        Run-Step 'ssh' @('-o','BatchMode=yes','-p',"$Port",$destination,"umask 077; mkdir '$remote'")
+        Run-Step 'scp' @('-o','BatchMode=yes','-P',"$Port",$archive,"${destination}:${remote}/source.tar")
     }
     Write-Host '[5/6] Testing, building and deploying on the server...'
     $deployCommand = "cd '$remote' && tar -xf source.tar && bash scripts/deploy-published-update.sh '$version' '$revision'"
-    if ($plinkExe) { Run-Step $plinkExe @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,$deployCommand) }
-    else { Run-Step 'ssh' @('-p',"$Port",$destination,$deployCommand) }
+    if ($plinkExe) { Run-Step $plinkExe @('-batch','-no-antispoof','-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,$deployCommand) }
+    else { Run-Step 'ssh' @('-o','BatchMode=yes','-p',"$Port",$destination,$deployCommand) }
     Write-Host '[6/6] UPDATE SUCCESS. GitHub and LiteCP are updated.'
     Write-Host "Local transfer files: $output"
     Write-Host "Server source and previous binary: $remote"

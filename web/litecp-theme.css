@@ -482,3 +482,47 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #backupsTable .row-actions .button {display:inline-flex!important;align-items:center!important;justify-content:center!important;width:auto!important;min-width:82px;height:36px!important;padding:0 12px!important;flex:0 0 auto;white-space:nowrap;box-sizing:border-box}
 #backupsTable td:last-child {width:1%;white-space:nowrap}
 #backupsTable td code {overflow-wrap:anywhere}
+
+/* Shared list pagination, including popup account and backup lists. */
+.list-page-hidden {display:none!important}
+.list-pagination {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid #343434;color:#b9bec5;font-size:13px}
+.list-pagination[hidden] {display:none!important}
+.list-pagination label,.list-pagination>div {display:flex;align-items:center;gap:8px}
+.list-pagination select {width:auto!important;min-width:64px;min-height:34px;padding:5px 10px!important}
+.list-pagination button {width:auto!important;min-width:82px;min-height:34px;padding:6px 12px!important;white-space:nowrap}
+
+/* Credential actions sit beside the bordered input, never over its text. */
+:root[data-theme] .password-copy-field,
+:root[data-theme] .website-ftp-dialog .ftp-username-wrap {display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;width:100%;}
+:root[data-theme] .password-copy-field > input,
+:root[data-theme] #databaseForm .password-copy-field > input,
+:root[data-theme] .website-ftp-dialog .ftp-username-wrap > input {order:0;flex:1 1 140px;min-width:0;width:auto;padding-right:12px!important;box-sizing:border-box;}
+:root[data-theme] .password-copy-field > .password-copy-button,
+:root[data-theme] .website-ftp-dialog .ftp-username-wrap > .password-copy-button {position:static!important;inset:auto!important;transform:none!important;flex:0 0 34px;width:34px;height:34px;margin:0!important;}
+:root[data-theme] .password-copy-field > .password-actions {position:static!important;inset:auto!important;transform:none!important;margin:0!important;order:1;flex:0 0 auto;}
+:root[data-theme] .password-copy-field > .password-visibility-button {order:2;}
+:root[data-theme] .password-copy-field > .password-copy-button:not(.password-visibility-button),
+:root[data-theme] .website-ftp-dialog .ftp-username-wrap > .password-copy-button {order:3;}
+:root[data-theme] #databaseForm .password-copy-field > .database-generate-button {order:1;flex:0 0 auto;width:auto!important;min-width:78px;padding:0 12px!important;font-size:12px;white-space:nowrap;}
+:root[data-theme] .password-copy-field .password-actions .button {min-height:34px;height:34px;white-space:nowrap;}
+:root[data-theme] .input-wrap:has(> .password-toggle) {gap:8px;}
+:root[data-theme] .input-wrap:has(> .password-toggle) > input {flex:1;min-width:0;width:auto;padding-right:12px;}
+:root[data-theme] .input-wrap > .password-toggle {position:static!important;flex:0 0 36px;margin:0;}
+@media(max-width:600px){
+ :root[data-theme] .password-copy-field > input,
+ :root[data-theme] #databaseForm .password-copy-field > input,
+ :root[data-theme] .website-ftp-dialog .ftp-username-wrap > input {flex-basis:100%;width:100%;}
+}
+
+/* Center completion actions consistently across forms and dialogs. */
+:root[data-theme] body :is(.modal-actions,.form-actions,.settings-actions,.ftp-form-actions),
+:root[data-theme] body :is(.fm-dialog,.ui-dialog,.password-dialog) footer,
+:root[data-theme] body .feature-actions:not(.page-heading .feature-actions):not(.panel-head .feature-actions) {
+ display:flex;align-items:center;justify-content:center!important;flex-wrap:wrap;gap:10px;
+}
+:root[data-theme] body :is(.modal-actions,.form-actions,.settings-actions,.ftp-form-actions) > .button,
+:root[data-theme] body :is(.fm-dialog,.ui-dialog,.password-dialog) footer > .button,
+:root[data-theme] body .feature-actions > .button {flex:0 0 auto;white-space:nowrap;}
+:root[data-theme] body form > .button[type="submit"],
+:root[data-theme] body .settings-body > .button[type="submit"],
+:root[data-theme] body .fm-dialog-body form > .button {display:flex;margin-left:auto;margin-right:auto;}

@@ -1,0 +1,12 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const vm=require('node:vm');
+const fs=require('node:fs');
+const sandbox={window:{},document:{body:{},querySelectorAll:()=>[],addEventListener:()=>{}},MutationObserver:class{observe(){}},requestAnimationFrame:()=>{}};
+vm.runInNewContext(fs.readFileSync(__dirname+'/list-pagination.js','utf8'),sandbox);
+const range=sandbox.window.LiteCPListPagination.ranges;
+test('empty lists have a safe first page',()=>{const r=range(0,9,10);assert.equal(r.page,1);assert.equal(r.pages,1);assert.equal(r.end,0);});
+test('last page does not include phantom rows',()=>{const r=range(23,3,10);assert.equal(r.start,20);assert.equal(r.end,23);assert.equal(r.pages,3);});
+test('deleting rows clamps an obsolete page',()=>{const r=range(10,4,10);assert.equal(r.page,1);assert.equal(r.start,0);});
+test('page size changes calculate correct bounds',()=>{const r=range(51,2,25);assert.equal(r.start,25);assert.equal(r.end,50);assert.equal(r.pages,3);});
+test('previous cannot move before the first page',()=>{assert.equal(range(50,0,10).page,1);});
