@@ -335,10 +335,17 @@ func (s *System) mailStackState(ctx context.Context) string {
 	if len(units) < 2 {
 		return "not installed"
 	}
-	for _, unit := range units {
-		if s.serviceState(ctx, unit) != "running" {
-			return "stopped"
+	for _, unit := range []string{"opendkim", "rspamd"} {
+		if unitFileExists(unit) {
+			units = append(units, unit)
 		}
+	}
+	states := make([]string, 0, len(units))
+	for _, unit := range units {
+		states = append(states, s.serviceState(ctx, unit))
+	}
+	if state := aggregateServiceStates(states); state != "running" {
+		return state
 	}
 	if !probeTCP("127.0.0.1:25") || !probeTCP("127.0.0.1:143") {
 		return "degraded"

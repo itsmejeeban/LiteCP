@@ -223,6 +223,19 @@ func (s *System) serviceUnits() []ServiceStatus {
 		mailLabel = "Postfix, Dovecot"
 	}
 	services = append(services, ServiceStatus{Key: "mail", Label: "Email Hosting", Unit: mailLabel})
+	for _, extra := range []ServiceStatus{
+		{Key: "ftps", Label: "FTPS", Unit: "vsftpd"},
+		{Key: "redis", Label: "Redis", Unit: "redis"},
+		{Key: "redis-server", Label: "Redis", Unit: "redis-server"},
+		{Key: "fail2ban", Label: "Brute-force protection", Unit: "fail2ban"},
+		{Key: "opendkim", Label: "DKIM signing", Unit: "opendkim"},
+		{Key: "rspamd", Label: "Spam filtering", Unit: "rspamd"},
+		{Key: "clamav-updates", Label: "ClamAV signature updates", Unit: "litecp-clamav-update.timer"},
+	} {
+		if unitFileExists(extra.Unit) {
+			services = append(services, extra)
+		}
+	}
 	return services
 }
 
@@ -233,70 +246,56 @@ func (s *System) serviceState(ctx context.Context, unit string) string {
 	commandCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	output, err := exec.CommandContext(commandCtx, "systemctl", "is-active", unit).Output()
-	if err != nil {
-		return "stopped"
+	if commandCtx.Err() != nil {
+		return "unknown"
 	}
 	state := strings.TrimSpace(string(output))
-	if state == "active" {
-		return "running"
+	if state == "" && err != nil {
+		return "unknown"
 	}
-	return state
+	return normalizeServiceState(state)
+
 }
 
 func (s *System) ServiceAction(ctx context.Context, key, action string) error {
-	if action != "start" && action != "restart" {
-		return errors.New("only start and restart actions are allowed")
+	if action != "start" && action != "restart" && action != "stop" {
+		return errors.New("unknown service action")
 	}
-	if key == "php" {
-		units := s.phpUnits()
-		if len(units) == 0 {
-			return errors.New("no PHP-FPM runtime is installed")
-		}
-		if s.demo {
-			return nil
-		}
-		for _, unit := range units {
-			if _, err := runCommand(ctx, 30*time.Second, "systemctl", action, unit); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if key == "mail" {
-		units := append([]string{}, s.mailUnits()...)
+	var units []string
+	switch key {
+	case "php":
+		units = s.phpUnits()
+	case "mail":
+		units = append(units, s.mailUnits()...)
 		for _, unit := range []string{"opendkim", "rspamd"} {
 			if unitFileExists(unit) {
 				units = append(units, unit)
 			}
 		}
-		if len(units) < 2 {
-			return errors.New("email hosting is not installed")
-		}
-		if s.demo {
-			return nil
-		}
-		for _, unit := range units {
-			if _, err := runCommand(ctx, 30*time.Second, "systemctl", action, unit); err != nil {
-				return err
+	default:
+		for _, service := range s.serviceUnits() {
+			if service.Key == key {
+				units = []string{service.Unit}
+				break
 			}
 		}
-		return nil
 	}
-	var unit string
-	for _, service := range s.serviceUnits() {
-		if service.Key == key {
-			unit = service.Unit
-			break
-		}
-	}
-	if unit == "" {
-		return errors.New("unknown service")
+	if len(units) == 0 {
+		return errors.New("service is not installed or is unknown")
 	}
 	if s.demo {
 		return nil
 	}
-	_, err := runCommand(ctx, 20*time.Second, "systemctl", action, unit)
-	return err
+	for _, unit := range units {
+		if _, err := runCommand(ctx, 30*time.Second, "systemctl", action, unit); err != nil {
+			return err
+		}
+		state := s.serviceState(ctx, unit)
+		if (action == "stop" && state != "stopped") || (action != "stop" && state != "running") {
+			return fmt.Errorf("%s: requested %s but current state is %s", unit, action, state)
+		}
+	}
+	return nil
 }
 
 func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *DBCredentials, error) {
@@ -1350,12 +1349,14 @@ func (s *System) phpUnits() []string {
 func (s *System) phpStackState(ctx context.Context, sites []Site) string {
 	units := s.phpUnits()
 	if len(units) == 0 {
-		return "stopped"
+		return "not installed"
 	}
+	states := make([]string, 0, len(units))
 	for _, unit := range units {
-		if s.serviceState(ctx, unit) != "running" {
-			return "degraded"
-		}
+		states = append(states, s.serviceState(ctx, unit))
+	}
+	if state := aggregateServiceStates(states); state != "running" {
+		return state
 	}
 	for _, site := range sites {
 		info, err := os.Stat(s.sitePHPSocket(site))
@@ -1416,8 +1417,11 @@ func (s *System) usesPHP73Container(version string) bool {
 }
 
 func unitFileExists(unit string) bool {
+	if !strings.HasSuffix(unit, ".service") && !strings.HasSuffix(unit, ".timer") {
+		unit += ".service"
+	}
 	for _, directory := range []string{"/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system"} {
-		if _, err := os.Stat(filepath.Join(directory, unit+".service")); err == nil {
+		if _, err := os.Stat(filepath.Join(directory, unit)); err == nil {
 			return true
 		}
 	}

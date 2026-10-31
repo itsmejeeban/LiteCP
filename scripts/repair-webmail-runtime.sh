@@ -40,7 +40,16 @@ plugin_source="$script_dir/../deploy/litecp_signon.php"
 plugin_target=/opt/litecp/webmail/plugins/litecp_signon/litecp_signon.php
 if [[ -f $plugin_source && -f $plugin_target ]] && ! cmp -s "$plugin_source" "$plugin_target"; then
   if [[ $unit == php83-php-fpm ]]; then php_cli=/opt/remi/php83/root/usr/bin/php; else php_cli=/usr/bin/php8.3; fi
-  "$php_cli" -l "$plugin_source"
+  # Syntax checking needs only the PHP parser. Do not load server extensions
+  # (for example ionCube or OPcache), which can crash CLI startup during updates.
+  # Keep validation mandatory and leave the installed plugin untouched on failure.
+  if "$php_cli" -n -l "$plugin_source"; then
+    :
+  else
+    lint_status=$?
+    echo "Webmail plugin syntax validation failed (PHP exit $lint_status). Existing plugin retained. Check the PHP CLI installation before retrying." >&2
+    exit "$lint_status"
+  fi
   recovery=$(mktemp "${plugin_target}.before-update.XXXXXX")
   cp --preserve=mode,ownership,timestamps "$plugin_target" "$recovery"
   install -m 0644 "$plugin_source" "$plugin_target"

@@ -421,8 +421,8 @@
     $("#servicesGrid").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
-      const unitLabel = service.key === "php" || service.key === "mail" ? service.unit : `${service.unit}.service`;
-      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><button class="button button-secondary" data-service="${escapeHTML(service.key)}" data-action="${stopped ? "start" : "restart"}">${stopped ? "Start" : "Restart"}</button></div></article>`;
+      const unitLabel = service.key === "php" || service.key === "mail" ? service.unit : (service.unit.endsWith(".timer") ? service.unit : `${service.unit}.service`);
+      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><div class="service-controls">${["start", "stop", "restart"].map(action => `<button class="button ${action === "stop" ? "button-danger" : "button-secondary"}" data-service="${escapeHTML(service.key)}" data-action="${action}" ${((action === "start" && service.state === "running") || (action === "stop" && service.state === "stopped") || service.state === "not installed") ? "disabled" : ""}>${titleCase(action)}</button>`).join("")}</div></div></article>`;
     }).join("");
   }
 
@@ -816,6 +816,7 @@
   async function handleServiceAction(event) {
     const button = event.target.closest("[data-service]");
     if (!button) return;
+    if (button.dataset.action === "stop" && !await window.LiteCPDialogs.confirm("Stop this service? Websites, email or scheduled tasks that depend on it will be unavailable until it is started again.")) return;
     button.disabled = true;
     const label = button.textContent;
     button.textContent = "Working…";
@@ -824,7 +825,7 @@
       showToast("Service updated", `${titleCase(button.dataset.service)} ${button.dataset.action} completed.`);
       currentState = await api("/api/state");
       renderAll();
-    } catch (error) { handleError(error); button.textContent = label; }
+    } catch (error) { handleError(error); button.textContent = label; button.disabled = false; }
   }
 
   async function restartAll() {
