@@ -32,6 +32,12 @@ func (a *App) terminateWebsite(ctx context.Context, site Site) error {
 		}
 	}
 	state := a.store.PublicState()
+	for _, backup := range state.Backups {
+		if backup.SiteID == site.ID && backupInProgress(backup.Status) {
+			return errors.New("wait for the website backup to finish before removing this website")
+		}
+	}
+
 	for _, other := range state.Sites {
 		if other.ID != site.ID && managedSiteRoot(other) == home {
 			return errors.New("another website shares this directory")
@@ -77,6 +83,9 @@ func (a *App) terminateWebsite(ctx context.Context, site Site) error {
 	if err != nil {
 		return err
 	}
+	if err := a.retainWebsiteBackups(site); err != nil {
+		return err
+	}
 	// Validate everything above before starting irreversible work. Keep the site
 	// registered on any failure, so remaining data can be reviewed and retried.
 	if err := a.system.RemoveSiteConfig(ctx, site); err != nil {
@@ -116,6 +125,6 @@ func (a *App) terminateWebsite(ctx context.Context, site Site) error {
 	if err := a.store.RemoveSite(site.ID); err != nil {
 		return err
 	}
-	a.store.AddActivity("Website permanently removed", site.Domain+": website home, local website backups, linked managed databases and FTP logins removed", "warning")
+	a.store.AddActivity("Website permanently removed", site.Domain+": website files, linked managed databases and FTP logins removed; local and remote backups retained", "warning")
 	return nil
 }

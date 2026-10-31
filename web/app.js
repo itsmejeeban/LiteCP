@@ -604,8 +604,16 @@
       logTimer = setInterval(loadLogs, 30000);
     }
     if (page === "files") loadFiles();
-    if (page === "websites") loadSiteSizes(true);
+    if (page === "websites") refreshWebsiteList();
     window.LiteCPFeatures?.navigate(page);
+  }
+
+  async function refreshWebsiteList() {
+    try {
+      // Migration runs in the background; the navigation cache may predate restore.
+      await window.LiteCP.refresh();
+      await loadSiteSizes(true);
+    } catch (error) { handleError(error); }
   }
 
   function syncWordPressSetup() {
@@ -775,7 +783,7 @@
         await api("/api/sites/ssl", { method: "POST", body: { id: site.id, email, renew: renewing } });
         showToast(renewing ? "SSL renewed" : "SSL enabled", `${site.domain} uses HTTPS.`);
       } else if (button.dataset.siteAction === "delete") {
-        const confirmation = await window.LiteCPDialogs.prompt(`Permanently remove ${site.domain}? This deletes its entire website home, including files, Trash, local website backups, linked managed databases and FTP accounts. This cannot be undone. Mailboxes and external backups are kept. Type ${site.domain} to confirm.`, "", {title:"Permanently remove website",label:"Type the exact domain",required:true,confirmText:"Remove permanently",danger:true});
+        const confirmation = await window.LiteCPDialogs.prompt(`Permanently remove ${site.domain}? This deletes its website files, Trash, linked managed databases and FTP accounts. Local and remote backups are kept. This cannot be undone. Mailboxes and external backups are kept. Type ${site.domain} to confirm.`, "", {title:"Permanently remove website",label:"Type the exact domain",required:true,confirmText:"Remove permanently",danger:true});
         if (confirmation !== site.domain) { if(confirmation) showToast("Removal cancelled","The domain did not match."); return; }
         await api(`/api/sites/${encodeURIComponent(site.id)}?deleteData=true`, { method: "DELETE", body:{domain:confirmation} });
         showToast("Website removed", `${site.domain}: website files and linked managed databases removed.`);

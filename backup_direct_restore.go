@@ -36,6 +36,19 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	site := a.store.SiteByID(input.SiteID)
+	sourceMissing := site == nil
+	if site == nil {
+		if retained, e := retainedWebsite(input.SiteID); e == nil {
+			site = &retained
+		} else if input.Kind == "history" {
+			for _, b := range a.store.PublicState().Backups {
+				if b.ID == input.ID && b.SiteID == input.SiteID && domainPattern.MatchString(b.Domain) {
+					site = &Site{ID: b.SiteID, Domain: b.Domain, PHPVersion: "8.3", AppType: "regular"}
+					break
+				}
+			}
+		}
+	}
 	if site == nil || !input.Confirm || input.ConfirmDomain != site.Domain {
 		writeError(w, 400, "Confirm replacement of the selected website before restoring")
 		return
@@ -44,7 +57,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Unsupported backup type")
 		return
 	}
-	if site.Application != nil && site.Application.Enabled {
+	if !sourceMissing && site.Application != nil && site.Application.Enabled {
 		writeError(w, 409, "Disable the application runtime before restoring")
 		return
 	}
@@ -60,7 +73,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if _, err := loadWebsiteZIPBackup(a.system.websiteBackupsRoot(*site), input.ID, site.ID); err != nil {
+		if _, err := loadWebsiteZIPBackup(a.restoreManualBackupRoot(*site), input.ID, site.ID); err != nil {
 			writeError(w, 404, "Complete website backup not found")
 			return
 		}
@@ -96,7 +109,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else {
-			preview, err = a.stageWebsiteBackup(ctx, *site, input.ID)
+			preview, err = a.prepareManualBackupStage(ctx, *site, filepath.Join(a.restoreManualBackupRoot(*site), input.ID, "website.zip"))
 		}
 		if err != nil {
 			fail(err)
@@ -204,4 +217,12 @@ func (a *App) initializeBackupRestoreJob(job *LiveMigrationJob) error {
 		return fmt.Errorf("create private restore job directory: %w", err)
 	}
 	return a.saveLiveJob(job)
+}
+
+func (a *App) restoreManualBackupRoot(site Site) string {
+	retained := filepath.Join(retainedWebsiteDirectory(site.ID), "backups", "manual")
+	if info, err := os.Lstat(retained); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		return retained
+	}
+	return a.system.websiteBackupsRoot(site)
 }

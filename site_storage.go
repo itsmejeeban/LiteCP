@@ -152,6 +152,9 @@ func validScheduledBackupPath(path string) bool {
 		return true
 	}
 	directory := filepath.Dir(path)
+	if filepath.Base(directory) == "scheduled" && filepath.Base(filepath.Dir(directory)) == "backups" && filepath.Dir(filepath.Dir(filepath.Dir(directory))) == filepath.Clean(retainedWebsiteBackupRoot) && retainedWebsiteIDPattern.MatchString(filepath.Base(filepath.Dir(filepath.Dir(directory)))) {
+		return true
+	}
 	if filepath.Base(directory) != "scheduled" || filepath.Base(filepath.Dir(directory)) != "backups" {
 		return false
 	}

@@ -77,6 +77,11 @@ def php_units():
     result=subprocess.run(['systemctl','list-units','--all','--plain','--no-legend','php*-fpm.service','php*-php-fpm.service','litecp-php73-fpm.service'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
     return [line.split()[0] for line in result.stdout.decode().splitlines() if line.split() and line.split()[0].endswith('.service')]
 
+def creation_pause_units():
+    # Nginx also proxies the panel HTTPS listener: stopping it disconnects admins.
+    # Keep the control plane reachable while pausing application/mail writers.
+    return ['crond','cron','postfix','dovecot','litecp-ftps']+php_units()
+
 def create(destination):
     cfg=config(); osid,major=osinfo()
     manifest={'format':'litecp-system-snapshot','schema':1,'createdAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'os':osid,'osMajor':major,'architecture':platform.machine(),'sites':len(cfg.get('sites',[])),'databases':len(cfg.get('databases',[])),'mailboxes':len(cfg.get('mailboxes',[])),'files':{},'configs':[],'roots':{},'hostname':platform.node()}
@@ -318,10 +323,10 @@ def main():
     if path.parent.resolve()!=BASE.resolve() or path.suffix!='.zip' or path.is_symlink():raise ValueError('Use a regular ZIP in '+str(BASE))
     if a.action!='inspect':status({'state':'running','action':a.action})
     if a.action=='create':
-        # Block customer writes for a consistent files/mail/SQL capture.
+        # Pause application writers; keep the panel HTTPS proxy available.
         stopped=[];containers=[]
         try:
-            for unit in ['nginx','crond','cron','postfix','dovecot','litecp-ftps']+php_units():
+            for unit in creation_pause_units():
                 if subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0:
                     run(['systemctl','stop',unit]);stopped.append(unit)
             containers=pause_containers()

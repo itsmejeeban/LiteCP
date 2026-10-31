@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -44,5 +45,39 @@ func TestSnapshotFingerprintDetection(t *testing.T) {
 	}
 	if _, err = snapshotDetectedFingerprint("host ssh-rsa invalid"); err == nil {
 		t.Fatal("invalid key accepted")
+	}
+}
+
+func TestSnapshotRemoteOnlyCleanup(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		remoteOnly             bool
+		transferErr, removeErr error
+		wantRemove             bool
+	}{
+		{"local copy", false, nil, nil, false},
+		{"failed upload", true, errors.New("transfer failed"), nil, false},
+		{"remote only", true, nil, nil, true},
+		{"cleanup failed", true, nil, errors.New("permission denied"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			status := finishSnapshotUpload("snapshot.zip", tc.remoteOnly, tc.transferErr, func(name string) error {
+				called = true
+				if name != "snapshot.zip" {
+					t.Fatal(name)
+				}
+				return tc.removeErr
+			})
+			if called != tc.wantRemove {
+				t.Fatalf("unexpected cleanup: %v", called)
+			}
+			if tc.removeErr != nil && !strings.Contains(status, "could not be removed") {
+				t.Fatal(status)
+			}
+			if tc.transferErr != nil && !strings.Contains(status, "retained") {
+				t.Fatal(status)
+			}
+		})
 	}
 }

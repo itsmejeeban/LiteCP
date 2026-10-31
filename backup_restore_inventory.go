@@ -42,8 +42,20 @@ func (a *App) backupRestoreInventory(w http.ResponseWriter, r *http.Request) {
 	state := a.store.PublicState()
 	items := []restorableBackup{}
 	warnings := []string{}
-	for _, site := range state.Sites {
+	sites := append([]Site{}, state.Sites...)
+	if entries, err := os.ReadDir(retainedWebsiteBackupRoot); err == nil {
+		for _, entry := range entries {
+			if site, e := retainedWebsite(entry.Name()); e == nil {
+				sites = append(sites, site)
+			}
+		}
+	}
+	seenManual := map[string]bool{}
+	for _, site := range sites {
 		root := a.system.websiteBackupsRoot(site)
+		if _, err := os.Stat(filepath.Join(retainedWebsiteDirectory(site.ID), "backups", "manual")); err == nil {
+			root = filepath.Join(retainedWebsiteDirectory(site.ID), "backups", "manual")
+		}
 		entries, err := os.ReadDir(root)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
@@ -59,7 +71,11 @@ func (a *App) backupRestoreInventory(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: true, WebsiteExists: true})
+			if seenManual[b.ID] {
+				continue
+			}
+			seenManual[b.ID] = true
+			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: true, WebsiteExists: a.store.SiteByDomain(site.Domain) != nil})
 		}
 	}
 	var mu sync.Mutex

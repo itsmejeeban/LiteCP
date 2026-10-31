@@ -21,12 +21,13 @@ import (
 
 // Snapshot storage is deliberately independent of website backup destinations.
 type snapshotSettings struct {
-	Destination  BackupDestination `json:"destination"`
-	Cron         string            `json:"cron"`
-	Enabled      bool              `json:"enabled"`
-	LastRun      time.Time         `json:"lastRun"`
-	Pending      string            `json:"pending,omitempty"`
-	UploadStatus string            `json:"uploadStatus"`
+	PendingRemoteOnly bool              `json:"pendingRemoteOnly,omitempty"`
+	Destination       BackupDestination `json:"destination"`
+	Cron              string            `json:"cron"`
+	Enabled           bool              `json:"enabled"`
+	LastRun           time.Time         `json:"lastRun"`
+	Pending           string            `json:"pending,omitempty"`
+	UploadStatus      string            `json:"uploadStatus"`
 }
 
 var snapshotSettingsMu sync.Mutex
@@ -284,6 +285,7 @@ func (a *App) tickSnapshotAutomation() {
 		}
 		if status.State == "failed" {
 			cfg.Pending = ""
+			cfg.PendingRemoteOnly = false
 			cfg.UploadStatus = "Snapshot failed; review snapshot status"
 			_ = a.writeSnapshotSettings(cfg)
 			return
@@ -304,15 +306,21 @@ func (a *App) tickSnapshotAutomation() {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Minute)
 		snapshotSettingsMu.Unlock()
-		_, e = a.system.UploadBackup(ctx, cfg.Destination, local)
+		remoteURL, uploadErr := a.system.UploadBackup(ctx, cfg.Destination, local)
+		e = uploadErr
+		if e == nil && cfg.PendingRemoteOnly {
+			info, statErr := os.Stat(local)
+			if statErr != nil {
+				e = statErr
+			} else {
+				e = a.system.historyRemoteOperation(ctx, &cfg.Destination, Backup{Path: local, RemotePath: remoteURL, Size: info.Size()}, "stat", "")
+			}
+		}
 		snapshotSettingsMu.Lock()
 		cancel()
-		if e != nil {
-			cfg.UploadStatus = "Upload failed; local snapshot retained: " + e.Error()
-		} else {
-			cfg.UploadStatus = "Uploaded successfully; local snapshot retained"
-		}
+		cfg.UploadStatus = finishSnapshotUpload(local, cfg.PendingRemoteOnly, e, os.Remove)
 		cfg.Pending = ""
+		cfg.PendingRemoteOnly = false
 		_ = a.writeSnapshotSettings(cfg)
 		return
 	}
@@ -334,6 +342,7 @@ func (a *App) tickSnapshotAutomation() {
 		cfg.UploadStatus = err.Error()
 	} else if cfg.Destination.Host != "" {
 		cfg.Pending = name
+		cfg.PendingRemoteOnly = false
 		cfg.UploadStatus = "Waiting for snapshot creation"
 	} else {
 		cfg.UploadStatus = "Local snapshot scheduled"
@@ -357,4 +366,18 @@ func snapshotDetectedFingerprint(scan string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("No supported SFTP host key was detected")
+}
+
+// Never remove the local recovery copy unless transfer and verification succeeded.
+func finishSnapshotUpload(local string, remoteOnly bool, transferErr error, remove func(string) error) string {
+	if transferErr != nil {
+		return "Upload or verification failed; local snapshot retained: " + transferErr.Error()
+	}
+	if !remoteOnly {
+		return "Uploaded successfully; local snapshot retained"
+	}
+	if err := remove(local); err != nil {
+		return "Uploaded successfully; local copy could not be removed: " + err.Error()
+	}
+	return "Uploaded successfully; stored on remote server only"
 }

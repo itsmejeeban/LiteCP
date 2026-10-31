@@ -7,6 +7,16 @@ class SnapshotTests(unittest.TestCase):
   pathlib.Path(s.ROOTS['panel'],'config.json').write_text('{"admin":{"username":"qa","passwordHash":"pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000"},"sites":[],"databases":[],"mailboxes":[]}');pathlib.Path(s.ROOTS['websites'],'index.php').write_text('<?php echo "snapshot";')
   s.config=lambda:json.loads(pathlib.Path(s.ROOTS['panel'],'config.json').read_text());s.managed_configs=lambda:[]
  def tearDown(self):self.tmp.cleanup()
+ def test_creation_keeps_panel_proxy_running(self):
+  original=s.php_units
+  try:
+   s.php_units=lambda:['php83-php-fpm.service']
+   units=s.creation_pause_units()
+   self.assertNotIn('nginx',units)
+   self.assertNotIn('litecp',units)
+   self.assertIn('php83-php-fpm.service',units)
+   self.assertIn('dovecot',units)
+  finally:s.php_units=original
  def test_round_trip_checksums_modes_and_stage(self):
   path=s.BASE/'test.zip';s.create(path);stage=self.root/'stage';stage.mkdir();m=s.inspect(path,stage);self.assertEqual(m['format'],'litecp-system-snapshot');self.assertEqual((stage/'data/websites/index.php').read_text(),'<?php echo "snapshot";')
  def test_snapshot_settings_do_not_replay_source_upload(self):

@@ -88,7 +88,7 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 		if input.Storage == "" {
 			input.Storage = "local"
 		}
-		if input.Storage != "local" && input.Storage != "remote" {
+		if input.Storage != "local" && input.Storage != "remote" && input.Storage != "remote-only" {
 			writeError(w, 400, "Choose local or remote snapshot storage")
 			return
 		}
@@ -99,7 +99,7 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, "Wait for the current snapshot operation to finish")
 			return
 		}
-		if input.Storage == "remote" && cfg.Destination.Host == "" {
+		if input.Storage != "local" && cfg.Destination.Host == "" {
 			writeError(w, 400, "Configure snapshot remote storage first")
 			return
 		}
@@ -109,7 +109,8 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 502, err.Error())
 			return
 		}
-		if input.Storage == "remote" {
+		if input.Storage != "local" {
+			cfg.PendingRemoteOnly = input.Storage == "remote-only"
 			cfg.Pending = name
 			cfg.UploadStatus = "Waiting for snapshot creation"
 			if err := a.writeSnapshotSettings(cfg); err != nil {

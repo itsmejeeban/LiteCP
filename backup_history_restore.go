@@ -157,7 +157,7 @@ func unpackHistoryTar(ctx context.Context, archive, root string) (int, int64, er
 }
 func (a *App) prepareHistoryBackup(ctx context.Context, b Backup) (MigrationPreview, error) {
 	var p MigrationPreview
-	if a.store.SiteByID(b.SiteID) == nil {
+	if a.store.SiteByID(b.SiteID) == nil && ctx.Value(directBackupRestoreContext{}) != true {
 		return p, errors.New("Create or select the source website before restoring its backup")
 	}
 	parent := filepath.Join(a.system.dataDir, "migrations")

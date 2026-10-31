@@ -8,3 +8,5 @@ function setup(accept=true){
 }
 test('cancelled overwrite confirmation makes no restore request',async()=>{const h=setup(false);await h.window.LiteCPBackupRestore({id:'backup',siteId:'site',domain:'example.com'});assert.equal(h.calls.length,0)});
 test('confirmed restore starts background job and polls progress',async()=>{const h=setup();await h.window.LiteCPBackupRestore({id:'backup',siteId:'site',domain:'example.com',kind:'history'});assert.equal(h.calls[0].path,'/api/backups/restore-direct');assert.equal(h.calls[0].options.body.confirmDomain,'example.com');assert.equal(h.calls[0].options.body.confirm,true);assert.equal(h.calls[1].path,'/api/backups/restore-direct?id=job-1');assert.equal(h.toasts[0][0],'Restore finished')});
+
+test('missing website restore is confirmed and submitted',async()=>{const h=setup();await h.window.LiteCPBackupRestore({id:'backup',siteId:'removed-site',domain:'example.com',kind:'history',websiteExists:false});assert.equal(h.calls[0].options.body.siteID,'removed-site');assert.equal(h.calls[0].options.body.confirm,true)});

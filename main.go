@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.7.12"
+var version = "3.7.16"
 var buildRevision = ""
 
 //go:embed web/*
@@ -1094,6 +1094,9 @@ func (a *App) pruneExpiredBackups() error {
 	expired := a.store.ExpiredBackups(time.Now().UTC().Add(-time.Duration(retention) * 24 * time.Hour))
 	removed := map[string]bool{}
 	for _, backup := range expired {
+		if a.store.SiteByID(backup.SiteID) == nil {
+			continue
+		}
 		if err := a.system.RemoveBackupFile(backup.Path); err != nil {
 			return err
 		}
