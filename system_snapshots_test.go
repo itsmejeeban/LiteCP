@@ -7,7 +7,7 @@ import (
 
 func TestSystemSnapshotsRequireAuthentication(t *testing.T) {
 	a := &App{}
-	for _, path := range []string{"/api/system-snapshots", "/api/system-snapshots/upload", "/api/system-snapshots/inspect", "/api/system-snapshots/restore"} {
+	for _, path := range []string{"/api/system-snapshots/settings", "/api/system-snapshots/remote", "/api/system-snapshots", "/api/system-snapshots/upload", "/api/system-snapshots/inspect", "/api/system-snapshots/restore"} {
 		w := httptest.NewRecorder()
 		a.routes().ServeHTTP(w, httptest.NewRequest("POST", path, nil))
 		if w.Code != 401 {

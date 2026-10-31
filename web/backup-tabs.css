@@ -1,7 +1,14 @@
 .backup-tab-panel {max-width:820px;}
-.backup-tab-panel[data-backup-panel="destinations"],.backup-tab-panel[data-backup-panel="history"] {max-width:none;overflow-x:auto;}
+.backup-tab-panel[data-backup-panel="restore"],.backup-tab-panel[data-backup-panel="destinations"],.backup-tab-panel[data-backup-panel="history"] {max-width:none;overflow-x:auto;}
 .backup-tab-panel .settings-body {padding:18px;}
 .backup-tab-panel .compact-form-card {margin:0;}
 .snapshot-row {display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid #303030;}
 .snapshot-row strong {overflow-wrap:anywhere;flex:1;min-width:160px;}
 [data-backup-panel="system-snapshot"] {max-width:1000px;}
+
+.backup-tab-panel[data-backup-panel="restore"] {width:100%;min-width:0;}
+.backup-tab-panel[data-backup-panel="restore"] > .panel {width:100%;max-width:none;min-width:0;}
+
+.snapshot-settings-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+.snapshot-settings-grid .field {min-width:0;}
+@media(max-width:640px){.snapshot-settings-grid {grid-template-columns:1fr;}}

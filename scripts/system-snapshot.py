@@ -56,9 +56,13 @@ def add_tree(z,key,root,manifest):
                 if name in dirs: dirs.remove(name)
             elif stat.S_ISDIR(s.st_mode):
                 zi=zipfile.ZipInfo(entry+'/');zi.external_attr=(stat.S_IFDIR|stat.S_IMODE(s.st_mode))<<16;z.writestr(zi,b'');data=None
-            elif stat.S_ISREG(s.st_mode): z.write(p,entry);data=None
+            elif stat.S_ISREG(s.st_mode):
+                if key=='panel' and rel=='snapshot-settings.json':
+                    settings=json.loads(p.read_text(encoding='utf-8'));settings.pop('pending',None);settings['uploadStatus']='';settings['enabled']=False
+                    data=json.dumps(settings).encode('utf-8');z.writestr(entry,data)
+                else:z.write(p,entry);data=None
             else: raise ValueError('Unsupported special file: '+str(p))
-            manifest['files'][entry]={'mode':stat.S_IMODE(s.st_mode),'uid':s.st_uid,'gid':s.st_gid,'size':s.st_size,'sha256':hashlib.sha256(data).hexdigest() if stat.S_ISLNK(s.st_mode) else (digest(p) if p.is_file() else '')}
+            manifest['files'][entry]={'mode':stat.S_IMODE(s.st_mode),'uid':s.st_uid,'gid':s.st_gid,'size':len(data) if data is not None else s.st_size,'sha256':hashlib.sha256(data).hexdigest() if data is not None else (digest(p) if p.is_file() else '')}
 
 def pause_containers():
     if not shutil.which('podman'):return []

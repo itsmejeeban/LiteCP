@@ -1,0 +1,37 @@
+package main
+
+import (
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestSnapshotRemoteListing(t *testing.T) {
+	names := snapshotNamesFromListing("sftp> ls -1 \"/snapshots/\"\n/snapshots/litecp-system-one.zip\nother.txt\n/snapshots/litecp-system-one.zip\nremote-two.zip\n")
+	if len(names) != 2 || names[0] != "litecp-system-one.zip" || names[1] != "remote-two.zip" {
+		t.Fatalf("unexpected names: %v", names)
+	}
+}
+func TestSnapshotSettingsHideSecretsAndStaySeparate(t *testing.T) {
+	dir := t.TempDir()
+	a := &App{system: &System{dataDir: dir}}
+	content := `{"destination":{"host":"backup.test","passwordCipher":"encrypted-secret"},"enabled":false}`
+	if err := os.WriteFile(filepath.Join(dir, "snapshot-settings.json"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	a.snapshotSettingsAPI(response, httptest.NewRequest("GET", "/api/system-snapshots/settings", nil))
+	if response.Code != 200 || strings.Contains(response.Body.String(), "encrypted-secret") || !strings.Contains(response.Body.String(), `"hasPassword":true`) {
+		t.Fatal(response.Body.String())
+	}
+}
+func TestSnapshotScheduleRejectsInvalidCron(t *testing.T) {
+	a := &App{system: &System{dataDir: t.TempDir()}}
+	response := httptest.NewRecorder()
+	a.snapshotSettingsAPI(response, httptest.NewRequest("POST", "/api/system-snapshots/settings", strings.NewReader(`{"enabled":true,"cron":"invalid"}`)))
+	if response.Code != 400 {
+		t.Fatal(response.Code)
+	}
+}

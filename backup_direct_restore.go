@@ -71,7 +71,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job := LiveMigrationJob{ID: safeSiteID(id), Source: LiveSource{Platform: "backup"}, Account: site.ID, Accounts: []LiveAccount{{ID: site.ID, Domain: site.Domain}}, Status: "running", Stage: "verify", Message: "Restore requested. Waiting for other server changes to finish.", CreatedAt: time.Now().UTC()}
-	if err = a.saveLiveJob(&job); err != nil {
+	if err = a.initializeBackupRestoreJob(&job); err != nil {
 		writeError(w, 500, err.Error())
 		return
 	}
@@ -191,4 +191,17 @@ func copyRestoreStage(ctx context.Context, source, target string) error {
 		}
 		return closeErr
 	})
+}
+
+// Restore jobs do not pass through source discovery, which normally creates
+// the private job directory before the first atomic status write.
+func (a *App) initializeBackupRestoreJob(job *LiveMigrationJob) error {
+	root, err := a.liveJobRoot(job.ID)
+	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(root, 0700); err != nil {
+		return fmt.Errorf("create private restore job directory: %w", err)
+	}
+	return a.saveLiveJob(job)
 }

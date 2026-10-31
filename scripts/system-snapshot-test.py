@@ -9,6 +9,12 @@ class SnapshotTests(unittest.TestCase):
  def tearDown(self):self.tmp.cleanup()
  def test_round_trip_checksums_modes_and_stage(self):
   path=s.BASE/'test.zip';s.create(path);stage=self.root/'stage';stage.mkdir();m=s.inspect(path,stage);self.assertEqual(m['format'],'litecp-system-snapshot');self.assertEqual((stage/'data/websites/index.php').read_text(),'<?php echo "snapshot";')
+ def test_snapshot_settings_do_not_replay_source_upload(self):
+  settings=pathlib.Path(s.ROOTS['panel'],'snapshot-settings.json');settings.write_text(json.dumps({'enabled':True,'pending':'old.zip','uploadStatus':'Uploading','destination':{'host':'backup.example'}}),encoding='utf-8')
+  path=s.BASE/'test.zip';s.create(path);s.inspect(path)
+  with zipfile.ZipFile(path) as z:captured=json.loads(z.read('data/panel/snapshot-settings.json'))
+  self.assertFalse(captured['enabled']);self.assertNotIn('pending',captured);self.assertEqual(captured['destination']['host'],'backup.example')
+  self.assertTrue(json.loads(settings.read_text())['enabled'])
  def test_rejects_corrupt_and_unlisted_members(self):
   path=s.BASE/'test.zip';s.create(path)
   with zipfile.ZipFile(path,'a') as z:z.writestr('../../escape','bad')

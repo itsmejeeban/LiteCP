@@ -78,11 +78,26 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, 200, map[string]any{"items": items, "folder": snapshotRoot})
 	case http.MethodPost:
+		snapshotSettingsMu.Lock()
+		defer snapshotSettingsMu.Unlock()
+		cfg, settingsErr := a.readSnapshotSettings()
+		if settingsErr != nil || cfg.Pending != "" {
+			writeError(w, 409, "Wait for the current snapshot operation to finish")
+			return
+		}
 		name := "litecp-system-" + time.Now().UTC().Format("20060102-150405") + ".zip"
 		path, _ := snapshotPath(name)
 		if err := a.startSnapshotJob(r.Context(), "create", path, ""); err != nil {
 			writeError(w, 502, err.Error())
 			return
+		}
+		if cfg.Destination.Host != "" {
+			cfg.Pending = name
+			cfg.UploadStatus = "Waiting for snapshot creation"
+			if err := a.writeSnapshotSettings(cfg); err != nil {
+				writeError(w, 500, "Snapshot started locally, but upload request could not be saved")
+				return
+			}
 		}
 		a.store.AddActivity("System snapshot requested", name, "info")
 		writeJSON(w, 202, map[string]string{"name": name, "message": "Snapshot started. Hosted services pause briefly while data is captured."})
@@ -144,6 +159,14 @@ func (a *App) inspectSystemSnapshot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, result)
 }
 func (a *App) restoreSystemSnapshot(w http.ResponseWriter, r *http.Request) {
+	snapshotSettingsMu.Lock()
+	cfg, settingsErr := a.readSnapshotSettings()
+	snapshotSettingsMu.Unlock()
+	if settingsErr != nil || cfg.Pending != "" {
+		writeError(w, 409, "Wait for the snapshot upload before restoring")
+		return
+	}
+
 	var input struct {
 		Name         string `json:"name"`
 		Confirmation string `json:"confirmation"`
@@ -170,6 +193,17 @@ func (a *App) restoreSystemSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) startSnapshotJob(ctx context.Context, action, path, confirmation string) error {
+	if err := os.MkdirAll(snapshotRoot, 0700); err != nil {
+		return err
+	}
+	for _, unit := range []string{"litecp-system-snapshot.service", "litecp-system-snapshot.timer"} {
+		if _, err := runCommand(ctx, 5*time.Second, "systemctl", "is-active", "--quiet", unit); err == nil {
+			return fmt.Errorf("A snapshot operation is already running")
+		}
+	}
+	if _, err := os.Lstat(path); err == nil && action == "create" {
+		return fmt.Errorf("Snapshot filename already exists; try again")
+	}
 	args := []string{"--unit=litecp-system-snapshot", "--collect", "--on-active=3s", "--property=UMask=0077", "/usr/bin/python3", "/usr/local/lib/litecp/system-snapshot.py", action, path}
 	if confirmation != "" {
 		args = append(args, "--confirm", confirmation)

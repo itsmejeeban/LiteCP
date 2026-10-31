@@ -11,3 +11,14 @@ Restore: upload the ZIP or place it in `/var/backups/litecp/system-snapshots/`, 
 A recovery ZIP and previous data are retained in the snapshot directory before overwrite. On failure, the restore attempts to put destination files and database data back; failed restored files are preserved separately. Read operation status in the panel and `journalctl -u litecp-system-snapshot`. Never expose the snapshot directory through a website. Existing browser trust and webmail sessions are not restored.
 
 For portable backups, external symlinks and special files are rejected instead of silently omitted. Databases not registered in LiteCP and data stored outside LiteCP's managed roots are not included. Quiesce application containers and external writers during capture; third-party external services are outside this backup's scope.
+
+
+## Remote storage and automatic snapshots
+
+System Snapshot has its own destination configuration in the private panel data file `snapshot-settings.json`. It does not reuse or change website backup destinations. Configure SFTP (with a verified SHA256 host key), FTPS, or FTP independently, even when using the same server. Passwords use LiteCP's existing encryption at rest. FTP does not encrypt transport.
+
+Choose hourly, daily, weekly, monthly, or a custom five-field cron schedule. Schedules use the panel time zone, run while LiteCP is running, and do not replay missed times after downtime. The last scheduled minute is persisted before starting to prevent duplicate starts. Creation uses the existing detached systemd snapshot job; pending remote uploads are persisted and processed in the background across browser navigation and panel restarts. Upload failures keep the local ZIP and display an error. Local snapshots are retained; no automatic pruning was added.
+
+Refresh files lists local ZIPs and scans the separately configured remote folder. Scan remote storage can repeat discovery, including ZIPs created on another LiteCP server. Retrieve & restore downloads a remote ZIP to a unique local filename and validates it; use its local Inspect & restore action and the explicit whole-server replacement confirmation. Matching operating system and services are still required. Remote ZIP filenames alone do not establish that an archive is valid or trustworthy. Existing local snapshots are never overwritten by a remote retrieval.
+
+Snapshots retain the destination configuration but clear pending upload state and disable automatic snapshot scheduling in the captured configuration. After restoring on another server, review the destination and explicitly re-enable its schedule to avoid two servers writing to the same destination unintentionally.

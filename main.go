@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "3.7.4"
+var version = "3.7.8"
 var buildRevision = ""
 
 //go:embed web/*
@@ -214,6 +214,7 @@ func main() {
 	reconcileCancel()
 	app.startUsageMonitor()
 	app.startBackupSchedules()
+	app.startSnapshotAutomation()
 	app.startCloudflareFirewallUpdates()
 	app.startAutoMigrationRestores()
 
@@ -303,6 +304,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/mail/webmail-login", only(http.MethodPost, a.withAuth(a.webmailLaunch)))
 	mux.HandleFunc("/api/mail/delivery", only(http.MethodGet, a.withAuth(a.emailDeliveryLogs)))
 	mux.HandleFunc("/api/mail/smtp-port-check", only(http.MethodPost, a.withAuth(a.smtpPortCheck)))
+	mux.HandleFunc("/api/system-snapshots/settings", a.withAuth(a.snapshotSettingsAPI))
+	mux.HandleFunc("/api/system-snapshots/remote", a.withAuth(a.snapshotRemoteAPI))
 	mux.HandleFunc("/api/system-snapshots", a.withAuth(a.systemSnapshots))
 	mux.HandleFunc("/api/system-snapshots/upload", only(http.MethodPost, a.withAuth(a.uploadSystemSnapshot)))
 	mux.HandleFunc("/api/system-snapshots/inspect", only(http.MethodPost, a.withAuth(a.inspectSystemSnapshot)))
