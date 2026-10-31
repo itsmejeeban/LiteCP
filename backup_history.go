@@ -10,8 +10,8 @@ import (
 
 // The client supplies a recorded ID, never a filesystem path.
 func (a *App) backupHistoryItem(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
-		w.Header().Set("Allow", "GET, DELETE")
+	if r.Method != http.MethodGet && r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, DELETE, POST")
 		writeError(w, http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
@@ -27,11 +27,30 @@ func (a *App) backupHistoryItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Backup not found.")
 		return
 	}
+	if r.Method == http.MethodPost {
+		preview, err := a.prepareHistoryBackup(r.Context(), *selected)
+		if err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, 200, preview)
+		return
+	}
 	resolved, err := filepath.EvalSymlinks(selected.Path)
 	missing := errors.Is(err, os.ErrNotExist)
 	if !validScheduledBackupPath(selected.Path) || (!missing && (err != nil || filepath.Clean(resolved) != filepath.Clean(selected.Path))) {
 		writeError(w, http.StatusBadRequest, "Backup path could not be safely verified.")
 		return
+	}
+	if r.Method == http.MethodDelete && r.URL.Query().Get("remote") == "true" {
+		if selected.RemotePath == "" {
+			writeError(w, 400, "No remote copy is recorded.")
+			return
+		}
+		if err := a.system.historyRemoteOperation(r.Context(), a.store.BackupDestinationByID(selected.DestinationID), *selected, "remove", ""); err != nil {
+			writeError(w, 502, err.Error())
+			return
+		}
 	}
 	if r.Method == http.MethodDelete {
 		if err := a.system.RemoveBackupFile(selected.Path); err != nil {
@@ -42,11 +61,24 @@ func (a *App) backupHistoryItem(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "Archive removed, but history could not be updated. Retry removing this entry.")
 			return
 		}
-		a.store.AddActivity("Backup removed", selected.Domain+" local backup removed; remote copies retained", "warning")
+		detail := "backup removed; remote copy retained"
+		if r.URL.Query().Get("remote") == "true" {
+			detail = "local and remote backup removed"
+		}
+		a.store.AddActivity("Backup removed", selected.Domain+" "+detail, "warning")
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
-	file, err := os.Open(selected.Path)
+	localPath := selected.Path
+	if missing && selected.RemotePath != "" {
+		localPath, err = a.historyLocalCopy(r.Context(), *selected)
+		if err != nil {
+			writeError(w, 502, err.Error())
+			return
+		}
+		defer os.Remove(localPath)
+	}
+	file, err := os.Open(localPath)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Local backup file is unavailable.")
 		return

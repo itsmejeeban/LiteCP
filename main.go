@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "2.0.107"
+var version = "2.0.110"
 var buildRevision = ""
 
 //go:embed web/*
@@ -1039,6 +1039,12 @@ func (a *App) createBackup(w http.ResponseWriter, r *http.Request) {
 	if err := a.store.AddBackup(backup); err != nil {
 		writeError(w, http.StatusInternalServerError, "Backup completed, but its history could not be saved.")
 		return
+	}
+	if backup.RemotePath != "" {
+		if err := a.system.RemoveBackupFile(backup.Path); err != nil {
+			writeError(w, 500, "Remote backup saved, but local cleanup failed: "+err.Error())
+			return
+		}
 	}
 	_ = a.pruneExpiredBackups()
 	a.store.AddActivity("Backup completed", site.Domain+" files and database saved", "success")

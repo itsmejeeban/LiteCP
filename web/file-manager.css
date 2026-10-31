@@ -432,3 +432,8 @@ body.fm-fullscreen-open { overflow: hidden; }
 
 /* Trash is presented as a virtual directory in the primary file list. */
 #trashPanel{display:none!important}
+
+/* Certificate shield with a contrasting renewal arrow. */
+:root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-icon {stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+:root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-shield {fill:#103e35;stroke:#48c99f;}
+:root[data-theme] #sitesTable button[data-ssl-renew="true"] .ssl-renew-arrow {fill:none;stroke:#8bd3ff;stroke-width:2;}

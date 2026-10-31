@@ -233,6 +233,11 @@ func (a *App) runBackupSchedule(schedule BackupSchedule) error {
 		if uploadErr != nil {
 			return uploadErr
 		}
+		if backup.RemotePath != "" {
+			if err := a.system.RemoveBackupFile(backup.Path); err != nil {
+				return err
+			}
+		}
 		// Administrator explicitly authorizes pruning through the saved retention count.
 		if schedule.Keep > 0 {
 			a.store.mu.RLock()

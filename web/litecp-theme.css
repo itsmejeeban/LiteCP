@@ -476,3 +476,9 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 [data-page-view="system-updates"]>.panel{margin-bottom:18px}.system-update-controls{display:flex;align-items:end;gap:14px;flex-wrap:wrap}.system-update-controls .field{min-width:180px}.system-update-controls input[type="search"]{min-width:220px;flex:1}.system-update-error{background:#742a34;color:#fff!important;padding:12px;border-radius:6px}[data-page-view="system-updates"] td{overflow-wrap:anywhere}
 
 #sitesPagination{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid #363636;color:#cbd5e1}#sitesPagination label{display:flex;align-items:center;gap:8px;margin:0}#sitesPagination select{width:auto;min-width:70px;padding:7px 28px 7px 10px}#sitesPagination .website-page-buttons{display:flex;gap:8px}#sitesPagination button{white-space:nowrap}@media(max-width:600px){#sitesPagination{justify-content:center}#sitesPagination>[role="status"]{order:3;flex-basis:100%;text-align:center}}
+
+/* Backup history text actions must not inherit square icon-button sizing. */
+:root[data-theme] #backupsTable .row-actions {display:inline-flex;align-items:center;flex-wrap:nowrap;gap:8px}
+:root[data-theme] #backupsTable .row-actions .button {display:inline-flex!important;align-items:center!important;justify-content:center!important;width:auto!important;min-width:82px;height:36px!important;padding:0 12px!important;flex:0 0 auto;white-space:nowrap;box-sizing:border-box}
+#backupsTable td:last-child {width:1%;white-space:nowrap}
+#backupsTable td code {overflow-wrap:anywhere}
