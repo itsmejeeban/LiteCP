@@ -35,3 +35,14 @@ func TestSnapshotScheduleRejectsInvalidCron(t *testing.T) {
 		t.Fatal(response.Code)
 	}
 }
+
+func TestSnapshotFingerprintDetection(t *testing.T) {
+	scan := "host ssh-ed25519 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+	value, err := snapshotDetectedFingerprint(scan)
+	if err != nil || !strings.HasPrefix(value, "SHA256:") {
+		t.Fatalf("%s %v", value, err)
+	}
+	if _, err = snapshotDetectedFingerprint("host ssh-rsa invalid"); err == nil {
+		t.Fatal("invalid key accepted")
+	}
+}

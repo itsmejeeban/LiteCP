@@ -78,11 +78,29 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, 200, map[string]any{"items": items, "folder": snapshotRoot})
 	case http.MethodPost:
+		var input struct {
+			Storage string `json:"storage"`
+		}
+		if err := decodeJSON(r, &input); err != nil {
+			writeError(w, 400, "Choose local or remote snapshot storage")
+			return
+		}
+		if input.Storage == "" {
+			input.Storage = "local"
+		}
+		if input.Storage != "local" && input.Storage != "remote" {
+			writeError(w, 400, "Choose local or remote snapshot storage")
+			return
+		}
 		snapshotSettingsMu.Lock()
 		defer snapshotSettingsMu.Unlock()
 		cfg, settingsErr := a.readSnapshotSettings()
 		if settingsErr != nil || cfg.Pending != "" {
 			writeError(w, 409, "Wait for the current snapshot operation to finish")
+			return
+		}
+		if input.Storage == "remote" && cfg.Destination.Host == "" {
+			writeError(w, 400, "Configure snapshot remote storage first")
 			return
 		}
 		name := "litecp-system-" + time.Now().UTC().Format("20060102-150405") + ".zip"
@@ -91,7 +109,7 @@ func (a *App) systemSnapshots(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 502, err.Error())
 			return
 		}
-		if cfg.Destination.Host != "" {
+		if input.Storage == "remote" {
 			cfg.Pending = name
 			cfg.UploadStatus = "Waiting for snapshot creation"
 			if err := a.writeSnapshotSettings(cfg); err != nil {

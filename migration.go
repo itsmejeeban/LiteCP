@@ -488,6 +488,9 @@ func (a *App) migrationDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *System) importScopedSQL(ctx context.Context, sqlPath string, database ManagedDatabase, password string) error {
+	return s.importScopedSQLMode(ctx, sqlPath, database, password, false)
+}
+func (s *System) importScopedSQLMode(ctx context.Context, sqlPath string, database ManagedDatabase, password string, replace bool) error {
 	if err := validateDatabaseObjects(database.Name, database.Username); err != nil {
 		return err
 	}
@@ -528,7 +531,7 @@ func (s *System) importScopedSQL(ctx context.Context, sqlPath string, database M
 	if err := check.Run(); err != nil {
 		return fmt.Errorf("verify target database: %s", checkOutput.String())
 	}
-	if strings.TrimSpace(checkOutput.String()) != "0" {
+	if !replace && strings.TrimSpace(checkOutput.String()) != "0" {
 		return errors.New("the target database must be empty; existing tables, routines and events were not modified")
 	}
 	command := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-extra-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--binary-mode=1", "--local-infile=0", database.Name)
@@ -536,6 +539,9 @@ func (s *System) importScopedSQL(ctx context.Context, sqlPath string, database M
 	var stderr limitedBuffer
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
+		if replace {
+			return fmt.Errorf("SQL restore failed; use the retained recovery backup: %s", stderr.String())
+		}
 		rollbackErr := s.resetManagedDatabase(context.Background(), database)
 		if rollbackErr != nil {
 			return fmt.Errorf("SQL import: %s (empty-database restore failed: %v)", stderr.String(), rollbackErr)

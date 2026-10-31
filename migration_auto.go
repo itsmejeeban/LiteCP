@@ -127,7 +127,11 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			_ = a.saveLiveJob(job)
 			return
 		}
-		setLiveJobStage(job, "restore", "restore-review", "Automatic restore stopped: "+err.Error()+". Retained backup and existing data were preserved.")
+		message := "Automatic restore stopped: " + err.Error() + ". Retained backup and existing data were preserved."
+		if job.Source.Platform == "backup" {
+			message = "Restore stopped: " + err.Error() + ". Backup and recovery files were retained. Review the recovery backup before retrying if database restoration had started."
+		}
+		setLiveJobStage(job, "restore", "restore-review", message)
 		_ = a.saveLiveJob(job)
 	}
 	if a.liveMigrationCancelled(job.ID) {
@@ -163,6 +167,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	}
 	content := ""
 	sqlPath := ""
+	nativeDatabases := map[string]ManagedDatabase{}
 	if configName != "" {
 		data, e := os.ReadFile(filepath.Join(source, configName))
 		if e != nil {
@@ -186,6 +191,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		if sqlPath == "" {
 			fail(fmt.Errorf("matching database dump was not found"))
+			return
+		}
+	} else if len(preview.Databases) > 0 && job.Source.Platform == "backup" && existing != nil {
+		nativeDatabases, err = a.nativeBackupDatabasePlan(*existing, preview.Databases)
+		if err != nil {
+			fail(err)
 			return
 		}
 	} else if len(preview.Databases) > 0 {
@@ -335,6 +346,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		if e = os.Chown(filepath.Join(stage, configName), site.RuntimeUID, site.RuntimeGID); e != nil {
 			fail(e)
+			return
+		}
+	}
+	for dump, targetDB := range nativeDatabases {
+		if err = a.system.restoreNativeBackupSQL(ctx, filepath.Join(root, "files", filepath.FromSlash(dump)), targetDB); err != nil {
+			fail(err)
 			return
 		}
 	}

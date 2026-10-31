@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -100,6 +102,29 @@ func (a *App) snapshotSettingsAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if d.Host != cfg.Destination.Host || d.Username != cfg.Destination.Username || d.Port != cfg.Destination.Port || d.Protocol != cfg.Destination.Protocol {
 		d.PasswordCipher = ""
+	}
+	if d.Protocol == "sftp" && strings.TrimSpace(d.HostKeySHA256) == "" && d.Host != "" {
+		if cfg.Destination.Protocol == "sftp" && cfg.Destination.Host == d.Host && cfg.Destination.Port == d.Port && cfg.Destination.HostKeySHA256 != "" {
+			d.HostKeySHA256 = cfg.Destination.HostKeySHA256
+		} else {
+			// Validate the endpoint before connecting; the placeholder is never saved.
+			check := d
+			check.HostKeySHA256 = "SHA256:" + strings.Repeat("A", 43)
+			if e := validateBackupDestination(check, true); e != nil {
+				writeError(w, 400, e.Error())
+				return
+			}
+			scan, e := runCommand(r.Context(), 20*time.Second, "ssh-keyscan", "-T", "10", "-p", strconv.Itoa(d.Port), "-t", "ed25519,ecdsa,rsa", "--", d.Host)
+			if e != nil {
+				writeError(w, 502, "Cannot detect the SFTP host key. Check the host and port or enter its fingerprint manually.")
+				return
+			}
+			d.HostKeySHA256, e = snapshotDetectedFingerprint(scan)
+			if e != nil {
+				writeError(w, 502, e.Error())
+				return
+			}
+		}
 	}
 	if d.Host != "" {
 		if err = validateBackupDestination(d, true); err != nil {
@@ -314,4 +339,22 @@ func (a *App) tickSnapshotAutomation() {
 		cfg.UploadStatus = "Local snapshot scheduled"
 	}
 	_ = a.writeSnapshotSettings(cfg)
+}
+
+func snapshotDetectedFingerprint(scan string) (string, error) {
+	for _, algorithm := range []string{"ssh-ed25519", "ecdsa-sha2-nistp256", "ssh-rsa"} {
+		for _, line := range strings.Split(scan, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) != 3 || fields[1] != algorithm {
+				continue
+			}
+			key, err := base64.StdEncoding.DecodeString(fields[2])
+			if err != nil || len(key) < 32 {
+				continue
+			}
+			digest := sha256.Sum256(key)
+			return "SHA256:" + base64.RawStdEncoding.EncodeToString(digest[:]), nil
+		}
+	}
+	return "", fmt.Errorf("No supported SFTP host key was detected")
 }
