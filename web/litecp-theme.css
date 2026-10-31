@@ -526,3 +526,18 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] body form > .button[type="submit"],
 :root[data-theme] body .settings-body > .button[type="submit"],
 :root[data-theme] body .fm-dialog-body form > .button {display:flex;margin-left:auto;margin-right:auto;}
+
+/* Keep all login controls aligned; the eye occupies a separate outside gutter. */
+:root[data-theme] #loginForm .input-wrap {width:100%;box-sizing:border-box;}
+:root[data-theme] #loginForm .input-wrap > input,
+:root[data-theme] #loginForm > button[type="submit"] {width:100%;box-sizing:border-box;}
+:root[data-theme] #loginForm .input-wrap:has(> .password-toggle) > input {flex:0 0 100%;width:100%;}
+:root[data-theme] #loginForm .input-wrap > .password-toggle {position:absolute!important;left:calc(100% + 8px);right:auto;top:50%;transform:translateY(-50%);width:28px;height:36px;}
+@media(max-width:480px){:root[data-theme] .login-card {width:min(380px,calc(100% - 36px));}}
+
+#webmailSetupForm .two-column-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;}
+#webmailSetupForm .field {display:flex;flex-direction:column;gap:8px;min-width:0;}
+#webmailSetupForm input {width:100%;min-height:42px;box-sizing:border-box;padding:10px 12px;}
+:root[data-theme] #webmailSetupForm .webmail-setup-actions {justify-content:center;gap:12px;margin-top:18px;}
+:root[data-theme] #webmailSetupForm .webmail-setup-actions .button {width:auto!important;min-width:140px;min-height:38px;padding:8px 16px!important;flex:0 0 auto;white-space:nowrap;}
+@media(max-width:600px){#webmailSetupForm .two-column-fields {grid-template-columns:1fr;}}

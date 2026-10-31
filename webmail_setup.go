@@ -103,19 +103,14 @@ func (a *App) configureWebmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Hostname = strings.ToLower(strings.TrimSpace(input.Hostname))
+	// Certificate locations are server-owned defaults, never browser-supplied paths.
+	input.Certificate = filepath.Join("/etc/letsencrypt/live", input.Hostname, "fullchain.pem")
+	input.PrivateKey = filepath.Join("/etc/letsencrypt/live", input.Hostname, "privkey.pem")
+	if input.Port == 0 {
+		input.Port = 8444
+	}
 	if err := validateWebmailSetup(input); err != nil {
 		writeError(w, 400, err.Error())
-		return
-	}
-	for _, path := range []string{input.Certificate, input.PrivateKey} {
-		if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
-			writeError(w, 400, "Certificate or private-key file is unavailable. Install a matching trusted certificate first.")
-			return
-		}
-	}
-	// Check the hostname and expiry before allowing package/service changes.
-	if _, err := runCommand(r.Context(), 10*time.Second, "openssl", "x509", "-in", input.Certificate, "-noout", "-checkhost", input.Hostname, "-checkend", "0"); err != nil {
-		writeError(w, 400, "Certificate must be valid and match the mail hostname.")
 		return
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(input.Port)))
@@ -145,7 +140,14 @@ func (a *App) configureWebmail(w http.ResponseWriter, r *http.Request) {
 	}
 	// A system service keeps installation alive when the browser closes and runs
 	// outside the web service's read-only filesystem sandbox. Inputs are arguments.
-	wrapper := `set -e; umask 077; cd "$1"; trap 'result=$?; printf "%s\n" "$result" > result' EXIT; export LITECP_MAIL_HOSTNAME="$2" LITECP_MAIL_CERT="$3" LITECP_MAIL_KEY="$4" LITECP_WEBMAIL_PORT="$5"; /bin/bash ./install-features.sh mail > setup.log 2>&1`
+	wrapper := `set -e; umask 077; cd "$1"; trap 'result=$?; printf "%s\n" "$result" > result' EXIT; exec > setup.log 2>&1
+export LITECP_MAIL_HOSTNAME="$2" LITECP_MAIL_CERT="$3" LITECP_MAIL_KEY="$4" LITECP_WEBMAIL_PORT="$5"
+if ! test -s "$3" || ! test -s "$4" || ! openssl x509 -in "$3" -noout -checkhost "$2" -checkend 86400; then
+  echo "Obtaining a trusted TLS certificate for $2. DNS and HTTP port 80 must reach this server."
+  certbot certonly --nginx --non-interactive --agree-tos --register-unsafely-without-email --cert-name "$2" -d "$2" --keep-until-expiring
+fi
+openssl x509 -in "$3" -noout -checkhost "$2" -checkend 0
+/bin/bash ./install-features.sh mail`
 	_, err = runCommand(context.Background(), 15*time.Second, "systemd-run", "--quiet", "--collect", "--unit=litecp-webmail-setup", "--property=RuntimeMaxSec=3600", "--property=UMask=0077", "--", "/bin/bash", "-c", wrapper, "litecp-webmail-setup", directory, input.Hostname, input.Certificate, input.PrivateKey, strconv.Itoa(input.Port))
 	if err != nil {
 		writeError(w, 502, "Webmail setup could not start. Existing mailboxes were preserved; review server service logs.")

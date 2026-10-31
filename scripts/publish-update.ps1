@@ -66,7 +66,15 @@ try {
     $main = [IO.File]::ReadAllText($mainPath)
     $match = [regex]::Match($main, 'var version = "(\d+)\.(\d+)\.(\d+)"')
     if (!$match.Success) { throw 'Cannot determine current LiteCP version.' }
-    $version = '{0}.{1}.{2}' -f $match.Groups[1].Value,$match.Groups[2].Value,([int]$match.Groups[3].Value + 1)
+    # Preserve a version already changed locally, including an explicit release version.
+    $committedMain = (& git show 'HEAD:main.go') -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the published version.' }
+    $committedVersion = [regex]::Match($committedMain, 'var version = "(\d+\.\d+\.\d+)"')
+    if (!$committedVersion.Success) { throw 'Cannot determine the committed LiteCP version.' }
+    $version = '{0}.{1}.{2}' -f $match.Groups[1].Value,$match.Groups[2].Value,$match.Groups[3].Value
+    if ($version -eq $committedVersion.Groups[1].Value) {
+        $version = '{0}.{1}.{2}' -f $match.Groups[1].Value,$match.Groups[2].Value,([int]$match.Groups[3].Value + 1)
+    }
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [IO.File]::WriteAllText($mainPath, $main.Replace($match.Value, ('var version = "' + $version + '"')), $utf8)
     $installer = [IO.File]::ReadAllText($installPath)
@@ -107,7 +115,7 @@ try {
     Write-Host '[6/6] UPDATE SUCCESS. GitHub and LiteCP are updated.'
     Write-Host "Local transfer files: $output"
     Write-Host "Server source and previous binary: $remote"
-    Start-Process explorer.exe -ArgumentList $output
+    # Keep completion in the terminal; do not open the transfer folder.
 } catch {
     Write-Host "UPDATE FAILED: $($_.Exception.Message)" -ForegroundColor Red
     if ($published) { Write-Host 'GitHub was updated, but deployment did not finish. Review the failed stage above.' }
