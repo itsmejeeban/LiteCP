@@ -60,7 +60,7 @@ func (a *App) startAutoMigrationRestores() {
 			entries, _ := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
 			for _, entry := range entries {
 				job, err := a.loadLiveJob(entry.Name())
-				if err != nil || job.Source == "backup" || job.Status != "review" || job.Preview == nil {
+				if err != nil || job.Source.Platform == "backup" || job.Status != "review" || job.Preview == nil {
 					continue
 				}
 				// Compatible staged captures continue automatically, including jobs
@@ -256,7 +256,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	privateStage := ""
 	privateEntries := []os.DirEntry{}
 	privateSource := filepath.Join(root, "files", "private_home")
-	if job.Source == "backup" {
+	if job.Source.Platform == "backup" {
 		privateSource = filepath.Join(root, "files", "home")
 	}
 	if privateInfo, privateErr := os.Lstat(privateSource); privateErr == nil {
@@ -271,11 +271,11 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		home := filepath.Dir(site.Root)
 		for _, entry := range privateEntries {
-			if (!entry.IsDir() && job.Source != "backup") || entry.Type()&os.ModeSymlink != 0 || entry.Name() == "" || entry.Name() == "." || entry.Name() == ".." {
+			if (!entry.IsDir() && job.Source.Platform != "backup") || entry.Type()&os.ModeSymlink != 0 || entry.Name() == "" || entry.Name() == "." || entry.Name() == ".." {
 				fail(fmt.Errorf("private application data contains an unsupported top-level entry"))
 				return
 			}
-			if _, statErr := os.Lstat(filepath.Join(home, entry.Name())); statErr == nil && job.Source != "backup" {
+			if _, statErr := os.Lstat(filepath.Join(home, entry.Name())); statErr == nil && job.Source.Platform != "backup" {
 				fail(fmt.Errorf("private application directory %s already exists; existing data was preserved", entry.Name()))
 				return
 			} else if statErr != nil && !os.IsNotExist(statErr) {
@@ -373,7 +373,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	}
 	movedPrivate := []string{}
 	privatePrevious := map[string]string{}
-	if job.Source == "backup" && len(privateEntries) > 0 {
+	if job.Source.Platform == "backup" && len(privateEntries) > 0 {
 		recovery, e := os.MkdirTemp(filepath.Dir(site.Root), ".restore-home-previous-")
 		if e != nil {
 			_ = os.Rename(site.Root, stage)

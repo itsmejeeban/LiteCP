@@ -16,7 +16,7 @@ type directBackupRestoreContext struct{}
 func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		job, err := a.loadLiveJob(r.URL.Query().Get("id"))
-		if err != nil || job.Source != "backup" {
+		if err != nil || job.Source.Platform != "backup" {
 			writeError(w, 404, "Restore job not found")
 			return
 		}
@@ -70,7 +70,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, err.Error())
 		return
 	}
-	job := LiveMigrationJob{ID: safeSiteID(id), Source: "backup", Account: site.ID, Accounts: []LiveAccount{{ID: site.ID, Domain: site.Domain}}, Status: "running", Stage: "verify", Message: "Restore requested. Waiting for other server changes to finish.", CreatedAt: time.Now().UTC()}
+	job := LiveMigrationJob{ID: safeSiteID(id), Source: LiveSource{Platform: "backup"}, Account: site.ID, Accounts: []LiveAccount{{ID: site.ID, Domain: site.Domain}}, Status: "running", Stage: "verify", Message: "Restore requested. Waiting for other server changes to finish.", CreatedAt: time.Now().UTC()}
 	if err = a.saveLiveJob(&job); err != nil {
 		writeError(w, 500, err.Error())
 		return
