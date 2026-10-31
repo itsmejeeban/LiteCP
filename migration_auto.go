@@ -282,8 +282,8 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		home := filepath.Dir(site.Root)
 		for _, entry := range privateEntries {
-			if (!entry.IsDir() && job.Source.Platform != "backup") || entry.Type()&os.ModeSymlink != 0 || entry.Name() == "" || entry.Name() == "." || entry.Name() == ".." {
-				fail(fmt.Errorf("private application data contains an unsupported top-level entry"))
+			if err := validateMigrationPrivateEntry(entry); err != nil {
+				fail(err)
 				return
 			}
 			if _, statErr := os.Lstat(filepath.Join(home, entry.Name())); statErr == nil && job.Source.Platform != "backup" {
@@ -471,4 +471,13 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	}
 	_ = a.saveLiveJob(job)
 	a.store.AddActivity("Automatic website restore", domain+": application verification required", "info")
+}
+
+// The exporter captures both private application directories and standalone
+// files beside public_html. Links and device/socket entries remain forbidden.
+func validateMigrationPrivateEntry(entry os.DirEntry) error {
+	if entry.Name() == "" || entry.Name() == "." || entry.Name() == ".." || entry.Type()&os.ModeSymlink != 0 || (!entry.IsDir() && !entry.Type().IsRegular()) {
+		return fmt.Errorf("private application data contains an unsupported top-level entry: %s", entry.Name())
+	}
+	return nil
 }
