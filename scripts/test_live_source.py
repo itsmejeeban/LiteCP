@@ -5,6 +5,7 @@ import tempfile
 import json
 import pathlib
 import unittest
+import types
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('live_source',pathlib.Path(__file__).with_name('live-source.py'))
@@ -12,6 +13,18 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_plesk_discovery_supports_python36_subprocess(self):
+        def legacy_run(args, **kwargs):
+            self.assertNotIn('text', kwargs)
+            self.assertNotIn('capture_output', kwargs)
+            self.assertTrue(kwargs['universal_newlines'])
+            self.assertEqual(args, ['/usr/sbin/plesk', 'bin', 'subscription', '--list'])
+            return types.SimpleNamespace(returncode=0, stdout='example.com\nshop.example.com\n')
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), patch.object(source.shutil, 'which', return_value='/usr/sbin/plesk'), patch.object(source.subprocess, 'run', side_effect=legacy_run):
+            result = source.export({'platform':'plesk', 'mode':'discover'})
+        self.assertEqual(result['accounts'], [{'id':'example.com','domain':'example.com'}, {'id':'shop.example.com','domain':'shop.example.com'}])
+
+
     def test_cpanel_cleanup_removes_only_created_archives(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

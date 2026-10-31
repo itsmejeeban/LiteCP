@@ -14,7 +14,7 @@ import tarfile
 import time
 
 def command(args, log=None):
-    result = subprocess.run(args, stdout=log or subprocess.PIPE, stderr=log or subprocess.PIPE, text=log is None, env={**os.environ, 'LC_ALL':'C'}, timeout=5400)
+    result = subprocess.run(args, stdout=log or subprocess.PIPE, stderr=log or subprocess.PIPE, universal_newlines=log is None, env={**os.environ, 'LC_ALL':'C'}, timeout=5400)
     if result.returncode:
         raise RuntimeError('Source command failed: ' + pathlib.Path(args[0]).name + '; inspect the retained source export log')
     return result.stdout if log is None else ''
