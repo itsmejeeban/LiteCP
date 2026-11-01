@@ -9,6 +9,14 @@ Implemented: validated settings, authenticated API, Linux/cgroup and mount capab
 inspection, collision-free immutable slice naming, cgroup counter reader, deterministic
 CPU/OOM/disk/process policy tests, and a Website Tools draft configuration page.
 
+Create resource limit opens the configuration form for any managed website.
+Saved configurations appear in a paginated list below it. While the page is visible,
+observed website-UID CPU, summed RSS memory and process counts refresh every three
+seconds; bounded disk measurements refresh every minute. CPU needs two samples.
+Unavailable measurements are identified rather than displayed as zero. Shared
+services and container processes with remapped UIDs are excluded. These observations
+are not evidence of resource enforcement; saved configurations remain Disabled.
+
 Still required before activation can be offered:
 
 * A privileged execution boundary with durable per-site transition locks.
@@ -18,7 +26,7 @@ Still required before activation can be offered:
 * Real project-quota allocation, recursive assignment, enforcement verification and quota usage reads.
 * Independent monitor service, persisted runtime states/history/cooldowns and single-flight recovery.
 * Transactional rollback, PHP-version/domain lifecycle integration and restore revalidation.
-* Live usage/history/retry APIs and enabled controls, once the executor is implemented.
+* Fully isolated cgroup usage/history/retry APIs and enabled controls, once the executor is implemented.
 * Supported-Linux stress and cross-site isolation tests from the approved acceptance plan.
 
 The policy evaluator enforces a ten-second consecutive CPU exhaustion criterion,

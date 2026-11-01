@@ -237,8 +237,11 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 405, "Use GET or PUT")
 		return
 	}
-	a.mutationMu.Lock()
-	defer a.mutationMu.Unlock()
+	// Authenticated mutations are already serialized by withAuth.
+	if r.Method == http.MethodGet && r.URL.Query().Get("siteId") == "" {
+		a.websiteResourceList(w, r)
+		return
+	}
 	site := a.store.SiteByID(r.URL.Query().Get("siteId"))
 	if site == nil {
 		writeError(w, 404, "Website not found")

@@ -7,7 +7,7 @@ function fixture(count = 2) {
   const node = () => {
     const children = new Map();
     return {innerHTML:'',textContent:'',value:'',dataset:{},hidden:false,disabled:false,
-      classList:{add(){},remove(){},toggle(){}},setAttribute(){},append(){},remove(){},
+      classList:{add(){},remove(){},toggle(){}},setAttribute(){},append(){},remove(){},scrollIntoView(){this.scrolled=true},
       querySelector(s){if(!children.has(s))children.set(s,node());return children.get(s)},
       querySelectorAll(){return []}};
   };
@@ -65,4 +65,22 @@ test('pagination and filtering preserve selection, configuration remains website
   f.cp.navigate('website-waf');await f.idle();
   assert.equal(f.editor.dataset.pageView,'website-waf');
   assert.equal(f.requests.some(r=>r.options?.body?.scope==='server'),false);
+});
+
+
+test('Configure and Check Logs open the selected website without changing protection',async()=>{
+  const f=fixture();await f.open();
+  const rows=f.security.querySelector('[data-switch-rows]').innerHTML;
+  assert.match(rows,/data-switch-configure="s1"/);
+  assert.match(rows,/data-switch-logs="s1"/);
+  await f.click({'data-switch-configure':'',dataset:{switchConfigure:'s1'}});
+  assert.equal(f.editor.querySelector('[data-website]').value,'s1');
+  assert.equal(f.editor.scrolled,true);
+  assert.ok(f.requests.some(r=>r.path.includes('waf-events?scope=s1')));
+  await f.open();
+  await f.click({'data-switch-logs':'',dataset:{switchLogs:'s0'}});
+  assert.equal(f.editor.querySelector('[data-website]').value,'s0');
+  assert.equal(f.editor.querySelector('[data-security-events]').scrolled,true);
+  assert.ok(f.requests.some(r=>r.path.includes('waf-events?scope=s0&kind=detected')));
+  assert.equal(f.requests.some(r=>r.options?.method==='PUT'),false);
 });

@@ -862,7 +862,7 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("status")
 		for i := len(s.Live) - 1; i >= 0; i-- {
 			e := s.Live[i]
-			if !e.Time.Before(start) && e.Time.Before(end) && (filter == "" || strings.Contains(strings.ToLower(e.Path+" "+e.Referrer+" "+e.Browser+" "+e.Bot), filter)) && (code == "" || strconv.Itoa(e.Status) == code) {
+			if !e.Time.Before(start) && e.Time.Before(end) && (filter == "" || matchesTrafficSearch(e, r.URL.Query().Get("field"), filter)) && (code == "" || strconv.Itoa(e.Status) == code) {
 				entries = append(entries, e)
 			}
 		}
@@ -876,6 +876,26 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 	report["malformed"] = s.Malformed
 	report["geoAvailable"] = len(loadTrafficGeo(a.system.dataDir)) > 0
 	writeJSON(w, 200, report)
+}
+
+// Search uses only the privacy-preserving fields retained in live analytics.
+func matchesTrafficSearch(e trafficEvent, field, query string) bool {
+	values := map[string]string{
+		"page": e.Path, "method": e.Method, "referral": e.Referrer,
+		"address": e.Address, "protocol": e.Protocol, "cache": e.Cache,
+		"client": strings.Join([]string{e.Device, e.Browser, e.OS, e.Bot}, " "), "country": e.Country,
+	}
+	if values["cache"] == "" || values["cache"] == "-" {
+		values["cache"] = "Unavailable"
+	}
+	value, specific := values[field]
+	if !specific {
+		for _, v := range values {
+			value += " " + v
+		}
+		value += " " + strconv.Itoa(e.Status)
+	}
+	return strings.Contains(strings.ToLower(value), strings.ToLower(strings.TrimSpace(query)))
 }
 
 func trafficRange(q url.Values, now time.Time) (time.Time, time.Time, error) {
