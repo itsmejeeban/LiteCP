@@ -957,6 +957,7 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) (content string) {
+	defer func() { content = injectTrafficLogging(content, site) }()
 	defer func() { content = suspensionSiteConfig(content, site, site.Suspended) }()
 	if site.Application != nil {
 		return s.applicationNginx(site)
@@ -1185,6 +1186,9 @@ func (s *System) syncPHP73Pools() error {
 func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 	if s.demo {
 		return nil
+	}
+	if err := s.reconcileTrafficLogging(ctx, sites); err != nil {
+		return fmt.Errorf("prepare website analytics logging: %w", err)
 	}
 	if err := s.reconcileWebsiteCron(sites); err != nil {
 		return fmt.Errorf("reconcile custom cron jobs: %w", err)

@@ -1,9 +1,56 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+func TestWAFWebsiteSwitchPreservesRulesAndMode(t *testing.T) {
+	local := defaultWAFPolicy()
+	local.Mode = "block"
+	local.Managed = true
+	local.Rules = []WAFCustomRule{wafTestRule("block")}
+	local.RateLimits = []WAFRateLimit{{ID: "login", Enabled: true, PathPrefix: "/login", Requests: 20}}
+	p := WAFPolicies{Server: local, Websites: map[string]WAFPolicy{"one": local, "two": local, "other": local}}
+	setWAFWebsiteEnabled(&p, []string{"one", "two"}, false)
+	if !wafWebsiteDisabled(p, "one") || wafWebsiteDisabled(p, "other") {
+		t.Fatal("switch changed the wrong websites")
+	}
+	if p.Websites["one"].Mode != "block" || len(p.Websites["one"].Rules) != 1 || len(p.Websites["one"].RateLimits) != 1 {
+		t.Fatal("switch destroyed configured settings")
+	}
+	if effectiveWAFRules(p, "one") != "SecRuleEngine Off\n" || !strings.Contains(wafRateDirectives(p, "one"), "dry_run on") {
+		t.Fatal("disabled website still enforces inherited WAF settings")
+	}
+	setWAFWebsiteEnabled(&p, []string{"one"}, true)
+	if wafWebsiteDisabled(p, "one") || p.Websites["one"].Mode != "block" || !strings.Contains(effectiveWAFRules(p, "one"), "deny,status:403") {
+		t.Fatal("enable did not restore the configured policy")
+	}
+}
+
+func TestWAFWebsiteSwitchLegacyAndPersistence(t *testing.T) {
+	p := WAFPolicies{Server: defaultWAFPolicy(), Websites: map[string]WAFPolicy{"one": defaultWAFPolicy()}}
+	if wafWebsiteDisabled(p, "one") {
+		t.Fatal("legacy policy unexpectedly disabled")
+	}
+	setWAFWebsiteEnabled(&p, []string{"one"}, true)
+	if p.Websites["one"].Mode != "detect" || !p.Websites["one"].Managed {
+		t.Fatal("first enable must use managed detection")
+	}
+	setWAFWebsiteEnabled(&p, []string{"one"}, false)
+	data, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored WAFPolicies
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !wafWebsiteDisabled(restored, "one") {
+		t.Fatal("disabled switch was lost after reload")
+	}
+}
 
 func wafTestRule(action string) WAFCustomRule {
 	return WAFCustomRule{ID: "test", Name: "Admin path", Enabled: true, Action: action, Match: WAFCondition{Field: "path", Operator: "starts_with", Value: "/admin"}}

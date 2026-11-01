@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -42,6 +43,7 @@ type WAFRateLimit struct {
 	Burst      int    `json:"burst"`
 }
 type WAFPolicy struct {
+	Enabled    *bool           `json:"enabled,omitempty"`
 	Mode       string          `json:"mode"`
 	Managed    bool            `json:"managed"`
 	Rules      []WAFCustomRule `json:"rules"`
@@ -58,6 +60,27 @@ const wafHTTPPath = "/etc/nginx/conf.d/00-litecp-waf-policy.conf"
 
 var wafIdentifier = regexp.MustCompile(`^[A-Za-z0-9_-]{1,48}$`)
 var wafHeaderKey = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+var wafPolicyLock sync.Mutex
+
+// Nil preserves existing policy behavior; false suspends inspection while
+// retaining the configured mode, rules and rate limits for the next enable.
+func wafWebsiteDisabled(p WAFPolicies, id string) bool {
+	v, ok := p.Websites[id]
+	return ok && v.Enabled != nil && !*v.Enabled
+}
+
+func setWAFWebsiteEnabled(p *WAFPolicies, ids []string, enabled bool) {
+	for _, id := range ids {
+		v := p.Websites[id]
+		v.Enabled = new(bool)
+		*v.Enabled = enabled
+		if enabled && (v.Mode == "off" || v.Mode == "") {
+			v.Mode = "detect"
+			v.Managed = true
+		}
+		p.Websites[id] = v
+	}
+}
 
 func defaultWAFPolicy() WAFPolicy {
 	return WAFPolicy{Mode: "off", Rules: []WAFCustomRule{}, RateLimits: []WAFRateLimit{}}
@@ -291,6 +314,9 @@ func compileWAFCustom(p WAFPolicy, scope string, next *int) (string, error) {
 	return out.String(), nil
 }
 func effectiveWAFRules(p WAFPolicies, siteID string) string {
+	if wafWebsiteDisabled(p, siteID) {
+		return "SecRuleEngine Off\n"
+	}
 	local, ok := p.Websites[siteID]
 	if !ok {
 		local = defaultWAFPolicy()
@@ -319,6 +345,9 @@ func wafRateName(scope, id string) string {
 }
 
 func wafRateDirectives(p WAFPolicies, siteID string) string {
+	if wafWebsiteDisabled(p, siteID) {
+		return "    limit_req_dry_run on;\n"
+	}
 	var out strings.Builder
 	scopes := []struct {
 		name string
@@ -411,7 +440,7 @@ func advancedWAFBlock(site Site) (string, bool) {
 	if !ok {
 		local = defaultWAFPolicy()
 	}
-	enabled := p.Server.Mode != "off" || local.Mode != "off"
+	enabled := !wafWebsiteDisabled(p, site.ID) && (p.Server.Mode != "off" || local.Mode != "off")
 	block := "    # LITECP_WAF_BEGIN\n"
 	if enabled {
 		rulePath := "/etc/litecp/waf/site-" + safeSiteID(site.ID) + ".conf"
@@ -420,11 +449,13 @@ func advancedWAFBlock(site Site) (string, bool) {
 		}
 		block += "    modsecurity on;\n    modsecurity_rules_file " + rulePath + ";\n" + wafRateDirectives(p, site.ID)
 	} else {
-		block += "    modsecurity off;\n"
+		block += "    modsecurity off;\n    limit_req_dry_run on;\n"
 	}
 	return block + "    # LITECP_WAF_END", true
 }
 func (a *App) wafPolicies(w http.ResponseWriter, r *http.Request) {
+	wafPolicyLock.Lock()
+	defer wafPolicyLock.Unlock()
 	w.Header().Set("Cache-Control", "no-store")
 	path := wafPolicyPath
 	if a.system.demo {
@@ -456,25 +487,46 @@ func (a *App) wafPolicies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Scope  string    `json:"scope"`
-		Policy WAFPolicy `json:"policy"`
+		Scope      string    `json:"scope"`
+		Policy     WAFPolicy `json:"policy"`
+		WebsiteIDs []string  `json:"websiteIds"`
+		Enabled    *bool     `json:"enabled"`
 	}
 	if err = decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
-	if err = validateWAFPolicy(input.Policy); err != nil {
-		writeError(w, 400, err.Error())
-		return
-	}
-	if input.Scope != "server" && a.store.SiteByID(input.Scope) == nil {
-		writeError(w, 404, "Website not found.")
-		return
-	}
-	if input.Scope == "server" {
-		p.Server = input.Policy
+	if input.Enabled != nil {
+		if len(input.WebsiteIDs) == 0 || len(input.WebsiteIDs) > 1000 || input.Scope != "" {
+			writeError(w, 400, "Select between 1 and 1000 websites.")
+			return
+		}
+		for _, id := range input.WebsiteIDs {
+			if a.store.SiteByID(id) == nil {
+				writeError(w, 404, "Website not found. No settings were changed.")
+				return
+			}
+		}
+		setWAFWebsiteEnabled(&p, input.WebsiteIDs, *input.Enabled)
 	} else {
-		p.Websites[input.Scope] = input.Policy
+		if err = validateWAFPolicy(input.Policy); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		if input.Scope != "server" && a.store.SiteByID(input.Scope) == nil {
+			writeError(w, 404, "Website not found.")
+			return
+		}
+		if input.Scope == "server" {
+			p.Server = input.Policy
+		} else {
+			// Configuration changes must not undo a switch changed in Security.
+			input.Policy.Enabled = p.Websites[input.Scope].Enabled
+			if input.Policy.Enabled == nil && p.Websites[input.Scope].Mode == "off" && p.Server.Mode == "off" {
+				input.Policy.Enabled = new(bool)
+			}
+			p.Websites[input.Scope] = input.Policy
+		}
 	}
 	if !a.system.demo && a.system.WAFEngine() == "not installed" {
 		writeError(w, 409, "Install the WAF engine before applying policies.")
@@ -482,7 +534,10 @@ func (a *App) wafPolicies(w http.ResponseWriter, r *http.Request) {
 	}
 	// Nginx has one dry-run switch per vhost; reject mixed rate enforcement
 	// rather than silently enforcing a Detect-only policy.
-	for _, local := range p.Websites {
+	for id, local := range p.Websites {
+		if wafWebsiteDisabled(p, id) {
+			continue
+		}
 		if p.Server.Mode != "off" && local.Mode != "off" && p.Server.Mode != local.Mode && hasWAFRates(p.Server) && hasWAFRates(local) {
 			writeError(w, 409, "Server and website rate limits on the same website must use the same mode. Nginx cannot independently dry-run one inherited limiter.")
 			return
@@ -498,7 +553,11 @@ func (a *App) wafPolicies(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 502, "WAF policy was not applied: "+err.Error())
 		return
 	}
-	a.store.AddActivity("WAF policy updated", input.Scope+": "+input.Policy.Mode, "success")
+	if input.Enabled != nil {
+		a.store.AddActivity("Website WAF switches updated", fmt.Sprintf("%d websites; enabled: %t", len(input.WebsiteIDs), *input.Enabled), "success")
+	} else {
+		a.store.AddActivity("WAF policy updated", input.Scope+": "+input.Policy.Mode, "success")
+	}
 	writeJSON(w, 200, map[string]any{"ok": true, "message": "Policy validated and applied."})
 }
 func (a *App) applyWAFPolicies(ctx context.Context, p WAFPolicies, data []byte) error {
@@ -512,8 +571,8 @@ func (a *App) applyWAFPolicies(ctx context.Context, p WAFPolicies, data []byte) 
 		}
 		// Build directly from the proposed policy, without publishing it before validation.
 		local := p.Websites[site.ID]
-		block := "    # LITECP_WAF_BEGIN\n    modsecurity off;\n    # LITECP_WAF_END"
-		if p.Server.Mode != "off" || local.Mode != "off" {
+		block := "    # LITECP_WAF_BEGIN\n    modsecurity off;\n    limit_req_dry_run on;\n    # LITECP_WAF_END"
+		if !wafWebsiteDisabled(p, site.ID) && (p.Server.Mode != "off" || local.Mode != "off") {
 			block = "    # LITECP_WAF_BEGIN\n    modsecurity on;\n    modsecurity_rules_file /etc/litecp/waf/site-" + safeSiteID(site.ID) + ".conf;\n" + wafRateDirectives(p, site.ID) + "    # LITECP_WAF_END"
 		}
 		text := string(original)

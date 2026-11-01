@@ -12,23 +12,24 @@ import (
 )
 
 type Site struct {
-	PHPSettings map[string]string   `json:"phpSettings,omitempty"`
-	Suspended   bool                `json:"suspended,omitempty"`
-	Application *ApplicationHosting `json:"application,omitempty"`
-	ID          string              `json:"id"`
-	Domain      string              `json:"domain"`
-	Root        string              `json:"root"`
-	AppType     string              `json:"appType"`
-	AppVersion  string              `json:"appVersion,omitempty"`
-	PHPVersion  string              `json:"phpVersion"`
-	RuntimeUID  int                 `json:"runtimeUid,omitempty"`
-	RuntimeGID  int                 `json:"runtimeGid,omitempty"`
-	SSL         bool                `json:"ssl"`
-	Cron        bool                `json:"cron"`
-	WAFMode     string              `json:"wafMode,omitempty"`
-	Database    string              `json:"database,omitempty"`
-	DBUser      string              `json:"dbUser,omitempty"`
-	CreatedAt   time.Time           `json:"createdAt"`
+	ResourceLimits *WebsiteResourceLimits `json:"resourceLimits,omitempty"`
+	PHPSettings    map[string]string      `json:"phpSettings,omitempty"`
+	Suspended      bool                   `json:"suspended,omitempty"`
+	Application    *ApplicationHosting    `json:"application,omitempty"`
+	ID             string                 `json:"id"`
+	Domain         string                 `json:"domain"`
+	Root           string                 `json:"root"`
+	AppType        string                 `json:"appType"`
+	AppVersion     string                 `json:"appVersion,omitempty"`
+	PHPVersion     string                 `json:"phpVersion"`
+	RuntimeUID     int                    `json:"runtimeUid,omitempty"`
+	RuntimeGID     int                    `json:"runtimeGid,omitempty"`
+	SSL            bool                   `json:"ssl"`
+	Cron           bool                   `json:"cron"`
+	WAFMode        string                 `json:"wafMode,omitempty"`
+	Database       string                 `json:"database,omitempty"`
+	DBUser         string                 `json:"dbUser,omitempty"`
+	CreatedAt      time.Time              `json:"createdAt"`
 
 	// Provisioning markers are request-scoped and never persisted. They allow
 	// the API to remove only files it created if durable state saving fails.

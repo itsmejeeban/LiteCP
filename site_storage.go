@@ -138,7 +138,7 @@ func (s *System) labelSiteHome(ctx context.Context, site Site) error {
 
 func siteLogDirectives(site Site) string {
 	if home := siteHome(site); home != "" {
-		return fmt.Sprintf("    access_log %s/access.log;\n    error_log %s/error.log;\n", filepath.Join(home, "logs"), filepath.Join(home, "logs"))
+		return fmt.Sprintf("    access_log %s/access.log;\n    error_log %s/error.log;\n", filepath.Join(home, "logs"), filepath.Join(home, "logs")) + trafficLogDirective(site)
 	}
 	return ""
 }
