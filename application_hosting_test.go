@@ -50,6 +50,8 @@ func TestApplicationNginxParserFixtures(t *testing.T){
  for _,enabled:=range []bool{false,true}{t.Run(fmt.Sprintf("enabled=%t",enabled),func(t *testing.T){
   site:=Site{Domain:"application-fixture.test",Root:filepath.Join(root,"public"),Application:&ApplicationHosting{Enabled:enabled,Port:21000}}
   config:=fmt.Sprintf("pid %q;\nerror_log %q;\nevents {}\nhttp {\naccess_log off;\nclient_body_temp_path %q;\nproxy_temp_path %q;\nfastcgi_temp_path %q;\nuwsgi_temp_path %q;\nscgi_temp_path %q;\n%s\n}\n",filepath.Join(root,"nginx.pid"),filepath.Join(root,"error.log"),filepath.Join(root,"client-body"),filepath.Join(root,"proxy"),filepath.Join(root,"fastcgi"),filepath.Join(root,"uwsgi"),filepath.Join(root,"scgi"),system.nginxConfig(site))
+  // This fixture validates application routing with WAF disabled; host policy and dynamic modules are tested separately.
+  config=strings.Replace(config,wafBlock(site,site.WAFMode),legacyWAFBlock(site,"off"),1)
   path:=filepath.Join(root,fmt.Sprintf("nginx-%t.conf",enabled));if err:=os.WriteFile(path,[]byte(config),0600);err!=nil{t.Fatal(err)}
   output,err:=exec.Command(binary,"-t","-p",root+string(os.PathSeparator),"-c",path).CombinedOutput();if err!=nil{t.Fatalf("isolated application Nginx config rejected: %v\n%s",err,output)}
  })}

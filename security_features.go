@@ -81,6 +81,11 @@ func wafBlock(site Site, mode string) string {
 	if block, ok := advancedWAFBlock(site); ok {
 		return block
 	}
+	return legacyWAFBlock(site, mode)
+}
+
+// Legacy rendering is kept separate so isolated fixtures do not read host policy.
+func legacyWAFBlock(site Site, mode string) string {
 	if mode == "off" || mode == "" {
 		return "    # LITECP_WAF_BEGIN\n    # Web application firewall is disabled.\n    # LITECP_WAF_END"
 	}
@@ -88,6 +93,10 @@ func wafBlock(site Site, mode string) string {
 }
 
 func replaceWAFBlock(config string, site Site, mode string) (string, error) {
+	return replaceRenderedWAFBlock(config, wafBlock(site, mode))
+}
+
+func replaceRenderedWAFBlock(config, block string) (string, error) {
 	start := strings.Index(config, "    # LITECP_WAF_BEGIN")
 	endMarker := "    # LITECP_WAF_END"
 	if start >= 0 {
@@ -96,14 +105,14 @@ func replaceWAFBlock(config string, site Site, mode string) (string, error) {
 			return "", errors.New("managed WAF marker is incomplete")
 		}
 		end := start + endRelative + len(endMarker)
-		return config[:start] + wafBlock(site, mode) + config[end:], nil
+		return config[:start] + block + config[end:], nil
 	}
 	server := strings.Index(config, "server {")
 	if server < 0 {
 		return "", errors.New("managed Nginx server block was not found")
 	}
 	insert := server + len("server {")
-	return config[:insert] + "\n" + wafBlock(site, mode) + config[insert:], nil
+	return config[:insert] + "\n" + block + config[insert:], nil
 }
 
 func (s *System) SetWAFMode(ctx context.Context, site Site, mode string) error {

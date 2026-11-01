@@ -202,8 +202,8 @@ func TestActivityPaginationBounds(t *testing.T) {
 
 func TestWAFConfigPreservesTLS(t *testing.T) {
 	site := Site{ID: "example", Domain: "example.test"}
-	original := "server {\n    listen 443 ssl;\n    ssl_certificate /etc/letsencrypt/live/example/fullchain.pem;\n" + wafBlock(site, "off") + "\n}\nserver { return 301 https://$host$request_uri; }\n"
-	updated, err := replaceWAFBlock(original, site, "detect")
+	original := "server {\n    listen 443 ssl;\n    ssl_certificate /etc/letsencrypt/live/example/fullchain.pem;\n" + legacyWAFBlock(site, "off") + "\n}\nserver { return 301 https://$host$request_uri; }\n"
+	updated, err := replaceRenderedWAFBlock(original, legacyWAFBlock(site, "detect"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,14 +212,14 @@ func TestWAFConfigPreservesTLS(t *testing.T) {
 			t.Errorf("lost %s", value)
 		}
 	}
-	disabled, err := replaceWAFBlock(updated, site, "off")
+	disabled, err := replaceRenderedWAFBlock(updated, legacyWAFBlock(site, "off"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if disabled != original {
 		t.Fatal("WAF on/off modified unrelated TLS configuration")
 	}
-	if _, err := replaceWAFBlock("server {\n    # LITECP_WAF_BEGIN", site, "off"); err == nil {
+	if _, err := replaceRenderedWAFBlock("server {\n    # LITECP_WAF_BEGIN", legacyWAFBlock(site, "off")); err == nil {
 		t.Fatal("incomplete marker accepted")
 	}
 }
