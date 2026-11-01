@@ -11,7 +11,10 @@ func TestWAFWebsiteSwitchPreservesRulesAndMode(t *testing.T) {
 	local.Mode = "block"
 	local.Managed = true
 	local.Rules = []WAFCustomRule{wafTestRule("block")}
-	local.RateLimits = []WAFRateLimit{{ID: "login", Enabled: true, PathPrefix: "/login", Requests: 20}}
+	local.RateLimits = []WAFRateLimit{{ID: "login", Name: "Login requests", Enabled: true, PathPrefix: "/login", Requests: 20}}
+	if err := validateWAFPolicy(local); err != nil {
+		t.Fatalf("invalid switch test fixture: %v", err)
+	}
 	p := WAFPolicies{Server: local, Websites: map[string]WAFPolicy{"one": local, "two": local, "other": local}}
 	setWAFWebsiteEnabled(&p, []string{"one", "two"}, false)
 	if !wafWebsiteDisabled(p, "one") || wafWebsiteDisabled(p, "other") {
