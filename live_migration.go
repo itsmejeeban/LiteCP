@@ -380,46 +380,14 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "Confirm deletion of finished migration temporary files")
 			return
 		}
-		// Serialize against automatic restore and retry transitions.
-		a.mutationMu.Lock()
-		defer a.mutationMu.Unlock()
-		entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
+		// withAuth already holds mutationMu for this POST. Taking it again
+		// deadlocks before any files are removed.
+		result, err := a.cleanMigrationTemporaryFiles()
 		if err != nil {
-			writeError(w, 500, "Cannot read migration history")
+			writeError(w, 500, err.Error())
 			return
 		}
-		cleaned, skipped := 0, 0
-		for _, entry := range entries {
-			job, loadErr := a.loadLiveJob(entry.Name())
-			if loadErr != nil || !migrationCleanupEligible(job.Status) || liveCaptureActive(job.ID) {
-				skipped++
-				continue
-			}
-			root, rootErr := a.liveJobRoot(job.ID)
-			if rootErr != nil {
-				continue
-			}
-			// Fixed job-owned paths only; restored websites and recovery copies
-			// are outside these private capture/staging directories.
-			paths := []string{filepath.Join(root, "native-backup"), filepath.Join(root, "portable-backup"), filepath.Join(a.system.dataDir, "migrations", job.ID)}
-			for _, path := range paths {
-				if err := os.RemoveAll(path); err != nil {
-					writeError(w, 500, "Some migration temporary files could not be removed; retry cleanup")
-					return
-				}
-			}
-			job.NativeReady = false
-			job.NativeBytes = 0
-			job.Preview = nil
-			job.Progress = nil
-			job.Message = "Migration temporary archives and staging files cleaned. Website data and job history were preserved."
-			if err := a.saveLiveJob(&job); err != nil {
-				writeError(w, 500, "Temporary files removed but history could not be updated")
-				return
-			}
-			cleaned++
-		}
-		writeJSON(w, 200, map[string]any{"cleaned": cleaned, "skipped": skipped})
+		writeJSON(w, 200, result)
 		return
 	}
 	if input.Action == "cancel" {

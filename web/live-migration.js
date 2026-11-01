@@ -53,7 +53,16 @@
   $('#liveJobsRefresh').onclick=loadJobs;
   $('#liveJobsCancelAll').onclick=async event=>{if(!await window.LiteCPDialogs.confirm('Cancel every active migration? Captured files and source credentials will be kept.'))return;event.currentTarget.disabled=true;try{await cp.api('/api/live-migrations/cancel',{method:'POST',body:{action:'cancel-all',confirm:true}});await loadJobs();cp.showToast('Migrations cancelled','All cancellable migration jobs were stopped.');}catch(error){cp.handleError(error);}finally{event.currentTarget.disabled=false;}};
   const cleanupButton=document.createElement('button');cleanupButton.type='button';cleanupButton.className='button button-danger';cleanupButton.textContent='Clean migration temporary files';$('#liveJobsRefresh').before(cleanupButton);
-  cleanupButton.onclick=async()=>{if(!await window.LiteCPDialogs.confirm('Delete temporary ZIP archives and extracted staging folders for finished migrations? Restored websites, databases, history and active migrations are kept.'))return;cleanupButton.disabled=true;try{const result=await cp.api('/api/live-migrations',{method:'POST',body:{action:'cleanup',confirm:true}});await loadJobs();cp.showToast('Migration cleanup complete',result.cleaned+' stopped jobs cleaned. '+(result.skipped||0)+' active or protected jobs skipped.');}catch(error){cp.handleError(error);}finally{cleanupButton.disabled=false;}};
+  cleanupButton.onclick=async()=>{
+    if(!await window.LiteCPDialogs.confirm('Delete temporary capture archives, extracted folders for stopped migrations, and unused uploaded migration stages? Restored websites, databases, backups, history, credentials and active migrations are kept.'))return;
+    cleanupButton.disabled=true;
+    try{
+      const result=await cp.api('/api/live-migrations',{method:'POST',body:{action:'cleanup',confirm:true}});
+      await loadJobs();
+      const summary=result.removedPaths+' temporary paths removed; '+result.cleaned+' stopped jobs cleaned; '+result.stages+' additional staging folders cleaned. '+result.skipped+' protected or unrecognized entries kept.';
+      cp.showToast(result.issues?.length?'Migration cleanup needs attention':'Migration cleanup complete',summary+(result.issues?.length?' '+result.issues.join(' | '):' Refresh Disk Usages to rescan storage.'),result.issues?.length?'error':'success');
+    }catch(error){cp.handleError(error);}finally{cleanupButton.disabled=false;}
+  };
   document.addEventListener('migration-section-change',loadJobs);
   $('#liveSourceForm').onsubmit=async event=>{
     event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),status=$('#liveConnectStatus');

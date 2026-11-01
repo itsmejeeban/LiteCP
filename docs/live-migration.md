@@ -36,6 +36,12 @@ A native backup's contents depend on source configuration and successful provide
 
 Panel restarts interrupt captures; retained files need review. Failures retain partial files and source logs for investigation. No source cleanup or DNS cutover is performed by LiteCP. Real provider capture must be tested with a source account before production use; fixture tests are not proof of a complete live migration.
 
+## Temporary file cleanup
+
+After stopping migrations, use **Clean migration temporary files** and confirm the deletion scope. Cleanup removes native/portable captures and extracted staging for stopped jobs, failed restaging copies, and independently uploaded stages with valid migration manifests. Active migrations, restored website data, recovery backups, credentials and job history are preserved. Unrecognized directories and failures are reported rather than silently deleted. Refresh Disk Usages after cleanup to measure the remaining files.
+
+The cleanup POST is serialized by the authentication middleware. The handler must not acquire the same mutation lock again; doing so prevents cleanup from running.
+
 ## Provider references
 
 - [cPanel pkgacct](https://docs.cpanel.net/whm/scripts/the-pkgacct-script/124/)
