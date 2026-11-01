@@ -1,12 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 )
 
 const retainedWebsiteBackupRoot = "/var/backups/litecp/retained-websites"
@@ -52,7 +56,10 @@ func (a *App) retainWebsiteBackups(site Site) error {
 	}
 	if err = a.store.saveLocked(); err != nil {
 		a.store.cfg.Backups = original
-		rollback := os.Rename(target, old)
+		var rollback error
+		if _, statErr := os.Lstat(old); os.IsNotExist(statErr) {
+			rollback = os.Rename(target, old)
+		}
 		return fmt.Errorf("cannot save retained backup paths: %v (rollback: %v)", err, rollback)
 	}
 	return nil
@@ -69,7 +76,14 @@ func moveWebsiteBackupsToSafety(source, target string) error {
 		return fmt.Errorf("retained backup folder already exists; website removal stopped")
 	}
 	if err = os.Rename(source, target); err != nil {
-		return fmt.Errorf("cannot preserve local backups; website removal stopped: %w", err)
+		if !errors.Is(err, syscall.EXDEV) {
+			return fmt.Errorf("cannot preserve local backups; website removal stopped: %w", err)
+		}
+		// Across mounts rename is impossible. Copy and verify every byte first;
+		// leave originals intact until the confirmed website deletion removes home.
+		if err = copyRetainedBackupTree(source, target); err != nil {
+			return fmt.Errorf("cannot verify retained backups; website removal stopped (source and partial copy preserved): %w", err)
+		}
 	}
 	return nil
 }
@@ -87,4 +101,80 @@ func retainedWebsite(id string) (Site, error) {
 		return Site{}, fmt.Errorf("invalid retained website metadata")
 	}
 	return site, nil
+}
+
+// Never follow symlinks or overwrite an existing destination. Failed copies
+// remain available for review, and must never authorize website deletion.
+func copyRetainedBackupTree(source, target string) error {
+	return filepath.Walk(source, func(name string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, name)
+		if err != nil {
+			return err
+		}
+		dest := filepath.Join(target, relative)
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("backup contains a symbolic link: %s", relative)
+		}
+		if info.IsDir() {
+			return os.Mkdir(dest, 0700)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("backup contains a special file: %s", relative)
+		}
+		input, err := os.Open(name)
+		if err != nil {
+			return err
+		}
+		defer input.Close()
+		opened, err := input.Stat()
+		if err != nil {
+			return err
+		}
+		if !os.SameFile(info, opened) {
+			return fmt.Errorf("backup changed during preservation")
+		}
+		output, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		digest := sha256.New()
+		n, copyErr := io.Copy(io.MultiWriter(output, digest), input)
+		if copyErr == nil {
+			copyErr = output.Sync()
+		}
+		closeErr := output.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		after, err := input.Stat()
+		if err != nil {
+			return err
+		}
+		if n != info.Size() || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
+			return fmt.Errorf("backup changed during preservation")
+		}
+		verify, err := os.Open(dest)
+		if err != nil {
+			return err
+		}
+		check := sha256.New()
+		_, err = io.Copy(check, verify)
+		closeErr = verify.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if string(check.Sum(nil)) != string(digest.Sum(nil)) {
+			return fmt.Errorf("retained backup verification failed")
+		}
+		return nil
+	})
 }

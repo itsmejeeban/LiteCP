@@ -55,3 +55,41 @@ func TestRetainedScheduledBackupPaths(t *testing.T) {
 		t.Fatal("unmanaged path accepted")
 	}
 }
+
+func TestCrossFilesystemBackupCopyPreservesSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	target := filepath.Join(root, "target")
+	if err := os.MkdirAll(filepath.Join(source, "manual"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("verified backup content")
+	if err := os.WriteFile(filepath.Join(source, "manual", "backup.zip"), original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyRetainedBackupTree(source, target); err != nil {
+		t.Fatal(err)
+	}
+	for _, base := range []string{source, target} {
+		data, err := os.ReadFile(filepath.Join(base, "manual", "backup.zip"))
+		if err != nil || string(data) != string(original) {
+			t.Fatal("backup not preserved", err)
+		}
+	}
+	if err := copyRetainedBackupTree(source, target); err == nil {
+		t.Fatal("existing target overwritten")
+	}
+}
+func TestCrossFilesystemBackupCopyRejectsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.Mkdir(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(root, filepath.Join(source, "link")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := copyRetainedBackupTree(source, filepath.Join(root, "target")); err == nil {
+		t.Fatal("symlink followed")
+	}
+}
