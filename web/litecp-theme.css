@@ -589,3 +589,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 /* Non-running service badges must override the shared green status style. */
 :root[data-theme] .state-pill.stopped { background:#7f2630; color:#fff; border-color:#a13b47; }
 :root[data-theme] .state-pill.stopped .pulse-dot { background:#ffb4bc; }
+
+/* Keep the restore action and its explanatory text visually separate. */
+#backupRestoreInventory .backup-restore-action {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
+#backupRestoreInventory .backup-restore-action .button {flex-shrink:0;}

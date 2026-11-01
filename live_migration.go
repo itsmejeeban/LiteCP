@@ -31,6 +31,10 @@ const liveNativeLimit = int64(8 << 30)
 var liveJobIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 var liveAccountPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,252}$`)
 var liveJobMu sync.Mutex
+
+// Serialize state writes with cancellation so a stale worker cannot revive a
+// cancelled job. The marker also survives restarts and capture-worker processes.
+var liveStateMu sync.Mutex
 var liveRunning = map[string]bool{}
 var liveCancels = map[string]context.CancelFunc{}
 
@@ -59,6 +63,8 @@ type liveExportResult struct {
 	Error        string          `json:"error"`
 }
 type LiveMigrationJob struct {
+	CPanelWebsiteID      string                     `json:"cpanelWebsiteId,omitempty"`
+	ArtifactsCleaned     bool                       `json:"artifactsCleaned,omitempty"`
 	AutoRestore          bool                       `json:"autoRestore,omitempty"`
 	Progress             *migrationTransferProgress `json:"progress,omitempty"`
 	ID                   string                     `json:"id"`
@@ -95,7 +101,11 @@ func setLiveJobStage(job *LiveMigrationJob, stage, status, message string) {
 }
 
 func liveJobCancellable(job LiveMigrationJob) bool {
-	return job.Status == "queued" || job.Status == "running" || job.Status == "review" || job.Status == "awaiting-overwrite" || job.Status == "restoring"
+	switch job.Status {
+	case "queued", "connecting", "running", "review", "awaiting-overwrite", "restoring", "restore-review", "captured", "interrupted":
+		return true
+	}
+	return false
 }
 
 func migrationCleanupEligible(status string) bool {
@@ -112,31 +122,48 @@ func (a *App) liveMigrationCancelled(id string) bool {
 }
 
 func (a *App) cancelLiveMigration(id string) (LiveMigrationJob, error) {
+	liveStateMu.Lock()
 	job, err := a.loadLiveJob(id)
 	if err != nil {
+		liveStateMu.Unlock()
 		return job, err
 	}
+	if job.Status == "cancelled" {
+		liveStateMu.Unlock()
+		return job, nil
+	}
 	if !liveJobCancellable(job) {
-		return job, errors.New("this migration is no longer queued or running")
+		liveStateMu.Unlock()
+		return job, errors.New("this migration is completed or is applying its final changes and cannot be cancelled")
 	}
 	root, err := a.liveJobRoot(job.ID)
 	if err != nil {
+		liveStateMu.Unlock()
 		return job, err
 	}
 	if err = os.WriteFile(filepath.Join(root, "cancel-requested"), []byte(time.Now().UTC().Format(time.RFC3339)), 0600); err != nil {
+		liveStateMu.Unlock()
 		return job, errors.New("could not record the cancellation request")
 	}
-	if liveCaptureActive(job.ID) {
-		_, _ = runCommand(context.Background(), 15*time.Second, "systemctl", "stop", liveCaptureUnit(job.ID))
-	}
+	job.AutoRestore = false
+	job.Progress = nil
+	setLiveJobStage(&job, job.Stage, "cancelled", "Migration cancelled. Captured files and source credentials were retained and were not deleted.")
+	err = a.saveLiveJobLocked(&job)
+	liveStateMu.Unlock()
 	liveJobMu.Lock()
 	if cancel := liveCancels[job.ID]; cancel != nil {
 		cancel()
 	}
-	delete(liveRunning, job.ID)
 	liveJobMu.Unlock()
-	setLiveJobStage(&job, job.Stage, "cancelled", "Migration cancelled. Captured files and source credentials were retained and were not deleted.")
-	if err = a.saveLiveJob(&job); err != nil {
+	// Persist cancellation immediately; stopping a systemd worker may take time.
+	if !a.system.demo {
+		go func() {
+			if liveCaptureActive(job.ID) {
+				_, _ = runCommand(context.Background(), 15*time.Second, "systemctl", "stop", liveCaptureUnit(job.ID))
+			}
+		}()
+	}
+	if err != nil {
 		return job, errors.New("migration stopped but its cancelled status could not be saved")
 	}
 	return job, nil
@@ -169,12 +196,17 @@ func (a *App) liveMigrationCancellation(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 400, "Select a cancellation action")
 		return
 	}
+	a.cancelPendingLiveMigrations(w)
+}
+
+func (a *App) cancelPendingLiveMigrations(w http.ResponseWriter) {
 	entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		writeError(w, 500, "Cannot read live migration jobs")
 		return
 	}
 	cancelled := 0
+	failures := []string{}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -183,10 +215,12 @@ func (a *App) liveMigrationCancellation(w http.ResponseWriter, r *http.Request) 
 		if loadErr == nil && liveJobCancellable(job) {
 			if _, cancelErr := a.cancelLiveMigration(job.ID); cancelErr == nil {
 				cancelled++
+			} else {
+				failures = append(failures, job.ID+": "+cancelErr.Error())
 			}
 		}
 	}
-	writeJSON(w, 200, map[string]any{"cancelled": cancelled})
+	writeJSON(w, 200, map[string]any{"cancelled": cancelled, "errors": failures})
 }
 
 func validateLiveSource(source LiveSource) error {
@@ -238,9 +272,20 @@ func (a *App) liveJobRoot(id string) (string, error) {
 	return filepath.Join(a.system.dataDir, "live-migrations", id), nil
 }
 func (a *App) saveLiveJob(job *LiveMigrationJob) error {
+	liveStateMu.Lock()
+	defer liveStateMu.Unlock()
+	return a.saveLiveJobLocked(job)
+}
+
+func (a *App) saveLiveJobLocked(job *LiveMigrationJob) error {
 	root, err := a.liveJobRoot(job.ID)
 	if err != nil {
 		return err
+	}
+	if a.liveMigrationCancelled(job.ID) {
+		job.AutoRestore = false
+		job.Progress = nil
+		setLiveJobStage(job, job.Stage, "cancelled", "Migration cancelled. Captured files and source credentials were retained and were not deleted.")
 	}
 	job.UpdatedAt = time.Now().UTC()
 	content, err := json.Marshal(job)
@@ -261,6 +306,12 @@ func (a *App) loadLiveJob(id string) (LiveMigrationJob, error) {
 	}
 	if json.Unmarshal(content, &job) != nil || job.ID != id {
 		return job, errors.New("invalid live migration state")
+	}
+	if a.liveMigrationCancelled(id) {
+		job.Status = "cancelled"
+		job.AutoRestore = false
+		job.Progress = nil
+		job.Message = "Migration cancelled. Captured files and source credentials were retained and were not deleted."
 	}
 	return job, nil
 }
@@ -405,26 +456,10 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.Action == "cancel-all" {
 		if !input.Confirm {
-			writeError(w, 400, "Confirm cancellation of all queued and running migrations")
+			writeError(w, 400, "Confirm cancellation of all pending migrations")
 			return
 		}
-		entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			writeError(w, 500, "Cannot read live migration jobs")
-			return
-		}
-		cancelled := 0
-		for _, entry := range entries {
-			if entry.IsDir() {
-				job, loadErr := a.loadLiveJob(entry.Name())
-				if loadErr == nil && liveJobCancellable(job) {
-					if _, cancelErr := a.cancelLiveMigration(job.ID); cancelErr == nil {
-						cancelled++
-					}
-				}
-			}
-		}
-		writeJSON(w, 200, map[string]any{"cancelled": cancelled})
+		a.cancelPendingLiveMigrations(w)
 		return
 	}
 	if input.Action == "fingerprint" {
@@ -551,7 +586,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 404, err.Error())
 			return
 		}
-		if !input.Confirm || !original.CredentialsRetained || original.NativeReady || liveCaptureActive(original.ID) {
+		if !input.Confirm || !original.CredentialsRetained || !migrationCleanupEligible(original.Status) || liveCaptureActive(original.ID) {
 			writeError(w, 409, "Retry requires retained credentials and a stopped, incomplete capture.")
 			return
 		}
@@ -583,9 +618,22 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		original.ID = id
+		original.CPanelWebsiteID = ""
+		original.ArtifactsCleaned = false
+		original.NativeReady = false
+		original.NativeBytes = 0
+		original.NativeSHA256 = ""
+		original.SourceExport = ""
+		original.SourceExportRetained = false
+		original.Warnings = nil
+		original.Preview = nil
+		original.Progress = nil
+		original.Stage = "connection"
+		original.CompletedAt = time.Time{}
 		original.Status = "connected"
 		original.Message = "Previous interrupted capture retained. Select the website and capture again in a restart-independent worker."
 		original.CreatedAt = time.Now().UTC()
+		original.StageStartedAt = original.CreatedAt
 		if err = a.saveLiveJob(&original); err != nil {
 			writeError(w, 500, err.Error())
 			return
@@ -636,6 +684,13 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			delete(liveRunning, job.ID)
 			liveJobMu.Unlock()
 			writeError(w, 500, "Could not save capture job")
+			return
+		}
+		if job.Status == "cancelled" || a.liveMigrationCancelled(job.ID) {
+			liveJobMu.Lock()
+			delete(liveRunning, job.ID)
+			liveJobMu.Unlock()
+			writeJSON(w, 200, job)
 			return
 		}
 		_, startErr := runCommand(r.Context(), 15*time.Second, "systemd-run", "--unit="+liveCaptureUnit(job.ID), "--collect", "--property=RuntimeMaxSec=7500", "--property=UMask=0077", "--setenv=LITECP_DATA_DIR="+a.system.dataDir, "/usr/local/bin/litecp", "capture-worker", job.ID)

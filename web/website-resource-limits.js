@@ -19,7 +19,7 @@
  const visible=()=>location.hash==='#website-resource-limits'&&!document.hidden;
  function renderList(){
   const pages=Math.max(1,Math.ceil(items.length/10));listPage=Math.min(listPage,pages);
-  $('[data-resources]').innerHTML=items.slice((listPage-1)*10,listPage*10).map(row=>{const u=row.usage||{},p=row.settings;return `<tr><td>${esc(row.domain)}<br><small>Requests: ${p.concurrentRequests}; I/O read/write: ${p.readMiBPerSecond||'Unlimited'} / ${p.writeMiBPerSecond||'Unlimited'} MiB/s</small></td><td>Disabled<br><small>Not enforced</small></td><td>${u.cpuPercent==null?(u.available?'Sampling…':'Unavailable'):Number(u.cpuPercent).toFixed(1)+'%'} / ${p.cpuPercent}%</td><td>${u.available?esc(cp.formatBytes(u.memoryBytes)):'Unavailable'} / ${esc(cp.formatBytes(p.memoryMiB*1048576))}</td><td>${u.diskBytes==null?'Unavailable / pending':esc(cp.formatBytes(u.diskBytes))} / ${esc(cp.formatBytes(p.diskMiB*1048576))}</td><td>${u.available?u.processes:'Unavailable'} / ${p.tasks}</td><td><button type="button" class="button button-secondary" data-edit-resource="${esc(row.id)}">Edit</button></td></tr>`}).join('')||'<tr><td colspan="7">No resource limits created. Choose a website above to create its settings.</td></tr>';
+  $('[data-resources]').innerHTML=items.slice((listPage-1)*10,listPage*10).map(row=>{const u=row.usage||{},p=row.settings;return `<tr><td>${esc(row.domain)}<br><small>Requests: ${p.concurrentRequests}; I/O read/write: ${p.readMiBPerSecond||'Unlimited'} / ${p.writeMiBPerSecond||'Unlimited'} MiB/s</small></td><td>Disabled<br><small>Not enforced</small></td><td>${u.cpuPercent==null?(u.available?'Sampling…':'Unavailable'):Number(u.cpuPercent).toFixed(1)+'%'} / ${p.cpuPercent}%</td><td>${u.available?esc(cp.formatBytes(u.memoryBytes)):'Unavailable'} / ${esc(cp.formatBytes(p.memoryMiB*1048576))}</td><td>${u.diskBytes==null?'Unavailable / pending':esc(cp.formatBytes(u.diskBytes))} / ${esc(cp.formatBytes(p.diskMiB*1048576))}</td><td>${u.available?u.processes:'Unavailable'} / ${p.tasks}</td><td><button type="button" class="button button-secondary" data-edit-resource="${esc(row.id)}">Edit</button> <button type="button" class="button button-danger" data-remove-resource="${esc(row.id)}">Remove</button></td></tr>`}).join('')||'<tr><td colspan="7">No resource limits created. Choose a website above to create its settings.</td></tr>';
   $('[data-count]').textContent=`Page ${listPage} of ${pages} · ${items.length} websites`;
   $('[data-previous]').disabled=listPage<=1;$('[data-next]').disabled=listPage>=pages;
  }
@@ -32,7 +32,15 @@
  function activate(){clearTimeout(timer);if(visible())loadList();}
  $('[data-refresh]').onclick=loadList;
  $('[data-previous]').onclick=()=>{listPage--;renderList()};$('[data-next]').onclick=()=>{listPage++;renderList()};
- $('[data-resources]').onclick=e=>{const button=e.target.closest('[data-edit-resource]');if(!button||busy)return;select.value=button.dataset.editResource;openEditor()};
+ $('[data-resources]').onclick=async e=>{
+ const remove=e.target.closest('[data-remove-resource]');
+ if(remove){
+  if(busy)return;const id=remove.dataset.removeResource,row=items.find(item=>item.id===id);if(!row)return;
+  if(!await window.LiteCPDialogs.confirm(`Remove saved resource-limit settings for ${row.domain}? Website files, databases and services will be kept.`,{title:'Remove resource limit',confirmText:'Remove',danger:true}))return;
+  busy=true;remove.disabled=true;
+  try{await cp.api('/api/sites/resource-limits?siteId='+encodeURIComponent(id),{method:'DELETE',body:{confirm:true}});if(active===id){generation++;active='';editor.hidden=true;}status.textContent='Resource settings removed.';await loadList();}catch(error){cp.handleError(error);}finally{busy=false;remove.disabled=false;}return;
+ }
+const button=e.target.closest('[data-edit-resource]');if(!button||busy)return;select.value=button.dataset.editResource;openEditor()};
  const previousNavigate=window.LiteCPFeatures.navigate;
  window.LiteCPFeatures.navigate=function(...args){previousNavigate?.apply(this,args);activate()};
  window.addEventListener('hashchange',activate);document.addEventListener('visibilitychange',activate);

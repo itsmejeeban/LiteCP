@@ -102,6 +102,11 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 		}
 		preview.Files++
 		preview.Bytes += written
+		// Mail folders and attachments must never be classified as web roots
+		// or database exports, even when named public_html or mysql.
+		if strings.HasPrefix(clean, "cpanel_account/") {
+			return nil
+		}
 		parts := strings.Split(clean, "/")
 		for i, part := range parts {
 			if ((platform == "cpanel" || platform == "litecp") && part == "public_html") || (platform == "plesk" && part == "httpdocs") {
@@ -595,6 +600,9 @@ func (b *limitedBuffer) Write(value []byte) (int, error) {
 // Application SQL assets (plugins, migrations, templates) are website files,
 // not database exports to import as independent schemas.
 func isMigrationDatabaseDump(name, platform string) bool {
+	if strings.HasPrefix(name, "cpanel_account/") {
+		return false
+	}
 	if !strings.HasSuffix(strings.ToLower(name), ".sql") || strings.EqualFold(path.Base(name), "mysql.sql") {
 		return false
 	}

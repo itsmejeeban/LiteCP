@@ -63,7 +63,7 @@ class LiveSourceTests(unittest.TestCase):
                 link=tarfile.TarInfo('cpmove-user/homedir/public_html/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/shadow';target.addfile(link)
             self.assertEqual(source.cpanel_portable(archive,portable),(1,2,1))
             with tarfile.open(portable) as result:
-                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php'])
+                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php','cpanel_account/format.json'])
 
     def test_cpanel_portable_keeps_laravel_env_without_account_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -74,9 +74,36 @@ class LiveSourceTests(unittest.TestCase):
                     info=tarfile.TarInfo(name); info.size=4; target.addfile(info,io.BytesIO(b'test'))
             source.cpanel_portable(archive,portable)
             with tarfile.open(portable) as result:
-                self.assertEqual(result.getnames(),['private_home/.env','public_html/index.php'])
+                self.assertEqual(result.getnames(),['private_home/.env','public_html/index.php','cpanel_account/format.json'])
 
-    @patch.object(source.os,'geteuid',return_value=0)
+    def test_cpanel_portable_exports_mail_metadata_messages_and_cron(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = pathlib.Path(directory)/'native.tar.gz'
+            portable = pathlib.Path(directory)/'portable.tar.gz'
+            entries = {
+                'cpmove-user/homedir/public_html/index.php': b'website',
+                'cpmove-user/homedir/etc/example.test/shadow': b'sales:hashed:',
+                'cpmove-user/homedir/etc/example.test/quota': b'sales:2097152',
+                'cpmove-user/homedir/mail/example.test/sales/cur/message:2,S': b'mail',
+                'cpmove-user/cron/user': b'*/5 * * * * /usr/bin/php task.php',
+                'cpmove-user/homedir/etc/private-secret': b'excluded',
+                'cpmove-user/homedir/.ssh/id_rsa': b'excluded',
+            }
+            with tarfile.open(archive, 'w:gz') as target:
+                for name, value in entries.items():
+                    info = tarfile.TarInfo(name)
+                    info.size = len(value)
+                    target.addfile(info, io.BytesIO(value))
+            source.cpanel_portable(archive, portable, '/home/user')
+            with tarfile.open(portable) as result:
+                names = result.getnames()
+                self.assertIn('cpanel_account/etc/example.test/shadow', names)
+                self.assertIn('cpanel_account/mail/example.test/sales/cur/message%3A2,S', names)
+                self.assertIn('cpanel_account/cron/user', names)
+                self.assertFalse(any('private-secret' in name or 'id_rsa' in name for name in names))
+                self.assertEqual(json.load(result.extractfile('cpanel_account/format.json')), {'version':1, 'sourceHome':'/home/user'})
+
+    @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)
     @patch.object(source,'command')
     def test_cpanel_discovery_parses_native_account_inventory(self,command,*unused):
@@ -85,14 +112,14 @@ class LiveSourceTests(unittest.TestCase):
         self.assertEqual(result['accounts'],[{'id':'example','domain':'example.test'}])
         self.assertEqual(command.call_args.args[0],['/usr/local/cpanel/bin/whmapi1','--output=json','listaccts'])
 
-    @patch.object(source.os,'geteuid',return_value=0)
+    @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)
     @patch.object(source,'command',return_value='{"metadata":{"result":0}}')
     def test_failed_provider_discovery_does_not_invent_accounts(self,*unused):
         with self.assertRaisesRegex(RuntimeError,'rejected'):
             source.export({'platform':'cpanel','mode':'discover'})
 
-    @patch.object(source.os,'geteuid',return_value=0)
+    @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.shutil,'which',return_value='/usr/sbin/plesk')
     @patch.object(source,'command',return_value='example.test\nsecond.test\n')
     def test_plesk_subscription_inventory(self,command,*unused):
@@ -100,7 +127,7 @@ class LiveSourceTests(unittest.TestCase):
         self.assertEqual([x['id'] for x in result['accounts']],['example.test','second.test'])
         self.assertEqual(command.call_args.args[0],['/usr/sbin/plesk','bin','subscription','--list'])
 
-    @patch.object(source.os,'geteuid',return_value=0)
+    @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)
     @patch.object(source,'command',return_value='{"metadata":{"result":1},"data":{"acct":[{"user":"example"}]}}')
     @patch.object(source.pathlib.Path,'mkdir')
@@ -109,7 +136,7 @@ class LiveSourceTests(unittest.TestCase):
             source.export({'platform':'cpanel','mode':'capture','account':'other;command','job':'abcdefghijklmnop'})
         mkdir.assert_not_called()
 
-    @patch.object(source.os,'geteuid',return_value=1000)
+    @patch.object(source.os,'geteuid',return_value=1000,create=True)
     def test_non_root_source_is_rejected(self,*unused):
         with self.assertRaisesRegex(RuntimeError,'Root SSH'):
             source.export({'platform':'cpanel','mode':'discover'})

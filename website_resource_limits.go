@@ -233,8 +233,8 @@ func readResourceCounters(dir string, at time.Time) (resourceSample, error) {
 }
 
 func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPut {
-		writeError(w, 405, "Use GET or PUT")
+	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
+		writeError(w, 405, "Use GET, PUT or DELETE")
 		return
 	}
 	// Authenticated mutations are already serialized by withAuth.
@@ -249,6 +249,28 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		writeJSON(w, 200, map[string]any{"settings": site.ResourceLimits, "state": "Disabled", "enforced": false, "capabilities": inspectResourceCapabilities(*site), "usage": nil, "history": []any{}, "nextRecovery": nil})
+		return
+	}
+	if r.Method == http.MethodDelete {
+		var body struct {
+			Confirm bool `json:"confirm"`
+		}
+		if decodeJSONWithLimit(r, &body, 4096) != nil || !body.Confirm {
+			writeError(w, 400, "Confirm removal of the saved resource settings.")
+			return
+		}
+		if site.ResourceLimits != nil && site.ResourceLimits.Enabled {
+			writeError(w, 409, "Disable enforcement before removing resource settings.")
+			return
+		}
+		if site.ResourceLimits != nil {
+			if err := a.store.UpdateSite(site.ID, func(s *Site) { s.ResourceLimits = nil }); err != nil {
+				writeError(w, 500, "Could not remove resource settings")
+				return
+			}
+			_ = a.store.AddActivity("Resource settings removed", site.Domain, "warning")
+		}
+		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
 	var p WebsiteResourceLimits

@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import os
+import io
 import pathlib
 import re
 import shutil
@@ -43,7 +44,7 @@ def cleanup_cpanel_export(root, account):
             removed.append(name)
     return removed
 
-def cpanel_portable(archive, portable):
+def cpanel_portable(archive, portable, source_home=""):
     website_files, private_files, skipped = 0, 0, 0
     # cPanel applications commonly keep private source/configuration beside
     # public_html. Preserve application-owned directories, but never copy
@@ -56,7 +57,18 @@ def cpanel_portable(archive, portable):
         for member in original:
             parts = pathlib.PurePosixPath(member.name).parts
             destination = None
-            if 'public_html' in parts:
+            # Match account-level paths only. Never confuse a website's own
+            # mail/etc/cron directories with cPanel's account metadata.
+            relative_account = parts[1:] if parts and parts[0] not in ('homedir', 'mysql', 'cron') else parts
+            if relative_account and relative_account[0] == 'cron' and len(relative_account) == 2:
+                destination = 'cpanel_account/cron/' + relative_account[1]
+            elif len(relative_account) >= 3 and relative_account[0] == 'homedir' and relative_account[1] in ('mail', 'etc'):
+                relative = relative_account[2:]
+                if relative_account[1] == 'mail' and len(relative) >= 2 and '.' in relative[0]:
+                    destination = 'cpanel_account/mail/' + '/'.join(relative)
+                elif relative_account[1] == 'etc' and len(relative) == 2 and relative[1] in ('shadow', 'passwd', 'quota'):
+                    destination = 'cpanel_account/etc/' + '/'.join(relative)
+            elif 'public_html' in parts:
                 destination = '/'.join(parts[parts.index('public_html'):])
             elif 'mysql' in parts and member.name.lower().endswith('.sql') and parts[-1].lower() != 'mysql.sql':
                 destination = 'mysql/' + parts[-1]
@@ -72,6 +84,8 @@ def cpanel_portable(archive, portable):
                 continue
             if '..' in pathlib.PurePosixPath(destination).parts:
                 raise RuntimeError('Unsafe website path in native cPanel backup; native export retained')
+            if destination.startswith("cpanel_account/mail/"):
+                destination = destination.replace("%", "%25").replace(":", "%3A")
             info = copy.copy(member)
             info.name = destination
             info.pax_headers = {}
@@ -86,6 +100,11 @@ def cpanel_portable(archive, portable):
                 website_files += 1
             elif destination.startswith('private_home/') and member.isfile():
                 private_files += 1
+        metadata = json.dumps({'version':1, 'sourceHome':source_home}).encode('utf-8')
+        info = tarfile.TarInfo('cpanel_account/format.json')
+        info.size = len(metadata)
+        info.mode = 0o600
+        target.addfile(info, io.BytesIO(metadata))
     return website_files, private_files, skipped
 
 def export(request):
@@ -171,9 +190,10 @@ def export(request):
         archive = root / ('cpmove-' + account + '.tar.gz')
         if not archive.is_file() or archive.is_symlink():
             raise RuntimeError('The cPanel native archive was not created at its expected location')
-        result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['The native archive retains account data. Website import does not activate mail, DNS, SSL, package settings or arbitrary cron jobs.']}
+        result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
-        website_files, private_files, skipped = cpanel_portable(archive, portable)
+        import pwd
+        website_files, private_files, skipped = cpanel_portable(archive, portable, pwd.getpwnam(account).pw_dir)
         os.chmod(portable,0o600)
         if website_files:
             result['portable'] = describe(portable)

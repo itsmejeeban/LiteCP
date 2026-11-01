@@ -118,6 +118,9 @@ func (a *App) startNextQueuedMigration() {
 	if err = a.saveLiveJob(&job); err != nil {
 		return
 	}
+	if job.Status == "cancelled" || a.liveMigrationCancelled(job.ID) {
+		return
+	}
 	_, err = runCommand(context.Background(), 15*time.Second, "systemd-run", "--unit="+liveCaptureUnit(job.ID), "--collect", "--property=RuntimeMaxSec=7500", "--property=UMask=0077", "--setenv=LITECP_DATA_DIR="+a.system.dataDir, "/usr/local/bin/litecp", "capture-worker", job.ID)
 	if err != nil {
 		job.Status = "failed"

@@ -120,6 +120,7 @@ func (a *App) cleanMigrationTemporaryFiles() (migrationCleanupResult, error) {
 			continue
 		}
 		job.NativeReady, job.NativeBytes, job.Preview, job.Progress = false, 0, nil, nil
+		job.ArtifactsCleaned = true
 		job.Message = "Migration temporary archives and staging files cleaned. Website data and job history were preserved."
 		if err := a.saveLiveJob(&job); err != nil {
 			result.Issues = append(result.Issues, root+": temporary files removed but history update failed")

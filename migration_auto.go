@@ -93,6 +93,10 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, err.Error())
 		return
 	}
+	if job.ArtifactsCleaned || (!job.NativeReady && job.Preview == nil) {
+		writeError(w, 409, "Migration files were cleaned. Capture the source account again before restoring.")
+		return
+	}
 	domain := migrationJobDomain(job)
 	if job.Status == "captured" {
 		if err = a.stageRetainedCapture(&job); err != nil {
@@ -145,7 +149,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		return
 	}
 	existing := a.store.SiteByDomain(domain)
-	if existing != nil && !overwrite {
+	if existing != nil && !overwrite && !(job.Source.Platform == "cpanel" && job.CPanelWebsiteID == existing.ID) {
 		setLiveJobStage(job, "preflight", "awaiting-overwrite", "Domain already exists. Review the conflict and explicitly confirm overwrite before migration continues.")
 		_ = a.saveLiveJob(job)
 		return
@@ -165,6 +169,39 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			}
 		}
 		preview.Databases = exports
+	}
+	// Resume only the services phase of this exact website after a partial
+	// commit. Never re-import SQL or replace newly delivered mail on retry.
+	if job.Source.Platform == "cpanel" && existing != nil && job.CPanelWebsiteID == existing.ID {
+		plan, e := planCPanelServices(filepath.Join(root, "files"), *job)
+		if e != nil {
+			fail(e)
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
+		defer cancel()
+		liveJobMu.Lock()
+		liveCancels[job.ID] = cancel
+		liveJobMu.Unlock()
+		defer func() {
+			liveJobMu.Lock()
+			delete(liveCancels, job.ID)
+			liveJobMu.Unlock()
+		}()
+		setLiveJobStage(job, "restore", "restoring", "Resuming cPanel mailbox and cron import. Website files and databases will not be replaced again.")
+		_ = a.saveLiveJob(job)
+		if job.Status == "cancelled" || a.liveMigrationCancelled(job.ID) {
+			fail(context.Canceled)
+			return
+		}
+		if e = a.importCPanelServices(ctx, plan, *existing); e != nil {
+			fail(e)
+			return
+		}
+		job.Warnings = append(job.Warnings, plan.Warnings...)
+		setLiveJobStage(job, "result", "restored-review", "Website restore retained. "+cpanelServiceSummary(plan)+" Verify mail delivery, schedules, application health and DNS before cutover.")
+		_ = a.saveLiveJob(job)
+		return
 	}
 	if len(preview.Roots) != 1 {
 		fail(fmt.Errorf("multiple or missing website roots require manual mapping"))
@@ -215,6 +252,17 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 	} else if len(preview.Databases) > 0 {
 		customConfigs, customDatabases, err = genericMigrationDatabasePlan(source, filepath.Join(root, "files", "private_home"), preview.Databases)
+		if err != nil {
+			fail(err)
+			return
+		}
+	}
+	var cpanelPlan cpanelServicesPlan
+	if job.Source.Platform == "cpanel" {
+		cpanelPlan, err = planCPanelServices(filepath.Join(root, "files"), *job)
+		if err == nil {
+			err = a.preflightCPanelServices(cpanelPlan)
+		}
 		if err != nil {
 			fail(err)
 			return
@@ -456,7 +504,13 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	// interrupt them, because stopping halfway could leave the website split
 	// between its old and restored trees.
 	setLiveJobStage(job, "restore", "committing", "Applying the verified website restore.")
-	_ = a.saveLiveJob(job)
+	if err = a.saveLiveJob(job); err != nil || job.Status == "cancelled" {
+		if err == nil {
+			err = context.Canceled
+		}
+		fail(err)
+		return
+	}
 	liveJobMu.Lock()
 	delete(liveCancels, job.ID)
 	liveJobMu.Unlock()
@@ -540,15 +594,35 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		return
 	}
 	site.AppType = app
-	if app != "regular" {
+	if job.Source.Platform == "cpanel" {
+		job.CPanelWebsiteID = site.ID
+		if err = a.saveLiveJob(job); err != nil {
+			fail(err)
+			return
+		}
+	}
+
+	if app != "regular" && len(cpanelPlan.Cron) == 0 {
 		if err = a.system.SetCron(site, true); err != nil {
 			fail(err)
 			return
 		}
 		_ = a.store.UpdateSite(site.ID, func(value *Site) { value.Cron = true })
 	}
+	if job.Source.Platform == "cpanel" {
+		if err = a.importCPanelServices(ctx, cpanelPlan, site); err != nil {
+			setLiveJobStage(job, "restore", "restore-review", "Website restored; mailbox/cron import needs attention: "+err.Error()+". Destination data and recovery files were retained.")
+			_ = a.saveLiveJob(job)
+			return
+		}
+		job.Warnings = append(job.Warnings, cpanelPlan.Warnings...)
+		job.Warnings = append(job.Warnings, cpanelServiceSummary(cpanelPlan))
+	}
 	code, e := runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
-	setLiveJobStage(job, "result", "restored-review", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Verify application pages before DNS cutover. Mail, DNS records, SSL and custom cron jobs still require separate review. Previous files are retained for recovery.")
+	setLiveJobStage(job, "result", "restored-review", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Verify application pages before DNS cutover. DNS records and SSL still require separate review. Previous files are retained for recovery.")
+	if job.Source.Platform != "cpanel" && job.Source.Platform != "backup" {
+		job.Message += " Mail and source cron jobs require separate configuration."
+	}
 	if e != nil || strings.TrimSpace(code) == "000" || strings.HasPrefix(strings.TrimSpace(code), "5") || strings.HasPrefix(strings.TrimSpace(code), "4") {
 		job.Message = "Website restored but its local health check failed. DNS must not be changed. Previous files are retained for recovery."
 	}

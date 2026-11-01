@@ -108,6 +108,57 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, state)
 		return
 	}
+	if r.URL.Query().Get("port") != "" {
+		port, direction, zone := r.URL.Query().Get("port"), r.URL.Query().Get("direction"), r.URL.Query().Get("zone")
+		var selected *profileRule
+		for i := range state.Rules {
+			rule := &state.Rules[i]
+			if rule.Port == port && rule.Direction == direction && rule.Zone == zone {
+				selected = rule
+				break
+			}
+		}
+		if selected == nil {
+			writeError(w, 404, "Rule no longer exists. Refresh the list.")
+			return
+		}
+		if direction == "inbound" {
+			ssh, e := run("/usr/sbin/sshd", "-T")
+			if e != nil {
+				writeError(w, 502, "Cannot verify SSH access; no rule changed.")
+				return
+			}
+			protected := port == fmt.Sprintf("%d/tcp", currentPanelPort())
+			for _, line := range strings.Split(ssh, "\n") {
+				f := strings.Fields(line)
+				if len(f) == 2 && f[0] == "port" && port == f[1]+"/tcp" {
+					protected = true
+				}
+			}
+			if protected {
+				writeError(w, 409, "This port provides current SSH or panel access. Change the service port first.")
+				return
+			}
+		}
+		if err := removeProfileRule(state.Backend, *selected, run); err != nil {
+			writeError(w, 502, "Rule removal did not finish; refresh status: "+err.Error())
+			return
+		}
+		updated, e := inspectFirewallProfile(state.Backend, run)
+		if e != nil {
+			writeError(w, 502, "Cannot verify removal. Refresh status.")
+			return
+		}
+		for _, rule := range updated.Rules {
+			if rule.Port == port && rule.Direction == direction && rule.Zone == zone {
+				writeError(w, 502, "Rule is still active. Refresh and retry.")
+				return
+			}
+		}
+		a.store.AddActivity("Firewall rule removed", direction+" "+port, "warning")
+		writeJSON(w, 200, updated)
+		return
+	}
 	// Keep access ports open before removing only this profile's rules.
 	ssh, err := run("/usr/sbin/sshd", "-T")
 	if err != nil {
@@ -185,4 +236,32 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 	}
 	a.store.AddActivity("LiteCP firewall disabled", "Required-port profile removed; access ports and unrelated rules preserved.", "warning")
 	writeJSON(w, 200, state)
+}
+
+// Remove only a rule previously identified as belonging to the LiteCP profile.
+func removeProfileRule(backend string, rule profileRule, run securityProbe) error {
+	if backend == "firewalld" {
+		args := []string{"--zone=" + rule.Zone, "--remove-rich-rule=" + rule.Raw}
+		if rule.Direction == "outbound" {
+			args = []string{"--policy=litecp-required", "--remove-port=" + rule.Port}
+		}
+		if _, err := run("firewall-cmd", append([]string{"--permanent"}, args...)...); err != nil {
+			return err
+		}
+		_, err := run("firewall-cmd", args...)
+		return err
+	}
+	if backend != "ufw" {
+		return fmt.Errorf("unsupported firewall backend")
+	}
+	parts := strings.Split(rule.Port, "/")
+	if len(parts) != 2 {
+		return fmt.Errorf("unsupported rule port")
+	}
+	direction := "in"
+	if rule.Direction == "outbound" {
+		direction = "out"
+	}
+	_, err := run("ufw", "--force", "delete", "allow", direction, "to", "any", "port", strings.ReplaceAll(parts[0], "-", ":"), "proto", parts[1], "comment", "litecp-required")
+	return err
 }

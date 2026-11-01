@@ -29,12 +29,24 @@ The Migration page supports root SSH account discovery, native backup capture, S
 | Plesk selected subscription's primary document root | Portable files, including hidden files | Into a chosen empty site |
 | Compatible SQL dumps | cPanel account dumps / Plesk primary-domain database dumps | Into chosen empty managed databases |
 | Addon domains, subdomains, non-primary roots | Native backup only when included by provider | Separate mapping and review required |
-| Mailboxes, messages, DNS, certificates, cron, users, quotas, packages, reseller settings | Native backup only when included by provider | Not activated |
+| cPanel named mailboxes, password hashes, quotas and Maildir messages | Portable export plus native backup | Additive import; existing mailbox/forwarder conflicts stop import |
+| cPanel account cron jobs | Portable export plus native backup | Compatible schedules run as the destination website user; unsupported syntax is imported disabled |
+| Plesk mail/cron, DNS, certificates, forwarders, users, packages, reseller settings | Native backup only when included by provider | Separate review/configuration required |
 | Symlinks, hard links, special files | Native backup retained; portable entries skipped with warnings | Manual compatibility review |
 
 A native backup's contents depend on source configuration and successful provider backup completion. A checksum proves transfer integrity, not application consistency or backup completeness. Missing/unsupported portable layouts stop automatic staging rather than being reported as a successful restore. SQL requiring source administrator privileges may fail under the restricted destination user. The source stays authoritative until all required services have been independently verified.
 
-Panel restarts interrupt captures; retained files need review. Failures retain partial files and source logs for investigation. No source cleanup or DNS cutover is performed by LiteCP. Real provider capture must be tested with a source account before production use; fixture tests are not proof of a complete live migration.
+Capture workers run independently of the panel. Failures retain partial files and source logs for investigation. After a cPanel transfer is checksum-verified, LiteCP removes only the two generated source archives; DNS cutover remains manual. Real provider capture must be tested with a source account before production use; fixture tests are not proof of a complete live migration.
+
+## Cancellation and cPanel service import
+
+**Cancel migration** and **Cancel all** include queued/running jobs and jobs awaiting restore, compatibility review or overwrite approval (`review`, `restore-review`, `captured`, `awaiting-overwrite`, `interrupted`). Cancellation is recorded immediately, disables automatic restore and survives late worker writes and panel restarts. Running workers are signalled to stop. The short final filesystem commit cannot safely be interrupted; completed restores are not relabelled as cancelled. Cancellation preserves captures, credentials and website data; temporary-file cleanup is a separate confirmed action.
+
+Captures created before the mailbox/cron export was introduced must be captured again. After temporary files are cleaned, **Retry capture** creates a new job using retained credentials; **Retry restore** is not offered against missing artifacts.
+
+cPanel mailbox import currently accepts named domain mailboxes with SHA512-CRYPT passwords. Locked/unsupported password hashes, orphan mail data, disabled destination email hosting and existing mailbox/forwarder conflicts produce an actionable error. The source account's default system mailbox is not activated. Existing mail data is never replaced. A retry after the website commit resumes mailbox/cron import without replacing website files, SQL or messages delivered since the import.
+
+Cron metadata is parsed without executing source commands. Standard numeric schedules and common hourly/daily/weekly/monthly/yearly macros are supported. Source home/PHP executable paths are translated to the destination. Reboot macros, unsupported shell/time-zone environment settings and percent-input commands are saved disabled for administrator review. Commands use the existing per-website UID/GID execution boundary. DNS, SSL, mail delivery and application health still need verification before cutover.
 
 ## Temporary file cleanup
 
