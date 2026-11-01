@@ -99,7 +99,7 @@ func liveJobCancellable(job LiveMigrationJob) bool {
 }
 
 func migrationCleanupEligible(status string) bool {
-	return status == "restored-review" || status == "failed" || status == "cancelled" || status == "interrupted"
+	return status == "restored-review" || status == "restore-review" || status == "captured" || status == "failed" || status == "cancelled" || status == "interrupted"
 }
 
 func (a *App) liveMigrationCancelled(id string) bool {
@@ -380,15 +380,19 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "Confirm deletion of finished migration temporary files")
 			return
 		}
+		// Serialize against automatic restore and retry transitions.
+		a.mutationMu.Lock()
+		defer a.mutationMu.Unlock()
 		entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
 		if err != nil {
 			writeError(w, 500, "Cannot read migration history")
 			return
 		}
-		cleaned := 0
+		cleaned, skipped := 0, 0
 		for _, entry := range entries {
 			job, loadErr := a.loadLiveJob(entry.Name())
 			if loadErr != nil || !migrationCleanupEligible(job.Status) || liveCaptureActive(job.ID) {
+				skipped++
 				continue
 			}
 			root, rootErr := a.liveJobRoot(job.ID)
@@ -407,13 +411,15 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			job.NativeReady = false
 			job.NativeBytes = 0
 			job.Preview = nil
+			job.Progress = nil
+			job.Message = "Migration temporary archives and staging files cleaned. Website data and job history were preserved."
 			if err := a.saveLiveJob(&job); err != nil {
 				writeError(w, 500, "Temporary files removed but history could not be updated")
 				return
 			}
 			cleaned++
 		}
-		writeJSON(w, 200, map[string]any{"cleaned": cleaned})
+		writeJSON(w, 200, map[string]any{"cleaned": cleaned, "skipped": skipped})
 		return
 	}
 	if input.Action == "cancel" {
