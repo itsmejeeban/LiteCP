@@ -63,7 +63,7 @@ def cpanel_portable(archive, portable):
             elif 'homedir' in parts:
                 home_index = parts.index('homedir')
                 relative = parts[home_index + 1:]
-                if relative and relative[0] not in excluded_home_directories and not relative[0].startswith('.'):
+                if relative and relative[0] not in excluded_home_directories and (not relative[0].startswith('.') or relative[0] == '.env'):
                     destination = 'private_home/' + '/'.join(relative)
             if not destination:
                 continue

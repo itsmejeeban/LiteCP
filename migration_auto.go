@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -99,7 +100,7 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if job.Status != "review" && job.Status != "awaiting-overwrite" {
+	if job.Status != "review" && job.Status != "restore-review" && job.Status != "awaiting-overwrite" {
 		writeError(w, 409, "Capture must finish and be ready for restore first.")
 		return
 	}
@@ -154,6 +155,17 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		fail(err)
 		return
 	}
+	if job.Source.Platform != "backup" {
+		// Retained manifests from older versions may include plugin schema assets.
+		// Reclassify those entries before planning imports on a retry.
+		exports := make([]string, 0, len(preview.Databases))
+		for _, dump := range preview.Databases {
+			if isMigrationDatabaseDump(dump, job.Source.Platform) {
+				exports = append(exports, dump)
+			}
+		}
+		preview.Databases = exports
+	}
 	if len(preview.Roots) != 1 {
 		fail(fmt.Errorf("multiple or missing website roots require manual mapping"))
 		return
@@ -168,6 +180,8 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	content := ""
 	sqlPath := ""
 	nativeDatabases := map[string]ManagedDatabase{}
+	var customConfigs []migrationConfigPlan
+	var customDatabases map[string]string
 	if configName != "" {
 		data, e := os.ReadFile(filepath.Join(source, configName))
 		if e != nil {
@@ -200,8 +214,11 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	} else if len(preview.Databases) > 0 {
-		fail(fmt.Errorf("custom application database configuration needs a supported adapter"))
-		return
+		customConfigs, customDatabases, err = genericMigrationDatabasePlan(source, filepath.Join(root, "files", "private_home"), preview.Databases)
+		if err != nil {
+			fail(err)
+			return
+		}
 	}
 	baseCtx, timeoutCancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	ctx, cancel := context.WithCancel(baseCtx)
@@ -346,6 +363,72 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		if e = os.Chown(filepath.Join(stage, configName), site.RuntimeUID, site.RuntimeGID); e != nil {
 			fail(e)
+			return
+		}
+	}
+	// Each imported schema gets a fresh scoped account; original source
+	// credentials are never copied into the destination database server.
+	if len(customDatabases) > 0 {
+		credentialsByName := map[string]DBCredentials{}
+		names := make([]string, 0, len(customDatabases))
+		for name := range customDatabases {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			credentials, e := a.system.createDatabase(ctx, domain, site.PHPVersion)
+			if e != nil {
+				fail(e)
+				return
+			}
+			id, e := randomToken(8)
+			if e != nil {
+				fail(e)
+				return
+			}
+			value := ManagedDatabase{ID: id, SiteID: site.ID, Domain: domain, Name: credentials.Name, Username: credentials.Username, CreatedAt: time.Now().UTC()}
+			if e = a.store.AddDatabase(value); e != nil {
+				fail(e)
+				return
+			}
+			if e = a.system.importScopedSQL(ctx, filepath.Join(root, "files", filepath.FromSlash(customDatabases[name])), value, credentials.Password); e != nil {
+				fail(e)
+				return
+			}
+			credentialsByName[name] = credentials
+			if name == customConfigs[0].Database {
+				copy := value
+				database = &copy
+			}
+		}
+		for _, plan := range customConfigs {
+			targetRoot := stage
+			if plan.Private {
+				targetRoot = privateStage
+			}
+			if targetRoot == "" {
+				fail(fmt.Errorf("private configuration staging is unavailable"))
+				return
+			}
+			target := filepath.Join(targetRoot, plan.Path)
+			rewritten := rewriteGenericMigrationConfig(plan, credentialsByName[plan.Database])
+			if err = writeAtomic(target, []byte(rewritten), 0640); err != nil {
+				fail(err)
+				return
+			}
+			if err = os.Chown(target, site.RuntimeUID, site.RuntimeGID); err != nil {
+				fail(err)
+				return
+			}
+		}
+	}
+	if err = preserveLaravelConfigCache(stage, customConfigs, false); err != nil {
+		fail(err)
+		return
+	}
+	if privateStage != "" {
+		if err = preserveLaravelConfigCache(privateStage, customConfigs, true); err != nil {
+			fail(err)
 			return
 		}
 	}

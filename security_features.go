@@ -58,6 +58,12 @@ func (s *System) WAFEngine() string {
 }
 
 func (s *System) wafRules(site Site, mode string) string {
+	if _, err := os.Stat(wafPolicyPath); err == nil {
+		if p, err := readWAFPolicies(wafPolicyPath); err == nil {
+			return effectiveWAFRules(p, site.ID)
+		}
+	}
+
 	engineMode := "On"
 	if mode == "detect" {
 		engineMode = "DetectionOnly"
@@ -72,6 +78,9 @@ Include /etc/litecp/waf/rules/*.conf
 }
 
 func wafBlock(site Site, mode string) string {
+	if block, ok := advancedWAFBlock(site); ok {
+		return block
+	}
 	if mode == "off" || mode == "" {
 		return "    # LITECP_WAF_BEGIN\n    # Web application firewall is disabled.\n    # LITECP_WAF_END"
 	}
@@ -262,7 +271,9 @@ func (s *System) phpExtensionLoaded(ctx context.Context, version, extension stri
 
 func (s *System) SetPHPExtension(ctx context.Context, version, extension string, install bool) error {
 	version, extension = strings.TrimSpace(version), strings.ToLower(strings.TrimSpace(extension))
- if strings.HasPrefix(extension,"package:") { return s.setCatalogueExtension(ctx,version,extension,install) }
+	if strings.HasPrefix(extension, "package:") {
+		return s.setCatalogueExtension(ctx, version, extension, install)
+	}
 	if !containsString(supportedPHPVersions, version) || !s.phpRuntimeAvailable(version) {
 		return errors.New("selected PHP version is not installed")
 	}
@@ -272,7 +283,9 @@ func (s *System) SetPHPExtension(ctx context.Context, version, extension string,
 	if s.usesPHP73Container(version) {
 		return errors.New("PHP 7.3 compatibility extensions are immutable; rebuild the compatibility image to change them")
 	}
- if !install && extensionRecommended(extension) {return errors.New("application baseline packages are protected; use the extension catalogue for optional packages")}
+	if !install && extensionRecommended(extension) {
+		return errors.New("application baseline packages are protected; use the extension catalogue for optional packages")
+	}
 	if s.demo {
 		return nil
 	}
@@ -537,6 +550,10 @@ func (a *App) malwareScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) setSiteWAF(w http.ResponseWriter, r *http.Request) {
+	if _, err := os.Stat(wafPolicyPath); err == nil {
+		writeError(w, 409, "Use Website WAF policies to preserve server protection.")
+		return
+	}
 	var input struct{ ID, Mode string }
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.1"
+var version = "4.0.3"
 var buildRevision = ""
 
 //go:embed web/*
@@ -257,6 +257,8 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/backup-schedules", a.withAuth(a.backupSchedules))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
 	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
+	mux.HandleFunc("/api/security/waf-events", only(http.MethodGet, a.withAuth(a.wafPolicyEvents)))
+	mux.HandleFunc("/api/security/waf-policies", a.withAuth(a.wafPolicyMethods))
 	mux.HandleFunc("/api/sites/waf-logs", only(http.MethodGet, a.withAuth(a.wafLogs)))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
 	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))

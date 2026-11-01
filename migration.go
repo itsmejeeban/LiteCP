@@ -22,6 +22,7 @@ import (
 
 const migrationUploadLimit = int64(2 << 30)
 const migrationExtractLimit = int64(8 << 30)
+const liveMigrationExtractLimit = int64(64 << 30)
 
 type MigrationPreview struct {
 	ID        string    `json:"id"`
@@ -48,9 +49,20 @@ func safeArchiveName(name string) (string, error) {
 	return clean, nil
 }
 
+// Windows-created plugin archives can leave backslash separators in a native
+// Linux backup. Normalize before validation, never after it; traversal and
+// duplicate normalized destinations are still rejected by the extractor.
+func safeMigrationArchiveName(name string) (string, error) {
+	return safeArchiveName(strings.ReplaceAll(name, `\`, "/"))
+}
+
 // Extract only inert regular files/directories, never symlinks, devices, hard
 // links, ownership or permissions supplied by another hosting panel.
 func extractMigration(ctx context.Context, archivePath, root, platform string) (MigrationPreview, error) {
+	return extractMigrationWithLimit(ctx, archivePath, root, platform, migrationExtractLimit)
+}
+
+func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform string, extractLimit int64) (MigrationPreview, error) {
 	preview := MigrationPreview{Platform: platform, Roots: []string{}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	roots := map[string]bool{}
 	files := map[string]bool{}
@@ -58,7 +70,7 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		clean, err := safeArchiveName(name)
+		clean, err := safeMigrationArchiveName(name)
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
@@ -72,8 +84,8 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 		if len(files) > maxArchiveMembers {
 			return errors.New("archive contains too many entries")
 		}
-		if size < 0 || size > migrationExtractLimit-preview.Bytes {
-			return errors.New("archive exceeds the 8 GiB extraction limit")
+		if size < 0 || size > extractLimit-preview.Bytes {
+			return fmt.Errorf("archive exceeds the %d GiB extraction limit", extractLimit>>30)
 		}
 		if directory {
 			return secureEnsureManagedDirectory(root, clean, 0700, os.Getuid(), os.Getgid())
@@ -97,7 +109,7 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 				break
 			}
 		}
-		if strings.HasSuffix(strings.ToLower(clean), ".sql") && !strings.EqualFold(path.Base(clean), "mysql.sql") {
+		if isMigrationDatabaseDump(clean, platform) {
 			preview.Databases = append(preview.Databases, clean)
 		}
 		return nil
@@ -124,7 +136,7 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 				preview.Skipped++
 				continue
 			}
-			if member.UncompressedSize64 > uint64(migrationExtractLimit) {
+			if member.UncompressedSize64 > uint64(extractLimit) {
 				return preview, errors.New("archive member exceeds extraction limit")
 			}
 			source, err := member.Open()
@@ -578,4 +590,24 @@ func (b *limitedBuffer) Write(value []byte) (int, error) {
 		_, _ = b.Buffer.Write(value)
 	}
 	return n, nil
+}
+
+// Application SQL assets (plugins, migrations, templates) are website files,
+// not database exports to import as independent schemas.
+func isMigrationDatabaseDump(name, platform string) bool {
+	if !strings.HasSuffix(strings.ToLower(name), ".sql") || strings.EqualFold(path.Base(name), "mysql.sql") {
+		return false
+	}
+	parts := strings.Split(name, "/")
+	for _, part := range parts[:len(parts)-1] {
+		if part == "public_html" || part == "httpdocs" || part == "private_home" {
+			return false
+		}
+	}
+	for _, part := range parts[:len(parts)-1] {
+		if part == "mysql" || part == "databases" {
+			return true
+		}
+	}
+	return false
 }

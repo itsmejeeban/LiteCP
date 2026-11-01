@@ -48,3 +48,21 @@
 .migration-stage-list li.current{color:var(--ink);font-weight:700;}.migration-stage-list li.current span{border-color:#438de0;background:#17324e;color:#b9d9ff;box-shadow:0 0 0 2px rgba(67,141,224,.15);}
 @media(max-width:650px){.live-capture-form .migration-website-picker{grid-template-columns:minmax(0,1fr);}}
 @media(max-width:760px){.migration-stage-list{grid-template-columns:repeat(3,1fr);row-gap:12px;}}
+
+/* Status colors remain scoped to migration jobs, including collapsed rows. */
+:root[data-theme] .live-job .badge.migration-status {
+ background:#17324e;color:#a8cef2;border:1px solid #345d85;
+ font-size:11px;line-height:1.3;white-space:nowrap;
+}
+:root[data-theme] .live-job:is([data-job-status="complete"],[data-job-status="completed"],[data-job-status="restored"],[data-job-status="success"]) .badge.migration-status {
+ background:#183b2b;color:#a9d7b8;border-color:#376d4e;
+}
+:root[data-theme] .live-job:is([data-job-status="failed"],[data-job-status="interrupted"],[data-job-status="error"]) .badge.migration-status {
+ background:#4b2227;color:#efb3b9;border-color:#8b434d;
+}
+:root[data-theme] .live-job:is([data-job-status="review"],[data-job-status="restore-review"],[data-job-status="restored-review"],[data-job-status="awaiting-overwrite"]) .badge.migration-status {
+ background:#44351b;color:#e7cd91;border-color:#826738;
+}
+:root[data-theme] .live-job:is([data-job-status="cancelled"],[data-job-status="canceled"]) .badge.migration-status {
+ background:#30343b;color:#c5cbd4;border-color:#626a77;
+}

@@ -65,6 +65,17 @@ class LiveSourceTests(unittest.TestCase):
             with tarfile.open(portable) as result:
                 self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php'])
 
+    def test_cpanel_portable_keeps_laravel_env_without_account_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive=pathlib.Path(directory)/'native.tar.gz'
+            portable=pathlib.Path(directory)/'portable.tar.gz'
+            with tarfile.open(archive,'w:gz') as target:
+                for name in ['account/homedir/.env','account/homedir/.ssh/id_rsa','account/homedir/public_html/index.php']:
+                    info=tarfile.TarInfo(name); info.size=4; target.addfile(info,io.BytesIO(b'test'))
+            source.cpanel_portable(archive,portable)
+            with tarfile.open(portable) as result:
+                self.assertEqual(result.getnames(),['private_home/.env','public_html/index.php'])
+
     @patch.object(source.os,'geteuid',return_value=0)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)
     @patch.object(source,'command')

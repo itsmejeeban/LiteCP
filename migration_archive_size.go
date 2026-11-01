@@ -1,14 +1,75 @@
 package main
 
 import (
- "context"
- "fmt"
- "strconv"
- "strings"
- "time"
+	"archive/tar"
+	"compress/gzip"
+	"context"
+	"fmt"
+	"io"
+	"os"
 )
 
-func migrationArchiveBytes(ctx context.Context,path string)(int64,error){
- output,err:=runCommand(ctx,2*time.Minute,"python3","-c","import sys,tarfile\nn=0\nwith tarfile.open(sys.argv[1], 'r:*') as archive:\n for member in archive:\n  n+=max(0,member.size)+4096\n  if n>8*1024**3: raise ValueError('archive exceeds extraction limit')\nprint(n)",path)
- if err!=nil{return 0,fmt.Errorf("archive size inspection failed")};size,err:=strconv.ParseInt(strings.TrimSpace(output),10,64);if err!=nil||size<0{return 0,fmt.Errorf("invalid archive size")};return size,nil
+// Inspect the same regular files/directories that extraction accepts. Stream
+// headers instead of retaining Python TarInfo objects for a large account.
+func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, error) {
+	input, err := os.Open(archivePath)
+	if err != nil {
+		return 0, fmt.Errorf("open website archive: %w", err)
+	}
+	defer input.Close()
+	var stream io.Reader = input
+	var magic [2]byte
+	_, err = io.ReadFull(input, magic[:])
+	if err != nil {
+		return 0, fmt.Errorf("read archive header: %w", err)
+	}
+	if _, err = input.Seek(0, io.SeekStart); err != nil {
+		return 0, err
+	}
+	if magic[0] == 0x1f && magic[1] == 0x8b {
+		gz, e := gzip.NewReader(input)
+		if e != nil {
+			return 0, fmt.Errorf("read compressed archive: %w", e)
+		}
+		defer gz.Close()
+		stream = gz
+	}
+	reader := tar.NewReader(migrationContextReader{ctx, stream})
+	var bytes, space int64
+	for entries := 0; ; entries++ {
+		header, e := reader.Next()
+		if e == io.EOF {
+			return space, nil
+		}
+		if e != nil {
+			return 0, fmt.Errorf("inspect website archive: %w", e)
+		}
+		if entries >= maxArchiveMembers {
+			return 0, fmt.Errorf("archive exceeds %d entries", maxArchiveMembers)
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && header.Typeflag != tar.TypeDir {
+			continue
+		}
+		if _, e = safeMigrationArchiveName(header.Name); e != nil {
+			return 0, fmt.Errorf("archive entry %q: %w", header.Name, e)
+		}
+		if header.Size < 0 || header.Size > liveMigrationExtractLimit-bytes {
+			return 0, fmt.Errorf("uncompressed website data exceeds the 64 GiB extraction limit")
+		}
+		bytes += header.Size
+		// Round data to filesystem blocks and budget one metadata block per entry.
+		space += ((header.Size+4095)/4096)*4096 + 4096
+	}
+}
+
+type migrationContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r migrationContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }

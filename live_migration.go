@@ -392,7 +392,9 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			root, rootErr := a.liveJobRoot(job.ID)
-			if rootErr != nil { continue }
+			if rootErr != nil {
+				continue
+			}
 			// Fixed job-owned paths only; restored websites and recovery copies
 			// are outside these private capture/staging directories.
 			paths := []string{filepath.Join(root, "native-backup"), filepath.Join(root, "portable-backup"), filepath.Join(a.system.dataDir, "migrations", job.ID)}
@@ -875,7 +877,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	}
 	setLiveJobStage(&job, "extract", "running", "Archive verified. Inspecting and staging website files and database dumps.")
 	_ = a.saveLiveJob(&job)
-	preview, err := extractMigration(ctx, archive, filepath.Join(stage, "files"), job.Source.Platform)
+	preview, err := extractMigrationWithLimit(ctx, archive, filepath.Join(stage, "files"), job.Source.Platform, liveMigrationExtractLimit)
 	if err != nil {
 		setLiveJobStage(&job, "preflight", "captured", "Native backup verified; website staging could not complete: "+err.Error())
 		_ = a.saveLiveJob(&job)
