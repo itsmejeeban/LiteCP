@@ -13,6 +13,17 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_plesk_subdomain_backup_uses_owning_subscription(self):
+        with patch.object(source, 'command', return_value='secureserver.top\n') as run:
+            self.assertEqual(source.plesk_backup_subscription('/usr/sbin/plesk', 'api.secureserver.top'), 'secureserver.top')
+            query = run.call_args.args[0][-1]
+            self.assertIn("site.name='api.secureserver.top'", query)
+            self.assertIn('site.webspace_id', query)
+            self.assertIn('site.parentDomainId', query)
+        with patch.object(source, 'command', return_value=''):
+            with self.assertRaisesRegex(RuntimeError, 'Cannot determine'):
+                source.plesk_backup_subscription('/usr/sbin/plesk', 'api.secureserver.top')
+
     def test_plesk_discovery_supports_python36_subprocess(self):
         def legacy_run(args, **kwargs):
             self.assertNotIn('text', kwargs)

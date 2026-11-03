@@ -109,6 +109,18 @@ def cpanel_portable(archive, portable, source_home=""):
         target.addfile(info, io.BytesIO(metadata))
     return website_files, private_files, skipped
 
+def plesk_backup_subscription(binary, account):
+    # Plesk native backups are subscription-scoped, not individual subdomains.
+    query = ("SELECT owner.name FROM domains site JOIN domains owner ON owner.id="
+             "CASE WHEN site.webspace_id > 0 THEN site.webspace_id "
+             "WHEN site.parentDomainId > 0 THEN site.parentDomainId ELSE site.id END "
+             "WHERE site.name='" + account + "'")
+    names = command([binary, 'db', '-N', '-B', '-e', query]).strip().splitlines()
+    if len(names) != 1 or not re.fullmatch(r'[a-zA-Z0-9_.-]{1,253}', names[0]) or names[0].startswith('-'):
+        raise RuntimeError('Cannot determine the Plesk subscription for the selected website')
+    return names[0]
+
+
 def export(request):
     if os.geteuid() != 0:
         raise RuntimeError('Root SSH access is required')
@@ -212,7 +224,8 @@ def export(request):
     # Preserve a complete native subscription backup, including Plesk's local
     # backup copy. The portable supplement is separate from that native backup.
     archive = root/'plesk-native.tar'
-    command([binary,'bin','pleskbackup','--domains-name',account,'-output-file',str(archive),'-keep-local-backup'],log)
+    subscription = plesk_backup_subscription(binary, account)
+    command([binary,'bin','pleskbackup','--domains-name',subscription,'-output-file',str(archive),'-keep-local-backup'],log)
     if not archive.is_file() or archive.is_symlink():
         raise RuntimeError('The Plesk native archive was not created')
     output = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['Complete native Plesk backup retained. Mail, DNS, SSL and platform configuration require separate compatibility review before cutover.']}
