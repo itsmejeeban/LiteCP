@@ -86,13 +86,14 @@ type OSInfo struct {
 }
 
 type System struct {
-	dataDir  string
-	os       OSInfo
-	demo     bool
-	cpuMu    sync.Mutex
-	secretMu sync.Mutex
-	prevIdle uint64
-	prevAll  uint64
+	dataDir   string
+	os        OSInfo
+	demo      bool
+	cpuMu     sync.Mutex
+	secretMu  sync.Mutex
+	phpPoolMu sync.Mutex
+	prevIdle  uint64
+	prevAll   uint64
 }
 
 var domainPattern = regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$`)
@@ -337,7 +338,13 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 	}
 
 	if _, err := os.Lstat(managedSiteRoot(site)); err == nil {
-		return Site{}, nil, errors.New("retained website data already exists for this domain; review or remove the retained directory before creating a new website")
+		empty, inspectErr := emptyProvisioningScaffold(managedSiteRoot(site))
+		if inspectErr != nil {
+			return Site{}, nil, fmt.Errorf("inspect retained website home: %w", inspectErr)
+		}
+		if !empty {
+			return Site{}, nil, errors.New("retained website data already exists for this domain; review or remove the retained directory before creating a new website")
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Site{}, nil, err
 	}
@@ -530,7 +537,7 @@ func (s *System) EnableSSL(ctx context.Context, site Site, email string, renew .
 	if s.demo {
 		return nil
 	}
-	return s.enableWebrootSSL(ctx, site, address.Address, len(renew)>0 && renew[0])
+	return s.enableWebrootSSL(ctx, site, address.Address, len(renew) > 0 && renew[0])
 }
 
 func (s *System) SetCron(site Site, enabled bool) error {
@@ -1092,6 +1099,8 @@ func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
 	if s.demo {
 		return nil
 	}
+	s.phpPoolMu.Lock()
+	defer s.phpPoolMu.Unlock()
 	if site.RuntimeUID == 0 || site.RuntimeGID == 0 {
 		return errors.New("website runtime identity is missing")
 	}
@@ -1120,7 +1129,7 @@ func (s *System) ensureSitePHPPool(ctx context.Context, site Site) error {
 			return err
 		}
 	}
-	if _, err := runCommand(ctx, 30*time.Second, "systemctl", "restart", s.phpUnitForVersion(site.PHPVersion)); err != nil {
+	if err := applyPHPPoolRuntime(ctx, s.phpUnitForVersion(site.PHPVersion), s.usesPHP73Container(site.PHPVersion), runCommand); err != nil {
 		return err
 	}
 	deadline := time.Now().Add(8 * time.Second)
@@ -1137,6 +1146,8 @@ func (s *System) removeSitePHPPool(ctx context.Context, site Site) error {
 	if s.demo {
 		return nil
 	}
+	s.phpPoolMu.Lock()
+	defer s.phpPoolMu.Unlock()
 	configPath := s.phpPoolConfigPath(site)
 	if err := os.Remove(configPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -1146,8 +1157,7 @@ func (s *System) removeSitePHPPool(ctx context.Context, site Site) error {
 			return err
 		}
 	}
-	_, err := runCommand(ctx, 30*time.Second, "systemctl", "restart", s.phpUnitForVersion(site.PHPVersion))
-	return err
+	return applyPHPPoolRuntime(ctx, s.phpUnitForVersion(site.PHPVersion), s.usesPHP73Container(site.PHPVersion), runCommand)
 }
 
 func (s *System) syncPHP73Pools() error {

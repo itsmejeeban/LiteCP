@@ -13,6 +13,34 @@ import (
 
 const siteStorageBase = "/home/litecp"
 
+var siteHomeScaffoldDirectories = []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc", "public_ftp"}
+
+// A failed provision can leave the empty private scaffold after public_html is
+// rolled back. Reuse only that exact empty layout; never adopt retained data.
+func emptyProvisioningScaffold(home string) (bool, error) {
+	expected := map[string]bool{".": true}
+	for _, name := range siteHomeScaffoldDirectories {
+		expected[filepath.FromSlash(name)] = true
+	}
+	valid := true
+	err := filepath.WalkDir(home, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(home, path)
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !expected[rel] {
+			valid = false
+			return filepath.SkipAll
+		}
+		delete(expected, rel)
+		return nil
+	})
+	return valid && len(expected) == 0, err
+}
+
 func defaultSiteRoot(domain string) string {
 	return filepath.Join(siteStorageBase, domain, "public_html")
 }
@@ -92,7 +120,7 @@ func (s *System) ensureSiteHome(site Site) error {
 	if err := os.Chmod(home, 0755); err != nil {
 		return err
 	}
-	for _, name := range []string{"backups", "backups/manual", "backups/scheduled", ".trash", "tmp", "logs", "ssl", "etc", "public_ftp"} {
+	for _, name := range siteHomeScaffoldDirectories {
 		target := filepath.Join(home, name)
 		info, err := os.Lstat(target)
 		if errors.Is(err, os.ErrNotExist) {

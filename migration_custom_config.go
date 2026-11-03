@@ -216,6 +216,11 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			} else if !strings.HasSuffix(name, ".php") || !(strings.Contains(name, "config") || strings.Contains(name, "connect") || strings.Contains(name, "database") || name == "db.php") {
 				return nil
 			}
+			// Shipped example files are preserved, but must not override an
+			// accompanying active configuration with placeholder credentials.
+			if kind == "php" && migrationConfigExampleHasActiveSibling(path) {
+				return nil
+			}
 			info, e := entry.Info()
 			if e != nil {
 				return e
@@ -257,6 +262,24 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 		return nil, nil, fmt.Errorf("no supported literal database configuration found; use a DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_HOST .env connection or a literal PHP configuration")
 	}
 	return plans, databases, nil
+}
+
+func migrationConfigExampleHasActiveSibling(path string) bool {
+	name := filepath.Base(path)
+	lower := strings.ToLower(name)
+	for _, suffix := range []string{".example.php", ".sample.php"} {
+		if !strings.HasSuffix(lower, suffix) {
+			continue
+		}
+		base := name[:len(name)-len(suffix)]
+		for _, active := range []string{base + ".php", base + ".local.php"} {
+			info, err := os.Lstat(filepath.Join(filepath.Dir(path), active))
+			if err == nil && info.Mode().IsRegular() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Laravel reads this generated file instead of .env when configuration is
