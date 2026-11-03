@@ -63,7 +63,7 @@ class LiveSourceTests(unittest.TestCase):
                 link=tarfile.TarInfo('cpmove-user/homedir/public_html/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/shadow';target.addfile(link)
             self.assertEqual(source.cpanel_portable(archive,portable),(1,2,1))
             with tarfile.open(portable) as result:
-                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php','cpanel_account/format.json'])
+                self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php','cpanel_account/mail/new/1%3A2,S','cpanel_account/format.json'])
 
     def test_cpanel_portable_keeps_laravel_env_without_account_secrets(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -85,6 +85,7 @@ class LiveSourceTests(unittest.TestCase):
                 'cpmove-user/homedir/etc/example.test/shadow': b'sales:hashed:',
                 'cpmove-user/homedir/etc/example.test/quota': b'sales:2097152',
                 'cpmove-user/homedir/mail/example.test/sales/cur/message:2,S': b'mail',
+                'cpmove-user/dnszones/example.test.db': b'@ IN NS ns1.example.test.',
                 'cpmove-user/cron/user': b'*/5 * * * * /usr/bin/php task.php',
                 'cpmove-user/homedir/etc/private-secret': b'excluded',
                 'cpmove-user/homedir/.ssh/id_rsa': b'excluded',
@@ -100,6 +101,7 @@ class LiveSourceTests(unittest.TestCase):
                 self.assertIn('cpanel_account/etc/example.test/shadow', names)
                 self.assertIn('cpanel_account/mail/example.test/sales/cur/message%3A2,S', names)
                 self.assertIn('cpanel_account/cron/user', names)
+                self.assertIn('cpanel_account/dns/example.test.db', names)
                 self.assertFalse(any('private-secret' in name or 'id_rsa' in name for name in names))
                 self.assertEqual(json.load(result.extractfile('cpanel_account/format.json')), {'version':1, 'sourceHome':'/home/user'})
 

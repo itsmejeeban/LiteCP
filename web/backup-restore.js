@@ -21,7 +21,7 @@
  await new Promise(resolve=>setTimeout(resolve,2500));job=await cp.api('/api/backups/restore-direct?id='+encodeURIComponent(job.id));
  }
  progress.querySelector('[data-progress]').textContent=job.message;
- const complete=job.status==='restored-review';progress.querySelector('[data-result]').textContent=complete?'Restore finished. Verify the website before use.':'Restore did not complete. Existing data and recovery files were retained.';
+ const complete=['restored','restored-review'].includes(job.status);progress.querySelector('[data-result]').textContent=complete?'Restore finished. Verify the website before use.':'Restore did not complete. Existing data and recovery files were retained.';
  cp.showToast(complete?'Restore finished':'Restore requires attention',job.message);await cp.refresh();
  }catch(error){progress.querySelector('[data-result]').textContent=error.message;cp.handleError(error);}finally{running=false;progress.querySelector('progress').remove();progress.querySelector('[data-close]').disabled=false;}}
  progress.addEventListener('cancel',event=>{if(running)event.preventDefault();});

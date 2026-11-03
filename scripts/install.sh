@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="4.0.34"
+LITECP_VERSION="4.0.36"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -568,6 +568,11 @@ bash "${SCRIPT_DIR}/install-phpmyadmin.sh"
 printf '\nInstalling encrypted website FTP (FTPS)...\n'
 bash "${SCRIPT_DIR}/install-ftp.sh"
 systemctl is-active --quiet litecp-ftps || fail "FTPS did not start; inspect journalctl -u litecp-ftps."
+
+if [[ "${LITECP_INSTALL_DNS:-1}" == 1 ]]; then
+  info "Installing the authoritative LiteCP DNS service..."
+  bash "${SCRIPT_DIR}/install-dns.sh"
+fi
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 # ClamAV and WAF are included by default. Explicit 0 keeps minimal/custom installs possible.

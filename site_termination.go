@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -86,6 +87,17 @@ func (a *App) terminateWebsite(ctx context.Context, site Site) error {
 	if err := a.retainWebsiteBackups(site); err != nil {
 		return err
 	}
+	rollbackDNS, err := a.prepareWebsiteDNSChange(ctx, site, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if a.store.SiteByID(site.ID) != nil {
+			if e := rollbackDNS(nil); e != nil {
+				log.Printf("DNS rollback for website %s failed: %v", site.ID, e)
+			}
+		}
+	}()
 	// Validate everything above before starting irreversible work. Keep the site
 	// registered on any failure, so remaining data can be reviewed and retried.
 	if err := a.system.RemoveSiteConfig(ctx, site); err != nil {

@@ -44,8 +44,8 @@ func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, erro
 		if e != nil {
 			return 0, fmt.Errorf("inspect website archive: %w", e)
 		}
-		if entries >= maxArchiveMembers {
-			return 0, fmt.Errorf("archive exceeds %d entries", maxArchiveMembers)
+		if entries >= liveMigrationMemberLimit {
+			return 0, fmt.Errorf("archive exceeds %d entries", liveMigrationMemberLimit)
 		}
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && header.Typeflag != tar.TypeDir {
 			continue

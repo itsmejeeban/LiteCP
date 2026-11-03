@@ -182,6 +182,9 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	profile := requiredFirewallProfile(ports, a.store.Settings().EmailHostingEnabled, ftpErr == nil, webmailPort)
+	if a.system.dnsAvailable() && !a.system.demo {
+		profile.Inbound = append(profile.Inbound, "53/tcp", "53/udp")
+	}
 	profile.Inbound = append(profile.Inbound, strconv.Itoa(currentPanelPort())+"/tcp")
 	// Protect the new listener while a panel-port change awaits confirmation.
 	if b, e := os.ReadFile("/var/lib/litecp/panel-port-pending"); e == nil {

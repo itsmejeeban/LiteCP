@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+	DNSZone        *WebsiteDNSZone        `json:"dnsZone,omitempty"`
 	ResourceLimits *WebsiteResourceLimits `json:"resourceLimits,omitempty"`
 	PHPSettings    map[string]string      `json:"phpSettings,omitempty"`
 	Suspended      bool                   `json:"suspended,omitempty"`
@@ -474,6 +475,12 @@ func (s *Store) UpdateSiteDomain(id, domain string, roots ...string) error {
 		originalSites := append([]Site{}, s.cfg.Sites...)
 		originalDatabases := append([]ManagedDatabase{}, s.cfg.Databases...)
 		originalBackups := append([]Backup{}, s.cfg.Backups...)
+		if zone := renameWebsiteDNS(s.cfg.Sites[i].DNSZone, s.cfg.Sites[i].Domain, domain); zone != nil {
+			if err := advanceDNSSerial(zone, s.cfg.Sites[i].DNSZone.Serial); err != nil {
+				return err
+			}
+			s.cfg.Sites[i].DNSZone = zone
+		}
 		oldHome := siteHome(s.cfg.Sites[i])
 		if len(roots) > 0 {
 			s.cfg.Sites[i].Root = roots[0]

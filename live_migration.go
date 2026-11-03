@@ -95,7 +95,7 @@ func setLiveJobStage(job *LiveMigrationJob, stage, status, message string) {
 	}
 	job.Status = status
 	job.Message = message
-	if status == "restored-review" || status == "failed" || status == "restore-review" || status == "interrupted" || status == "cancelled" {
+	if (status == "restored" || status == "restored-review") || status == "failed" || status == "restore-review" || status == "interrupted" || status == "cancelled" {
 		job.CompletedAt = time.Now().UTC()
 	}
 }
@@ -109,7 +109,7 @@ func liveJobCancellable(job LiveMigrationJob) bool {
 }
 
 func migrationCleanupEligible(status string) bool {
-	return status == "restored-review" || status == "restore-review" || status == "captured" || status == "failed" || status == "cancelled" || status == "interrupted"
+	return (status == "restored" || status == "restored-review") || status == "restore-review" || status == "captured" || status == "failed" || status == "cancelled" || status == "interrupted"
 }
 
 func (a *App) liveMigrationCancelled(id string) bool {

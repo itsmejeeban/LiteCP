@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.34"
+var version = "4.0.36"
 var buildRevision = ""
 
 //go:embed web/*
@@ -279,6 +279,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
 	mux.HandleFunc("/api/sites/php-settings", a.withAuth(a.sitePHPSettings))
+	mux.HandleFunc("/api/sites/dns", a.withAuth(a.websiteDNS))
 	mux.HandleFunc("/api/sites/resource-limits", a.withAuth(a.websiteResourceLimits))
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
@@ -955,6 +956,25 @@ func (a *App) changeSiteDomain(w http.ResponseWriter, r *http.Request) {
 		application.CertificateKey = ""
 		updated.Application = &application
 	}
+	updated.DNSZone = renameWebsiteDNS(site.DNSZone, site.Domain, updated.Domain)
+	if updated.DNSZone != nil {
+		if err := advanceDNSSerial(updated.DNSZone, site.DNSZone.Serial); err != nil {
+			writeError(w, 409, err.Error())
+			return
+		}
+	}
+	rollbackDNS, err := a.prepareWebsiteDNSChange(r.Context(), *site, &updated)
+	if err != nil {
+		writeError(w, 502, err.Error())
+		return
+	}
+	defer func() {
+		if current := a.store.SiteByID(site.ID); current != nil && current.Domain == site.Domain {
+			if e := rollbackDNS(nil); e != nil {
+				log.Printf("DNS rollback for website %s failed: %v", site.ID, e)
+			}
+		}
+	}()
 	if err := a.system.ChangeSiteDomain(r.Context(), *site, updated); err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -997,6 +1017,18 @@ func (a *App) deleteSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]bool{"ok": true})
 		return
 	}
+	rollbackDNS, dnsErr := a.prepareWebsiteDNSChange(r.Context(), *site, nil)
+	if dnsErr != nil {
+		writeError(w, 502, dnsErr.Error())
+		return
+	}
+	defer func() {
+		if a.store.SiteByID(site.ID) != nil {
+			if e := rollbackDNS(nil); e != nil {
+				log.Printf("DNS rollback for website %s failed: %v", site.ID, e)
+			}
+		}
+	}()
 	backup, err := a.system.snapshotSiteConfig(*site)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())

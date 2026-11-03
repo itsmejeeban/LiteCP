@@ -21,7 +21,7 @@ type migrationConfigPlan struct {
 
 var migrationPHPStringsAndComments = regexp.MustCompile(`(?s)'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|/\*.*?\*/|//[^\r\n]*|#[^\r\n]*`)
 var migrationConfigField = regexp.MustCompile(`(?i)(?:\$([a-z_][a-z0-9_]*)\s*=\s*|['"]([a-z_][a-z0-9_]*)['"]\s*=>\s*|define\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]\s*,\s*|\$db\s*\[\s*['"]default['"]\s*\]\s*\[\s*['"]([a-z_][a-z0-9_]*)['"]\s*\]\s*=\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`)
-var migrationEnvField = regexp.MustCompile(`(?m)^[ \t]*(?:export[ \t]+)?(DB_DATABASE|DB_NAME|DB_USERNAME|DB_USER|DB_PASSWORD|DB_HOST|DB_PORT|DB_SOCKET)[ \t]*=[ \t]*("[^"\r\n]*"|'[^'\r\n]*'|[^\r\n#]*)(?:[ \t]*#.*)?$`)
+var migrationEnvField = regexp.MustCompile(`(?m)^[ \t]*(?:export[ \t]+)?(DB_DATABASE|DB_NAME|DB_USERNAME|DB_USER|DB_PASSWORD|DB_HOST|DB_PORT|DB_SOCKET)[ \t]*=[ \t]*("[^"\r\n]*"|'[^'\r\n]*'|[^\r\n#]*)(?:[ \t]*#[^\r\n]*)?\r?$`)
 
 func migrationConfigKey(key string) string {
 	switch strings.ToLower(key) {
@@ -64,12 +64,22 @@ func inspectMigrationConfig(content, kind string) (migrationConfigPlan, error) {
 			return value
 		})
 	}
+	scopeStart, scopeEnd := 0, len(searchable)
+	if kind == "php" {
+		scopeStart, scopeEnd = migrationPHPDatabaseScope(searchable)
+		if scopeStart < 0 {
+			return result, fmt.Errorf("multiple database arrays require explicit mapping")
+		}
+	}
 	matches := migrationConfigField.FindAllStringSubmatchIndex(searchable, -1)
 	if kind == "env" {
 		matches = migrationEnvField.FindAllStringSubmatchIndex(searchable, -1)
 	}
 	values := map[string]string{}
 	for _, match := range matches {
+		if match[0] < scopeStart || match[0] >= scopeEnd {
+			continue
+		}
 		if kind == "php" {
 			insideString := false
 			for _, token := range migrationPHPStringsAndComments.FindAllStringIndex(searchable, -1) {
@@ -97,8 +107,17 @@ func inspectMigrationConfig(content, kind string) (migrationConfigPlan, error) {
 			start, end = match[10], match[11]
 		}
 		field := migrationConfigKey(key)
+		if kind == "php" && strings.EqualFold(key, "name") && scopeStart > 0 {
+			field = "name"
+		}
 		if field == "" {
 			continue
+		}
+		if kind == "php" {
+			tail := strings.TrimLeft(searchable[end:], " \t\r\n")
+			if tail != "" && !strings.ContainsRune(",;)]", rune(tail[0])) {
+				return result, fmt.Errorf("dynamic database expression requires explicit mapping")
+			}
 		}
 		value := strings.TrimSpace(content[start:end])
 		if len(value) >= 2 && (value[0] == '\'' || value[0] == '"') {
@@ -279,4 +298,43 @@ func preserveLaravelConfigCache(root string, plans []migrationConfigPlan, privat
 		}
 	}
 	return nil
+}
+
+// Locate a literal db/database array without executing PHP. Ignore brackets inside
+// strings and comments and preserve byte offsets used by credential replacement.
+func migrationPHPDatabaseScope(content string) (int, int) {
+	pattern := regexp.MustCompile(`(?i)['"](?:db|database)['"]\s*=>\s*\[`)
+	scopeStart, scopeEnd := 0, len(content)
+	for _, match := range pattern.FindAllStringIndex(content, -1) {
+		masked := []byte(content)
+		for _, token := range migrationPHPStringsAndComments.FindAllStringIndex(content, -1) {
+			if token[0] < match[0] && match[0] < token[1] {
+				masked = nil
+				break
+			}
+			for i := token[0]; i < token[1]; i++ {
+				masked[i] = ' '
+			}
+		}
+		if masked == nil {
+			continue
+		}
+		depth := 1
+		for i := match[1]; i < len(masked); i++ {
+			if masked[i] == '[' {
+				depth++
+			}
+			if masked[i] == ']' {
+				depth--
+				if depth == 0 {
+					if scopeStart != 0 {
+						return -1, -1
+					}
+					scopeStart, scopeEnd = match[1], i
+					break
+				}
+			}
+		}
+	}
+	return scopeStart, scopeEnd
 }

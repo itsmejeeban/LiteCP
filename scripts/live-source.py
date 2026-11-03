@@ -59,12 +59,14 @@ def cpanel_portable(archive, portable, source_home=""):
             destination = None
             # Match account-level paths only. Never confuse a website's own
             # mail/etc/cron directories with cPanel's account metadata.
-            relative_account = parts[1:] if parts and parts[0] not in ('homedir', 'mysql', 'cron') else parts
-            if relative_account and relative_account[0] == 'cron' and len(relative_account) == 2:
+            relative_account = parts[1:] if parts and parts[0] not in ('homedir', 'mysql', 'cron', 'dnszones') else parts
+            if len(relative_account) == 2 and relative_account[0] == 'dnszones' and member.isfile() and member.size <= 2097152:
+                destination = 'cpanel_account/dns/' + relative_account[1]
+            elif relative_account and relative_account[0] == 'cron' and len(relative_account) == 2:
                 destination = 'cpanel_account/cron/' + relative_account[1]
             elif len(relative_account) >= 3 and relative_account[0] == 'homedir' and relative_account[1] in ('mail', 'etc'):
                 relative = relative_account[2:]
-                if relative_account[1] == 'mail' and len(relative) >= 2 and '.' in relative[0]:
+                if relative_account[1] == 'mail' and relative and ('.' in relative[0] or relative[0] in ('cur', 'new', 'tmp', 'maildirsize', 'subscriptions') or relative[0].startswith('dovecot')):
                     destination = 'cpanel_account/mail/' + '/'.join(relative)
                 elif relative_account[1] == 'etc' and len(relative) == 2 and relative[1] in ('shadow', 'passwd', 'quota'):
                     destination = 'cpanel_account/etc/' + '/'.join(relative)
@@ -190,7 +192,7 @@ def export(request):
         archive = root / ('cpmove-' + account + '.tar.gz')
         if not archive.is_file() or archive.is_symlink():
             raise RuntimeError('The cPanel native archive was not created at its expected location')
-        result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS, SSL, forwarders and package settings require separate review.']}
+        result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS zones are imported for review and export; registrar delegation, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
         import pwd
         website_files, private_files, skipped = cpanel_portable(archive, portable, pwd.getpwnam(account).pw_dir)

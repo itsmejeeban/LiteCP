@@ -19,8 +19,9 @@ import (
 )
 
 type cpanelMailboxImport struct {
-	Mailbox Mailbox
-	Source  string
+	Mailbox        Mailbox
+	Source         string
+	DefaultAccount bool
 }
 type cpanelServicesPlan struct {
 	Mailboxes  []cpanelMailboxImport
@@ -143,7 +144,25 @@ func planCPanelServices(root string, job LiveMigrationJob) (cpanelServicesPlan, 
 	if err != nil && !os.IsNotExist(err) {
 		return plan, err
 	}
+	defaultMail := false
 	for _, d := range mailDomains {
+		if cpanelDefaultMailEntry(d.Name()) {
+			if d.IsDir() {
+				e := filepath.Walk(filepath.Join(base, "mail", d.Name()), func(_ string, info os.FileInfo, e error) error {
+					if e != nil {
+						return e
+					}
+					if !info.IsDir() {
+						defaultMail = true
+					}
+					return nil
+				})
+				if e != nil {
+					return plan, e
+				}
+			}
+			continue
+		}
 		users, e := os.ReadDir(filepath.Join(base, "mail", d.Name()))
 		if e != nil {
 			return plan, e
@@ -154,11 +173,28 @@ func planCPanelServices(root string, job LiveMigrationJob) (cpanelServicesPlan, 
 			}
 		}
 	}
+	if defaultMail {
+		domain := ""
+		for _, account := range job.Accounts {
+			if account.ID == job.Account {
+				domain = account.Domain
+				break
+			}
+		}
+		address := job.Account + "@" + domain
+		if validateMailDomain(domain) != nil || validateMailboxAddress(address, domain) != nil || seen[address] {
+			return plan, errors.New("default account mail needs a valid, non-conflicting primary domain")
+		}
+		plan.Mailboxes = append(plan.Mailboxes, cpanelMailboxImport{Mailbox: Mailbox{ID: migrationServiceID(job.ID, "mail", address), Domain: domain, Address: address, PasswordHash: "{CRYPT}*", CreatedAt: time.Now().UTC()}, Source: filepath.Join(base, "mail"), DefaultAccount: true})
+		plan.Warnings = append(plan.Warnings, "Default account mail preserved as "+address+"; set a mailbox password in LiteCP before login.")
+	}
 	cron, err := readCPanelMetadata(base, "cron/"+job.Account, true)
 	if err != nil {
 		return plan, err
 	}
-	plan.Cron, plan.Warnings, err = parseCPanelCron(string(cron), job.ID)
+	var warnings []string
+	plan.Cron, warnings, err = parseCPanelCron(string(cron), job.ID)
+	plan.Warnings = append(plan.Warnings, warnings...)
 	return plan, err
 }
 
@@ -385,7 +421,7 @@ func (a *App) importCPanelServices(ctx context.Context, plan cpanelServicesPlan,
 					return err
 				}
 				if incoming.Source != "" {
-					if err = copyCPanelMaildir(ctx, incoming.Source, stage); err != nil {
+					if err = copyCPanelMaildirFiltered(ctx, incoming.Source, stage, incoming.DefaultAccount); err != nil {
 						return err
 					}
 				}
@@ -451,6 +487,10 @@ func (a *App) importCPanelServices(ctx context.Context, plan cpanelServicesPlan,
 }
 
 func copyCPanelMaildir(ctx context.Context, source, target string) error {
+	return copyCPanelMaildirFiltered(ctx, source, target, false)
+}
+
+func copyCPanelMaildirFiltered(ctx context.Context, source, target string, defaultAccount bool) error {
 	return filepath.Walk(source, func(name string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -466,6 +506,12 @@ func copyCPanelMaildir(ctx context.Context, source, target string) error {
 			return nil
 		}
 		parts := strings.Split(filepath.ToSlash(rel), "/")
+		if defaultAccount && !cpanelDefaultMailEntry(parts[0]) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		for i, part := range parts {
 			parts[i] = strings.ReplaceAll(strings.ReplaceAll(part, "%3A", ":"), "%25", "%")
 			if parts[i] == ".." || strings.ContainsAny(parts[i], "/\\\x00") {
@@ -498,4 +544,10 @@ func copyCPanelMaildir(ctx context.Context, source, target string) error {
 // Stable presentation and tests; password hashes are never returned in a job.
 func cpanelServiceSummary(plan cpanelServicesPlan) string {
 	return fmt.Sprintf("%d mailbox(es) and %d custom cron job(s) imported.", len(plan.Mailboxes), len(plan.Cron))
+}
+
+// cPanel creates these at account level even when there are no email accounts.
+// They are Maildir contents, never domain/account pairs.
+func cpanelDefaultMailEntry(name string) bool {
+	return strings.HasPrefix(name, ".") || name == "cur" || name == "new" || name == "tmp" || name == "maildirsize" || name == "subscriptions" || strings.HasPrefix(name, "dovecot")
 }

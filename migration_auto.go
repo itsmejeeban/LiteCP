@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -199,7 +200,11 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 		job.Warnings = append(job.Warnings, plan.Warnings...)
-		setLiveJobStage(job, "result", "restored-review", "Website restore retained. "+cpanelServiceSummary(plan)+" Verify mail delivery, schedules, application health and DNS before cutover.")
+		if e = a.importCPanelDNS(ctx, filepath.Join(root, "files"), job, *existing); e != nil {
+			fail(e)
+			return
+		}
+		a.finishMigrationHealth(ctx, job, existing.Domain)
 		_ = a.saveLiveJob(job)
 		return
 	}
@@ -618,16 +623,27 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		job.Warnings = append(job.Warnings, cpanelPlan.Warnings...)
 		job.Warnings = append(job.Warnings, cpanelServiceSummary(cpanelPlan))
 	}
+	if job.Source.Platform == "cpanel" {
+		if err = a.importCPanelDNS(ctx, filepath.Join(root, "files"), job, site); err != nil {
+			fail(err)
+			return
+		}
+	}
+	a.finishMigrationHealth(ctx, job, domain)
+	_ = a.saveLiveJob(job)
+	a.store.AddActivity("Automatic website restore", domain+": "+job.Status, "info")
+}
+
+func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, domain string) {
 	code, e := runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
-	setLiveJobStage(job, "result", "restored-review", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Verify application pages before DNS cutover. DNS records and SSL still require separate review. Previous files are retained for recovery.")
+	setLiveJobStage(job, "result", "restored", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Review application pages, mail delivery, DNS delegation and SSL before cutover. Previous files are retained for recovery.")
 	if job.Source.Platform != "cpanel" && job.Source.Platform != "backup" {
 		job.Message += " Mail and source cron jobs require separate configuration."
 	}
-	if e != nil || strings.TrimSpace(code) == "000" || strings.HasPrefix(strings.TrimSpace(code), "5") || strings.HasPrefix(strings.TrimSpace(code), "4") {
-		job.Message = "Website restored but its local health check failed. DNS must not be changed. Previous files are retained for recovery."
+	status, parseErr := strconv.Atoi(strings.TrimSpace(code))
+	if e != nil || parseErr != nil || status < 200 || status >= 400 {
+		setLiveJobStage(job, "result", "restored-review", "Website restored but its local HTTP health check failed (status "+strings.TrimSpace(code)+"). Review application logs before DNS cutover. Previous files are retained for recovery.")
 	}
-	_ = a.saveLiveJob(job)
-	a.store.AddActivity("Automatic website restore", domain+": application verification required", "info")
 }
 
 // The exporter captures both private application directories and standalone

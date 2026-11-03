@@ -23,6 +23,7 @@ import (
 const migrationUploadLimit = int64(2 << 30)
 const migrationExtractLimit = int64(8 << 30)
 const liveMigrationExtractLimit = int64(64 << 30)
+const liveMigrationMemberLimit = 1000000
 
 type MigrationPreview struct {
 	ID        string    `json:"id"`
@@ -66,6 +67,10 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 	preview := MigrationPreview{Platform: platform, Roots: []string{}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	roots := map[string]bool{}
 	files := map[string]bool{}
+	memberLimit := maxArchiveMembers
+	if extractLimit == liveMigrationExtractLimit {
+		memberLimit = liveMigrationMemberLimit
+	}
 	add := func(name string, size int64, directory bool, source io.Reader) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -77,11 +82,14 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 		if clean == "." {
 			return nil
 		}
-		if files[clean] {
+		if wasDirectory, exists := files[clean]; exists {
+			if wasDirectory && directory {
+				return secureEnsureManagedDirectory(root, clean, 0700, os.Getuid(), os.Getgid())
+			}
 			return fmt.Errorf("duplicate archive entry: %s", clean)
 		}
-		files[clean] = true
-		if len(files) > maxArchiveMembers {
+		files[clean] = directory
+		if len(files) > memberLimit {
 			return errors.New("archive contains too many entries")
 		}
 		if size < 0 || size > extractLimit-preview.Bytes {
@@ -133,7 +141,7 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 		if err != nil {
 			return preview, err
 		}
-		if len(reader.File) > maxArchiveMembers {
+		if len(reader.File) > memberLimit {
 			return preview, errors.New("archive contains too many entries")
 		}
 		for _, member := range reader.File {
@@ -175,7 +183,7 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 				return preview, err
 			}
 			entries++
-			if entries > maxArchiveMembers {
+			if entries > memberLimit {
 				return preview, errors.New("archive contains too many entries")
 			}
 			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && header.Typeflag != tar.TypeDir {
