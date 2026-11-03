@@ -560,7 +560,9 @@ func (s *System) importScopedSQLMode(ctx context.Context, sqlPath string, databa
 		return errors.New("the target database must be empty; existing tables, routines and events were not modified")
 	}
 	command := exec.CommandContext(commandCtx, firstAvailableCommand("mysql", "mariadb"), "--defaults-extra-file="+credentials.Name(), "--user="+database.Username, "--protocol=socket", "--binary-mode=1", "--local-infile=0", database.Name)
-	command.Stdin = source
+	scopedSQL := scopedMigrationSQL(source, database.Name)
+	defer scopedSQL.Close()
+	command.Stdin = scopedSQL
 	var stderr limitedBuffer
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
