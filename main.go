@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.48"
+var version = "4.0.52"
 var buildRevision = ""
 
 //go:embed web/*
@@ -264,6 +264,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
 	mux.HandleFunc("/api/security/scan", only(http.MethodPost, a.withAuth(a.malwareScan)))
 	mux.HandleFunc("/api/security/server-scan", a.withAuth(a.serverScan))
+	mux.HandleFunc("/api/security/malware-files", a.withAuth(a.malwareFileAction))
 	mux.HandleFunc("/api/live-migrations/auto-restore", only(http.MethodPost, a.withAuth(a.autoMigrationAction)))
 	mux.HandleFunc("/api/backup-schedules", a.withAuth(a.backupSchedules))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))

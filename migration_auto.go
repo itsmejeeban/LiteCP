@@ -232,7 +232,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 		a.finishMigrationHealth(ctx, job, existing.Domain)
-		_ = a.saveLiveJob(job)
+		a.finishSuccessfulMigrationCleanup(job)
 		return
 	}
 	if len(preview.Roots) != 1 {
@@ -671,7 +671,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	if job.Status == "restored-review" && strings.Contains(job.Message, "(status 403)") && blankMigrationWebsite(source, privateSource) {
 		setLiveJobStage(job, "result", "restored", "Blank website and included databases restored. HTTP 403 is expected because the website has no index file; directory listing remains disabled.")
 	}
-	_ = a.saveLiveJob(job)
+	a.finishSuccessfulMigrationCleanup(job)
 	a.store.AddActivity("Automatic website restore", domain+": "+job.Status, "info")
 }
 

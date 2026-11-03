@@ -68,7 +68,7 @@ func TestMigrationCancelAllIncludesPendingReview(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Cancelled != 9 || len(result.Errors) != 0 {
+	if result.Cancelled != 10 || len(result.Errors) != 0 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
 	select {
@@ -82,7 +82,7 @@ func TestMigrationCancelAllIncludesPendingReview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i < 9 {
+		if i < 10 {
 			if job.Status != "cancelled" || job.AutoRestore || job.CompletedAt.IsZero() {
 				t.Fatalf("%s not cancelled: %+v", status, job)
 			}

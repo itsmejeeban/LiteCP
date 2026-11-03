@@ -82,3 +82,8 @@
 @media(max-width:700px){.live-job-heading.has-progress{grid-template-columns:minmax(0,1fr) auto auto;}.migration-row-progress{grid-column:1/-1;grid-row:2;}}
 
 .live-jobs-panel h2 .migration-total {display:inline-flex;margin-left:8px;vertical-align:middle;font-size:12px;font-weight:500;}
+
+/* Keep row cancellation visible without expanding the job details. */
+.live-job-heading:has([data-live-cancel]){grid-template-columns:minmax(0,1fr) auto auto auto;}
+.live-job-heading.has-progress:has([data-live-cancel]){grid-template-columns:minmax(180px,1fr) minmax(160px,2fr) auto auto auto;}
+@media(max-width:700px){.live-job-heading.has-progress:has([data-live-cancel]){grid-template-columns:minmax(0,1fr) auto auto auto;}}

@@ -160,3 +160,76 @@ func (a *App) cleanMigrationTemporaryFiles() (migrationCleanupResult, error) {
 	}
 	return result, nil
 }
+
+// Successful restores no longer need transfer archives or extraction staging.
+// Review/failed jobs retain these files for retry; recovery backups are untouched.
+func (a *App) cleanSuccessfulMigration(job *LiveMigrationJob) error {
+	if job.Status != "restored" || job.ArtifactsCleaned {
+		return nil
+	}
+	root, err := a.liveJobRoot(job.ID)
+	if err != nil {
+		return err
+	}
+	stageParent := filepath.Join(a.system.dataDir, "migrations")
+	targets := []string{filepath.Join(root, "native-backup"), filepath.Join(root, "portable-backup"), filepath.Join(stageParent, job.ID)}
+	if job.Preview != nil && job.Preview.ID != job.ID {
+		id := job.Preview.ID
+		if id == "" || safeSiteID(id) != id {
+			return errors.New("invalid migration staging ID; temporary files preserved")
+		}
+		entries, e := os.ReadDir(filepath.Dir(root))
+		if e != nil {
+			return e
+		}
+		for _, entry := range entries {
+			if entry.Name() == job.ID {
+				continue
+			}
+			other, e := a.loadLiveJob(entry.Name())
+			if e != nil {
+				return errors.New("cannot verify staging ownership; temporary files preserved")
+			}
+			if other.Preview != nil && other.Preview.ID == id {
+				return errors.New("shared migration stage preserved")
+			}
+		}
+		targets = append(targets, filepath.Join(stageParent, id))
+	}
+	// Check every component before removal, including parents, to reject symlink escapes.
+	for _, target := range targets {
+		rel, e := filepath.Rel(a.system.dataDir, target)
+		if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return errors.New("unsafe migration cleanup path")
+		}
+		current := a.system.dataDir
+		for _, part := range append([]string{"."}, strings.Split(rel, string(os.PathSeparator))...) {
+			current = filepath.Join(current, part)
+			info, e := os.Lstat(current)
+			if errors.Is(e, os.ErrNotExist) {
+				break
+			}
+			if e != nil {
+				return e
+			}
+			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return errors.New("migration cleanup path is not a real directory")
+			}
+		}
+	}
+	for _, target := range targets {
+		if err := os.RemoveAll(target); err != nil {
+			return err
+		}
+	}
+	job.NativeReady, job.NativeBytes, job.Preview, job.Progress = false, 0, nil, nil
+	job.ArtifactsCleaned = true
+	return nil
+}
+
+func (a *App) finishSuccessfulMigrationCleanup(job *LiveMigrationJob) {
+	if err := a.cleanSuccessfulMigration(job); err != nil {
+		job.Warnings = append(job.Warnings, "Automatic temporary-file cleanup needs attention: "+err.Error())
+	}
+	_ = a.saveLiveJob(job)
+}

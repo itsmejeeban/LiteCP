@@ -102,7 +102,7 @@ func setLiveJobStage(job *LiveMigrationJob, stage, status, message string) {
 
 func liveJobCancellable(job LiveMigrationJob) bool {
 	switch job.Status {
-	case "queued", "connecting", "running", "review", "awaiting-overwrite", "restoring", "restore-review", "captured", "interrupted":
+	case "queued", "connecting", "running", "review", "awaiting-overwrite", "restoring", "restore-review", "captured", "interrupted", "restored-review":
 		return true
 	}
 	return false

@@ -20,7 +20,7 @@
   const jobsLink=document.createElement('button');jobsLink.type='button';jobsLink.className='button button-secondary';jobsLink.textContent='View migration jobs';jobsLink.onclick=()=>cp.navigate('migrations/jobs');$('#liveSourceForm .settings-body').append(jobsLink);
   let jobs=[],selectedJob=null,initialized=false,pollTimer=null;const accountSelections=new Map(),expandedJobs=new Set();
   const active=job=>job.status==='running'||job.status==='connecting'||job.status==='restoring';
-  const cancellable=job=>['queued','running','connecting','restoring','review','awaiting-overwrite','restore-review','captured','interrupted'].includes(job.status);
+  const cancellable=job=>['queued','running','connecting','restoring','review','awaiting-overwrite','restore-review','captured','interrupted','restored-review'].includes(job.status);
   const migrationStages=['connection','selection','capture','transfer','verify','extract','preflight','restore','result'];
   function stageProgress(job){
     let index=migrationStages.indexOf(job.stage);if(index<0)index=job.status==='queued'?1:0;
@@ -71,7 +71,7 @@
     if(!visibleJobs.length&&section==='completed')$('#liveJobs p').textContent='No completed migration jobs yet.';
     if(!visibleJobs.length&&section==='jobs')$('#liveJobs p').textContent='No queued or running migration jobs.';
     document.querySelectorAll('[data-live-auto]:not([data-live-retry-restore]),a[href^="/api/live-migrations/download"]').forEach(control=>control.remove());
-    document.querySelectorAll('.live-job').forEach(section=>{const job=allJobs.find(item=>item.id===section.dataset.jobId);if(job&&cancellable(job)){const actions=section.querySelector('.feature-actions');actions?.insertAdjacentHTML('afterbegin',`<button class="button button-danger" type="button" data-live-cancel="${esc(job.id)}">Cancel migration</button>`);}});
+    document.querySelectorAll('.live-job').forEach(section=>{const job=allJobs.find(item=>item.id===section.dataset.jobId);if(job&&cancellable(job)){const actions=section.querySelector('.live-job-heading');actions?.insertAdjacentHTML('beforeend',`<button class="button button-danger" type="button" data-live-cancel="${esc(job.id)}" aria-label="Cancel migration for ${esc(job.accounts?.find(account=>account.id===job.account)?.domain||job.account||job.id)}">Cancel</button>`);}});
     document.querySelectorAll('.live-job[data-job-status="review"] [data-live-review]').forEach(control=>control.remove());
     document.querySelectorAll('[data-live-capture]').forEach(form=>{const selected=accountSelections.get(form.dataset.liveCapture);if(selected)selected.forEach(id=>pickAccount(form,id));});
   }
