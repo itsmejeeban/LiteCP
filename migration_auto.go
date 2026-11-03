@@ -676,7 +676,9 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 }
 
 func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, domain string) {
-	code, e := runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
+	code, e := retryMigrationHealth(ctx, 2*time.Second, func() (string, error) {
+		return runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
+	})
 	setLiveJobStage(job, "result", "restored", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Review application pages, mail delivery, DNS delegation and SSL before cutover. Previous files are retained for recovery.")
 	if job.Source.Platform != "cpanel" && job.Source.Platform != "backup" {
 		job.Message += " Mail and source cron jobs require separate configuration."
@@ -694,4 +696,31 @@ func validateMigrationPrivateEntry(entry os.DirEntry) error {
 		return fmt.Errorf("private application data contains an unsupported top-level entry: %s", entry.Name())
 	}
 	return nil
+}
+
+// Nginx reloads and restored application workers may need a short settling
+// period. Never treat a persistent error as success or rewrite website data.
+func retryMigrationHealth(ctx context.Context, delay time.Duration, probe func() (string, error)) (string, error) {
+	var code string
+	var err error
+	for attempt := 0; attempt < 4; attempt++ {
+		if ctx.Err() != nil {
+			return code, ctx.Err()
+		}
+		code, err = probe()
+		status, parseErr := strconv.Atoi(strings.TrimSpace(code))
+		if err == nil && parseErr == nil && status >= 200 && status < 400 {
+			return code, nil
+		}
+		if attempt < 3 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return code, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return code, err
 }
