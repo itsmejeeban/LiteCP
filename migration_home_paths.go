@@ -107,6 +107,9 @@ func relocateMigrationHomePaths(roots []string, sourceHome, destinationHome, rec
 				return err
 			}
 			text := relocateMigrationHomeText(string(data), kind, sourceHome, destinationHome)
+			if relative == "index.php" {
+				text = repairMigrationLocalBootstrap(text, writeRoot, destinationHome)
+			}
 			if text == string(data) {
 				return nil
 			}
@@ -164,4 +167,20 @@ func (a *App) repairCommittedMigrationPaths(job LiveMigrationJob, stagedRoot str
 		return err
 	}
 	return relocateMigrationHomePaths(roots, sourceHome, filepath.ToSlash(managedSiteRoot(site)), recovery, site.RuntimeUID, site.RuntimeGID)
+}
+
+// Repair only the known literal bootstrap layout, without evaluating source PHP.
+// The existing path-recovery transaction preserves the original entry point.
+func repairMigrationLocalBootstrap(content, root, destinationHome string) string {
+	if _, err := os.Lstat(filepath.Join(destinationHome, "app", "bootstrap.php")); !os.IsNotExist(err) {
+		return content
+	}
+	if _, _, err := readMigrationSource(root, "app/bootstrap.php"); err != nil {
+		return content
+	}
+	for _, quote := range []string{"'", "\""} {
+		old := "require dirname(__DIR__) . " + quote + "/app/bootstrap.php" + quote + ";"
+		content = strings.Replace(content, old, "require __DIR__ . "+quote+"/app/bootstrap.php"+quote+";", 1)
+	}
+	return content
 }

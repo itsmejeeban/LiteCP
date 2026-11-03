@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.44"
+var version = "4.0.48"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,12 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "doctor" {
+		if err := runDoctor(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) == 3 && os.Args[1] == "capture-worker" {
 		if err := runLiveCaptureWorker(os.Args[2]); err != nil {
 			log.Fatal(err)

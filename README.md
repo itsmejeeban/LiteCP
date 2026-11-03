@@ -278,3 +278,21 @@ New installations include ClamAV, initial malware signatures and a twice-daily s
 The System Update page compares installed OS packages with upgrade candidates from the server's configured APT/DNF repositories. Check updates, update selected packages or all eligible packages, or enable a daily/weekly timer (disabled by default). Updates run in a background system service and do not request a reboot. Package maintainer scripts can restart services; take a recovery backup before updating. Existing OS security-update timers remain independent.
 
 Source-built WAF installations hold Nginx packages back in this updater so an ABI change does not strand the connector. LiteCP releases, Roundcube/phpMyAdmin, ionCube and hosting container images remain managed by their dedicated update tools. They are explicitly listed as separate components rather than claiming repository coverage. Diagnostics: `/var/lib/litecp/system-updates/operations.log` (private); schedule service: `litecp-system-update.timer`. Repository access and Linux package-manager integration require live validation before production use.
+
+## Terminal recovery when the panel will not open
+
+Run on the LiteCP server through SSH or the provider console:
+
+```sh
+sudo litecp doctor --repair
+```
+
+For diagnostics without starting services:
+
+```sh
+sudo litecp doctor --check
+```
+
+Available from **4.0.48**. The command is embedded in the installed binary, so no source checkout or GitHub token is needed. It checks configuration JSON, available disk space, Nginx syntax, LiteCP, installed/enabled MySQL, PHP-FPM, cron, mail, FTPS, Fail2ban and DNS services, then probes the local panel HTTP endpoint. Repair mode starts inactive required services and inactive enabled hosting services. Running services are not restarted; disabled optional services remain disabled.
+
+Each stage prints its result. Exit status 0 means these checks passed; status 1 means attention is still required. Invalid configuration, missing packages, full disks, TLS problems and provider firewall restrictions may need administrator action. Doctor reports failures rather than resetting configuration, deleting files, reinstalling packages or weakening security. Local HTTP success does not prove public TLS or network access. The same recovery script is available at `scripts/litecp-doctor.sh` for source installations.
