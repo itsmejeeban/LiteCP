@@ -465,7 +465,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 				return
 			}
 			credentialsByName[name] = credentials
-			if name == customConfigs[0].Database {
+			if len(customConfigs) > 0 && name == customConfigs[0].Database {
 				copy := value
 				database = &copy
 			}
@@ -646,6 +646,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 	}
 	a.finishMigrationHealth(ctx, job, domain)
+	// A truly blank root has no index; Nginx correctly refuses directory listing.
+	if job.Status == "restored-review" && strings.Contains(job.Message, "(status 403)") && blankMigrationWebsite(source, privateSource) {
+		setLiveJobStage(job, "result", "restored", "Blank website and included databases restored. HTTP 403 is expected because the website has no index file; directory listing remains disabled.")
+	}
 	_ = a.saveLiveJob(job)
 	a.store.AddActivity("Automatic website restore", domain+": "+job.Status, "info")
 }

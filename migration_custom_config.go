@@ -253,7 +253,7 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			return nil, nil, err
 		}
 	}
-	if len(plans) == 0 {
+	if len(plans) == 0 && !blankMigrationWebsite(public, private) {
 		return nil, nil, fmt.Errorf("no supported literal database configuration found; use a DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_HOST .env connection or a literal PHP configuration")
 	}
 	return plans, databases, nil
@@ -337,4 +337,41 @@ func migrationPHPDatabaseScope(content string) (int, int) {
 		}
 	}
 	return scopeStart, scopeEnd
+}
+
+// An empty document root may legitimately retain PHP settings and unrelated SQL
+// dumps. Do not treat an unrecognized application as a blank website.
+func blankMigrationWebsite(roots ...string) bool {
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if os.IsNotExist(err) && path == root {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("link")
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if !entry.Type().IsRegular() {
+				return fmt.Errorf("special file")
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			switch relative {
+			case ".htaccess", ".user.ini", "php.ini":
+				return nil
+			}
+			return fmt.Errorf("application file")
+		})
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
