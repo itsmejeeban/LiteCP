@@ -74,7 +74,7 @@
   }
   async function loadJobs(){
     if(cp.demo){$('#liveJobs').innerHTML='<div class="empty-state"><p>Live migration requires the installed Linux server.</p></div>';return;}
-    try{const result=await cp.api('/api/live-migrations');jobs=result.items;for(const job of jobs){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));Object.assign(job,current);}}renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'))pollTimer=setTimeout(loadJobs,5000);}
+    try{const result=await cp.api('/api/live-migrations');jobs=result.items;for(const job of jobs){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));Object.assign(job,current);}}renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
     catch(error){$('#liveJobs').textContent=error.message;}
   }
   function pickAccount(form,id){const job=jobs.find(item=>item.id===form.dataset.liveCapture),account=job?.accounts.find(item=>item.id===id);if(!account)return;const selected=accountSelections.get(form.dataset.liveCapture)||[];if(!selected.includes(id))selected.push(id);accountSelections.set(form.dataset.liveCapture,selected);form.elements.account.value=JSON.stringify(selected);const box=form.querySelector('[data-selected-website]');box.replaceChildren();for(const key of selected){const value=job.accounts.find(x=>x.id===key);const line=document.createElement('div');line.textContent=value?.domain||key;const remove=document.createElement('button');remove.type='button';remove.className='button button-secondary';remove.textContent='Remove';remove.onclick=()=>{const remaining=selected.filter(x=>x!==key);accountSelections.set(form.dataset.liveCapture,remaining);form.querySelector('[data-clear-account]').click();remaining.forEach(x=>pickAccount(form,x));};line.append(remove);box.append(line)}form.querySelector('[data-clear-account]').hidden=false;form.querySelectorAll('[data-account]').forEach(row=>{const chosen=selected.includes(row.dataset.account);row.classList.toggle('selected',chosen);row.querySelector('[data-pick-account]').disabled=chosen;});}
@@ -94,16 +94,18 @@
       const latest=await cp.api('/api/live-migrations');
       const pending=(latest.items||[]).filter(pendingMigration);
       for(let i=0;i<pending.length;i++){
-        const job=await cp.api('/api/live-migrations?id='+encodeURIComponent(pending[i].id)),action=pendingRetryAction(job);
+        const job=pending[i];
         retryPendingButton.textContent=`Retrying ${i+1} of ${pending.length}`;
-        if(!action){skipped++;continue;}
         try{
-          if(action==='restore')await cp.api('/api/live-migrations/auto-restore',{method:'POST',body:{id:job.id,overwrite:false}});
+          Object.assign(job,await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id)));
+          const action=pendingRetryAction(job);
+          if(!action){skipped++;continue;}
+          if(action==='restore')await cp.api('/api/live-migrations/auto-restore',{method:'POST',body:{id:job.id,overwrite:false,background:true}});
           else await cp.api('/api/live-migrations',{method:'POST',body:{action:'retry',id:job.id,confirm:true}});
           retried++;
         }catch(error){errors.push(`${job.accounts?.find(account=>account.id===job.account)?.domain||job.account||job.id}: ${error.message}`);}
       }
-      await cp.refresh();
+      await loadJobs();
       cp.showToast('Pending retries requested',`${retried} retry request(s) accepted; ${skipped} require individual review. Check each job for its result.`);
       if(errors.length)cp.handleError(new Error(errors.join('; ')));
     }catch(error){cp.handleError(error);}

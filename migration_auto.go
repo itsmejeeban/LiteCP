@@ -84,6 +84,7 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 		ID            string `json:"id"`
 		Overwrite     bool   `json:"overwrite"`
 		ConfirmDomain string `json:"confirmDomain"`
+		Background    bool   `json:"background"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
@@ -114,6 +115,21 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job.AutoRestore = true
+	if input.Background {
+		// The persistent restore worker serializes work independently of HTTP.
+		// Overwrites still need the separate domain-confirmation workflow.
+		if input.Overwrite {
+			writeError(w, 400, "Use the individual overwrite confirmation.")
+			return
+		}
+		setLiveJobStage(&job, "preflight", "review", "Restore retry queued. Waiting for the background restore worker.")
+		if err := a.saveLiveJob(&job); err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusAccepted, job)
+		return
+	}
 	a.performAutoMigration(&job, input.Overwrite)
 	writeJSON(w, 200, job)
 }
