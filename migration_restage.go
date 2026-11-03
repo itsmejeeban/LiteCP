@@ -28,13 +28,16 @@ func (a *App) stageRetainedCapture(job *LiveMigrationJob) error {
 	if err != nil {
 		return err
 	}
-	available, err := migrationFreeBytes(ctx, root)
-	if err != nil || available < required+(1<<30) {
-		return fmt.Errorf("insufficient disk space for archive plus safety reserve")
-	}
 	parent := filepath.Join(a.system.dataDir, "migrations")
 	if err = os.MkdirAll(parent, 0700); err != nil {
 		return err
+	}
+	available, err := migrationFreeBytes(ctx, parent)
+	if err != nil {
+		return fmt.Errorf("cannot check migration staging free space: %w", err)
+	}
+	if available < required+(1<<30) {
+		return fmt.Errorf("insufficient staging space: need %.2f GiB for extraction plus 1 GiB safety reserve; %.2f GiB available at %s. Free space or expand storage before retrying; retained backups were not deleted", float64(required)/(1<<30), float64(available)/(1<<30), parent)
 	}
 	fresh, err := os.MkdirTemp(parent, ".restage-"+job.ID+"-")
 	if err != nil {

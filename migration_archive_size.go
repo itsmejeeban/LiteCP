@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 )
 
 // Inspect the same regular files/directories that extraction accepts. Stream
@@ -36,6 +37,7 @@ func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, erro
 	}
 	reader := tar.NewReader(migrationContextReader{ctx, stream})
 	var bytes, space int64
+	paths := map[string]bool{} // true for directories, including implicit parents
 	for entries := 0; ; entries++ {
 		header, e := reader.Next()
 		if e == io.EOF {
@@ -50,9 +52,25 @@ func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, erro
 		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA && header.Typeflag != tar.TypeDir {
 			continue
 		}
-		if _, e = safeMigrationArchiveName(header.Name); e != nil {
+		clean, nameErr := safeMigrationArchiveName(header.Name)
+		if nameErr != nil {
+			e = nameErr
 			return 0, fmt.Errorf("archive entry %q: %w", header.Name, e)
 		}
+		if clean == "." {
+			continue
+		}
+		directory := header.Typeflag == tar.TypeDir
+		if wasDirectory, exists := paths[clean]; exists && (!wasDirectory || !directory) {
+			return 0, fmt.Errorf("archive path conflict at %q: a file and another entry use the same destination; correct the source archive before retrying (no files were extracted)", clean)
+		}
+		for parent := path.Dir(clean); parent != "."; parent = path.Dir(parent) {
+			if isDirectory, exists := paths[parent]; exists && !isDirectory {
+				return 0, fmt.Errorf("archive path conflict at %q: parent %q is a file (no files were extracted)", clean, parent)
+			}
+			paths[parent] = true
+		}
+		paths[clean] = directory
 		if header.Size < 0 || header.Size > liveMigrationExtractLimit-bytes {
 			return 0, fmt.Errorf("uncompressed website data exceeds the 64 GiB extraction limit")
 		}
