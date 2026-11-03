@@ -397,6 +397,7 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) createManagedDatabase(w http.ResponseWriter, r *http.Request) {
 	var input struct {
+		SiteID   string `json:"siteId"`
 		Name     string `json:"name"`
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -404,6 +405,15 @@ func (a *App) createManagedDatabase(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	var domain string
+	if input.SiteID != "" {
+		site := a.store.SiteByID(input.SiteID)
+		if site == nil {
+			writeError(w, http.StatusNotFound, "Website not found.")
+			return
+		}
+		domain = site.Domain
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Username = strings.TrimSpace(input.Username)
@@ -428,7 +438,7 @@ func (a *App) createManagedDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := randomToken(8)
-	database := ManagedDatabase{ID: id, Name: input.Name, Username: input.Username, CreatedAt: time.Now().UTC()}
+	database := ManagedDatabase{ID: id, SiteID: input.SiteID, Domain: domain, Name: input.Name, Username: input.Username, CreatedAt: time.Now().UTC()}
 	if err := a.store.AddDatabase(database); err != nil {
 		if rollbackErr := a.system.DropManagedDatabase(context.Background(), database); rollbackErr != nil {
 			writeError(w, http.StatusInternalServerError, "Panel state could not be saved, and database rollback failed: "+rollbackErr.Error())

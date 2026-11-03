@@ -6,7 +6,7 @@ import (
 )
 
 func TestURLUploadAddressSafety(t *testing.T) {
-	for _, value := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "100.100.100.200", "::1", "::ffff:127.0.0.1", "fc00::1", "192.0.2.1", "2001:db8::1", "64:ff9b::a00:1"} {
+	for _, value := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "100.100.100.200", "::1", "::ffff:127.0.0.1", "fc00::1", "192.0.2.1", "2001:db8::1", "64:ff9b::a00:1", "64:ff9b:1::a00:1", "100::1", "2001::a00:1", "2001:20::1", "3fff::1", "5f00::1"} {
 		if publicDownloadIP(net.ParseIP(value)) {
 			t.Fatalf("unsafe address accepted: %s", value)
 		}

@@ -401,10 +401,10 @@ func (s *System) ScanManagedPath(ctx context.Context, site Site, relative string
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	if site.RuntimeUID < 1 || site.RuntimeGID < 1 {
-		return result, errors.New("site runtime identity is not configured")
+	command, err := websiteScanCommand(commandCtx, site, target)
+	if err != nil {
+		return result, err
 	}
-	command := exec.CommandContext(commandCtx, "setpriv", fmt.Sprintf("--reuid=%d", site.RuntimeUID), fmt.Sprintf("--regid=%d", site.RuntimeGID), "--clear-groups", "clamscan", "--recursive=yes", "--infected", "--follow-dir-symlinks=0", "--follow-file-symlinks=0", "--max-filesize=256M", "--max-scansize=2G", target)
 	var output limitedBuffer
 	command.Stdout, command.Stderr = &output, &output
 	err = command.Run()

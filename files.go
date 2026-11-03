@@ -214,6 +214,9 @@ func (s *System) ReadManagedFile(site Site, relative string) (string, os.FileInf
 	if err != nil {
 		return "", nil, fmt.Errorf("read file: %w", err)
 	}
+	if len(content) > maxEditableFileSize {
+		return "", nil, errors.New("file grew beyond the browser editing limit while being read")
+	}
 	if !utf8.Valid(content) || strings.IndexByte(string(content), 0) >= 0 {
 		return "", nil, errors.New("binary files cannot be edited in the browser")
 	}

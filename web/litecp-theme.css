@@ -593,3 +593,6 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 /* Keep the restore action and its explanatory text visually separate. */
 #backupRestoreInventory .backup-restore-action {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;}
 #backupRestoreInventory .backup-restore-action .button {flex-shrink:0;}
+
+:root[data-theme] #sitesTable .row-actions button[data-site-action="databases"]::before {background-image:url("assets/sidebar/databases.svg");background-size:contain;background-position:center;}
+:root[data-theme] #sitesTable .row-actions button[data-site-action="databases"] {order:-99!important;}

@@ -31,7 +31,16 @@ func publicDownloadIP(ip net.IP) bool {
 	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 		return false
 	}
-	for _, network := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001:db8::/32", "64:ff9b::/96", "2002::/16"} {
+	// Only globally allocated IPv6 unicast is eligible. Translation and tunnel
+	// prefixes can otherwise relay an apparently public URL to an internal IPv4
+	// address on hosts with NAT64 or transition routing configured.
+	if ip.To4() == nil {
+		_, globalIPv6, _ := net.ParseCIDR("2000::/3")
+		if !globalIPv6.Contains(ip) {
+			return false
+		}
+	}
+	for _, network := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001::/23", "2001:db8::/32", "3fff::/20", "64:ff9b::/96", "2002::/16"} {
 		_, block, _ := net.ParseCIDR(network)
 		if block.Contains(ip) {
 			return false

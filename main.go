@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.20"
+var version = "4.0.26"
 var buildRevision = ""
 
 //go:embed web/*
@@ -525,6 +525,7 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) logout(w http.ResponseWriter, r *http.Request) {
+	closeOwnedTerminals(terminalOwner(r))
 	a.forgetBrowser(w, r)
 	if cookie, err := r.Cookie("litecp_session"); err == nil {
 		a.mu.Lock()

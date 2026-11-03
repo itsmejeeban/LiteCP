@@ -530,15 +530,7 @@ func (s *System) EnableSSL(ctx context.Context, site Site, email string, renew .
 	if s.demo {
 		return nil
 	}
-	args := []string{"--nginx", "--domain", site.Domain, "--non-interactive", "--agree-tos", "--email", email, "--redirect"}
-	if len(renew) > 0 && renew[0] {
-		args = append(args, "--force-renewal")
-	}
-	_, err = runCommand(ctx, 90*time.Second, "certbot", args...)
-	if err == nil && site.Suspended {
-		return s.setSuspension(ctx, site, true)
-	}
-	return err
+	return s.enableWebrootSSL(ctx, site, address.Address, len(renew)>0 && renew[0])
 }
 
 func (s *System) SetCron(site Site, enabled bool) error {
