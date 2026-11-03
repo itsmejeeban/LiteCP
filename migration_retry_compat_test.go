@@ -127,20 +127,32 @@ func TestMigrationHomePathRelocation(t *testing.T) {
 }
 
 func TestHealthRetryRejectsUnrelatedWebsite(t *testing.T) {
-	a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{}}
-	id := "abcdefghijklmnop1234"
-	root, _ := a.liveJobRoot(id)
-	if err := os.MkdirAll(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	job := LiveMigrationJob{ID: id, Status: "restored-review", NativeReady: true, Source: LiveSource{Platform: "cpanel"}}
-	if err := a.saveLiveJob(&job); err != nil {
-		t.Fatal(err)
-	}
-	r := httptest.NewRecorder()
-	a.autoMigrationAction(r, httptest.NewRequest("POST", "/", strings.NewReader(`{"id":"`+id+`","background":true}`)))
-	if r.Code != 409 {
-		t.Fatalf("unrelated health retry accepted: %d", r.Code)
+	for _, scenario := range []struct {
+		name       string
+		originalID string
+		sites      []Site
+	}{
+		{name: "missing original website ID"},
+		{name: "original website deleted", originalID: "original-site"},
+		{name: "domain recreated with another ID", originalID: "original-site", sites: []Site{{ID: "replacement-site", Domain: "example.test"}}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{cfg: Config{Sites: scenario.sites}}}
+			id := "abcdefghijklmnop1234"
+			root, _ := a.liveJobRoot(id)
+			if err := os.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			job := LiveMigrationJob{ID: id, Status: "restored-review", NativeReady: true, Source: LiveSource{Platform: "cpanel"}, Account: "source", Accounts: []LiveAccount{{ID: "source", Domain: "example.test"}}, CPanelWebsiteID: scenario.originalID}
+			if err := a.saveLiveJob(&job); err != nil {
+				t.Fatal(err)
+			}
+			r := httptest.NewRecorder()
+			a.autoMigrationAction(r, httptest.NewRequest("POST", "/", strings.NewReader(`{"id":"`+id+`","background":true}`)))
+			if r.Code != 409 {
+				t.Fatalf("unrelated health retry accepted: %d", r.Code)
+			}
+		})
 	}
 }
 

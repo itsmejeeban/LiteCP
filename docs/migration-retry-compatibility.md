@@ -22,3 +22,21 @@ an HTTP 500 response remains pending until the underlying problem is corrected.
 Verified locally with targeted migration tests and JavaScript syntax checks.
 These changes require deployment through `update.bat` before live retries use
 the new behavior. They have not yet been verified by a live restore.
+
+## cPanel mail format metadata (4.0.42)
+
+cPanel's `mail/mailbox_format.cpanel` marker is validated as account metadata,
+so an account with empty mail directories can restore without creating a
+mailbox. Named mailboxes and cron jobs are still discovered normally. The
+marker must be a regular file declaring Maildir; symbolic links, unsupported
+mail formats and unmatched mailbox data still stop for review.
+
+Pending jobs stopped by this marker can use **Retry pending** after the update;
+they do not need a new source capture while their staged files are retained.
+
+## Re-capture after a deleted website (4.0.43)
+
+Jobs stopped at final website checks also offer **Retry capture** while source
+credentials remain available. This starts a fresh capture rather than trying
+to run health checks against a deleted website's ID. Existing destination
+websites still require overwrite confirmation, and existing mail is preserved.

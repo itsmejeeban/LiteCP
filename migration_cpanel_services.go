@@ -146,6 +146,18 @@ func planCPanelServices(root string, job LiveMigrationJob) (cpanelServicesPlan, 
 	}
 	defaultMail := false
 	for _, d := range mailDomains {
+		// cPanel writes this account-level format marker even for accounts
+		// with no mailboxes. It is metadata, not a domain or a Maildir message.
+		if d.Name() == "mailbox_format.cpanel" {
+			data, e := readCPanelMetadata(base, "mail/mailbox_format.cpanel", false)
+			if e != nil {
+				return plan, e
+			}
+			if strings.TrimSpace(string(data)) != "maildir" {
+				return plan, errors.New("unsupported cPanel mailbox format; convert source mail to Maildir and capture again")
+			}
+			continue
+		}
 		if cpanelDefaultMailEntry(d.Name()) {
 			if d.IsDir() {
 				e := filepath.Walk(filepath.Join(base, "mail", d.Name()), func(_ string, info os.FileInfo, e error) error {
@@ -162,6 +174,9 @@ func planCPanelServices(root string, job LiveMigrationJob) (cpanelServicesPlan, 
 				}
 			}
 			continue
+		}
+		if !d.IsDir() || validateMailDomain(d.Name()) != nil {
+			return plan, errors.New("unsupported cPanel mail root entry; source mail was preserved for review")
 		}
 		users, e := os.ReadDir(filepath.Join(base, "mail", d.Name()))
 		if e != nil {
