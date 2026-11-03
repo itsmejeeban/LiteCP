@@ -66,3 +66,9 @@
 :root[data-theme] .live-job:is([data-job-status="cancelled"],[data-job-status="canceled"]) .badge.migration-status {
  background:#30343b;color:#c5cbd4;border-color:#626a77;
 }
+
+:root[data-theme] .live-job:is([data-job-status="running"],[data-job-status="connecting"],[data-job-status="restoring"]) .badge.migration-status {
+  background:#163d2b!important;
+  border-color:#2d7652!important;
+  color:#a4dfbc!important;
+}
