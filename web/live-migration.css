@@ -72,3 +72,13 @@
   border-color:#2d7652!important;
   color:#a4dfbc!important;
 }
+
+.live-job-heading.has-progress {grid-template-columns:minmax(180px,1fr) minmax(160px,2fr) auto auto;}
+.migration-row-progress {display:flex;align-items:center;gap:12px;min-width:0;}
+.migration-row-track {display:block;flex:1;height:8px;overflow:hidden;border-radius:6px;background:#253344;}
+.migration-row-track>span {display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#3186d7,#36b889);transition:width .3s ease;}
+.migration-row-progress small {white-space:nowrap;color:#a4dfbc;font-size:12px;}
+.migration-row-progress small span {color:#a7b2bf;font-size:11px;}
+@media(max-width:700px){.live-job-heading.has-progress{grid-template-columns:minmax(0,1fr) auto auto;}.migration-row-progress{grid-column:1/-1;grid-row:2;}}
+
+.live-jobs-panel h2 .migration-total {display:inline-flex;margin-left:8px;vertical-align:middle;font-size:12px;font-weight:500;}
