@@ -125,7 +125,10 @@ def export(request):
         binary = shutil.which('plesk')
         if not binary:
             raise RuntimeError('Plesk CLI is not installed on this source')
-        accounts = [{'id':value.strip(), 'domain':value.strip()} for value in command([binary,'bin','subscription','--list']).splitlines() if value.strip()]
+        # Subscriptions omit child subdomains and additional hosted domains.
+        # Site inventory includes each independently hosted website and its root.
+        names = command([binary,'bin','site','--list']).splitlines()
+        accounts = [{'id':name, 'domain':name} for name in sorted(set(value.strip() for value in names if value.strip()))]
     elif platform == 'litecp':
         with open('/var/lib/litecp/config.json') as config_file:
             config = json.load(config_file)

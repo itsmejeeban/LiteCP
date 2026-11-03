@@ -18,7 +18,7 @@ class LiveSourceTests(unittest.TestCase):
             self.assertNotIn('text', kwargs)
             self.assertNotIn('capture_output', kwargs)
             self.assertTrue(kwargs['universal_newlines'])
-            self.assertEqual(args, ['/usr/sbin/plesk', 'bin', 'subscription', '--list'])
+            self.assertEqual(args, ['/usr/sbin/plesk', 'bin', 'site', '--list'])
             return types.SimpleNamespace(returncode=0, stdout='example.com\nshop.example.com\n')
         with patch.object(source.os, 'geteuid', return_value=0, create=True), patch.object(source.shutil, 'which', return_value='/usr/sbin/plesk'), patch.object(source.subprocess, 'run', side_effect=legacy_run):
             result = source.export({'platform':'plesk', 'mode':'discover'})
@@ -123,11 +123,11 @@ class LiveSourceTests(unittest.TestCase):
 
     @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.shutil,'which',return_value='/usr/sbin/plesk')
-    @patch.object(source,'command',return_value='example.test\nsecond.test\n')
-    def test_plesk_subscription_inventory(self,command,*unused):
+    @patch.object(source,'command',return_value='example.test\nsecond.test\nshop.example.test\nexample.test\n')
+    def test_plesk_full_site_inventory(self,command,*unused):
         result=source.export({'platform':'plesk','mode':'discover'})
-        self.assertEqual([x['id'] for x in result['accounts']],['example.test','second.test'])
-        self.assertEqual(command.call_args.args[0],['/usr/sbin/plesk','bin','subscription','--list'])
+        self.assertEqual([x['id'] for x in result['accounts']],['example.test','second.test','shop.example.test'])
+        self.assertEqual(command.call_args.args[0],['/usr/sbin/plesk','bin','site','--list'])
 
     @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.pathlib.Path,'is_file',return_value=True)
