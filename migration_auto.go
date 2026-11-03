@@ -106,7 +106,14 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if job.Status != "review" && job.Status != "restore-review" && job.Status != "awaiting-overwrite" {
+	if job.Status == "restored-review" {
+		existing := a.store.SiteByDomain(domain)
+		if job.Source.Platform != "cpanel" || existing == nil || job.CPanelWebsiteID == "" || job.CPanelWebsiteID != existing.ID {
+			writeError(w, 409, "Health retry requires the original committed migration website.")
+			return
+		}
+	}
+	if job.Status != "review" && job.Status != "restore-review" && job.Status != "restored-review" && job.Status != "awaiting-overwrite" {
 		writeError(w, 409, "Capture must finish and be ready for restore first.")
 		return
 	}
@@ -209,6 +216,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		_ = a.saveLiveJob(job)
 		if job.Status == "cancelled" || a.liveMigrationCancelled(job.ID) {
 			fail(context.Canceled)
+			return
+		}
+		if e = a.repairCommittedMigrationPaths(*job, root, *existing, plan.SourceHome); e != nil {
+			fail(e)
 			return
 		}
 		if e = a.importCPanelServices(ctx, plan, *existing); e != nil {
@@ -489,6 +500,16 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 				fail(err)
 				return
 			}
+		}
+	}
+	if job.Source.Platform == "cpanel" {
+		recovery, e := a.liveJobRoot(job.ID)
+		if e == nil {
+			e = relocateMigrationHomePaths([]string{stage, privateStage}, cpanelPlan.SourceHome, filepath.ToSlash(managedSiteRoot(site)), recovery, site.RuntimeUID, site.RuntimeGID)
+		}
+		if e != nil {
+			fail(e)
+			return
 		}
 	}
 	if err = preserveLaravelConfigCache(stage, customConfigs, false); err != nil {

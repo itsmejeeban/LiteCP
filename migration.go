@@ -99,11 +99,11 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 			return secureEnsureManagedDirectory(root, clean, 0700, os.Getuid(), os.Getgid())
 		}
 		if err := secureEnsureManagedDirectory(root, path.Dir(clean), 0700, os.Getuid(), os.Getgid()); err != nil {
-			return err
+			return fmt.Errorf("archive parent conflict for %s: %w", clean, err)
 		}
 		written, err := secureWriteManagedNoReplace(root, clean, source, size, 0600, os.Getuid(), os.Getgid())
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot extract archive entry %s: %w", clean, err)
 		}
 		if written != size {
 			return errors.New("archive member size does not match its header")

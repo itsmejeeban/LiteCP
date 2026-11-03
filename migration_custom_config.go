@@ -37,6 +37,8 @@ func migrationConfigKey(key string) string {
 		return "port"
 	case "db_socket", "unix_socket":
 		return "socket"
+	case "dsn":
+		return "dsn"
 	}
 	return ""
 }
@@ -133,10 +135,23 @@ func inspectMigrationConfig(content, kind string) (migrationConfigPlan, error) {
 		result.Fields[field] = []int{start, end}
 		values[field] = value
 	}
+	if dsn, ok := values["dsn"]; ok {
+		parts, err := migrationMySQLDSN(dsn)
+		if err != nil {
+			return result, err
+		}
+		if values["name"] != "" || result.Fields["host"] != nil || result.Fields["port"] != nil || result.Fields["socket"] != nil {
+			return result, fmt.Errorf("mixed DSN and separate database connection values require explicit mapping")
+		}
+		values["name"], values["host"] = parts["dbname"], parts["host"]
+	}
 	if values["name"] == "" {
 		return result, nil
 	}
 	for _, key := range []string{"name", "user", "password", "host"} {
+		if result.Fields["dsn"] != nil && (key == "name" || key == "host") {
+			continue
+		}
 		if _, ok := result.Fields[key]; !ok {
 			return result, fmt.Errorf("database connection needs literal name, username, password and host")
 		}
@@ -154,6 +169,13 @@ func inspectMigrationConfig(content, kind string) (migrationConfigPlan, error) {
 
 func rewriteGenericMigrationConfig(plan migrationConfigPlan, credentials DBCredentials) string {
 	values := map[string]string{"name": credentials.Name, "user": credentials.Username, "password": credentials.Password, "host": "localhost", "port": "3306", "socket": ""}
+	if span := plan.Fields["dsn"]; span != nil {
+		parts, _ := migrationMySQLDSN(strings.Trim(plan.Content[span[0]:span[1]], "\"'"))
+		values["dsn"] = "mysql:host=localhost;port=3306;dbname=" + credentials.Name
+		if parts["charset"] != "" {
+			values["dsn"] += ";charset=" + parts["charset"]
+		}
+	}
 	type edit struct {
 		start, end int
 		value      string
@@ -235,7 +257,7 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			plan, e := inspectMigrationConfig(string(data), kind)
 			// Ignore unrelated config files without a connection. Never guess dynamic values.
 			if e != nil {
-				if len(plan.Fields) > 0 && plan.Fields["name"] != nil {
+				if plan.Fields["name"] != nil || plan.Fields["dsn"] != nil {
 					return fmt.Errorf("configuration %s: %w", entry.Name(), e)
 				}
 				return nil
@@ -258,7 +280,7 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			return nil, nil, err
 		}
 	}
-	if len(plans) == 0 && !blankMigrationWebsite(public, private) {
+	if len(plans) == 0 && !blankMigrationWebsite(public, private) && !migrationHasNoDatabaseReferences(public, private) {
 		return nil, nil, fmt.Errorf("no supported literal database configuration found; use a DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_HOST .env connection or a literal PHP configuration")
 	}
 	return plans, databases, nil
