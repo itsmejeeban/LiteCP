@@ -605,3 +605,8 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 .malware-files td:last-child .button{margin:4px 0 4px 8px;}
 .malware-quarantine-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #343434;}
 .malware-quarantine-row span{overflow-wrap:anywhere;min-width:0;}
+
+/* DNS uses its own image rather than the default action sprite. */
+:root[data-theme] #sitesTable .row-actions button[data-site-dns]::before {display:none;}
+:root[data-theme] #sitesTable .row-actions button[data-site-dns] {order:-98!important;flex-shrink:0;}
+:root[data-theme] #sitesTable .row-actions button[data-site-dns] img {display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain;}
