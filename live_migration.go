@@ -590,6 +590,25 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, "Retry requires retained credentials and a stopped, incomplete capture.")
 			return
 		}
+		if _, err := selectedMigrationAccounts(original, []string{original.Account}); err != nil {
+			writeError(w, 409, "Reconnect and select the source website before retrying capture.")
+			return
+		}
+		// Repeated clicks must reuse a queued/running retry rather than create
+		// multiple backups and competing restores for the same source website.
+		entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
+		if err != nil {
+			writeError(w, 500, "Cannot inspect existing migration retries")
+			return
+		}
+		for _, entry := range entries {
+			existing, err := a.loadLiveJob(entry.Name())
+			if err == nil && existing.Source == original.Source && existing.Account == original.Account &&
+				(existing.Status == "queued" || existing.Status == "running" || existing.Status == "restoring") {
+				writeJSON(w, 202, existing)
+				return
+			}
+		}
 		id, err := randomToken(18)
 		if err != nil {
 			writeError(w, 500, err.Error())
@@ -628,17 +647,18 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 		original.Warnings = nil
 		original.Preview = nil
 		original.Progress = nil
-		original.Stage = "connection"
+		original.Stage = "queued"
 		original.CompletedAt = time.Time{}
-		original.Status = "connected"
-		original.Message = "Previous interrupted capture retained. Select the website and capture again in a restart-independent worker."
+		original.Status = "queued"
+		original.AutoRestore = true
+		original.Message = "Capture retry queued for the selected website. Previous capture files were retained."
 		original.CreatedAt = time.Now().UTC()
 		original.StageStartedAt = original.CreatedAt
 		if err = a.saveLiveJob(&original); err != nil {
 			writeError(w, 500, err.Error())
 			return
 		}
-		writeJSON(w, 201, original)
+		writeJSON(w, 202, original)
 		return
 	}
 	if input.Action == "capture" {
