@@ -9,6 +9,28 @@ function Run-Step([string]$Tool, [string[]]$Arguments) {
     & $Tool @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$Tool failed with exit code $LASTEXITCODE" }
 }
+# Only use for idempotent connection/transfer operations, never deployment.
+function Run-TransferStep([string]$Tool, [string[]]$Arguments) {
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $messages = @(& $Tool @Arguments 2>&1)
+            $code = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $previousPreference }
+        $messages | ForEach-Object { Write-Host "$_" }
+        if ($code -eq 0) { return }
+        $transient = ($messages -join "`n") -match '(?i)connection timed out|connection reset|connection unexpectedly closed|connection refused|network error|connection closed by remote host'
+        if (!$transient -or $attempt -eq 3) {
+            if ($transient) {
+                throw "Cannot connect reliably to ${Server}:$Port after $attempt attempt(s). Check the SSH service, configured port, server firewall and provider firewall through the provider console. Changing the password or host-key fingerprint will not fix a connection timeout."
+            }
+            throw "SSH command failed (exit $code). Review the error above. If the host key changed, verify it through the provider console before updating LITECP_UPDATE_HOSTKEY. Authentication and host-key failures are not retried."
+        }
+        Write-Host "Temporary SSH connection failure. Retrying safe transfer step ($($attempt + 1)/3)..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+    }
+}
 function Find-UpdateTool([string]$Name, [string[]]$Candidates) {
     $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { return $command.Source }
@@ -67,12 +89,12 @@ try {
     Write-Host 'Checking SSH identity and login before publishing...'
     try {
         if ($plinkExe) {
-            Run-Step $plinkExe (@('-batch','-no-antispoof') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,'true'))
+            Run-TransferStep $plinkExe (@('-batch','-no-antispoof') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,'true'))
         } else {
             Run-Step 'ssh' @('-o','BatchMode=yes','-o','ConnectTimeout=15','-p',"$Port",$destination,'true')
         }
     } catch {
-        throw 'SSH preflight failed. No changes were published. If PuTTY reports a changed host key, verify its fingerprint in the provider console, then set LITECP_UPDATE_HOSTKEY to that SHA256 value in update-local.bat. Password authentication does not replace host-key verification. Review the SSH error above.'
+        throw "SSH preflight failed. No changes were published. $($_.Exception.Message)"
     }
     Write-Host '[2/6] Reviewing local changes...'
     Run-Step 'git' @('status','--short')
@@ -119,11 +141,11 @@ try {
     $remote = '/root/litecp-manual-update-' + [guid]::NewGuid().ToString('N')
     $destination = "$User@$Server"
     if ($plinkExe) {
-        Run-Step $plinkExe (@('-batch','-no-antispoof') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,"umask 077; mkdir '$remote'"))
-        Run-Step $pscpExe (@('-batch') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$archive,"${destination}:${remote}/source.tar"))
+        Run-TransferStep $plinkExe (@('-batch','-no-antispoof') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$destination,"umask 077; mkdir -p '$remote'"))
+        Run-TransferStep $pscpExe (@('-batch') + $hostKeyArgs + @('-P',"$Port",'-pw',$env:LITECP_UPDATE_PASSWORD,$archive,"${destination}:${remote}/source.tar"))
     } else {
-        Run-Step 'ssh' @('-o','BatchMode=yes','-p',"$Port",$destination,"umask 077; mkdir '$remote'")
-        Run-Step 'scp' @('-o','BatchMode=yes','-P',"$Port",$archive,"${destination}:${remote}/source.tar")
+        Run-TransferStep 'ssh' @('-o','BatchMode=yes','-o','ConnectTimeout=15','-p',"$Port",$destination,"umask 077; mkdir -p '$remote'")
+        Run-TransferStep 'scp' @('-o','BatchMode=yes','-o','ConnectTimeout=15','-P',"$Port",$archive,"${destination}:${remote}/source.tar")
     }
     Write-Host '[5/6] Testing, building and deploying on the server...'
     $deployCommand = "cd '$remote' && tar -xf source.tar && bash scripts/deploy-published-update.sh '$version' '$revision'"
