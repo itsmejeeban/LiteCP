@@ -95,3 +95,13 @@ test('policy save retains disabled protection status',async()=>{
  assert.match(f.editor.querySelector('[data-status]').textContent,/Status: Disabled/);
  assert.equal(f.editor.querySelector('[data-save]').disabled,false);
 });
+
+ test('first policy save reports the authoritative disabled switch instead of draft mode',async()=>{
+ const f=fixture();f.policies.websites.s0.mode='off';f.policies.websites.s0.enabled=false;
+ await f.open();await f.click({'data-switch-configure':'',dataset:{switchConfigure:'s0'}});
+ // An unconfigured site previews Detect in the editor; it must not imply enabled protection.
+ await f.editor.querySelector('[data-save]').onclick();
+ assert.match(f.editor.querySelector('[data-message]').textContent,/Protection is disabled/);
+ assert.match(f.editor.querySelector('[data-status]').textContent,/Status: Disabled/);
+ assert.ok(f.requests.filter(r=>r.path==='/api/security/waf-policies'&&!r.options).length>=3);
+});

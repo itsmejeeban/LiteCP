@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -44,6 +45,21 @@ func readWAFTail(path string) (string, error) {
 var wafRateClient = regexp.MustCompile(`client: ([^, ]+)`)
 var wafRateZone = regexp.MustCompile(`zone "(lcw_[A-Za-z0-9_]+)"`)
 
+type wafRateLogSource struct{ path, website string }
+
+func wafRateLogSources(sites []Site) []wafRateLogSource {
+	sources := []wafRateLogSource{{"/var/log/nginx/error.log", "Server"}}
+	for i, site := range sites {
+		if i >= 20 {
+			break
+		}
+		if home := siteHome(site); home != "" {
+			sources = append(sources, wafRateLogSource{filepath.Join(home, "logs", "error.log"), site.Domain})
+		}
+	}
+	return sources
+}
+
 func (a *App) wafPolicyEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	scope := r.URL.Query().Get("scope")
@@ -64,33 +80,39 @@ func (a *App) wafPolicyEvents(w http.ResponseWriter, r *http.Request) {
 	entries := []wafPolicyEvent{}
 	unavailable := 0
 	if kind == "rate" {
-		text, err := readWAFTail("/var/log/nginx/error.log")
-		if err != nil {
-			unavailable++
-		}
-		lines := strings.Split(text, "\n")
-		for i := len(lines) - 1; i >= 0 && len(entries) < 200; i-- {
-			line := lines[i]
-			zone := wafRateZone.FindStringSubmatch(line)
-			if len(zone) < 2 || !strings.Contains(line, "limiting requests") {
+		sources := wafRateLogSources(sites)
+		for _, source := range sources {
+			text, err := readWAFTail(source.path)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					unavailable++
+				}
 				continue
 			}
-			prefix := wafRatePrefix("server")
-			if scope != "server" {
-				prefix = wafRatePrefix(safeSiteID(scope))
+			lines := strings.Split(text, "\n")
+			for i := len(lines) - 1; i >= 0 && len(entries) < 200; i-- {
+				line := lines[i]
+				zone := wafRateZone.FindStringSubmatch(line)
+				if len(zone) < 2 || !strings.Contains(line, "limiting requests") {
+					continue
+				}
+				prefix := wafRatePrefix("server")
+				if scope != "server" {
+					prefix = wafRatePrefix(safeSiteID(scope))
+				}
+				if !strings.HasPrefix(zone[1], prefix) {
+					continue
+				}
+				client := "unknown"
+				if m := wafRateClient.FindStringSubmatch(line); len(m) > 1 {
+					client = m[1]
+				}
+				stamp := ""
+				if len(line) >= 19 {
+					stamp = line[:19]
+				}
+				entries = append(entries, wafPolicyEvent{Time: stamp, Website: source.website, Message: zone[1] + " | client " + client, Blocked: !strings.Contains(line, "dry run")})
 			}
-			if !strings.HasPrefix(zone[1], prefix) {
-				continue
-			}
-			client := "unknown"
-			if m := wafRateClient.FindStringSubmatch(line); len(m) > 1 {
-				client = m[1]
-			}
-			stamp := ""
-			if len(line) >= 19 {
-				stamp = line[:19]
-			}
-			entries = append(entries, wafPolicyEvent{Time: stamp, Message: zone[1] + " | client " + client, Blocked: !strings.Contains(line, "dry run")})
 		}
 	} else {
 		paths := []struct{ path, website string }{}
@@ -148,5 +170,5 @@ func (a *App) wafPolicyEvents(w http.ResponseWriter, r *http.Request) {
 	if end > len(filtered) {
 		end = len(filtered)
 	}
-	writeJSON(w, 200, map[string]any{"entries": filtered[start:end], "page": page, "pages": pages, "total": len(filtered), "unavailableLogs": unavailable, "note": "Bounded recent log sample (at most 20 websites), not lifetime totals. Bodies, cookies and authorization headers are not returned. Rate events come from the default Nginx error log; redirected logs require administrator configuration. Server custom events are separated by rule prefix; managed CRS events are in website logs."})
+	writeJSON(w, 200, map[string]any{"entries": filtered[start:end], "page": page, "pages": pages, "total": len(filtered), "unavailableLogs": unavailable, "note": "Bounded recent log sample (at most 20 websites), not lifetime totals. Bodies, cookies and authorization headers are not returned. Rate events come from the default and managed website Nginx error logs; custom redirected logs require administrator configuration. Server custom events are separated by rule prefix; managed CRS events are in website logs."})
 }

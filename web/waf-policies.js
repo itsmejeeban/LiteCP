@@ -57,9 +57,12 @@
    const submitted=structuredClone(policy),target=loadedScope;
    await cp.api('/api/security/waf-policies',{method:'PUT',body:{scope:target,policy:submitted}});
    dirty=false;
-   const enabled=submitted.enabled!==false&&(submitted.mode!=='off'||data.policies.server.mode!=='off');
+   data=await cp.api('/api/security/waf-policies');
+   const saved=data.policies.websites[target]||submitted;
+   policy=structuredClone(saved);
+   const enabled=saved.enabled!==false&&(saved.mode!=='off'||data.policies.server.mode!=='off');
    message(enabled?'Policy applied successfully.':'Policy saved. Protection is disabled; enable this website in Security > Website WAF to enforce the saved rules.');
-   $('[data-status]').textContent=`Engine: ${data.engine} · Status: ${enabled?'Enabled':'Disabled'} · Configured mode: ${submitted.mode}`;
+   $('[data-status]').textContent=`Engine: ${data.engine} · Status: ${enabled?'Enabled':'Disabled'} · Configured mode: ${saved.mode}`;
   }catch(e){message(e.message,true)}finally{busy=false;controls.forEach(([control,disabled])=>control.disabled=disabled);}
  };
  $('[data-export-events]').onclick=()=>{const blob=new Blob([JSON.stringify(eventEntries,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='litecp-waf-events-page.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
