@@ -1,16 +1,7 @@
 (() => {
   "use strict";
   const themes = [
-    {id:"default",name:"Default",description:"Original LiteCP design",accent:"#0866ff",surface:"#0d0d0d",radius:"8px"},
-    {id:"shadcn",name:"shadcn/ui",description:"Neutral zinc, crisp borders and restrained surfaces",accent:"#fafafa",surface:"#18181b",radius:"6px"},
-    {id:"mui",name:"Material UI (MUI)",description:"Indigo accents, elevated cards and rounded controls",accent:"#b9a5ff",surface:"#211f26",radius:"16px"},
-    {id:"mantine",name:"Mantine",description:"Compact blue controls and slate surfaces",accent:"#339af0",surface:"#25262b",radius:"4px"},
-    {id:"heroui",name:"HeroUI",description:"Violet accents and generous soft corners",accent:"#a78bfa",surface:"#181424",radius:"18px"},
-    {id:"chakra",name:"Chakra UI",description:"Teal accents and clear, comfortable controls",accent:"#5eead4",surface:"#17232b",radius:"8px"},
-    {id:"primereact",name:"PrimeReact",description:"Emerald highlights and structured data tables",accent:"#34d399",surface:"#18212f",radius:"6px"},
-    {id:"fluent",name:"Fluent UI",description:"Windows-inspired blue and precise geometry",accent:"#60a5fa",surface:"#202020",radius:"4px"},
-    {id:"daisyui",name:"daisyUI",description:"Playful violet with bold, rounded buttons",accent:"#c084fc",surface:"#211b32",radius:"14px"},
-    {id:"baseui",name:"Base UI",description:"Minimal graphite with subtle orange accents",accent:"#fdba74",surface:"#1c1c1c",radius:"6px"}
+    {id:"default",name:"Default",description:"Neutral zinc, crisp borders and restrained surfaces",accent:"#fafafa",surface:"#18181b",radius:"6px"}
   ];
   const storageKey="litecp.uiTheme";
   const valid = value => themes.some(theme=>theme.id===value) ? value : "default";

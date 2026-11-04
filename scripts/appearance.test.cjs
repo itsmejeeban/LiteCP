@@ -12,10 +12,10 @@ function setup(saved,blocked=false){
   events.DOMContentLoaded();
   return {document,window,select,cards,status,cancel,form,memory,windowEvents};
 }
-test('all ten themes initialize and preview without changing the saved theme',()=>{
+test('the sole Default theme initializes and preview without changing the saved theme',()=>{
   const app=setup();
-  assert.equal(app.select.children.length,10);
-  assert.equal(app.cards.children.length,10);
+  assert.equal(app.select.children.length,1);
+  assert.equal(app.cards.children.length,1);
   assert.equal(app.document.documentElement.dataset.uiTheme,'default');
   for(const theme of app.window.LiteCPTheme.themes){
     app.select.value=theme.id;app.select.listeners.change();
@@ -26,15 +26,15 @@ test('all ten themes initialize and preview without changing the saved theme',()
   app.cancel.listeners.click();
   assert.equal(app.document.documentElement.dataset.uiTheme,'default');
 });
-test('save persists selection and cancel returns to the last saved theme',()=>{
-  const app=setup('mui');assert.equal(app.select.value,'mui');
-  app.select.value='chakra';app.select.listeners.change();
-  app.form.listeners.submit({preventDefault(){}});
-  assert.equal(app.memory.get('litecp.uiTheme'),'chakra');
-  app.select.value='heroui';app.select.listeners.change();app.cancel.listeners.click();
-  assert.equal(app.select.value,'chakra');
-  assert.equal(setup(app.memory.get('litecp.uiTheme')).select.value,'chakra');
+test('legacy themes resolve to Default and saving persists Default',()=>{
+  for(const legacy of ['shadcn','mui','mantine','heroui','chakra','primereact','fluent','daisyui','baseui']){
+    const app=setup(legacy);assert.equal(app.select.value,'default');
+    app.form.listeners.submit({preventDefault(){}});
+    assert.equal(app.memory.get('litecp.uiTheme'),'default');
+    assert.equal(app.window.LiteCPTheme.themes.length,1);
+  }
 });
+
 test('invalid preferences and unavailable storage fall back safely',()=>{
   assert.equal(setup('unknown').select.value,'default');
   const app=setup(null,true);app.select.value='mantine';app.select.listeners.change();
@@ -45,14 +45,17 @@ test('invalid preferences and unavailable storage fall back safely',()=>{
 test('changes in another tab synchronize the selected theme',()=>{
   const app=setup();app.memory.set('litecp.uiTheme','fluent');
   app.windowEvents.storage({key:'litecp.uiTheme'});
-  assert.equal(app.select.value,'fluent');
+  assert.equal(app.select.value,'default');
   app.memory.clear();app.windowEvents.storage({key:null});
   assert.equal(app.select.value,'default');
 });
 test('every preset has styles and appearance has a routable settings entry',()=>{
   const css=fs.readFileSync('web/appearance.css','utf8');
+  assert.match(css,/data-ui-theme="default"\]\{--canvas:#09090b;--paper:#18181b/);
+  assert.match(css,/--ui-accent:#fafafa;--ui-accent-hover:#d4d4d8;--ui-accent-ink:#09090b/);
+  for(const removed of ['shadcn','mui','mantine','heroui','chakra','primereact','fluent','daisyui','baseui'])assert.ok(!css.includes(`[data-ui-theme="${removed}"]`));
   for(const theme of setup().window.LiteCPTheme.themes){if(theme.id!=='default')assert.ok(css.includes(`[data-ui-theme="${theme.id}"]`));}
   assert.match(fs.readFileSync('web/settings-tabs.js','utf8'),/id:"appearance"/);
   assert.match(fs.readFileSync('web/app.js','utf8'),/"developer","appearance"/);
-  assert.match(fs.readFileSync('web/index.html','utf8'),/appearance\.css\?v=4\.0\.61/);
+  assert.match(fs.readFileSync('web/index.html','utf8'),/appearance\.css\?v=4\.0\.63/);
 });
