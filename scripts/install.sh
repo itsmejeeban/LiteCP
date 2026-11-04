@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="4.0.100"
+LITECP_VERSION="4.0.101"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -377,7 +377,9 @@ else
     printf '%s\n' "${PANEL_NGINX}" > "${PANEL_CONFIG}"
   fi
   setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 || true
-  semanage port -a -t http_port_t -p tcp 4321 >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp 4321 >/dev/null 2>&1 || true
+  for port in 4321 9091; do
+    semanage port -a -t http_port_t -p tcp "$port" >/dev/null 2>&1 || semanage port -m -t http_port_t -p tcp "$port"
+  done
   semanage fcontext -a -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t '/var/www/litecp(/.*)?' >/dev/null 2>&1
   semanage fcontext -a -t httpd_sys_content_t '/home/litecp(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_content_t '/home/litecp(/.*)?'
   for folder in public_html tmp; do

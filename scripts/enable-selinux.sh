@@ -6,6 +6,13 @@ exec 9>/run/litecp-selinux.lock
 flock -n 9 || { echo 'Another SELinux change is running.' >&2; exit 1; }
 [[ "$(getenforce)" != Disabled ]] || { echo 'SELinux is disabled; enable and relabel it before using this script.' >&2; exit 1; }
 echo '[1/4] Preparing WAF labels and configuration backup...'
+if command -v selinuxenabled >/dev/null && selinuxenabled; then
+  command -v semanage >/dev/null || { echo 'SELinux management tools are required to configure LiteCP HTTP ports.' >&2; exit 1; }
+  for port in 4321 9091; do
+    echo "Configuring LiteCP HTTP port $port for SELinux..."
+    semanage port -a -t http_port_t -p tcp "$port" 2>/dev/null || semanage port -m -t http_port_t -p tcp "$port"
+  done
+fi
 bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-waf-labels.sh"
 config=/etc/selinux/config
 grep -Eq '^SELINUX=(permissive|enforcing)$' "$config" || { echo 'Unrecognized SELinux configuration.' >&2; exit 1; }
@@ -41,9 +48,12 @@ setenforce 1
 echo '[2/4] Enforcement enabled with an independent rollback guard.'
 [[ "$(getenforce)" == Enforcing ]]
 echo '[3/4] Checking Nginx, panel response and active services...'
-if systemctl is-active --quiet nginx; then nginx -t; systemctl reload nginx; fi
-curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/api/version >/dev/null
-for unit in "${active[@]}"; do systemctl is-active --quiet "$unit"; done
+if systemctl is-active --quiet nginx; then
+  nginx -t -e stderr || { echo 'Nginx configuration verification failed.' >&2; exit 1; }
+  systemctl reload nginx || { echo 'Nginx reload failed under SELinux enforcement.' >&2; exit 1; }
+fi
+curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/api/version >/dev/null || { echo 'Local panel health check failed.' >&2; exit 1; }
+for unit in "${active[@]}"; do systemctl is-active --quiet "$unit" || { echo "Previously active service $unit failed verification." >&2; exit 1; }; done
 echo '[4/4] Saving persistent enforcement configuration...'
 sed -i -E 's/^SELINUX=(permissive|enforcing)$/SELINUX=enforcing/' "$config"
 grep -qx 'SELINUX=enforcing' "$config"
