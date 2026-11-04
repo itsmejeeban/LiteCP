@@ -5,13 +5,15 @@ version="$1"
 revision="$2"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
-for tool in go systemctl install cp; do command -v "$tool" >/dev/null; done
+for tool in go systemctl install cp curl python3; do command -v "$tool" >/dev/null; done
 work="$PWD"
 switched=0
 rollback() {
   trap - ERR
   if [[ "$switched" == 1 ]]; then
     echo 'Restoring the previous LiteCP binary...'
+    systemctl stop litecp litecp-broker.service litecp-broker.socket || true
+    if [[ -d "$work/service-recovery" ]]; then bash "$work/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
     install -m 0755 "$work/previous-litecp" /usr/local/bin/litecp
     systemctl restart litecp || true
   fi
@@ -27,9 +29,16 @@ echo '[Server 3/4] Preserving current binary and restarting LiteCP...'
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 systemctl stop litecp
 switched=1
+LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/scripts/install-privilege-services.sh"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
+bash "$work/scripts/repair-waf-labels.sh"
 systemctl start litecp
 bash "$work/scripts/repair-webmail-runtime.sh"
 echo '[Server 4/4] Checking service...'
-systemctl is-active --quiet litecp
+healthy=0
+for attempt in $(seq 1 45); do
+  if bash "$work/scripts/check-privilege-services.sh" "$version"; then healthy=1; break; fi
+  sleep 1
+done
+[[ $healthy == 1 ]]
 echo "LiteCP $version deployed successfully. Recovery binary: $work/previous-litecp"

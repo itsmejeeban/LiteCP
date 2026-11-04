@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.95"
+var version = "4.0.97"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,19 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "web" {
+		if err := runUnprivilegedWeb(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "broker" {
+		// Mark inherited activation descriptors before startup can launch any
+		// website command or helper process.
+		if err := prepareBrokerActivation(); err != nil {
+			log.Fatal(err)
+		}
+	}
 	if len(os.Args) > 1 && os.Args[1] == "doctor" {
 		if err := runDoctor(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -207,6 +220,9 @@ func main() {
 		}
 		return
 	}
+	if runtimeRootHTTPForbidden(os.Args, NewSystem(dataDir).demo) {
+		log.Fatal("Root HTTP serving is disabled. Start litecp.service (unprivileged web) and litecp-broker.service.")
+	}
 	if err := store.interruptBackupRequests(); err != nil {
 		log.Fatal("Cannot reconcile backup requests: ", err)
 	}
@@ -228,6 +244,12 @@ func main() {
 	app.startSnapshotAutomation()
 	app.startCloudflareFirewallUpdates()
 	app.startAutoMigrationRestores()
+	if len(os.Args) == 2 && os.Args[1] == "broker" {
+		if err := runPrivilegeBroker(app); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	server := &http.Server{
 		Addr:              bind,
@@ -255,6 +277,10 @@ func main() {
 }
 
 func (a *App) routes() http.Handler {
+	return a.securityHeaders(a.routeMux())
+}
+
+func (a *App) routeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
@@ -412,7 +438,7 @@ func (a *App) routes() http.Handler {
 		static.ServeHTTP(w, r)
 	}))
 
-	return a.securityHeaders(mux)
+	return mux
 }
 
 func (a *App) securityHeaders(next http.Handler) http.Handler {

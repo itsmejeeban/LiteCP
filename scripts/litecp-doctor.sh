@@ -44,6 +44,7 @@ nginx_valid=no
 if command -v nginx >/dev/null && timeout 30 nginx -t;then nginx_valid=yes;ok 'Nginx configuration validates';else fail 'Nginx configuration is invalid or nginx is missing; repair the reported configuration before restart.';fi
 printf '[3/4] Checking panel and installed hosting services...\n'
 check_service litecp.service yes
+if systemctl cat litecp-broker.service >/dev/null 2>&1; then check_service litecp-broker.service yes; fi
 if [[ $nginx_valid == yes ]];then check_service nginx.service yes;fi
 # Only start optional installed services when enabled by the administrator.
 for unit in mysqld.service mysql.service crond.service cron.service postfix.service dovecot.service opendkim.service vsftpd.service fail2ban.service named.service; do check_service "$unit" no;done

@@ -429,7 +429,7 @@ install_waf() {
   install -d -m 0755 /etc/litecp/waf
   mkdir "$FEATURE_TMP/crs"
   tar -xzf "$FEATURE_TMP/crs.tar.gz" -C "$FEATURE_TMP/crs" --strip-components=1
-  cp -a "$FEATURE_TMP/crs/rules" /etc/litecp/waf/
+  cp -a --no-preserve=ownership,context "$FEATURE_TMP/crs/rules" /etc/litecp/waf/
   [[ -e /etc/litecp/waf/crs-setup.conf ]] || install -m 0644 "$FEATURE_TMP/crs/crs-setup.conf.example" /etc/litecp/waf/crs-setup.conf
   if [[ ! -e /etc/litecp/waf/modsecurity.conf ]]; then
     cat > /etc/litecp/waf/modsecurity.conf <<'EOF'
@@ -455,6 +455,7 @@ EOF
   # The distribution Nginx policy already rotates /var/log/nginx/*.log.
   # Remove the older overlapping policy, which makes logrotate reject both.
   rm -f /etc/logrotate.d/litecp-waf
+  bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-waf-labels.sh"
   nginx -t
   systemctl reload nginx
   echo 'WAF engine installed. Enable Detect per website, tune false positives, then choose Block. Rebuild the AlmaLinux connector after a Nginx ABI upgrade.'

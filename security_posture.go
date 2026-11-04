@@ -107,10 +107,18 @@ func (a *App) securityPosture(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+	webUID := os.Geteuid()
+	peerUID, separated := r.Context().Value(brokerPeerUIDKey{}).(uint32)
+	if separated {
+		webUID = int(peerUID)
+	}
 	result := collectSecurityPosture(func(command string, args ...string) (string, error) {
 		return runCommand(ctx, 2*time.Second, command, args...)
-	}, os.Geteuid())
+	}, webUID)
 	for i := range result.Checks {
+		if result.Checks[i].ID == "privilege" && separated {
+			result.Checks[i].Detail = "The network-facing web service runs without root or Linux capabilities. Authenticated management operations use a root-owned local broker; browser root shells are unavailable. Broker operation isolation still requires security review."
+		}
 		if result.Checks[i].ID == "mfa" {
 			if a.store.twoFactor().Enabled {
 				result.Checks[i].Status = "good"

@@ -17,6 +17,8 @@ failed() {
   trap - ERR
   if [[ "$switched" == 1 ]]; then
     systemctl stop litecp || true
+    systemctl stop litecp-broker.service litecp-broker.socket || true
+    if [[ -d "$work/service-recovery" ]]; then bash "$work/source/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
     cp --preserve=mode "$work/previous-litecp" /usr/local/bin/litecp
     systemctl start litecp || true
   fi
@@ -65,14 +67,16 @@ cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 status running "Restarting LiteCP and checking the new version."
 systemctl stop litecp
 switched=1
+LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
 cp -a "$data_dir" "$work/panel-data"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
+bash "$work/source/scripts/repair-waf-labels.sh"
 systemctl start litecp
 bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do
-  if curl --fail --silent --max-time 2 http://127.0.0.1:9090/api/version | python3 -c 'import json,sys;sys.exit(json.load(sys.stdin).get("version")!=sys.argv[1])' "${tag#v}"; then
+  if bash "$work/source/scripts/check-privilege-services.sh" "${tag#v}"; then
     status success "LiteCP was updated successfully. Sign in again if your session ended."
     exit 0
   fi

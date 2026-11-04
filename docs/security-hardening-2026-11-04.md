@@ -14,6 +14,12 @@ was retained at `/var/backups/litecp/selinux-before-enforcing-20261104T172453-70
 No reboot, policy allow-all module, service restart or relabel was performed.
 These checks do not establish coverage of every application or mail delivery path.
 
+Follow-up: a reload-only failure was subsequently found while testing brute-force
+protection. Existing workers had continued serving, but vendor WAF rules retained
+`var_t` labels and could not be loaded by confined Nginx. Scoped configuration
+labels and vendor ownership were repaired, and an actual reload plus HTTP 200/403
+checks passed with SELinux enforcing. See `brute-force-live-test-2026-11-05.md`.
+
 `scripts/enable-selinux.sh` now also arms an independent systemd rollback timer.
 It preserves the previous configuration and runtime mode on unsuccessful checks.
 Run only after application-specific staging acceptance as its existing header says.

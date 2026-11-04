@@ -3,6 +3,7 @@
 set -euo pipefail
 [[ "$EUID" -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 [[ "$(getenforce)" != Disabled ]] || { echo 'SELinux is disabled; enable and relabel it before using this script.' >&2; exit 1; }
+bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-waf-labels.sh"
 config=/etc/selinux/config
 grep -Eq '^SELINUX=(permissive|enforcing)$' "$config" || { echo 'Unrecognized SELinux configuration.' >&2; exit 1; }
 backup="/var/backups/litecp/selinux-$(date -u +%Y%m%dT%H%M%S)-$$.config"
@@ -35,6 +36,7 @@ systemd-run --unit="$guard" --on-active=5m /bin/bash -c \
 guard_started=1
 setenforce 1
 [[ "$(getenforce)" == Enforcing ]]
+if systemctl is-active --quiet nginx; then nginx -t; systemctl reload nginx; fi
 curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/api/version >/dev/null
 for unit in "${active[@]}"; do systemctl is-active --quiet "$unit"; done
 sed -i -E 's/^SELINUX=(permissive|enforcing)$/SELINUX=enforcing/' "$config"

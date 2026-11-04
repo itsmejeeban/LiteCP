@@ -103,8 +103,8 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
-install -d /etc/systemd/system/litecp.service.d
-cat > /etc/systemd/system/litecp.service.d/dns.conf <<'EOF'
+install -d /etc/systemd/system/litecp-broker.service.d
+cat > /etc/systemd/system/litecp-broker.service.d/dns.conf <<'EOF'
 [Service]
 ReadWritePaths=-/etc/litecp/dns
 EOF

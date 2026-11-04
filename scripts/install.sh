@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="4.0.95"
+LITECP_VERSION="4.0.97"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -317,7 +317,7 @@ LITECP_DATA_DIR=/var/lib/litecp
 LITECP_BIND=127.0.0.1:9090
 EOF
 chmod 0600 /etc/litecp/litecp.env
-install -m 0644 "${SOURCE_DIR}/deploy/litecp.service" /etc/systemd/system/litecp.service
+bash "${SOURCE_DIR}/scripts/install-privilege-services.sh"
 
 if [[ ! -f /etc/litecp/tls/litecp.key ]]; then
   openssl req -x509 -nodes -newkey rsa:3072 -days 825 -keyout /etc/litecp/tls/litecp.key -out /etc/litecp/tls/litecp.crt -subj "/CN=LiteCP" >/dev/null 2>&1
@@ -598,6 +598,8 @@ OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WAF:-1}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
+info "Verifying the unprivileged web process and local broker..."
+bash "${SCRIPT_DIR}/check-privilege-services.sh" "${LITECP_VERSION}"
 success "LiteCP - By Hostingtom is installed."
 printf 'SSH port: %s (allow this TCP port in any external cloud firewall).\n' "${SSH_PROTECTION_PORTS:-22}"
 printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"
