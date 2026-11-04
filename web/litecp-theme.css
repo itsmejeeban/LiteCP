@@ -168,6 +168,8 @@
 :root[data-theme] .panel-search-result {border-radius:5px;}
 :root[data-theme] svg {color:var(--cf-icon);}
 :root[data-theme] :is(.button-primary,.fm-tool.fm-primary,.success-seal) svg {color:#fff;}
+:root[data-theme] .success-seal {background:var(--cf-success-bg);color:var(--cf-success-ink);box-shadow:none;}
+:root[data-theme] .success-seal svg {color:inherit;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;}
 :root[data-theme] .custom-check {background:var(--surface-soft);color:transparent;}
 :root[data-theme] .custom-check svg {color:inherit;}
 :root[data-theme] .brand-mark svg {color:inherit;}
