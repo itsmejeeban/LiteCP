@@ -26,13 +26,14 @@ var selinuxRepairMu sync.Mutex
 const selinuxRepairUnit = "litecp-selinux-repair.service"
 
 type selinuxRepairStatus struct {
-	State     string    `json:"state"`
-	Message   string    `json:"message"`
-	StartedAt time.Time `json:"startedAt,omitempty"`
-	Mode      string    `json:"mode"`
-	CanEnable bool      `json:"canEnable"`
-	Log       string    `json:"log,omitempty"`
-	Job       string    `json:"job,omitempty"`
+	State     string     `json:"state"`
+	Message   string     `json:"message"`
+	StartedAt time.Time  `json:"startedAt,omitempty"`
+	Mode      string     `json:"mode"`
+	CanEnable bool       `json:"canEnable"`
+	Log       string     `json:"log,omitempty"`
+	Job       string     `json:"job,omitempty"`
+	RetryAt   *time.Time `json:"retryAt,omitempty"`
 }
 
 func selinuxRepairAllowed(mode string) bool { return mode == "Permissive" }
@@ -76,6 +77,11 @@ func (a *App) selinuxRepair(w http.ResponseWriter, r *http.Request) {
 		value.Message = "The repair worker stopped before completion. Its independent rollback may still be pending; review the saved log."
 	}
 	value.CanEnable = selinuxRepairAllowed(value.Mode) && value.State != "running" && (value.State != "failed" || time.Since(value.StartedAt) > 8*time.Minute)
+	value.RetryAt = nil
+	if value.Mode == "Permissive" && value.State == "failed" && !value.CanEnable {
+		retryAt := value.StartedAt.Add(8 * time.Minute)
+		value.RetryAt = &retryAt
+	}
 	if r.Method == http.MethodGet {
 		if value.Job != "" && filepath.Base(value.Job) == value.Job && strings.HasPrefix(value.Job, "job-") {
 			if log, err := os.Open(filepath.Join(base, value.Job, "output.log")); err == nil {

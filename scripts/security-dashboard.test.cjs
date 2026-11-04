@@ -13,6 +13,11 @@ test('SELinux controls escape logs and only offer enablement when admitted',()=>
  const running=context.html({mode:'Enforcing',state:'running',log:'<script>attack</script>'});
  assert.match(running,/<progress/);assert.doesNotMatch(running,/<script>/);
  assert.match(context.html({mode:'Disabled'}),/will not reboot/);
+ const cooldown=context.html({mode:'Permissive',state:'failed',canEnable:false,retryAt:new Date(Date.now()+60000).toISOString()});
+ assert.match(cooldown,/button[^>]*disabled/);
+ assert.match(cooldown,/Retry available in/);
+ assert.match(cooldown,/automatically/);
+ assert.doesNotMatch(cooldown,/data-selinux-enable/);
 });
 
 test('SELinux enablement requires confirmation and submits only a fixed request',async()=>{
