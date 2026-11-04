@@ -13,15 +13,15 @@
  async function openEditor(){if(busy)return;const seq=++generation,id=select.value;active='';editor.hidden=true;status.textContent='Checking capabilities…';try{const data=await cp.api('/api/sites/resource-limits?siteId='+encodeURIComponent(id));if(seq!==generation)return;active=id;editor.reset();for(const key of fields)if(data.settings?.[key]!=null)editor.elements[key].value=data.settings[key];page.querySelector('[data-capabilities]').textContent='Disabled — '+data.capabilities.prerequisites.join('. ');page.querySelector('[data-save]').textContent=data.settings?'Save changes':'Create resource limit';editor.hidden=false;status.textContent='';}catch(error){if(seq===generation)status.textContent=error.message;}}
  picker.onsubmit=e=>{e.preventDefault();openEditor()};
  page.querySelector('[data-cancel]').onclick=()=>{generation++;active='';editor.hidden=true};
- editor.onsubmit=async e=>{e.preventDefault();if(busy||!active)return;busy=true;select.disabled=true;const buttons=page.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);const body={enabled:false};for(const key of fields)body[key]=Number(editor.elements[key].value);try{await cp.api('/api/sites/resource-limits?siteId='+encodeURIComponent(active),{method:'PUT',body});status.textContent='Resource settings saved. Enforcement is disabled.';editor.hidden=true;await loadList();}catch(error){status.textContent=error.message;}finally{busy=false;select.disabled=false;buttons.forEach(b=>b.disabled=false);}};
+ editor.onsubmit=async e=>{e.preventDefault();if(busy||!active)return;busy=true;select.disabled=true;const buttons=page.querySelectorAll('button');buttons.forEach(b=>b.disabled=true);const body={enabled:false};for(const key of fields)body[key]=Number(editor.elements[key].value);try{await cp.api('/api/sites/resource-limits?siteId='+encodeURIComponent(active),{method:'PUT',body});status.textContent='Resource settings saved. Enforcement is disabled.';editor.hidden=true;await loadList();}catch(error){status.textContent=error.message;}finally{busy=false;select.disabled=false;buttons.forEach(b=>b.disabled=false);render();renderList();}};
  let items=[],listPage=1,listBusy=false,timer=null;
  const $=selector=>page.querySelector(selector);
  const visible=()=>location.hash==='#website-resource-limits'&&!document.hidden;
  function renderList(){
-  const pages=Math.max(1,Math.ceil(items.length/10));listPage=Math.min(listPage,pages);
+  const pages=Math.max(1,Math.ceil(items.length/10));listPage=Math.max(1,Math.min(listPage,pages));
   $('[data-resources]').innerHTML=items.slice((listPage-1)*10,listPage*10).map(row=>{const u=row.usage||{},p=row.settings;return `<tr><td>${esc(row.domain)}<br><small>Requests: ${p.concurrentRequests}; I/O read/write: ${p.readMiBPerSecond||'Unlimited'} / ${p.writeMiBPerSecond||'Unlimited'} MiB/s</small></td><td>Disabled<br><small>Not enforced</small></td><td>${u.cpuPercent==null?(u.available?'Sampling…':'Unavailable'):Number(u.cpuPercent).toFixed(1)+'%'} / ${p.cpuPercent}%</td><td>${u.available?esc(cp.formatBytes(u.memoryBytes)):'Unavailable'} / ${esc(cp.formatBytes(p.memoryMiB*1048576))}</td><td>${u.diskBytes==null?'Unavailable / pending':esc(cp.formatBytes(u.diskBytes))} / ${esc(cp.formatBytes(p.diskMiB*1048576))}</td><td>${u.available?u.processes:'Unavailable'} / ${p.tasks}</td><td><button type="button" class="button button-secondary" data-edit-resource="${esc(row.id)}">Edit</button> <button type="button" class="button button-danger" data-remove-resource="${esc(row.id)}">Remove</button></td></tr>`}).join('')||'<tr><td colspan="7">No resource limits created. Choose a website above to create its settings.</td></tr>';
   $('[data-count]').textContent=`Page ${listPage} of ${pages} · ${items.length} websites`;
-  $('[data-previous]').disabled=listPage<=1;$('[data-next]').disabled=listPage>=pages;
+  $('[data-previous]').disabled=busy||listPage<=1;$('[data-next]').disabled=busy||listPage>=pages;
  }
  async function loadList(){
   if(listBusy)return;listBusy=true;
@@ -31,7 +31,7 @@
  }
  function activate(){clearTimeout(timer);if(visible())loadList();}
  $('[data-refresh]').onclick=loadList;
- $('[data-previous]').onclick=()=>{listPage--;renderList()};$('[data-next]').onclick=()=>{listPage++;renderList()};
+ $('[data-previous]').onclick=()=>{if(busy||listPage<=1)return;listPage--;renderList()};$('[data-next]').onclick=()=>{if(busy||listPage>=Math.max(1,Math.ceil(items.length/10)))return;listPage++;renderList()};
  $('[data-resources]').onclick=async e=>{
  const remove=e.target.closest('[data-remove-resource]');
  if(remove){
