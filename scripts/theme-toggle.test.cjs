@@ -1,9 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('web/features.js','utf8');
-test('dark mode initializes without reading saved light preferences or device appearance',()=>{
+test('default stays dark when storage is unavailable without consulting device appearance',()=>{
  for(const preference of ['light','dark','system',null]){
-  const document={documentElement:{dataset:{theme:'light'}}};
-  vm.runInNewContext(fs.readFileSync('web/theme.js','utf8'),{document,localStorage:{getItem(){throw Error('Saved theme must not be read');}},matchMedia(){throw Error('Device appearance must not be read');}});
+  const document={documentElement:{dataset:{theme:'light'}},addEventListener(){}};
+  vm.runInNewContext(fs.readFileSync('web/theme.js','utf8'),{document,window:{addEventListener(){}},localStorage:{getItem(){throw Error('Storage unavailable');}},matchMedia(){throw Error('Device appearance must not be read');}});
   assert.equal(document.documentElement.dataset.theme,'dark',preference);
  }
  assert.match(fs.readFileSync('web/index.html','utf8'),/<html lang="en" data-theme="dark">/);
