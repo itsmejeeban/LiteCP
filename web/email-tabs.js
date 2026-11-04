@@ -46,7 +46,7 @@
   }
   page.querySelector('.mail-form-grid').classList.add('hidden');page.querySelector('.stacked-panels').classList.add('email-dns-only');
   const setupNotice=document.createElement('article');setupNotice.className='panel email-setup-notice hidden';
-  setupNotice.innerHTML='<div class="settings-body"><h2>Configure webmail first</h2><p data-email-setup-message>Complete webmail setup to use Email tools.</p><div class="feature-actions"><button class="button button-primary" type="button">Configure webmail</button></div></div>';
+  setupNotice.innerHTML='<div class="settings-body"><h2>Webmail is not configured</h2><p data-email-setup-message>Mail tools remain available. Configure webmail if you want browser-based mailbox access.</p><div class="feature-actions"><button class="button button-primary" type="button">Configure webmail</button></div></div>';
   page.append(setupNotice);
   let configured=null,prompting=false,promptedRoute='',pendingRoute='';
   setupNotice.querySelector('button').onclick=()=>cp.navigate('email/configure-webmail');
@@ -73,13 +73,14 @@
   });
   let lastRoute='';function sync(){renderForwards();const route=location.hash.slice(1),active=route==='email'||route.startsWith('email/'),selected=entries.find(entry=>entry[0]===route.split('/')[1])||entries[0];
     const ready=configured??!!cp.state()?.system?.webmailAvailable;
-    const blocked=active&&selected[0]!=='configure-webmail'&&!ready;
-    setupNotice.classList.toggle('hidden',!blocked);
+    // Roundcube is an optional mail client, not a prerequisite for managing
+    // Postfix/Dovecot mailboxes, aliases or connection diagnostics.
+    const blocked=false;
+    setupNotice.classList.toggle('hidden',!active||selected[0]==='configure-webmail'||ready);
     if(!active)promptedRoute='';
     toggle.classList.toggle('active',active);for(const entry of entries){const current=active&&entry===selected&&!blocked;entry.panel.classList.toggle('hidden',!current);entry.link.classList.toggle('active',current);if(current)entry.link.setAttribute('aria-current','page');else entry.link.removeAttribute('aria-current');}
     if(active){page.querySelector('h1').textContent=selected[1];if(route!==lastRoute)expand(true);}
     if(route!==lastRoute)document.querySelector('#mailDNSPanel').classList.add('hidden');lastRoute=route;
-    if(blocked)requireSetup(route);
   }
   const navigate=window.LiteCPFeatures.navigate;window.LiteCPFeatures.navigate=id=>{navigate?.(id);sync();};
   const render=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{render(state);sync();};
