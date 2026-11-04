@@ -219,6 +219,10 @@ func (a *App) mailDNS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	host := a.system.mailHostname(r.Context())
+	if !domainPattern.MatchString(host) {
+		writeError(w, 409, "Configure a public mail hostname such as mail.example.com with matching DNS and TLS first. The current server hostname is not a valid public mail server; DNS records and client settings were not generated.")
+		return
+	}
 	records := []DNSRecord{
 		{Type: "A", Name: host, Value: primaryIP()},
 		{Type: "MX", Name: domain, Value: "10 " + host + "."},
