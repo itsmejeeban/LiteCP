@@ -239,6 +239,9 @@ func (s *System) CopyManagedPaths(ctx context.Context, site Site, paths []string
 	}
 	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destination, false)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errors.New("choose an existing destination folder; create the folder first if needed")
+		}
 		return err
 	}
 	destinationFile, err := secureOpenManaged(managedSiteRoot(site), destinationClean, os.O_RDONLY, 0)
@@ -361,6 +364,9 @@ func (s *System) MoveManagedPaths(site Site, paths []string, destination string)
 	}
 	_, destinationClean, err := resolveManagedPath(managedSiteRoot(site), destination, false)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errors.New("choose an existing destination folder; create the folder first if needed")
+		}
 		return err
 	}
 	destinationFile, err := secureOpenManaged(managedSiteRoot(site), destinationClean, os.O_RDONLY, 0)

@@ -60,13 +60,52 @@ test('permission sorting compares octal modes in both directions', () => {
   assert.deepEqual(prepareEntries(files,'',true,'mode',true).map(x=>x.mode),['0750','0640','0600']);
 });
 
+test('combined download submits the selected paths without a popup', () => {
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
+  const start=source.indexOf('      const form=document.createElement');
+  const code=source.slice(start,source.indexOf('form.remove();return;',start)+'form.remove();return;'.length);
+  let submitted,removed=false;
+  const document={createElement:tag=>tag==='form'?{inputs:[],append(input){this.inputs.push(input);},submit(){submitted=this;},remove(){removed=true;}}:{},body:{append(){}}};
+  vm.runInNewContext('(function(){'+code+'})()',{document,activeSite:'site id',items:[{path:'folder/a.txt'},{path:'folder/b.txt'}],encodeURIComponent});
+  assert.equal(submitted.method,'POST');
+  assert.equal(submitted.target,'_self');
+  assert.equal(submitted.action,'/api/files/download-selected?siteId=site%20id');
+  assert.deepEqual(Array.from(submitted.inputs,input=>[input.name,input.value]),[['paths','folder/a.txt'],['paths','folder/b.txt']]);
+  assert.equal(removed,true);
+});
+
+test('Trash toolbar exposes permanent deletion only for a selection and resets outside Trash', () => {
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
+  const start=source.indexOf('  function syncSelection()');
+  const code=source.slice(start,source.indexOf('    $("#fmInspector")',start))+'}\nsyncSelection';
+  const deleteTool={dataset:{fmAction:'delete'},lastElementChild:{textContent:'Delete'},disabled:true};
+  const restoreTool={dataset:{fmAction:'restore-items'},disabled:true};
+  const state={listing:{trash:true},items:[{type:'file',size:1}]};
+  const sandbox={page:{querySelector:()=>deleteTool,querySelectorAll:()=>[deleteTool,restoreTool]},$:()=>({}),picked:()=>state.items,cp:{formatBytes:()=>''},siteID:()=>'',editableFile:()=>false,htmlFile:()=>false,extractableFile:()=>false};
+  Object.defineProperty(sandbox,'listing',{get:()=>state.listing});
+  const sync=vm.runInNewContext(code,sandbox);
+  sync();
+  assert.equal(deleteTool.dataset.fmAction,'purge-items');
+  assert.equal(deleteTool.lastElementChild.textContent,'Delete permanently');
+  assert.equal(deleteTool.disabled,false);
+  assert.equal(restoreTool.disabled,false);
+  state.items=[];sync();assert.equal(deleteTool.disabled,true);
+  state.listing={trash:false};state.items=[{type:'file',size:1}];sync();
+  assert.equal(deleteTool.dataset.fmAction,'delete');
+  assert.equal(deleteTool.lastElementChild.textContent,'Delete');
+  assert.equal(deleteTool.disabled,false);
+  assert.equal(restoreTool.disabled,true);
+});
+
 test('search discards responses from a previous website and older request', async () => {
   const fs=require('node:fs'),vm=require('node:vm');
   const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
   const code=source.slice(source.indexOf('  async function searchFiles()'),source.indexOf('  async function editFile('));
   const pending=[],shown=[],controls={'#cpfmSearchInput':{value:'one'},'#cpfmSearchScope':{value:'all'},'#showHidden':{checked:false}};
   let current='site1';
-  const search=vm.runInNewContext('let searchRequest=0;'+code+';searchFiles',{URLSearchParams,$:key=>controls[key],siteID:()=>current,cp:{path:()=>'',api:()=>new Promise(resolve=>pending.push(resolve))},showSearchResults:result=>shown.push(result)});
+  const search=vm.runInNewContext('let searchRequest=0;'+code+';searchFiles',{listing:null,URLSearchParams,$:key=>controls[key],siteID:()=>current,cp:{path:()=>'',api:()=>new Promise(resolve=>pending.push(resolve))},showSearchResults:result=>shown.push(result)});
   const first=search();current='site2';pending.shift()({entries:['wrong site']});await first;assert.equal(shown.length,0);
   const older=search();controls['#cpfmSearchInput'].value='two';const latest=search();
   pending[1]({entries:['latest']});await latest;pending[0]({entries:['stale']});await older;
