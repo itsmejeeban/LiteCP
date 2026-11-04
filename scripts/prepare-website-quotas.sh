@@ -10,15 +10,19 @@ quota_mount_has_projects() {
 }
 
 quota_verify() {
-  local website_home="$1" kind options mount state
+  local website_home="$1" kind options mount state status
   kind="$(findmnt -n -T "$website_home" -o FSTYPE)" || return 1
   options="$(findmnt -n -T "$website_home" -o OPTIONS)" || return 1
   mount="$(findmnt -n -T "$website_home" -o TARGET)" || return 1
   quota_mount_has_projects "$options" || return 1
   case "$kind" in
     ext4)
-      state="$(LC_ALL=C quotaon --project --print-state "$mount" 2>&1)" || return 1
-      grep -Eiq 'project quota .* is on[[:space:]]*$' <<<"$state" || return 1
+      # quota-tools print-state returns the number of enabled quota types, so
+      # project-only status can legitimately exit 1 when the quota is ON.
+      status=0
+      state="$(LC_ALL=C quotaon --project --print-state "$mount" 2>&1)" || status=$?
+      [[ $status == 0 || $status == 1 ]] || return 1
+      grep -Eiq '^project quota on .+ is on[[:space:]]*$' <<<"$state" || return 1
       ;;
     xfs)
       state="$(LC_ALL=C xfs_quota -x -c 'state -p' "$mount" 2>&1)" || return 1

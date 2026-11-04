@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/prepare-website-quotas.sh"
-TEST_KIND=ext4 TEST_OPTIONS=rw,prjquota TEST_ACCOUNTING=on
+TEST_KIND=ext4 TEST_OPTIONS=rw,prjquota TEST_ACCOUNTING=on TEST_QUOTA_EXIT=1
 findmnt() {
   case "${*: -1}" in
     FSTYPE) printf '%s\n' "$TEST_KIND";;
@@ -10,11 +10,20 @@ findmnt() {
     *) return 1;;
   esac
 }
-quotaon() { printf 'project quota on /home/litecp (/dev/test) is %s\n' "$TEST_ACCOUNTING"; }
+quotaon() { printf 'project quota on /home/litecp (/dev/test) is %s\n' "$TEST_ACCOUNTING"; return "$TEST_QUOTA_EXIT"; }
 xfs_quota() { printf 'Accounting: ON\nEnforcement: %s\n' "$TEST_ACCOUNTING"; }
 quota_verify /home/litecp || { echo 'FAIL: ext4 active quota rejected'; exit 1; }
+TEST_QUOTA_EXIT=0
+quota_verify /home/litecp || { echo 'FAIL: ext4 active quota with zero exit rejected'; exit 1; }
+TEST_QUOTA_EXIT=2
+if quota_verify /home/litecp; then echo 'FAIL: quota command failure accepted'; exit 1; fi
+TEST_QUOTA_EXIT=0
 TEST_ACCOUNTING=off
 if quota_verify /home/litecp; then echo 'FAIL: disabled ext4 quota accepted'; exit 1; fi
+TEST_QUOTA_EXIT=1
+if quota_verify /home/litecp; then echo 'FAIL: nonzero exit mistaken for active quota'; exit 1; fi
+TEST_ACCOUNTING=unknown
+if quota_verify /home/litecp; then echo 'FAIL: unknown ext4 quota state accepted'; exit 1; fi
 TEST_ACCOUNTING=on TEST_OPTIONS=rw,usrquota
 if quota_verify /home/litecp; then echo 'FAIL: user quota mistaken for project quota'; exit 1; fi
 TEST_KIND=xfs TEST_OPTIONS=rw,pquota TEST_ACCOUNTING=ON
