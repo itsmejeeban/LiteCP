@@ -14,9 +14,18 @@ function setup(){
  }
  const dialogs=[];document.createElement=()=>{const dialog=new Element();dialogs.push(dialog);return dialog;};document.body={append(){}};
  const original=new Element();document.activeElement=original;
- const window={};vm.runInNewContext(fs.readFileSync('web/dialogs.js','utf8'),{window,document});
- return {api:window.LiteCPDialogs,document,original,dialogs,current:()=>dialogs.find(dialog=>dialog.open)};
+ const events=new Map();
+ const window={addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},removeEventListener(name,fn){events.get(name)?.delete(fn);}};
+ vm.runInNewContext(fs.readFileSync('web/dialogs.js','utf8'),{window,document});
+ return {api:window.LiteCPDialogs,document,original,dialogs,events,navigate:()=>[...(events.get('hashchange')||[])].forEach(fn=>fn()),current:()=>dialogs.find(dialog=>dialog.open)};
 }
+
+test('navigation dismisses only an opted-in informational prompt and removes its listener',async()=>{
+ const p=setup(),result=p.api.confirm('Configure webmail first',{dismissOnNavigation:true});
+ p.navigate();assert.equal(await result,false);assert.equal(p.current(),undefined);assert.equal(p.events.get('hashchange').size,0);
+ const destructive=p.api.confirm('Delete database?');p.navigate();assert.ok(p.current());
+ p.current().querySelector('[data-dialog-cancel]').dispatch('click');assert.equal(await destructive,false);
+});
 test('destructive confirmation focuses Cancel and Escape cancels without accepting',async()=>{
  const p=setup(),result=p.api.confirm('Delete the selected database?'),dialog=p.current();
  assert.equal(dialog.className,'ui-dialog ui-dialog-danger');assert.equal(p.document.activeElement,dialog.querySelector('[data-dialog-cancel]'));

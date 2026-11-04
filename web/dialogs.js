@@ -74,6 +74,7 @@
     function finish(value) {
       if (finished) return;
       finished = true;
+      window.removeEventListener('hashchange', cancel);
       dialog.close(); dialog.remove();
       if (previous?.isConnected && !previous.disabled) previous.focus({ preventScroll: true });
       active = false;
@@ -81,6 +82,7 @@
       next();
     }
     const cancel = () => finish(item.input ? null : false);
+    if (options.dismissOnNavigation) window.addEventListener('hashchange', cancel);
     find('[data-dialog-close]').addEventListener('click', cancel);
     find('[data-dialog-cancel]').addEventListener('click', cancel);
     dialog.addEventListener('cancel', event => { event.preventDefault(); event.stopPropagation(); cancel(); });

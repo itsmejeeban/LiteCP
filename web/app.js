@@ -38,7 +38,9 @@
     php: { symbol: "PHP", description: "Runs per-site PHP versions through isolated FastCGI pools." },
     database: { symbol: "DB", description: "Stores clients, invoices and application data." },
     cron: { symbol: "CR", description: "Executes scheduled WHMCS and WordPress automation tasks." },
-    mail: { symbol: "MX", description: "Provides authenticated SMTP submission and IMAP mailboxes." }
+    mail: { symbol: "MX", description: "Provides authenticated SMTP submission and IMAP mailboxes." },
+    fail2ban: { symbol: "BF", description: "Blocks repeated failed authentication attempts." },
+    "clamav-updates": { symbol: "AV", description: "Keeps the antivirus detection signatures up to date." }
   };
 
   const demoState = {
@@ -598,6 +600,7 @@
     if (databaseRoute) page = "databases";
     if (page === "databases") { databaseSiteID = databaseRoute ? databaseRoute.slice(10) : ""; renderDatabases(); }
 	const serverExplorer = page === 'server-files';
+    document.querySelector('[data-page-view="files"] h1').textContent=serverExplorer?'Server File Explorer':'File manager';
 	if(serverExplorer){page='files';const select=$('#fileSiteSelect');if(!select.querySelector('option[value="server-explorer"]'))select.add(new Option('Server File Explorer','server-explorer'));select.value='server-explorer';currentFilePath='';}
 	else if(page==='files' && $('#fileSiteSelect').value==='server-explorer'){$('#fileSiteSelect option[value="server-explorer"]')?.remove();currentFilePath='';}
 	document.querySelector('[data-page-view="files"]').classList.toggle('server-file-explorer',serverExplorer);

@@ -57,7 +57,7 @@
       const result=await cp.api('/api/mail/webmail-configure');configured=!!result.configured;
       if(location.hash.slice(1)!==route)return;
       if(configured){sync();return;}
-      const accepted=await window.LiteCPDialogs.confirm('Configure webmail before using Email tools.',{title:'Webmail setup required',confirmText:'Configure webmail'});
+      const accepted=await window.LiteCPDialogs.confirm('Configure webmail before using Email tools.',{title:'Webmail setup required',confirmText:'Configure webmail',dismissOnNavigation:true});
       if(location.hash.slice(1)!==route)return;
       if(accepted){pendingRoute=route;cp.navigate('email/configure-webmail');}
       else cp.navigate('dashboard');

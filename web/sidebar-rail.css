@@ -4,6 +4,7 @@
 .sidebar-toggle-bar {justify-content:flex-end;min-height:58px;}
 .sidebar-toggle-bar .sidebar-copyright {align-self:flex-start;margin-bottom:6px;max-width:calc(100% - 45px);font-size:9px;}
 .mobile-navigation-toggle {display:none!important;}
+@media(max-width:900px){#sidebar:not(.open)~.sidebar-toggle-bar{display:none!important;}}
 @media(max-width:900px){.mobile-navigation-toggle {display:inline-grid!important;place-items:center;width:40px;height:40px;padding:9px;margin-right:auto;flex:0 0 40px;}.mobile-navigation-toggle svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;}.sidebar-scrim:not(.visible){visibility:hidden;}}
 @media(min-width:901px){
   :root[data-theme] body.sidebar-collapsed #sidebar {width:60px;transform:none;padding-bottom:50px;overflow-x:hidden;}
