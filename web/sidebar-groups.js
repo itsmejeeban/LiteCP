@@ -20,7 +20,7 @@
     if(group.id==="website-tools"){
       const restore=document.createElement("a");restore.className="nav-item";restore.href="#backups/restore";
       restore.dataset.websiteBackupRestore="true";
-      restore.innerHTML='<img src="assets/sidebar/backups.svg" alt="" width="20" height="20"><span>Website Backups Restore</span>';
+      restore.innerHTML='<img src="assets/sidebar/backups.svg" alt="" width="20" height="20"><span>Restore Backups</span>';
       restore.onclick=event=>{event.preventDefault();window.LiteCP.navigate("backups/restore");};
       const backups=submenu.querySelector('[data-page="website-backups"]');
       if(backups)backups.after(restore);else submenu.append(restore);

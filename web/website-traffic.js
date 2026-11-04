@@ -4,7 +4,7 @@
   const page = document.createElement('section');
   page.className = 'page website-traffic-page';
   page.dataset.pageView = 'website-traffic';
-  page.innerHTML = `<div class="page-heading"><div><h1>Website Traffic Analytics</h1><p>Origin traffic from Nginx access logs. No website tracking script required.</p></div><button class="button button-primary" data-refresh>Refresh</button></div>
+  page.innerHTML = `<div class="page-heading"><div><h1>Traffic Analytics</h1><p>Origin traffic from Nginx access logs. No website tracking script required.</p></div><button class="button button-primary" data-refresh>Refresh</button></div>
     <div class="panel traffic-controls"><label class="field"><span>Website</span><select data-site aria-label="Website"></select></label><label class="field"><span>Date range (UTC)</span><select data-range><option value="today">Today</option><option value="7" selected>Last 7 Days</option><option value="30">Last 30 Days</option><option value="custom">Custom dates</option></select></label><label class="field" data-custom hidden><span>From</span><input type="date" data-from></label><label class="field" data-custom hidden><span>Through</span><input type="date" data-to></label><label class="field"><span>Chart interval</span><select data-group><option value="hourly">Hourly</option><option value="daily" selected>Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div>
     <p data-status role="status"></p><p data-warning class="traffic-warning" role="status" hidden></p>
     <div class="traffic-cards" data-cards></div><div class="traffic-charts" data-charts></div>
@@ -14,7 +14,7 @@
   document.querySelector('.main-content').append(page);
   const link = document.createElement('a');
   link.className = 'nav-item'; link.dataset.page = 'website-traffic'; link.href = '#website-traffic';
-  link.innerHTML = '<img src="assets/sidebar/analytics.svg" width="20" height="20" alt=""><span>Website Traffic Analytics</span>';
+  link.innerHTML = '<img src="assets/sidebar/analytics.svg" width="20" height="20" alt=""><span>Traffic Analytics</span>';
   link.onclick = event => { event.preventDefault(); cp.navigate('website-traffic'); };
   document.querySelector('.nav').append(link);
   const $ = selector => page.querySelector(selector);
