@@ -40,7 +40,13 @@
     form().elements.enabled.checked = true;
     setSchedule(presets.five);
     find("[data-cron-save]").textContent = "Create cron job";
+    find("[data-cron-form-title]").textContent = "Add a cron job";
     find("[data-cron-cancel-edit]").hidden = true;
+  }
+  function clearTestResult() {
+    find('[data-cron-result]').hidden = true;
+    find('[data-cron-result-message]').textContent = '';
+    find('[data-cron-output]').textContent = '';
   }
   function validPart(value, minimum, maximum) {
     if (!value || !/^[\d*,/\-]+$/.test(value)) return false;
@@ -93,6 +99,7 @@
     try {
       await cp.api(endpoint(active), { method, body });
       if (!current(active)) return;
+      clearTestResult();
       if (reset) resetForm();
       await load(active);
       if (current(active)) status(message);
@@ -164,7 +171,7 @@
       const active = context(), job = items.find(value => value.id === run.dataset.cronRun);
       if (!job) return;
       if (!await window.LiteCPDialogs.confirm("Run this command now? It can change website data or send messages, just like its scheduled run.", {title:"Test cron job",confirmText:"Run test"}) || !current(active) || busy) return;
-      busy=true;setControls();status("Running test (up to 30 seconds)…");
+      busy=true;clearTestResult();setControls();status("Running test (up to 30 seconds)…");
       try {
         const result=await cp.api('/api/website-cron/run?siteId='+encodeURIComponent(active.siteID),{method:'POST',body:{id:job.id}});
         if(!current(active))return;
@@ -180,6 +187,7 @@
     const item = items.find(value => value.id === (edit?.dataset.cronEdit || toggle?.dataset.cronToggle || remove?.dataset.cronRemove));
     if (!item) return;
     if (edit) {
+      clearTestResult();find("[data-cron-form-title]").textContent = "Edit cron job";
       editing = item.id; form().elements.name.value = item.name || ""; form().elements.command.value = item.command; form().elements.enabled.checked = item.enabled;
       setSchedule(item.schedule); find("[data-cron-save]").textContent = "Save changes"; find("[data-cron-cancel-edit]").hidden = false; status(""); form().elements.command.focus();
     } else if (toggle) {

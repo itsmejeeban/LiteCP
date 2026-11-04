@@ -173,3 +173,27 @@ test('cancelling Run test does not execute the command',async()=>{
  let writes=0;const ui=panel(async(url,options)=>{if(options)writes++;return list('A',[job('saved')]);},async()=>false);
  await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});assert.equal(writes,0);
 });
+
+test('editing a job clears old test results and labels the edit form',async()=>{
+ const ui=panel(async(url,options)=>!options?list('A',[job('saved')]):{success:true,message:'Completed',output:'old output',durationMs:1});
+ await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});
+ assert.equal(ui.dialog.querySelector('[data-cron-result]').hidden,false);
+ await ui.click('[data-cron-edit]',{cronEdit:'saved'});
+ assert.equal(ui.dialog.querySelector('[data-cron-form-title]').textContent,'Edit cron job');
+ assert.equal(ui.dialog.querySelector('[data-cron-result]').hidden,true);
+ assert.equal(ui.dialog.querySelector('[data-cron-output]').textContent,'');
+ await ui.click('[data-cron-cancel-edit]');
+ assert.equal(ui.dialog.querySelector('[data-cron-form-title]').textContent,'Add a cron job');
+});
+
+test('new failed test request does not leave an earlier successful result visible',async()=>{
+ let runs=0;const pending=deferred();
+ const ui=panel(async(url,options)=>{if(!options)return list('A',[job('saved')]);if(++runs===1)return {success:true,message:'Completed',output:'old success',durationMs:1};return pending.promise;});
+ await ui.open('A');await ui.click('[data-cron-run]',{cronRun:'saved'});
+ const run=ui.click('[data-cron-run]',{cronRun:'saved'});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(ui.dialog.querySelector('[data-cron-result]').hidden,true);
+ assert.equal(ui.dialog.querySelector('[data-cron-output]').textContent,'');
+ pending.reject(new Error('connection interrupted'));await run;
+ assert.equal(ui.dialog.querySelector('[data-cron-result]').hidden,true);
+ assert.match(ui.dialog.querySelector('[data-cron-status]').textContent,/connection interrupted/);
+});
