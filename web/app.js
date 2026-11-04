@@ -540,9 +540,9 @@
   }
 
   let databaseSiteID = "";
-  let databaseSizes = {}, databaseSizesLoading = false;
-  async function loadDatabaseSizes() {
-    if (databaseSizesLoading) return;
+  let databaseSizes = {}, databaseSizesLoading = false, databaseSizesRefreshPending = false;
+  async function loadDatabaseSizes(refreshAfterCurrent = false) {
+    if (databaseSizesLoading) { databaseSizesRefreshPending ||= refreshAfterCurrent; return; }
     databaseSizesLoading = true;
     databaseSizes = {};
     renderDatabases();
@@ -554,6 +554,7 @@
     } finally {
       databaseSizesLoading = false;
       renderDatabases();
+      if (databaseSizesRefreshPending) { databaseSizesRefreshPending = false; loadDatabaseSizes(); }
     }
   }
   function renderDatabases() {
@@ -1125,6 +1126,7 @@
       form.reset(); currentState = await api("/api/state"); renderAll();
       form.dispatchEvent(new Event("database-created"));
       showOneTimeCredentials("Database created", "Save this password now. LiteCP does not store database passwords.", [["Host", result.host], ["Database", result.database.name], ["Username", result.database.username], ["Password", result.password]]);
+      loadDatabaseSizes(true);
     } catch (error) { if(inlineError)inlineError.textContent=error.message; handleError(error); }
     finally { submit.disabled = false; }
   }

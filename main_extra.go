@@ -458,11 +458,13 @@ func (a *App) deleteManagedDatabase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Database not found.")
 		return
 	}
+	linkedSite := a.store.SiteByID(database.SiteID)
+	detachPrimary := linkedSite != nil && linkedSite.Database == database.Name
 	if err := a.store.RemoveDatabase(id); err != nil {
 		writeError(w, http.StatusInternalServerError, "Could not save database removal state.")
 		return
 	}
-	if database.SiteID != "" {
+	if detachPrimary {
 		if err := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = "", "" }); err != nil {
 			if rollbackErr := a.store.AddDatabase(*database); rollbackErr != nil {
 				writeError(w, http.StatusInternalServerError, "Website detachment failed, and database-state rollback also failed: "+rollbackErr.Error())
@@ -477,8 +479,8 @@ func (a *App) deleteManagedDatabase(w http.ResponseWriter, r *http.Request) {
 		if rollbackErr := a.store.AddDatabase(*database); rollbackErr != nil {
 			rollbackErrors = append(rollbackErrors, "database state: "+rollbackErr.Error())
 		}
-		if database.SiteID != "" {
-			if rollbackErr := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = database.Name, database.Username }); rollbackErr != nil {
+		if detachPrimary {
+			if rollbackErr := a.store.UpdateSite(database.SiteID, func(site *Site) { site.Database, site.DBUser = linkedSite.Database, linkedSite.DBUser }); rollbackErr != nil {
 				rollbackErrors = append(rollbackErrors, "website state: "+rollbackErr.Error())
 			}
 		}
