@@ -78,6 +78,28 @@ test('combined download navigates directly with encoded selection and bounds URL
   assert.throws(run,/Select fewer files/);assert.equal(assigned,undefined);
 });
 
+test('full download action accepts multiple files and keeps single-item actions guarded', async () => {
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
+  const start=source.indexOf('  async function action(name)');
+  const code=source.slice(start,source.indexOf('  async function showTrash()',start));
+  let assigned;
+  let items=[{path:'folder/a.txt',type:'file'},{path:'folder/b.txt',type:'file'}];
+  const sandbox={URLSearchParams,encodeURIComponent,listing:{trash:false},closeMenu(){},picked:()=>items,siteID:()=> 'test-site',cp:{path:()=> 'folder',demo:false},window:{location:{assign:url=>{assigned=url;}}}};
+  const action=vm.runInNewContext(code+';action',sandbox);
+  await action('download');
+  assert.deepEqual(new URL(assigned,'https://panel.test').searchParams.getAll('paths'),['folder/a.txt','folder/b.txt']);
+  assigned=undefined;await action('rename');assert.equal(assigned,undefined);
+  items=[{path:'folder/a.txt',type:'file'}];await action('download');
+  assert.match(assigned,/^\/api\/files\/download\?/);
+  assigned=undefined;items=[];
+  await assert.rejects(action('download'),/Select files/);assert.equal(assigned,undefined);
+  items=[{path:'folder',type:'directory'},{path:'folder/a.txt',type:'file'}];
+  await assert.rejects(action('download'),/Compress for folders/);
+  items=Array.from({length:251},(_,i)=>({path:`${i}.txt`,type:'file'}));
+  await assert.rejects(action('download'),/at most 250/);
+});
+
 test('Trash toolbar exposes permanent deletion only for a selection and resets outside Trash', () => {
   const fs=require('node:fs'),vm=require('node:vm');
   const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');

@@ -306,7 +306,7 @@
     if(activeSite==="server-explorer" && !["home","up","back","forward","refresh","reload","view","download","settings","select-all","unselect-all","clear","list","grid"].includes(name))return;
     if (!activeSite) { cp.showToast("Choose a website","Add or select a website before managing files.","error"); return; }
     if (["copy","move","archive","delete"].includes(name) && !items.length) return;
-    if (["rename","chmod","edit","html-edit","view","download","extract"].includes(name) && items.length!==1) return;
+    if (["rename","chmod","edit","html-edit","view","extract"].includes(name) && items.length!==1) return;
     const api = (url,method,body) => cp.api(url,{method,body:{siteId:activeSite,...body}});
     if (name==="refresh") { folders.clear(); folderErrors.clear(); await refresh(); return; }
     if (name==="clear") { selected.clear(); syncSelection(); return; }
