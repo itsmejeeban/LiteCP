@@ -258,6 +258,23 @@ func (a *App) websiteBackupUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Backup upload requires the installed Linux server")
 		return
 	}
+	// Refuse a known-full inspection queue before receiving or retaining another
+	// archive. Previously retries could accumulate unlisted uploaded ZIP files.
+	entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "migrations"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		writeError(w, 500, "Could not inspect retained restore stages")
+		return
+	}
+	staged := 0
+	for _, entry := range entries {
+		if _, _, err := a.loadMigration(entry.Name()); err == nil {
+			staged++
+		}
+	}
+	if staged >= 3 {
+		writeError(w, http.StatusConflict, "Three restore/migration stages are already retained. Review and remove unneeded stages under Migration before uploading another backup. No new archive was saved.")
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, migrationUploadLimit+(1<<20))
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		writeError(w, 400, "Select a valid backup ZIP up to 2 GiB")
