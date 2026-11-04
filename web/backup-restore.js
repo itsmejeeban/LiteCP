@@ -10,9 +10,11 @@
  panel.querySelector('[data-restore-warnings]').textContent=(data.warnings||[]).join(' | ');status.textContent=items.length+' available backup(s). Remote checks cover backups recorded by this LiteCP installation.';
  }catch(error){status.textContent='Could not check backups: '+error.message;}finally{loading=false;}}
  const progress=document.createElement('dialog');progress.className='fm-dialog';document.body.append(progress);
- let running=false;
- async function restore(b){if(running)return;
- if(!await window.LiteCPDialogs.confirm(b.websiteExists===false?`Create ${b.domain} and restore this backup? If this domain now exists, its current data will be replaced after creating a recovery backup.`:`Restore ${b.domain} from this backup? Current website files and supported application databases will be replaced. A recovery backup is created first.`,{title:'Restore website',confirmText:'Restore and replace',danger:true}))return;
+ let running=false,confirming=false;
+ async function restore(b){if(running||confirming)return;
+ confirming=true;let confirmed;
+ try{confirmed=await window.LiteCPDialogs.confirm(b.websiteExists===false?`Create ${b.domain} and restore this backup? If this domain now exists, its current data will be replaced after creating a recovery backup.`:`Restore ${b.domain} from this backup? Current website files and supported application databases will be replaced. A recovery backup is created first.`,{title:'Restore website',confirmText:'Restore and replace',danger:true});}finally{confirming=false;}
+ if(!confirmed)return;
  running=true;progress.innerHTML='<header><h2>Restore progress</h2></header><div class="fm-dialog-body"><p role="status" data-progress>Requesting restore...</p><progress aria-label="Restore in progress"></progress><p data-result></p><button type="button" class="button button-secondary" data-close disabled>Close</button></div>';progress.showModal();progress.querySelector('[data-close]').onclick=()=>progress.close();
  try{
  let job=await cp.api('/api/backups/restore-direct',{method:'POST',body:{id:b.id,siteID:b.siteId,kind:b.kind||'history',confirm:true,confirmDomain:b.domain}});
@@ -21,8 +23,8 @@
  await new Promise(resolve=>setTimeout(resolve,2500));job=await cp.api('/api/backups/restore-direct?id='+encodeURIComponent(job.id));
  }
  progress.querySelector('[data-progress]').textContent=job.message;
- const complete=['restored','restored-review'].includes(job.status);progress.querySelector('[data-result]').textContent=complete?'Restore finished. Verify the website before use.':'Restore did not complete. Existing data and recovery files were retained.';
- cp.showToast(complete?'Restore finished':'Restore requires attention',job.message);await cp.refresh();
+ const complete=job.status==='restored',review=job.status==='restored-review';progress.querySelector('[data-result]').textContent=complete?'Restore finished. Verify the website before use.':review?'Files and databases were restored, but verification needs review. Check the reported problem before using the website.':'Restore did not complete. Existing data and recovery files were retained.';
+ cp.showToast(complete?'Restore finished':review?'Restore needs review':'Restore requires attention',job.message,complete?'success':'error');await cp.refresh();if(location.hash==='#backups/restore')await load();
  }catch(error){progress.querySelector('[data-result]').textContent=error.message;cp.handleError(error);}finally{running=false;progress.querySelector('progress').remove();progress.querySelector('[data-close]').disabled=false;}}
  progress.addEventListener('cancel',event=>{if(running)event.preventDefault();});
  panel.addEventListener('click',event=>{if(event.target.closest('[data-restore-refresh]'))load();const button=event.target.closest('[data-restore-index]');if(button&&items[Number(button.dataset.restoreIndex)])restore(items[Number(button.dataset.restoreIndex)]);});
