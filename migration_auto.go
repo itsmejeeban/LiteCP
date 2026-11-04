@@ -542,6 +542,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		fail(context.Canceled)
 		return
 	}
+	if job.Source.Platform == "backup" && privateStage != "" {
+		if err = preserveRestoreBackupRepositories(filepath.Dir(site.Root), privateStage); err != nil {
+			fail(fmt.Errorf("cannot preserve existing backup repositories: %w", err))
+			return
+		}
+	}
 	// The remaining renames and state updates form the atomic commit. Do not
 	// interrupt them, because stopping halfway could leave the website split
 	// between its old and restored trees.

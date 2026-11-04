@@ -387,7 +387,7 @@ func (s *System) CreateSite(ctx context.Context, input CreateSiteInput) (Site, *
 		} else if site.AppType == "regular" {
 			guidance = "Upload your PHP or HTML website files"
 		}
-		content := []byte("<!doctype html><meta charset=utf-8><title>LiteCP</title><style>body{font:16px system-ui;max-width:680px;margin:12vh auto;padding:32px;color:#173b46}code{background:#edf6f4;padding:3px 6px;border-radius:5px}</style><h1>Ready for " + appName + "</h1><p>" + guidance + " to <code>" + site.Root + "</code>, then remove this file.</p>")
+		content := []byte("<!doctype html><meta charset=utf-8><title>LiteCP</title><style>body{font:16px system-ui;max-width:680px;margin:12vh auto;padding:32px;color:#173b46}code{background:#edf6f4;padding:3px 6px;border-radius:5px}</style><h1>Ready for " + appName + "</h1><p>" + guidance + " to your website's <code>public_html</code> directory, then remove this file.</p>")
 		if err := os.WriteFile(placeholder, content, 0640); err != nil {
 			return Site{}, nil, fmt.Errorf("write placeholder: %w", err)
 		}
