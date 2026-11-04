@@ -37,7 +37,9 @@ AmbientCapabilities=
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-InaccessiblePaths=-/var/lib/litecp -/var/backups/litecp -/var/vmail -/etc/shadow -/etc/letsencrypt -/run/podman -/run/docker.sock
+# Shadow remains protected by its native root-only DAC permissions; mounting
+# systemd's inaccessible regular file over shadow_t is denied by SELinux.
+InaccessiblePaths=-/var/lib/litecp -/var/backups/litecp -/var/vmail -/etc/letsencrypt -/run/podman -/run/docker.sock
 TasksMax=256
 MemoryMax=256M
 

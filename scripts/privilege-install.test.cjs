@@ -6,6 +6,15 @@ test('network service is unprivileged and cannot inherit Linux capabilities',()=
  assert.doesNotMatch(unit,/^User=root$/m);
  assert.doesNotMatch(unit,/^(?:ReadWritePaths|BindPaths)=/m);
  assert.match(unit,/InaccessiblePaths=.*\/var\/lib\/litecp/);
+ assert.doesNotMatch(unit,/^InaccessiblePaths=.*\/etc\/shadow/m);
+});
+test('updates runtime-check the namespace before stopping the current panel',()=>{
+ for(const [path,marker] of [['scripts/deploy-published-update.sh',"echo '[Server 3/4]"],['scripts/update-panel.sh','status running "Restarting LiteCP']]){
+  const script=read(path),body=script.slice(script.indexOf(marker));
+  assert.ok(body.indexOf('--prepare-only')>=0&&body.indexOf('--prepare-only')<body.indexOf('systemctl stop litecp'),path);
+ }
+ const checker=read('scripts/check-web-sandbox.sh');
+ for(const signal of ['systemd-run','/etc/shadow','/var/lib/litecp/secret.key','CapEff','NoNewPrivs'])assert.ok(checker.includes(signal),signal);
 });
 test('broker socket admits only root and the dedicated service group',()=>{
  const socket=read('deploy/litecp-broker.socket');

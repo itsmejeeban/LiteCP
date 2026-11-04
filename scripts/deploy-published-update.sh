@@ -27,6 +27,7 @@ echo '[Server 2/4] Building the published revision...'
 CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=$version -X main.buildRevision=$revision" -o "$work/next-litecp" .
 echo '[Server 3/4] Preserving current binary and restarting LiteCP...'
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
+bash "$work/scripts/install-privilege-services.sh" --prepare-only
 systemctl stop litecp
 switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/scripts/install-privilege-services.sh"
@@ -40,5 +41,9 @@ for attempt in $(seq 1 45); do
   if bash "$work/scripts/check-privilege-services.sh" "$version"; then healthy=1; break; fi
   sleep 1
 done
-[[ $healthy == 1 ]]
+if [[ $healthy != 1 ]]; then
+  systemctl status litecp litecp-broker litecp-broker.socket --no-pager || true
+  journalctl -u litecp -u litecp-broker -n 50 --no-pager || true
+  false
+fi
 echo "LiteCP $version deployed successfully. Recovery binary: $work/previous-litecp"

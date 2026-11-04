@@ -72,6 +72,12 @@ databases, backups, or old deliverables. Existing custom systemd overrides shoul
 be reviewed; an override that changes the effective web user makes installation
 fail rather than silently continuing as root.
 
+From 4.0.98 a transient systemd sandbox preflight runs before service replacement
+or stopping the installed panel. It checks actual private-file denial, UID,
+capabilities and NoNewPrivileges. The web unit relies on native root-only DAC for
+`/etc/shadow`: masking that special SELinux file type causes a NAMESPACE failure
+on the tested enforcing AlmaLinux installation. See `update-recovery-2026-11-05.md`.
+
 ## Acceptance
 
 Run focused tests with `go test ./... -run 'TestBroker|TestNetworkWeb|TestSecurityPosture|TestSecurityDashboard'`.

@@ -65,6 +65,7 @@ PY
 CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=${tag#v} -X main.buildRevision=${BUILD_REVISION}" -o "$work/next-litecp" .
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 status running "Restarting LiteCP and checking the new version."
+bash "$work/source/scripts/install-privilege-services.sh" --prepare-only
 systemctl stop litecp
 switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
@@ -82,4 +83,5 @@ for attempt in $(seq 1 45); do
   fi
   sleep 1
 done
+journalctl -u litecp -u litecp-broker -n 50 --no-pager || true
 false
