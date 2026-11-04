@@ -11,9 +11,15 @@
   page.querySelector('[data-ssl-search]').oninput=()=>render(cp.state());
   page.addEventListener('click',async event=>{
     const button=event.target.closest('[data-install-ssl]');if(!button)return;const id=button.dataset.installSsl,site=cp.state()?.sites.find(site=>site.id===id);if(!site||site.ssl||busy.has(id))return;
-    const email=await window.LiteCPDialogs.prompt(`Install HTTPS for ${site.domain}. The domain must point to this server.`,cp.state()?.settings?.email||'',{title:'Install SSL certificate',label:'Renewal email address',type:'email',required:true,confirmText:'Install SSL'});if(!email)return;
-    busy.add(id);render(cp.state());status.textContent=`Installing SSL for ${site.domain}…`;
-    try{await cp.api('/api/sites/ssl',{method:'POST',body:{id,email}});await cp.refresh();status.textContent=`SSL installed for ${site.domain}. HTTPS is enabled.`;cp.showToast('SSL installed',`${site.domain} now uses HTTPS.`);}catch(error){status.textContent=`SSL installation failed: ${error.message}`;cp.handleError(error);}finally{busy.delete(id);render(cp.state());}
+    const requestedDomain=site.domain;busy.add(id);
+    try{
+      const email=await window.LiteCPDialogs.prompt(`Install HTTPS for ${site.domain}. The domain must point to this server.`,cp.state()?.settings?.email||'',{title:'Install SSL certificate',label:'Renewal email address',type:'email',required:true,confirmText:'Install SSL'});if(!email)return;
+      const latest=cp.state()?.sites.find(item=>item.id===id);if(!latest||latest.ssl||latest.domain!==requestedDomain){status.textContent='Website changed. Review its current SSL status before retrying.';return;}
+      render(cp.state());status.textContent=`Installing SSL for ${site.domain}…`;
+      await cp.api('/api/sites/ssl',{method:'POST',body:{id,email}});
+      status.textContent=`SSL installed for ${site.domain}. HTTPS is enabled.`;cp.showToast('SSL installed',`${site.domain} now uses HTTPS.`);
+      try{await cp.refresh();}catch(error){status.textContent=`SSL installed for ${site.domain}, but the website list could not refresh. Reload this page to check the current certificate status.`;}
+    }catch(error){status.textContent=`SSL installation failed: ${error.message}`;cp.handleError(error);}finally{busy.delete(id);render(cp.state());}
   });
   const previous=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{previous(state);render(state);};render(cp.state());
 })();
