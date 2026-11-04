@@ -594,20 +594,27 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, "Reconnect and select the source website before retrying capture.")
 			return
 		}
-		// Repeated clicks must reuse a queued/running retry rather than create
-		// multiple backups and competing restores for the same source website.
+		// Repeated clicks must reuse an active retry or a verified backup waiting
+		// for overwrite consent, rather than capture the same website again.
 		entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
 		if err != nil {
 			writeError(w, 500, "Cannot inspect existing migration retries")
 			return
 		}
+		var replacement *LiveMigrationJob
 		for _, entry := range entries {
 			existing, err := a.loadLiveJob(entry.Name())
-			if err == nil && existing.Source == original.Source && existing.Account == original.Account &&
-				(existing.Status == "queued" || existing.Status == "running" || existing.Status == "restoring") {
-				writeJSON(w, 202, existing)
-				return
+			if err == nil && existing.ID != original.ID && existing.Source == original.Source && existing.Account == original.Account &&
+				(existing.Status == "queued" || existing.Status == "running" || existing.Status == "restoring" ||
+					(existing.Status == "awaiting-overwrite" && existing.CreatedAt.After(original.CreatedAt) && !existing.ArtifactsCleaned && existing.NativeReady && existing.Preview != nil)) {
+				if replacement == nil || existing.CreatedAt.After(replacement.CreatedAt) {
+					replacement = &existing
+				}
 			}
+		}
+		if replacement != nil {
+			writeJSON(w, 202, replacement)
+			return
 		}
 		id, err := randomToken(18)
 		if err != nil {

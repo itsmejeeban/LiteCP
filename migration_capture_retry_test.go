@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCaptureRetryQueuesSelectedWebsiteAndPreservesFailedJob(t *testing.T) {
@@ -91,5 +92,45 @@ func TestCaptureRetryRequiresSelectedDiscoveredWebsite(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Dir(root))
 	if len(entries) != 1 {
 		t.Fatal("invalid retry created a job")
+	}
+}
+
+func TestCaptureRetryReusesVerifiedBackupAwaitingOverwrite(t *testing.T) {
+	app := &App{system: &System{dataDir: t.TempDir()}}
+	failed := LiveMigrationJob{
+		ID: "abcdefghijklmnop1234", Status: "failed", Account: "api.example.test",
+		Source:   LiveSource{Platform: "plesk", Host: "source.example.test", Port: 22},
+		Accounts: []LiveAccount{{ID: "api.example.test"}}, CredentialsRetained: true,
+	}
+	oldest := failed
+	oldest.ID = "abcdefghijklmnop2345"
+	oldest.Status, oldest.NativeReady = "awaiting-overwrite", true
+	oldest.Preview = &MigrationPreview{}
+	oldest.CreatedAt = time.Now().Add(-time.Hour)
+	latest := oldest
+	latest.ID = "abcdefghijklmnop3456"
+	latest.CreatedAt = time.Now()
+	for _, job := range []LiveMigrationJob{failed, oldest, latest} {
+		root, _ := app.liveJobRoot(job.ID)
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := app.saveLiveJob(&job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	response := httptest.NewRecorder()
+	app.liveMigrations(response, httptest.NewRequest(http.MethodPost, "/api/live-migrations", strings.NewReader(`{"action":"retry","id":"`+failed.ID+`","confirm":true}`)))
+	var result LiveMigrationJob
+	if response.Code != http.StatusAccepted || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.ID != latest.ID || result.Status != "awaiting-overwrite" {
+		t.Fatalf("verified overwrite-waiting job was not reused: %d %s", response.Code, response.Body.String())
+	}
+	root, _ := app.liveJobRoot(failed.ID)
+	entries, _ := os.ReadDir(filepath.Dir(root))
+	if len(entries) != 3 {
+		t.Fatal("retry created a duplicate capture", len(entries))
+	}
+	if result.AutoRestore {
+		t.Fatal("retry changed the overwrite consent state")
 	}
 }
