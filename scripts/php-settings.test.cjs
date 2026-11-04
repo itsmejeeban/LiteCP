@@ -1,4 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+test('direct PHP settings route activates its page during registration',()=>{
+ const source=fs.readFileSync('web/php-settings.js','utf8');
+ for(const [hash,expected] of [['#php-settings',true],['#dashboard',false]]){
+  const classes=new Set(),page={dataset:{},classList:{add:name=>classes.add(name)}};
+  const start=source.indexOf(" page.className='page';"),end=source.indexOf(' page.innerHTML=');
+  vm.runInNewContext(source.slice(start,end),{page,location:{hash}});
+  assert.equal(classes.has('active'),expected);
+ }
+});
 test('PHP settings locks all editor fields until save completes',async()=>{
  const source=fs.readFileSync('web/php-settings.js','utf8');let finish,submitted;
  const controls=Array.from({length:4},()=>({disabled:false}));const saveButton={disabled:false};
