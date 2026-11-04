@@ -7,10 +7,27 @@
  const link=document.createElement('a');link.className='nav-item';link.dataset.page='security-dashboard';link.href='#security-dashboard';
  link.innerHTML='<img src="assets/sidebar/security.svg" alt="" width="20" height="20"><span>Security Dashboard</span>';
  document.querySelector('[data-page="firewall"]').before(link);link.onclick=event=>{event.preventDefault();cp.navigate('security-dashboard');};
+ let repair=null,repairTimer=null,checksCache=[];
+ function repairHTML(value){
+  if(!value)return '<p>SELinux repair status is unavailable. Refresh to check again.</p>';
+  const running=value.state==='running';
+  const note=value.mode==='Disabled'?'SELinux is disabled at boot. Enable it and relabel the filesystem through OS maintenance first. This button will not reboot the server.':value.mode==='Unknown'?'Unable to verify SELinux mode. Inspect the server before changing enforcement.':'';
+  return `<div class="selinux-repair"><p>Current mode: ${esc(value.mode)}</p>${value.canEnable?'<button class="button button-primary" data-selinux-enable>Enable SELinux</button>':''}${running?'<progress aria-label="Enabling SELinux"></progress>':''}<p role="status">${esc(note||value.message||'Guarded enablement backs up the configuration and rolls back if service checks fail.')}</p>${value.log?`<details><summary>View repair log</summary><pre>${esc(value.log)}</pre></details>`:''}</div>`;
+ }
+ function render(){page.querySelector('[data-security-checks]').innerHTML=checksCache.map(check=>{const type=['critical','warning','good','info','unknown'].includes(check.status)?check.status:'unknown';return `<article class="panel security-check security-check-${type}"><div class="settings-body"><div class="security-check-heading"><h2>${esc(check.label)}</h2><span class="badge">${esc({critical:'Action required',warning:'Needs review',good:'Observed',info:'Information',unknown:'Not verified'}[type])}</span></div><p>${esc(check.detail)}</p>${check.id==='selinux'?repairHTML(repair):''}</div></article>`;}).join('');
+  const enable=page.querySelector('[data-selinux-enable]');if(enable)enable.onclick=enableSELinux;
+ }
+ function scheduleRepair(){clearTimeout(repairTimer);if(repair?.state==='running'&&location.hash==='#security-dashboard')repairTimer=setTimeout(pollRepair,3000);}
+ async function pollRepair(){try{repair=await cp.api('/api/security/selinux');render();if(repair.state!=='running'){await load();return;}}catch(error){page.querySelector('[data-security-status]').textContent='Unable to refresh repair status. '+error.message;}scheduleRepair();}
+ async function enableSELinux(){
+  if(!await window.LiteCPDialogs.confirm('Enable SELinux enforcement? LiteCP will back up the configuration, check active services and roll back if verification fails. Application-specific policy compatibility still requires testing.'))return;
+  const button=page.querySelector('[data-selinux-enable]');if(button)button.disabled=true;
+  try{repair=await cp.api('/api/security/selinux',{method:'POST',body:{confirm:true}});render();scheduleRepair();}catch(error){page.querySelector('[data-security-status]').textContent='SELinux enablement failed. '+error.message;if(button)button.disabled=false;}
+ }
  let pending=null,generation=0;
  function load(){if(pending)return pending;const request=++generation,status=page.querySelector('[data-security-status]'),button=page.querySelector('button');status.textContent='Checking security status…';button.disabled=true;page.querySelector('[data-security-checks]').replaceChildren();
   pending=(async()=>{try{const value=await cp.api('/api/security/posture');if(request!==generation)return;
-   page.querySelector('[data-security-checks]').innerHTML=value.checks.map(check=>{const type=['critical','warning','good','info','unknown'].includes(check.status)?check.status:'unknown';return `<article class="panel security-check security-check-${type}"><div class="settings-body"><div class="security-check-heading"><h2>${esc(check.label)}</h2><span class="badge">${esc({critical:'Action required',warning:'Needs review',good:'Observed',info:'Information',unknown:'Not verified'}[type])}</span></div><p>${esc(check.detail)}</p></div></article>`;}).join('');status.textContent='Checked '+cp.formatDateTime(value.checkedAt);
+   checksCache=value.checks;try{repair=await cp.api('/api/security/selinux');}catch{repair=null;}render();scheduleRepair();status.textContent='Checked '+cp.formatDateTime(value.checkedAt);
   }catch(error){status.textContent='Unable to check security status. '+error.message;}finally{button.disabled=false;pending=null;}})();return pending;
  }
  page.querySelector('button').onclick=load;

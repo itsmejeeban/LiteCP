@@ -74,6 +74,7 @@
   "/api/security/malware-files",
   "/api/security/panel-port",
   "/api/security/posture",
+  "/api/security/selinux",
   "/api/security/scan",
   "/api/security/server-scan",
   "/api/security/ssh-port",
