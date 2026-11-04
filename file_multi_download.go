@@ -11,6 +11,16 @@ import (
 
 // Stream a selection without creating archives in the customer's website.
 func (a *App) downloadSelectedFiles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, POST")
+		writeError(w, http.StatusMethodNotAllowed, "Use GET or POST for file downloads")
+		return
+	}
+	// ZIP selections are confined to managed websites, never the server explorer.
+	if r.URL.Query().Get("siteId") == "server-explorer" {
+		writeError(w, http.StatusForbidden, "Combined downloads require a managed website")
+		return
+	}
 	site, err := a.requestSite(r)
 	if err != nil {
 		writeError(w, 404, "Website not found")
@@ -22,6 +32,13 @@ func (a *App) downloadSelectedFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paths := r.PostForm["paths"]
+	if r.Method == http.MethodGet {
+		if len(r.URL.RawQuery) > 8192 {
+			writeError(w, http.StatusRequestURITooLong, "Select fewer files or use Compress")
+			return
+		}
+		paths = r.URL.Query()["paths"]
+	}
 	if len(paths) < 2 || len(paths) > 250 {
 		writeError(w, 400, "Select between 2 and 250 files for a ZIP download")
 		return

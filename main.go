@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.69"
+var version = "4.0.70"
 var buildRevision = ""
 
 //go:embed web/*
@@ -339,7 +339,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/files/create", only(http.MethodPost, a.withAuth(a.createFile)))
 	mux.HandleFunc("/api/files/transfer", only(http.MethodPost, a.withAuth(a.transferFiles)))
 	mux.HandleFunc("/api/files/upload-url", only(http.MethodPost, a.withAuth(a.uploadFileURL)))
-	mux.HandleFunc("/api/files/download-selected", only(http.MethodPost, a.withAuth(a.downloadSelectedFiles)))
+	mux.HandleFunc("/api/files/download-selected", a.withAuth(a.downloadSelectedFiles))
 	mux.HandleFunc("/api/files/content", a.withAuth(a.fileContent))
 	mux.HandleFunc("/api/files/encodings", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"encodings": availableEditorEncodings(), "maxBytes": maxEditableFileSize})

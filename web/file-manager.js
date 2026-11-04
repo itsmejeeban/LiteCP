@@ -323,11 +323,11 @@
       if(!items.length||items.some(entry=>entry.type!=="file"))throw new Error('Select files to download. Use Compress for folders.');
       if(items.length===1){window.location.assign(`/api/files/download?siteId=${encodeURIComponent(activeSite)}&path=${encodeURIComponent(item.path)}`);return;}
       if(items.length>250)throw new Error('Select at most 250 files per ZIP download.');
-      const form=document.createElement('form');form.method='POST';form.action='/api/files/download-selected?siteId='+encodeURIComponent(activeSite);form.target='_self';form.hidden=true;
-      for(const entry of items){const input=document.createElement('input');input.type='hidden';input.name='paths';input.value=entry.path;form.append(input);}
-      // Keep the form connected while the browser starts the download navigation.
-      // Removing it synchronously can cancel the submission before any request.
-      document.body.append(form);form.submit();setTimeout(()=>form.remove(),60000);return;
+      const params=new URLSearchParams({siteId:activeSite});
+      for(const entry of items)params.append('paths',entry.path);
+      const url='/api/files/download-selected?'+params.toString();
+      if(url.length>8000)throw new Error('Selected paths are too long for one download. Select fewer files or use Compress.');
+      window.location.assign(url);return;
     }
     if(name==="upload-url") {
       let controller=null,running=false;

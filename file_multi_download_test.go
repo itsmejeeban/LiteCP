@@ -63,4 +63,27 @@ func TestSelectedDownloadZIPAndTraversal(t *testing.T) {
 	if request([]string{"a.txt", "missing.txt"}).Code != 404 {
 		t.Fatal("missing file accepted")
 	}
+	get := func(values url.Values) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/api/files/download-selected?"+values.Encode(), nil)
+		w := httptest.NewRecorder()
+		app.downloadSelectedFiles(w, r)
+		return w
+	}
+	w = get(url.Values{"siteId": {"zip-site"}, "paths": {"a.txt", "b.txt"}})
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	archive, err = zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil || len(archive.File) != 2 {
+		t.Fatal("GET download did not produce both ZIP members", err)
+	}
+	if get(url.Values{"siteId": {"zip-site"}, "paths": {"a.txt", "../escape"}}).Code != 400 {
+		t.Fatal("GET traversal accepted")
+	}
+	if get(url.Values{"siteId": {"server-explorer"}, "paths": {"a", "b"}}).Code != 403 {
+		t.Fatal("server explorer selection accepted")
+	}
+	if get(url.Values{"siteId": {"zip-site"}, "paths": {strings.Repeat("a", 8300), "b"}}).Code != 414 {
+		t.Fatal("oversized selection accepted")
+	}
 }

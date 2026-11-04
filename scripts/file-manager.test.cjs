@@ -60,22 +60,22 @@ test('permission sorting compares octal modes in both directions', () => {
   assert.deepEqual(prepareEntries(files,'',true,'mode',true).map(x=>x.mode),['0750','0640','0600']);
 });
 
-test('combined download submits the selected paths without a popup', () => {
+test('combined download navigates directly with encoded selection and bounds URL size', () => {
   const fs=require('node:fs'),vm=require('node:vm');
   const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
-  const start=source.indexOf('      const form=document.createElement');
+  const start=source.indexOf('      const params=new URLSearchParams({siteId:activeSite})');
   const end=source.indexOf('    if(name==="upload-url")',start);
   const code=source.slice(start,end).replace(/\n    }\s*$/, '');
-  let submitted,removed=false;
-  let cleanup;
-  const document={createElement:tag=>tag==='form'?{inputs:[],append(input){this.inputs.push(input);},submit(){submitted=this;},remove(){removed=true;}}:{},body:{append(){}}};
-  vm.runInNewContext('(function(){'+code+'})()',{document,activeSite:'site id',items:[{path:'folder/a.txt'},{path:'folder/b.txt'}],encodeURIComponent,setTimeout:callback=>{cleanup=callback;}});
-  assert.equal(submitted.method,'POST');
-  assert.equal(submitted.target,'_self');
-  assert.equal(submitted.action,'/api/files/download-selected?siteId=site%20id');
-  assert.deepEqual(Array.from(submitted.inputs,input=>[input.name,input.value]),[['paths','folder/a.txt'],['paths','folder/b.txt']]);
-  assert.equal(removed,false,'submission form must remain attached until navigation starts');
-  cleanup();assert.equal(removed,true);
+  let assigned;
+  const sandbox={URLSearchParams,activeSite:'site id',items:[{path:'folder/a & ü.txt'},{path:'folder/b.txt'}],window:{location:{assign:url=>{assigned=url;}}}};
+  const run=()=>vm.runInNewContext('(function(){'+code+'})()',sandbox);
+  run();
+  const url=new URL(assigned,'https://panel.test');
+  assert.equal(url.pathname,'/api/files/download-selected');
+  assert.equal(url.searchParams.get('siteId'),'site id');
+  assert.deepEqual(url.searchParams.getAll('paths'),['folder/a & ü.txt','folder/b.txt']);
+  assigned=undefined;sandbox.items=[{path:'a'.repeat(8100)},{path:'b'}];
+  assert.throws(run,/Select fewer files/);assert.equal(assigned,undefined);
 });
 
 test('Trash toolbar exposes permanent deletion only for a selection and resets outside Trash', () => {
