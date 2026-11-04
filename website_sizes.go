@@ -66,7 +66,7 @@ func sumWebsiteDatabaseSizes(site Site, databases []ManagedDatabase, schemas map
 	return total, true
 }
 
-func (a *App) websiteDatabaseSizes(ctx context.Context) map[string]int64 {
+func (a *App) schemaDatabaseSizes(ctx context.Context) map[string]int64 {
 	schemas := map[string]int64{}
 	if !a.system.demo {
 		// LEFT JOIN includes empty databases; absent schemas remain unavailable.
@@ -85,6 +85,23 @@ func (a *App) websiteDatabaseSizes(ctx context.Context) map[string]int64 {
 			}
 		}
 	}
+	return schemas
+}
+
+func (a *App) databaseSizes(w http.ResponseWriter, r *http.Request) {
+	schemas := a.schemaDatabaseSizes(r.Context())
+	sizes := map[string]int64{}
+	for _, database := range a.store.PublicState().Databases {
+		if size, ok := schemas[database.Name]; ok {
+			sizes[database.ID] = size
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"sizes": sizes})
+}
+
+func (a *App) websiteDatabaseSizes(ctx context.Context) map[string]int64 {
+	schemas := a.schemaDatabaseSizes(ctx)
 	result := map[string]int64{}
 	databases := a.store.PublicState().Databases
 	for _, site := range a.store.Sites() {

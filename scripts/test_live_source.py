@@ -13,6 +13,15 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_plesk_subdomain_selects_referenced_parent_database_only(self):
+        inventory = 'securese_jk\tsecureserver.top\nother_db\tsecureserver.top\ndirect_db\tapi.secureserver.top\n'
+        with patch.object(source, 'command', return_value=inventory), patch.object(source.os, 'walk', return_value=[('/website', [], ['.env'])]), patch.object(source.pathlib.Path, 'is_symlink', return_value=False), patch.object(source.pathlib.Path, 'is_file', return_value=True), patch.object(source.pathlib.Path, 'stat', return_value=types.SimpleNamespace(st_size=100)), patch.object(source.pathlib.Path, 'read_text', return_value='DB_DATABASE=securese_jk\nDB_PASSWORD=private\n'):
+            self.assertEqual(source.plesk_website_databases('/usr/sbin/plesk', 'api.secureserver.top', 'secureserver.top', pathlib.Path('/website')), ['direct_db', 'securese_jk'])
+
+    def test_plesk_database_selection_does_not_export_unrelated_schemas(self):
+        with patch.object(source, 'command', return_value='parent_db\tsecureserver.top\n'), patch.object(source.os, 'walk', return_value=[]):
+            self.assertEqual(source.plesk_website_databases('/usr/sbin/plesk', 'blank.secureserver.top', 'secureserver.top', pathlib.Path('/website')), [])
+
     def test_plesk_subdomain_backup_uses_owning_subscription(self):
         with patch.object(source, 'command', return_value='secureserver.top\n') as run:
             self.assertEqual(source.plesk_backup_subscription('/usr/sbin/plesk', 'api.secureserver.top'), 'secureserver.top')

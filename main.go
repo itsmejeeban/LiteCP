@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.58"
+var version = "4.0.60"
 var buildRevision = ""
 
 //go:embed web/*
@@ -352,6 +352,7 @@ func (a *App) routes() http.Handler {
 	mux.HandleFunc("/api/files/extract", only(http.MethodPost, a.withAuth(a.extractArchive)))
 	mux.HandleFunc("/api/files/download", only(http.MethodGet, a.withAuth(a.downloadFile)))
 	mux.HandleFunc("/api/databases", only(http.MethodPost, a.withAuth(a.createManagedDatabase)))
+	mux.HandleFunc("/api/databases/sizes", only(http.MethodGet, a.withAuth(a.databaseSizes)))
 	mux.HandleFunc("/api/databases/password", only(http.MethodPut, a.withAuth(a.resetManagedDatabasePassword)))
 	mux.HandleFunc("/api/databases/", only(http.MethodDelete, a.withAuth(a.deleteManagedDatabase)))
 	mux.HandleFunc("/api/firewall/apply-litecp", a.withAuth(a.litecpFirewallControl))

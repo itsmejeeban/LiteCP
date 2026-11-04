@@ -121,6 +121,45 @@ def plesk_backup_subscription(binary, account):
     return names[0]
 
 
+def plesk_website_databases(binary, account, subscription, source):
+    query = ("SELECT data_bases.name, domains.name FROM data_bases JOIN domains ON data_bases.dom_id=domains.id "
+             "WHERE domains.id IN (SELECT site.id FROM domains site JOIN domains owner ON owner.id="
+             "CASE WHEN site.webspace_id > 0 THEN site.webspace_id WHEN site.parentDomainId > 0 "
+             "THEN site.parentDomainId ELSE site.id END WHERE owner.name='" + subscription + "')")
+    available, selected = set(), set()
+    for line in command([binary, 'db', '-N', '-B', '-e', query]).splitlines():
+        fields = line.split('\t')
+        if len(fields) != 2:
+            raise RuntimeError('Plesk database inventory returned an unsupported layout')
+        name, owner = fields
+        available.add(name)
+        if owner == account:
+            selected.add(name)
+    # Read configuration literals only. Never execute imported application code.
+    env_name = re.compile(r"(?m)^\s*(?:export\s+)?(?:DB_DATABASE|DB_NAME)\s*=\s*([^\r\n#]*)")
+    php_name = re.compile(r"(?i)(?:\$(?:db_database|db_name|dbname|database|database_name)\s*=|['\"](?:DB_DATABASE|DB_NAME|dbname|database|database_name)['\"]\s*(?:=>|\]\s*=)|define\s*\(\s*['\"]DB_NAME['\"]\s*,)\s*['\"]([A-Za-z0-9_$-]+)['\"]")
+    count = 0
+    for directory, directories, files in os.walk(str(source), followlinks=False):
+        directories[:] = [name for name in directories if name.lower() not in ('vendor', 'node_modules', '.git', 'cache', 'upgrade') and not pathlib.Path(directory, name).is_symlink()]
+        for name in files:
+            count += 1
+            if count > 200000:
+                raise RuntimeError('Too many files for Plesk database configuration discovery')
+            lower = name.lower()
+            if lower != '.env' and not (lower.endswith('.php') and any(word in lower for word in ('config', 'connect', 'database', 'db.php'))):
+                continue
+            path = pathlib.Path(directory, name)
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
+                continue
+            content = path.read_text(encoding='utf-8', errors='replace')
+            names = env_name.findall(content) if lower == '.env' else php_name.findall(content)
+            for value in names:
+                value = value.strip().strip('\"\'')
+                if value in available:
+                    selected.add(value)
+    return sorted(selected)
+
+
 def export(request):
     if os.geteuid() != 0:
         raise RuntimeError('Root SSH access is required')
@@ -246,18 +285,17 @@ def export(request):
     # symlinks or hard-links. Unsupported entries are reported, not hidden.
     skipped = []
     dumps = []
-    database_names = command([binary,'db','-N','-B','-e',"SELECT data_bases.name FROM data_bases JOIN domains ON data_bases.dom_id=domains.id WHERE domains.name='" + account + "'"]).splitlines()
+    database_names = plesk_website_databases(binary, account, subscription, source)
     for index, database in enumerate(database_names):
         database = database.strip()
         if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_$-]{0,63}',database) or database.lower() in ('psa','mysql','information_schema','performance_schema','sys'):
-            output['warnings'].append('A database name requires manual export; its native backup remains retained.')
-            continue
+            raise RuntimeError('A required database name needs manual export; native backup retained')
         dump = root / ('database-' + str(index + 1) + '.sql')
         with open(dump,'xb') as destination:
             result = subprocess.run([binary,'db','dump',database,'--single-transaction','--skip-lock-tables','--routines','--triggers'],stdout=destination,stderr=log,timeout=3600)
         os.chmod(dump,0o600)
         if result.returncode:
-            output['warnings'].append('Portable database export failed for ' + database + '; restore it from the verified native backup before cutover.')
+            raise RuntimeError('Required portable database export failed; inspect retained source export log. Native backup retained.')
         else:
             dumps.append((dump,'databases/' + database + '.sql'))
     def filter_member(info):

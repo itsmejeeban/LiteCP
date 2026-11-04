@@ -538,12 +538,28 @@
   }
 
   let databaseSiteID = "";
+  let databaseSizes = {}, databaseSizesLoading = false;
+  async function loadDatabaseSizes() {
+    if (databaseSizesLoading) return;
+    databaseSizesLoading = true;
+    databaseSizes = {};
+    renderDatabases();
+    try {
+      const result = await api("/api/databases/sizes");
+      databaseSizes = result.sizes || {};
+    } catch (error) {
+      if (error.status !== 401) showToast("Database sizes unavailable", error.message, "error");
+    } finally {
+      databaseSizesLoading = false;
+      renderDatabases();
+    }
+  }
   function renderDatabases() {
     const site = (currentState.sites || []).find(item => item.id === databaseSiteID);
     const heading = document.querySelector('[data-page-view="databases"] .page-heading h1');
     if (heading) heading.textContent = site ? `Databases — ${site.domain}` : "Databases";
     const databases = (currentState.databases || []).filter(item => !databaseSiteID || item.siteId === databaseSiteID);
-    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>AUTH</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><span class="database-value"><button class="database-link" data-database-action="open" data-id="${escapeHTML(database.id)}" title="Open ${escapeHTML(database.name)} in phpMyAdmin">${escapeHTML(database.name)}</button><button class="database-copy" data-database-action="copy-name" data-id="${escapeHTML(database.id)}" aria-label="Copy database name ${escapeHTML(database.name)}" title="Copy database name">${icons.copy}</button></span></td><td><span class="database-value"><code>${escapeHTML(database.username)}</code><button class="database-copy" data-database-action="copy-user" data-id="${escapeHTML(database.id)}" aria-label="Copy username ${escapeHTML(database.username)}" title="Copy username">${icons.copy}</button></span></td><td>${escapeHTML(database.domain || "Standalone")}</td><td>${database.legacyAuth ? '<span class="badge">Legacy PHP</span>' : '<span class="badge success">Modern</span>'}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database" aria-label="Delete database ${escapeHTML(database.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
+    $("#databasesTable").innerHTML = databases.length ? `<table class="data-table"><thead><tr><th>DATABASE</th><th>USERNAME</th><th>WEBSITE</th><th>DATABASE SIZE</th><th>AUTH</th><th>CREATED</th><th></th></tr></thead><tbody>${databases.map(database => `<tr><td><span class="database-value"><button class="database-link" data-database-action="open" data-id="${escapeHTML(database.id)}" title="Open ${escapeHTML(database.name)} in phpMyAdmin">${escapeHTML(database.name)}</button><button class="database-copy" data-database-action="copy-name" data-id="${escapeHTML(database.id)}" aria-label="Copy database name ${escapeHTML(database.name)}" title="Copy database name">${icons.copy}</button></span></td><td><span class="database-value"><code>${escapeHTML(database.username)}</code><button class="database-copy" data-database-action="copy-user" data-id="${escapeHTML(database.id)}" aria-label="Copy username ${escapeHTML(database.username)}" title="Copy username">${icons.copy}</button></span></td><td>${escapeHTML(database.domain || "Standalone")}</td><td title="Database data and indexes">${Object.prototype.hasOwnProperty.call(databaseSizes, database.id) ? formatBytes(databaseSizes[database.id]) : databaseSizesLoading ? "Calculating…" : "Unavailable"}</td><td>${database.legacyAuth ? '<span class="badge">Legacy PHP</span>' : '<span class="badge success">Modern</span>'}</td><td>${formatDate(database.createdAt)}</td><td><span class="row-actions"><button class="text-action" data-database-action="password" data-id="${escapeHTML(database.id)}" title="Reset password">Password</button><button class="danger" data-database-action="delete" data-id="${escapeHTML(database.id)}" title="Delete database" aria-label="Delete database ${escapeHTML(database.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No managed databases yet.</p></div>';
   }
 
   function renderFirewall() {
@@ -617,6 +633,7 @@
     }
     if (page === "files") loadFiles();
     if (page === "websites") refreshWebsiteList();
+    if (page === "databases") loadDatabaseSizes();
     window.LiteCPFeatures?.navigate(page);
   }
 

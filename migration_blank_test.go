@@ -25,3 +25,13 @@ func TestBlankWebsiteMigrationWithDatabase(t *testing.T) {
 		t.Fatal("unrecognized application was accepted as blank")
 	}
 }
+
+func TestMigrationCannotOmitConfiguredDatabaseDump(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("DB_DATABASE=source_db\nDB_USERNAME=source_user\nDB_PASSWORD=example\nDB_HOST=localhost\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := genericMigrationDatabasePlan(root, filepath.Join(root, "missing"), nil); err == nil {
+		t.Fatal("configured database with no SQL dump was accepted")
+	}
+}

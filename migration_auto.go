@@ -282,7 +282,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(err)
 			return
 		}
-	} else if len(preview.Databases) > 0 {
+	} else {
 		customConfigs, customDatabases, err = genericMigrationDatabasePlan(source, filepath.Join(root, "files", "private_home"), preview.Databases)
 		if err != nil {
 			fail(err)
