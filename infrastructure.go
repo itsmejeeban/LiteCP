@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var databaseObjectPattern = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -314,6 +315,9 @@ func validateFirewallRule(rule FirewallRule) error {
 	}
 	if len(rule.Label) > 64 || strings.ContainsAny(rule.Label, "\r\n") {
 		return errors.New("firewall rule label must be at most 64 characters")
+	}
+	if utf8.RuneCountInString(rule.Remarks) > 500 || strings.ContainsRune(rule.Remarks, '\x00') {
+		return errors.New("firewall remarks must be at most 500 characters and contain no null bytes")
 	}
 	address := rule.Source
 	addressLabel := "source"

@@ -39,6 +39,7 @@ func normalizeFirewallRule(rule FirewallRule) FirewallRule {
 	}
 	rule.Protocol = strings.ToLower(strings.TrimSpace(rule.Protocol))
 	rule.Label = strings.TrimSpace(rule.Label)
+	rule.Remarks = strings.TrimSpace(rule.Remarks)
 	if rule.Direction == "outbound" {
 		rule.Source = ""
 		rule.Destination = strings.TrimSpace(rule.Destination)
@@ -71,12 +72,19 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "Firewall rule not found.")
 		return
 	}
-	var input FirewallRule
+	var input struct {
+		FirewallRule
+		Remarks *string `json:"remarks"`
+	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
-	rule := normalizeFirewallRule(input)
+	input.FirewallRule.Remarks = old.Remarks
+	if input.Remarks != nil {
+		input.FirewallRule.Remarks = *input.Remarks
+	}
+	rule := normalizeFirewallRule(input.FirewallRule)
 	rule.ID, rule.CreatedAt = old.ID, old.CreatedAt
 	if err := validateFirewallRule(rule); err != nil {
 		writeError(w, 400, err.Error())
@@ -84,6 +92,18 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	oldNormalized := normalizeFirewallRule(*old)
 	if oldNormalized == rule {
+		writeJSON(w, 200, rule)
+		return
+	}
+	notesOnly := oldNormalized
+	notesOnly.Label = rule.Label
+	notesOnly.Remarks = rule.Remarks
+	if notesOnly == rule {
+		if err := a.store.UpdateFirewallRule(id, rule); err != nil {
+			writeError(w, 500, "Cannot save firewall remarks.")
+			return
+		}
+		a.store.AddActivity("Firewall remarks updated", rule.Label, "success")
 		writeJSON(w, 200, rule)
 		return
 	}

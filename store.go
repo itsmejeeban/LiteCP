@@ -85,6 +85,7 @@ type FirewallRule struct {
 	Source      string    `json:"source"`
 	Destination string    `json:"destination,omitempty"`
 	Label       string    `json:"label"`
+	Remarks     string    `json:"remarks,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 

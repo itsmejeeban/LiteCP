@@ -13,6 +13,7 @@ type profileRule struct {
 	Port      string `json:"port"`
 	Zone      string `json:"zone"`
 	Raw       string `json:"-"`
+	Remarks   string `json:"remarks"`
 }
 type profileState struct {
 	Enabled bool          `json:"enabled"`
@@ -104,6 +105,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 502, "Cannot read LiteCP firewall rules: "+err.Error())
 		return
 	}
+	a.annotateFirewallProfile(&state)
 	if r.Method == http.MethodGet {
 		writeJSON(w, 200, state)
 		return
@@ -149,6 +151,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 502, "Cannot verify removal. Refresh status.")
 			return
 		}
+		a.annotateFirewallProfile(&updated)
 		for _, rule := range updated.Rules {
 			if rule.Port == port && rule.Direction == direction && rule.Zone == zone {
 				writeError(w, 502, "Rule is still active. Refresh and retry.")
@@ -236,6 +239,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.store.AddActivity("LiteCP firewall disabled", "Required-port profile removed; access ports and unrelated rules preserved.", "warning")
+	a.annotateFirewallProfile(&state)
 	writeJSON(w, 200, state)
 }
 

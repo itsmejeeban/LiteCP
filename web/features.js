@@ -86,7 +86,7 @@
   async function saveFirewall(event) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
     const direction = data.get("direction");
-    const body = { direction, action: data.get("action"), port: Number(data.get("port")), protocol: data.get("protocol"), label: data.get("label"), [direction === "outbound" ? "destination" : "source"]: String(data.get("source")).trim() };
+    const body = { direction, action: data.get("action"), port: Number(data.get("port")), protocol: data.get("protocol"), label: data.get("label"), remarks: data.get("remarks"), [direction === "outbound" ? "destination" : "source"]: String(data.get("source")).trim() };
     const id = String(data.get("id") || "");
     if(data.get('sourcePreset')==='cloudflare'){
       if(direction!=='inbound'||body.action!=='allow'){notifyError(new Error('Cloudflare only requires Direction: Inbound and Action: Allow.'));return;}
@@ -100,7 +100,7 @@
     const button = event.target.closest("[data-firewall-action]"); if (!button) return;
     const rule = (cp.state().firewallRules || []).find(item => item.id === button.dataset.id); if (!rule) return;
     if (button.dataset.firewallAction === "edit") {
-      const form = $("#firewallForm"); for (const key of ["id", "port", "protocol", "label"]) form.elements[key].value = rule[key] || "";
+      const form = $("#firewallForm"); for (const key of ["id", "port", "protocol", "label", "remarks"]) form.elements[key].value = rule[key] || "";
       form.elements.direction.value = rule.direction || "inbound"; form.elements.action.value = rule.action || "allow";
       sourcePreset.value=rule.source==='cloudflare'?'cloudflare':'custom';sourceInput.readOnly=rule.source==='cloudflare';
       form.elements.source.value = (rule.direction === "outbound" ? rule.destination : rule.source) || "any"; directionChange(); form.scrollIntoView({behavior:"smooth"}); return;
@@ -314,8 +314,8 @@
     if(!state)return;
     $$('[data-site-action="delete"]').forEach(button=>{if(button.parentElement.querySelector('[data-site-action="files"]'))return;button.insertAdjacentHTML("beforebegin",`<button title="Open file manager" aria-label="Open file manager" data-site-action="files" data-id="${esc(button.dataset.id)}">${fileManagerIcon}<span class="site-action-label">Files</span></button>`);});
     $$('#sitesTable [data-site-action="files"]').forEach(button=>button.parentElement.prepend(button));
-    const rows=(state.firewallRules||[]).map(rule=>`<tr><td>${esc(rule.direction||"inbound")}</td><td>${esc(rule.action||"allow")}</td><td>${rule.port}/${esc(rule.protocol)}</td><td><code>${esc(rule.source==="cloudflare"?"Cloudflare (IPv4 + IPv6)":rule.direction==="outbound"?rule.destination:rule.source)}</code></td><td>${esc(rule.label)}</td><td><span class="row-actions"><button class="text-action" data-firewall-action="edit" data-id="${esc(rule.id)}">Edit</button><button class="text-action danger" data-firewall-action="delete" data-id="${esc(rule.id)}">Delete</button></span></td></tr>`).join("");
-    $("#firewallTable").innerHTML=`<p class="feature-note">Installer rules for SSH, HTTP, HTTPS and LiteCP remain protected. Other outbound traffic remains allowed unless blocked by a rule. Host rules do not govern separately routed container/VM traffic.</p><table class="data-table"><thead><tr><th>DIRECTION</th><th>ACTION</th><th>PORT</th><th>ADDRESS</th><th>LABEL</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6">No custom firewall rules.</td></tr>'}</tbody></table>`;
+    const rows=(state.firewallRules||[]).map(rule=>`<tr><td><span class="firewall-direction firewall-direction-${rule.direction==="outbound"?"outbound":"inbound"}">${rule.direction==="outbound"?"Outbound":"Inbound"}</span></td><td>${esc(rule.action||"allow")}</td><td>${rule.port}/${esc(rule.protocol)}</td><td><code>${esc(rule.source==="cloudflare"?"Cloudflare (IPv4 + IPv6)":rule.direction==="outbound"?rule.destination:rule.source)}</code></td><td>${esc(rule.label)}</td><td class="firewall-remarks">${esc(rule.remarks||"")}</td><td><span class="row-actions"><button class="text-action" data-firewall-action="edit" data-id="${esc(rule.id)}">Edit</button><button class="text-action danger" data-firewall-action="delete" data-id="${esc(rule.id)}">Delete</button></span></td></tr>`).join("");
+    $("#firewallTable").innerHTML=`<p class="feature-note">Installer rules for SSH, HTTP, HTTPS and LiteCP remain protected. Other outbound traffic remains allowed unless blocked by a rule. Host rules do not govern separately routed container/VM traffic.</p><table class="data-table"><thead><tr><th>DIRECTION</th><th>ACTION</th><th>PORT</th><th>ADDRESS</th><th>LABEL</th><th>REMARKS</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="7">No custom firewall rules.</td></tr>'}</tbody></table>`;
     $("#mailHostingToggle").textContent=state.settings.emailHostingEnabled===false?"Enable email hosting":"Disable email hosting";
     // Base tables may retain their DOM between refreshes. Replace our enhancements.
     $$('#mailboxesTable [data-mail-enhancement], #mailDomainsTable [data-mail-enhancement]').forEach(node=>node.remove());
