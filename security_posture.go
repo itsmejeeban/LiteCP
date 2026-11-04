@@ -43,6 +43,19 @@ func collectSecurityPosture(probe securityProbe, uid int) securityPosture {
 	}
 	for _, item := range []struct{ id, label, unit string }{{"firewall", "Firewall", "firewalld"}, {"fail2ban", "Brute-force service", "fail2ban"}, {"postfix", "SMTP service", "postfix"}, {"dovecot", "Mailbox service", "dovecot"}, {"opendkim", "DKIM signer", "opendkim"}} {
 		output, e := probe("systemctl", "is-active", item.unit)
+		if item.id == "firewall" && (e != nil || strings.TrimSpace(output) != "active") {
+			// Ubuntu installations can use UFW instead of firewalld. Its
+			// effective status, not its oneshot systemd unit, is authoritative.
+			ufw, ufwErr := probe("ufw", "status")
+			if ufwErr == nil && strings.HasPrefix(strings.TrimSpace(ufw), "Status: active") {
+				add(item.id, item.label, "good", "UFW is active; this does not verify every firewall rule.")
+				continue
+			}
+			if ufwErr == nil && strings.HasPrefix(strings.TrimSpace(ufw), "Status: inactive") {
+				add(item.id, item.label, "warning", "UFW is inactive and firewalld is not active.")
+				continue
+			}
+		}
 		if strings.TrimSpace(output) == "active" && e == nil {
 			add(item.id, item.label, "good", "Service is active; this does not verify every security setting.")
 		} else if strings.TrimSpace(output) == "inactive" || strings.TrimSpace(output) == "failed" {
@@ -103,7 +116,7 @@ func (a *App) securityPosture(w http.ResponseWriter, r *http.Request) {
 				result.Checks[i].Status = "good"
 				result.Checks[i].Detail = "Authenticator verification is enabled. Keep recovery codes offline."
 			} else {
-				result.Checks[i].Detail = "Authenticator verification is not enabled. Complete enrollment below."
+				result.Checks[i].Detail = "Authenticator verification is not enabled. Complete enrollment in Security > 2FA."
 			}
 		}
 	}

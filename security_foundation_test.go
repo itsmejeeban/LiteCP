@@ -107,3 +107,25 @@ func TestSecurityDashboardRequiresAuthenticationAndGET(t *testing.T) {
 		t.Fatal("demo reported real protection")
 	}
 }
+
+func TestSecurityPostureRecognizesUFW(t *testing.T) {
+	for _, scenario := range []struct{ output, status string }{
+		{"Status: active\n", "good"},
+		{"Status: inactive\n", "warning"},
+		{"unrecognized output", "unknown"},
+	} {
+		t.Run(scenario.status, func(t *testing.T) {
+			result := collectSecurityPosture(func(command string, args ...string) (string, error) {
+				if command == "ufw" {
+					return scenario.output, nil
+				}
+				return "", errors.New("unavailable")
+			}, 1000)
+			for _, check := range result.Checks {
+				if check.ID == "firewall" && check.Status != scenario.status {
+					t.Fatalf("firewall status=%s, want %s", check.Status, scenario.status)
+				}
+			}
+		})
+	}
+}

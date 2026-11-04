@@ -8,7 +8,7 @@
  link.innerHTML='<img src="assets/sidebar/security.svg" alt="" width="20" height="20"><span>Security Dashboard</span>';
  document.querySelector('[data-page="firewall"]').before(link);link.onclick=event=>{event.preventDefault();cp.navigate('security-dashboard');};
  let pending=null,generation=0;
- function load(){if(pending)return pending;const request=++generation,status=page.querySelector('[data-security-status]'),button=page.querySelector('button');status.textContent='Checking security status…';button.disabled=true;
+ function load(){if(pending)return pending;const request=++generation,status=page.querySelector('[data-security-status]'),button=page.querySelector('button');status.textContent='Checking security status…';button.disabled=true;page.querySelector('[data-security-checks]').replaceChildren();
   pending=(async()=>{try{const value=await cp.api('/api/security/posture');if(request!==generation)return;
    page.querySelector('[data-security-checks]').innerHTML=value.checks.map(check=>{const type=['critical','warning','good','info','unknown'].includes(check.status)?check.status:'unknown';return `<article class="panel security-check security-check-${type}"><div class="settings-body"><div class="security-check-heading"><h2>${esc(check.label)}</h2><span class="badge">${esc({critical:'Action required',warning:'Needs review',good:'Observed',info:'Information',unknown:'Not verified'}[type])}</span></div><p>${esc(check.detail)}</p></div></article>`;}).join('');status.textContent='Checked '+cp.formatDateTime(value.checkedAt);
   }catch(error){status.textContent='Unable to check security status. '+error.message;}finally{button.disabled=false;pending=null;}})();return pending;
