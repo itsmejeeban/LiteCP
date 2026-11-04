@@ -31,7 +31,7 @@
     $('[data-cards]').replaceChildren(); $('[data-charts]').replaceChildren(); $('[data-rows]').replaceChildren();
     $('[data-warning]').hidden=true; liveEntries=[];livePage=1;renderLive();
     $('[data-pagination]').textContent='';$('[data-prev]').disabled=true;$('[data-next]').disabled=true;
-    $('[data-live-info]').textContent='';$('[data-geo]').textContent='';
+    $('[data-live-info]').textContent=paused?'Live access paused. Resume to load requests for the selected website and filters.':'';$('[data-geo]').textContent='';
   }
   function renderSites() {
     const select=$('[data-site]'),old=select.value,sites=cp.state()?.sites||[];
@@ -82,7 +82,7 @@
   async function loadLive() {
     if(!active()||paused||!$('[data-site]').value||liveBusy)return;
     liveBusy=true;const token=++liveRequest,gen=generation;
-    const params=query();params.set('view','live');params.set('field',$('[data-live-field]').value);params.set('filter',$('[data-live-filter]').value);params.set('status',$('[data-live-status]').value);
+    const params=query();params.set('view','live');params.set('group','daily');params.set('field',$('[data-live-field]').value);params.set('filter',$('[data-live-filter]').value);params.set('status',$('[data-live-status]').value);
     try {
       const result=await cp.api('/api/sites/traffic?'+params);
       if(token!==liveRequest||gen!==generation||!active()||paused)return;
@@ -105,7 +105,7 @@
   $('[data-prev]').onclick=()=>{generation++;reportPage--;loadReport();};$('[data-next]').onclick=()=>{generation++;reportPage++;loadReport();};
   $('[data-live-prev]').onclick=()=>{livePage--;renderLive();};$('[data-live-next]').onclick=()=>{livePage++;renderLive();};
   $('[data-pause]').onclick=()=>{paused=!paused;$('[data-pause]').textContent=paused?'Resume':'Pause';$('[data-live-info]').textContent=paused?'Live access paused.': 'Resuming live access…';if(!paused)loadLive();};
-  for(const key of ['live-filter','live-status','live-field'])$(`[data-${key}]`).oninput=()=>{generation++;livePage=1;clearTimeout(filterTimer);filterTimer=setTimeout(loadLive,300);};
+  for(const key of ['live-filter','live-status','live-field'])$(`[data-${key}]`).oninput=()=>{generation++;livePage=1;liveEntries=[];renderLive();$('[data-live-info]').textContent=paused?'Live access paused. Resume to apply the new filters.':'Loading matching requests…';clearTimeout(filterTimer);filterTimer=setTimeout(loadLive,300);};
   const today=new Date().toISOString().slice(0,10);$('[data-from]').value=today;$('[data-to]').value=today;$('[data-from]').max=today;$('[data-to]').max=today;
   const navigate=window.LiteCPFeatures.navigate;window.LiteCPFeatures.navigate=id=>{navigate?.(id);activate();};
   const render=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{render(state);renderSites();if(active()&&!timer)activate();};

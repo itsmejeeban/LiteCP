@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="4.0.85"
+LITECP_VERSION="4.0.87"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -52,7 +52,7 @@ if [[ "${OS_ID}" == "ubuntu" ]]; then
       PHP_PACKAGES+=("php${PHP_VERSION}-${PHP_PACKAGE}")
     done
   done
-  apt-get install -y "${PHP_PACKAGES[@]}"
+  apt-get install -y "${PHP_PACKAGES[@]}" quota e2fsprogs xfsprogs util-linux
   CRON_UNIT="cron"
 else
   EL_MAJOR="$(rpm -E '%{rhel}')"
@@ -97,7 +97,7 @@ else
     fi
   done
   ((${#PHP_VERSIONS[@]} > 0)) || fail "No supported parallel PHP-FPM packages are available."
-  dnf install -y "${PHP_PACKAGES[@]}"
+  dnf install -y "${PHP_PACKAGES[@]}" quota e2fsprogs xfsprogs util-linux
   CRON_UNIT="crond"
 fi
 
@@ -191,6 +191,21 @@ install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "${SOURCE_DIR}/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 install -d -m 0755 /var/www/litecp
 install -d -m 0755 /home/litecp
+info "Preparing project-quota support for website storage"
+install -m 0700 "${SCRIPT_DIR}/prepare-website-quotas.sh" /usr/local/lib/litecp/prepare-website-quotas.sh
+if [[ "$FRESH_INSTALL" == 1 ]]; then
+  bash /usr/local/lib/litecp/prepare-website-quotas.sh --prepare-fresh || {
+    quota_result=$?
+    [[ "$quota_result" == 2 ]] || fail "Website quota storage preparation failed; existing files were retained."
+    info "Existing filesystem requires quota maintenance. Disk enforcement is unavailable."
+  }
+else
+  bash /usr/local/lib/litecp/prepare-website-quotas.sh --check || {
+    quota_result=$?
+    [[ "$quota_result" == 2 ]] || fail "Could not inspect quota storage."
+    info "Existing installation preserved. Disk enforcement is unavailable until project quotas are configured."
+  }
+fi
 install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail /etc/litecp/php73-pools
 touch /etc/litecp/php73-pools.conf
 chmod 0640 /etc/litecp/php73-pools.conf

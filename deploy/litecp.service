@@ -3,6 +3,7 @@ Description=LiteCP - By Hostingtom
 Documentation=https://github.com/hostingtom/litecp
 Wants=network-online.target
 After=network-online.target
+RequiresMountsFor=/home/litecp
 
 [Service]
 Type=simple

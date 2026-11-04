@@ -81,3 +81,23 @@ test('missing websites produce a useful empty state and no API requests',async()
   assert.equal(f.requests.length,0);assert.equal(f.nodes.get('[data-refresh]').disabled,true);
   assert.match(f.nodes.get('[data-status]').textContent,/Add a website/);
 });
+
+test('changing filters while paused clears stale requests and explains how to resume',async()=>{
+  const f=fixture();await flush();f.nodes.get('[data-pause]').onclick();const before=f.requests.length;
+  f.nodes.get('[data-live-filter]').value='no-match';f.nodes.get('[data-live-filter]').oninput();await flush();
+  assert.equal(f.requests.length,before);
+  assert.doesNotMatch(f.nodes.get('[data-live-rows]').innerHTML,/192\.0\.2/);
+  assert.match(f.nodes.get('[data-live-info]').textContent,/Resume to apply/);
+  f.nodes.get('[data-site]').value='two';f.nodes.get('[data-site]').onchange();await flush();
+  assert.match(f.nodes.get('[data-live-info]').textContent,/Live access paused/);
+  f.nodes.get('[data-pause]').onclick();await flush();
+  assert.ok(f.requests.some(url=>url.includes('view=live')&&url.includes('filter=no-match')&&url.includes('siteId=two')));
+});
+
+test('live requests do not inherit historical hourly chart interval restrictions',async()=>{
+  const f=fixture();await flush();f.nodes.get('[data-group]').value='hourly';f.nodes.get('[data-range]').value='custom';
+  f.nodes.get('[data-from]').value='2026-09-01';f.nodes.get('[data-to]').value='2026-11-01';f.nodes.get('[data-group]').onchange();await flush();
+  const liveURL=f.requests.filter(url=>url.includes('view=live')).at(-1);
+  assert.equal(new URLSearchParams(liveURL.split('?')[1]).get('group'),'daily');
+  assert.match(liveURL,/from=2026-09-01/);
+});
