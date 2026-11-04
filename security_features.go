@@ -401,22 +401,43 @@ func (s *System) ScanManagedPath(ctx context.Context, site Site, relative string
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	command, err := websiteScanCommand(commandCtx, site, target)
+	logDir := filepath.Join(s.dataDir, "website-scans")
+	if err := os.MkdirAll(logDir, 0700); err != nil {
+		return result, err
+	}
+	logFile, err := os.CreateTemp(logDir, "scan-*.log")
+	if err != nil {
+		return result, err
+	}
+	logPath := logFile.Name()
+	logFile.Close()
+	command, err := websiteScanCommand(commandCtx, site, target, logPath)
 	if err != nil {
 		return result, err
 	}
 	var output limitedBuffer
 	command.Stdout, command.Stderr = &output, &output
 	err = command.Run()
-	text := output.String()
+	launcherOutput := output.String()
+	data, readErr := os.ReadFile(logPath)
+	if readErr != nil {
+		return MalwareScanResult{}, fmt.Errorf("Cannot read ClamAV scan log: %w", readErr)
+	}
+	text := string(data)
 	if len(text) > 1<<20 {
 		text = text[len(text)-(1<<20):]
 	}
 	result.Output = strings.TrimSpace(text)
+	if strings.Contains(text, "LibClamAV Error:") || strings.Contains(text, " ERROR") {
+		return MalwareScanResult{}, fmt.Errorf("ClamAV scan incomplete: %s", strings.TrimSpace(text))
+	}
+	if commandCtx.Err() != nil {
+		return MalwareScanResult{}, fmt.Errorf("ClamAV scan interrupted: %w", commandCtx.Err())
+	}
 	if err != nil {
 		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
-			return MalwareScanResult{}, fmt.Errorf("ClamAV scan failed: %s", strings.TrimSpace(text))
+		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !websiteScanOutputComplete(text, true) {
+			return MalwareScanResult{}, fmt.Errorf("ClamAV scan failed: %s", strings.TrimSpace(launcherOutput+"\n"+text))
 		}
 		result.Status = "infected"
 		for _, line := range strings.Split(text, "\n") {
@@ -428,6 +449,9 @@ func (s *System) ScanManagedPath(ctx context.Context, site Site, relative string
 				result.InfectedFiles = append(result.InfectedFiles, filepath.ToSlash(relativeName))
 			}
 		}
+	}
+	if err == nil && !websiteScanOutputComplete(text, false) {
+		return MalwareScanResult{}, errors.New("ClamAV did not return a completed scan summary; no clean result was confirmed")
 	}
 	return result, nil
 }
