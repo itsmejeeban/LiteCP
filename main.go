@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.102"
+var version = "4.0.103"
 var buildRevision = ""
 
 //go:embed web/*
@@ -244,6 +244,7 @@ func main() {
 	app.startSnapshotAutomation()
 	app.startCloudflareFirewallUpdates()
 	app.startAutoMigrationRestores()
+	app.startIntegrityMonitor()
 	if len(os.Args) == 2 && os.Args[1] == "broker" {
 		if err := runPrivilegeBroker(app); err != nil {
 			log.Fatal(err)
@@ -294,6 +295,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/live-migrations/auto-restore", only(http.MethodPost, a.withAuth(a.autoMigrationAction)))
 	mux.HandleFunc("/api/backup-schedules", a.withAuth(a.backupSchedules))
 	mux.HandleFunc("/api/security/posture", only(http.MethodGet, a.withAuth(a.securityPosture)))
+	mux.HandleFunc("/api/security/integrity", a.withAuth(a.integrityAPI))
 	mux.HandleFunc("/api/security/selinux", a.withAuth(a.selinuxRepair))
 	mux.HandleFunc("/api/security/two-factor", a.withAuth(a.twoFactorSettings))
 	mux.HandleFunc("/api/security/waf-events", only(http.MethodGet, a.withAuth(a.wafPolicyEvents)))

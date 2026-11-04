@@ -93,7 +93,7 @@ func collectSecurityPosture(probe securityProbe, uid int) securityPosture {
 		add("ssh-auth", "SSH authentication", "info", "Effective global SSH settings were read. Per-user Match rules and alternate access remain to be checked.")
 	}
 	add("mfa", "Administrator 2FA", "warning", "TOTP enrollment is not implemented in this version.")
-	add("integrity", "File integrity monitoring", "warning", "Trusted baselines and change monitoring are not implemented.")
+	add("integrity", "File integrity monitoring", "warning", "Create a trusted baseline to start monitoring critical server files.")
 	add("ddos", "DDoS protection", "unknown", "No application-level attack monitor is configured. Large attacks require upstream protection.")
 	add("backup", "Backup security", "warning", "Private storage and archive validation exist. Archive encryption and off-server restore acceptance need verification.")
 	add("audit", "Security events", "info", "Authentication events go to the service journal. Independent, tamper-resistant log retention is not verified.")
@@ -116,6 +116,26 @@ func (a *App) securityPosture(w http.ResponseWriter, r *http.Request) {
 		return runCommand(ctx, 2*time.Second, command, args...)
 	}, webUID)
 	for i := range result.Checks {
+		if result.Checks[i].ID == "integrity" {
+			integrityMu.Lock()
+			value, err := a.integrityRead()
+			integrityMu.Unlock()
+			check := &result.Checks[i]
+			check.Detail = "Create a trusted baseline to start monitoring critical configuration and the panel binary."
+			if err != nil {
+				check.Detail = "Integrity monitoring settings could not be read."
+			} else if value.Baseline != "" {
+				check.Detail = "Baseline saved. Scheduled monitoring is disabled."
+				if value.Enabled {
+					check.Status = "info"
+					check.Detail = "Scheduled integrity monitoring is enabled; review the latest report below."
+				}
+				if value.Error != "" || len(value.Changes) > 0 {
+					check.Status = "warning"
+					check.Detail = "The latest integrity check requires review. Open the report below."
+				}
+			}
+		}
 		if result.Checks[i].ID == "privilege" && separated {
 			result.Checks[i].Detail = "The network-facing web service runs without root or Linux capabilities. Authenticated management operations use a root-owned local broker; browser root shells are unavailable. Broker operation isolation still requires security review."
 		}

@@ -1,7 +1,7 @@
 /* Pagination for client-rendered lists. Existing server/native pagers retain ownership. */
 (() => {
  "use strict";
- const native = '.waf-policy-page,#sitesTable,#extensionsTable,[data-delivery-table],[data-page-view="system-updates"],[data-page-view="website-resource-limits"],#trashPanel';
+ const native = '.integrity-page,.waf-policy-page,#sitesTable,#extensionsTable,[data-delivery-table],[data-page-view="system-updates"],[data-page-view="website-resource-limits"],#trashPanel';
  const cards = '[data-backup-list],[data-ftp-list],[data-cron-list],[data-snapshot-list],[data-schedule-list],#liveJobs,#migrationStages';
  const states = new WeakMap();
  const ranges = (count, page, size) => {
