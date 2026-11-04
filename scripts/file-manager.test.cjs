@@ -64,15 +64,18 @@ test('combined download submits the selected paths without a popup', () => {
   const fs=require('node:fs'),vm=require('node:vm');
   const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
   const start=source.indexOf('      const form=document.createElement');
-  const code=source.slice(start,source.indexOf('form.remove();return;',start)+'form.remove();return;'.length);
+  const end=source.indexOf('    if(name==="upload-url")',start);
+  const code=source.slice(start,end).replace(/\n    }\s*$/, '');
   let submitted,removed=false;
+  let cleanup;
   const document={createElement:tag=>tag==='form'?{inputs:[],append(input){this.inputs.push(input);},submit(){submitted=this;},remove(){removed=true;}}:{},body:{append(){}}};
-  vm.runInNewContext('(function(){'+code+'})()',{document,activeSite:'site id',items:[{path:'folder/a.txt'},{path:'folder/b.txt'}],encodeURIComponent});
+  vm.runInNewContext('(function(){'+code+'})()',{document,activeSite:'site id',items:[{path:'folder/a.txt'},{path:'folder/b.txt'}],encodeURIComponent,setTimeout:callback=>{cleanup=callback;}});
   assert.equal(submitted.method,'POST');
   assert.equal(submitted.target,'_self');
   assert.equal(submitted.action,'/api/files/download-selected?siteId=site%20id');
   assert.deepEqual(Array.from(submitted.inputs,input=>[input.name,input.value]),[['paths','folder/a.txt'],['paths','folder/b.txt']]);
-  assert.equal(removed,true);
+  assert.equal(removed,false,'submission form must remain attached until navigation starts');
+  cleanup();assert.equal(removed,true);
 });
 
 test('Trash toolbar exposes permanent deletion only for a selection and resets outside Trash', () => {

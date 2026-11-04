@@ -325,7 +325,9 @@
       if(items.length>250)throw new Error('Select at most 250 files per ZIP download.');
       const form=document.createElement('form');form.method='POST';form.action='/api/files/download-selected?siteId='+encodeURIComponent(activeSite);form.target='_self';form.hidden=true;
       for(const entry of items){const input=document.createElement('input');input.type='hidden';input.name='paths';input.value=entry.path;form.append(input);}
-      document.body.append(form);form.submit();form.remove();return;
+      // Keep the form connected while the browser starts the download navigation.
+      // Removing it synchronously can cancel the submission before any request.
+      document.body.append(form);form.submit();setTimeout(()=>form.remove(),60000);return;
     }
     if(name==="upload-url") {
       let controller=null,running=false;
