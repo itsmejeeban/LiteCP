@@ -15,7 +15,7 @@ type wafLogEntry struct {
 	Blocked bool   `json:"blocked"`
 }
 
-var wafBoundary = regexp.MustCompile(`(?m)^--([A-Za-z0-9]+)-A--\r?$`)
+var wafBoundary = regexp.MustCompile(`(?m)^((?:--[A-Za-z0-9]+-)|(?:---[A-Za-z0-9]+---))A--\r?$`)
 var wafMessage = regexp.MustCompile(`\[msg "((?:\\.|[^"\\])*)"\]`)
 var wafRuleID = regexp.MustCompile(`\[id "([0-9]+)"\]`)
 var wafTime = regexp.MustCompile(`\[([^\]]+)\]`)
@@ -32,15 +32,15 @@ func parseWAFLogs(data string, blocked bool) []wafLogEntry {
 		}
 		record := data[start[0]:end]
 		id := data[start[2]:start[3]]
-		if !strings.Contains(record, "--"+id+"-Z--") {
+		if !strings.Contains(record, id+"Z--") {
 			continue
 		}
-		h := strings.Index(record, "--"+id+"-H--")
+		h := strings.Index(record, id+"H--")
 		if h < 0 {
 			continue
 		}
 		summary := record[h:]
-		if endH := strings.Index(summary, "\n--"+id+"-"); endH >= 0 {
+		if endH := strings.Index(summary, "\n"+id); endH >= 0 {
 			summary = summary[:endH]
 		}
 		denied := strings.Contains(summary, "Access denied with code ") || strings.Contains(summary, "Action: Intercepted")
@@ -49,7 +49,7 @@ func parseWAFLogs(data string, blocked bool) []wafLogEntry {
 		}
 		messages := []string{}
 		for _, line := range strings.Split(summary, "\n") {
-			if !strings.HasPrefix(line, "Message:") {
+			if !strings.HasPrefix(line, "Message:") && !strings.HasPrefix(line, "ModSecurity:") {
 				continue
 			}
 			msg := wafMessage.FindStringSubmatch(line)

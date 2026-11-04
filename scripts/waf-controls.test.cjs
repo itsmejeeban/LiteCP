@@ -84,3 +84,14 @@ test('Configure and Check Logs open the selected website without changing protec
   assert.ok(f.requests.some(r=>r.path.includes('waf-events?scope=s0&kind=detected')));
   assert.equal(f.requests.some(r=>r.options?.method==='PUT'),false);
 });
+
+test('policy save retains disabled protection status',async()=>{
+ const f=fixture();await f.open();await f.click({'data-switch-configure':'',dataset:{switchConfigure:'s0'}});
+ // The full fixture checks policy status on a disabled website after saving.
+ f.policies.websites.s0.enabled=false;
+ await f.open();await f.click({'data-switch-configure':'',dataset:{switchConfigure:'s0'}});
+ await f.editor.querySelector('[data-save]').onclick();
+ assert.match(f.editor.querySelector('[data-message]').textContent,/Protection is disabled/);
+ assert.match(f.editor.querySelector('[data-status]').textContent,/Status: Disabled/);
+ assert.equal(f.editor.querySelector('[data-save]').disabled,false);
+});

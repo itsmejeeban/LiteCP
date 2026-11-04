@@ -47,7 +47,21 @@
   if(b.hasAttribute('data-rules-prev')){rulePage--;render()}if(b.hasAttribute('data-rules-next')){rulePage++;render()}
  };
  page.onchange=e=>{if(e.target.matches('[data-mode]')){policy.mode=e.target.value;mark()}if(e.target.matches('[data-managed]')){policy.managed=e.target.checked;mark()}for(const kind of ['rule','rate']){const i=e.target.getAttribute(`data-${kind}-enabled`);if(i!==null){(kind==='rule'?policy.rules:policy.rateLimits)[Number(i)].enabled=e.target.checked;mark()}}};
- $('[data-save]').onclick=async()=>{if(busy||!loadedScope)return;if(!await window.LiteCPDialogs.confirm('Apply this WAF policy? Blocking rules can deny legitimate requests. Keep SSH access available for recovery.'))return;busy=true;$('[data-save]').disabled=true;try{await cp.api('/api/security/waf-policies',{method:'PUT',body:{scope:loadedScope,policy}});dirty=false;message('Policy applied successfully.');$('[data-status]').textContent=`Engine: ${data.engine} · Configured mode: ${policy.mode}`;}catch(e){message(e.message,true)}finally{busy=false;$('[data-save]').disabled=false}};
+ $('[data-save]').onclick=async()=>{
+  if(busy||!loadedScope)return;
+  busy=true;
+  const controls=[...page.querySelectorAll('button,input,select')].map(control=>[control,control.disabled]);
+  controls.forEach(([control])=>control.disabled=true);
+  try{
+   if(!await window.LiteCPDialogs.confirm('Apply this WAF policy? Blocking rules can deny legitimate requests. Keep SSH access available for recovery.'))return;
+   const submitted=structuredClone(policy),target=loadedScope;
+   await cp.api('/api/security/waf-policies',{method:'PUT',body:{scope:target,policy:submitted}});
+   dirty=false;
+   const enabled=submitted.enabled!==false&&(submitted.mode!=='off'||data.policies.server.mode!=='off');
+   message(enabled?'Policy applied successfully.':'Policy saved. Protection is disabled; enable this website in Security > Website WAF to enforce the saved rules.');
+   $('[data-status]').textContent=`Engine: ${data.engine} · Status: ${enabled?'Enabled':'Disabled'} · Configured mode: ${submitted.mode}`;
+  }catch(e){message(e.message,true)}finally{busy=false;controls.forEach(([control,disabled])=>control.disabled=disabled);}
+ };
  $('[data-export-events]').onclick=()=>{const blob=new Blob([JSON.stringify(eventEntries,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='litecp-waf-events-page.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
  $('[data-refresh]').onclick=load;$('[data-website]').onchange=load;$('[data-events-refresh]').onclick=events;$('[data-kind]').onchange=()=>{eventPage=1;events()};let searchTimer;$('[data-search]').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{eventPage=1;events()},300)};$('[data-event-prev]').onclick=()=>{eventPage--;events()};$('[data-event-next]').onclick=()=>{eventPage++;events()};
  const switches=document.createElement('section');switches.className='page waf-policy-page';switches.dataset.pageView='server-waf';

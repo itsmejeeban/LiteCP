@@ -23,3 +23,17 @@ func TestWAFLogClassification(t *testing.T) {
 		t.Fatal("partial record exposed")
 	}
 }
+
+func TestWAFLogV3AuditFormat(t *testing.T) {
+	data := "---7QpDtpSR---A--\r\n[04/Nov/2026:21:54:07 +0530] id\r\n---7QpDtpSR---B--\r\nAuthorization: secret\r\n---7QpDtpSR---C--\r\npassword=secret\r\n---7QpDtpSR---H--\r\nModSecurity: Access denied with code 403 (phase 2). [id \"7000001\"] [msg \"Website rule qa: Test path\"]\r\n---7QpDtpSR---Z--\r\n"
+	rows := parseWAFLogs(data, true)
+	if len(rows) != 1 || !rows[0].Blocked || !strings.Contains(rows[0].Message, "7000001") || strings.Contains(rows[0].Message, "secret") {
+		t.Fatal(rows)
+	}
+	if len(parseWAFLogs(data, false)) != 0 {
+		t.Fatal("blocked event classified as detected")
+	}
+	if len(parseWAFLogs(strings.ReplaceAll(data, "---7QpDtpSR---Z--", ""), true)) != 0 {
+		t.Fatal("partial v3 event exposed")
+	}
+}
