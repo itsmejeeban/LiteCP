@@ -58,3 +58,13 @@ test('DNS blocks page and website selection during a save', () => {
   assert.equal($('[data-page-size]').disabled,true);
   assert.equal($('[data-next]').disabled,true);
 });
+
+test('switching DNS websites clears import text but refreshing the same website preserves it', async () => {
+  const source=fs.readFileSync(path.join(__dirname,'../web/website-dns.js'),'utf8');
+  const nodes=new Map(),$=key=>{if(!nodes.has(key))nodes.set(key,{value:'',hidden:false,textContent:''});return nodes.get(key)};
+  const picker={value:'one'};
+  const context=vm.createContext({$,picker,endpoint:()=>'/test',buttons(){},render(){},cp:{api:async()=>({zone:{records:[]},installed:false})}});
+  vm.runInContext(`let generation=0,loadedSite='',records=[],recordPage=1,busy=false;${source.slice(source.indexOf('  async function load()'),source.indexOf('  async function save('))}globalThis.load=load;`,context);
+  await context.load();$('[data-import]').value='zone for one';await context.load();assert.equal($('[data-import]').value,'zone for one');
+  picker.value='two';await context.load();assert.equal($('[data-import]').value,'');
+});
