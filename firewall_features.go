@@ -15,6 +15,19 @@ func runHostCommand(ctx context.Context, timeout time.Duration, command string, 
 	return runCommand(ctx, timeout, "systemd-run", append(systemdArgs, args...)...)
 }
 
+// firewalld owns configuration writes through D-Bus, so its client can remain
+// inside the broker sandbox. Passing broker-owned pipes through systemd-run can
+// fail under SELinux. The exact read-only sshd probe also needs no host writer.
+func firewallDirectCommand(command string, args []string) bool {
+	return command == "firewall-cmd" || (command == "/usr/sbin/sshd" && len(args) == 1 && args[0] == "-T")
+}
+func runFirewallCommand(ctx context.Context, timeout time.Duration, command string, args ...string) (string, error) {
+	if firewallDirectCommand(command, args) {
+		return runCommand(ctx, timeout, command, args...)
+	}
+	return runHostCommand(ctx, timeout, command, args...)
+}
+
 func normalizeFirewallRule(rule FirewallRule) FirewallRule {
 	rule.Direction = strings.ToLower(strings.TrimSpace(rule.Direction))
 	if rule.Direction == "" {

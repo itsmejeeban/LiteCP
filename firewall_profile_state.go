@@ -97,7 +97,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 	run := func(cmd string, args ...string) (string, error) {
-		return runHostCommand(ctx, 25*time.Second, cmd, args...)
+		return runFirewallCommand(ctx, 25*time.Second, cmd, args...)
 	}
 	state, err := inspectFirewallProfile(a.system.firewallBackend(), run)
 	if err != nil {
@@ -128,7 +128,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 				writeError(w, 502, "Cannot verify SSH access; no rule changed.")
 				return
 			}
-			protected := port == fmt.Sprintf("%d/tcp", currentPanelPort())
+			protected := port == fmt.Sprintf("%d/tcp", currentPanelPort()) || containsString(savedFirewallSSHPorts(a.system.dataDir), port)
 			for _, line := range strings.Split(ssh, "\n") {
 				f := strings.Fields(line)
 				if len(f) == 2 && f[0] == "port" && port == f[1]+"/tcp" {
@@ -166,6 +166,7 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	protected := []string{"80/tcp", "443/tcp", fmt.Sprintf("%d/tcp", currentPanelPort())}
+	protected = append(protected, savedFirewallSSHPorts(a.system.dataDir)...)
 	for _, line := range strings.Split(ssh, "\n") {
 		f := strings.Fields(line)
 		if len(f) == 2 && f[0] == "port" {

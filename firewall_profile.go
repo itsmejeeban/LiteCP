@@ -17,6 +17,20 @@ type litecpFirewallProfile struct {
 	Outbound []string `json:"outbound"`
 }
 
+// The installer may set sshd's command-line port, which sshd -T alone misses.
+func savedFirewallSSHPorts(dataDir string) []string {
+	data, err := os.ReadFile(filepath.Join(dataDir, "ssh-port"))
+	if err != nil {
+		return nil
+	}
+	value := strings.TrimSpace(string(data))
+	port, err := strconv.Atoi(value)
+	if err != nil || port < 1 || port > 65535 {
+		return nil
+	}
+	return []string{strconv.Itoa(port) + "/tcp"}
+}
+
 func requiredFirewallProfile(sshPorts []string, mail, ftp bool, webmailPort string) litecpFirewallProfile {
 	p := litecpFirewallProfile{Inbound: []string{"80/tcp", "443/tcp", "4321/tcp"}, Outbound: []string{"53/tcp", "53/udp", "123/udp", "80/tcp", "443/tcp", "22/tcp"}}
 	for _, port := range sshPorts {
@@ -143,7 +157,7 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	// Inspect sshd on the host, outside ProtectHome/PrivateDevices and with an
 	// absolute path (service PATH may not contain /usr/sbin).
-	ssh, err := runHostCommand(ctx, 20*time.Second, "/usr/sbin/sshd", "-T")
+	ssh, err := runFirewallCommand(ctx, 20*time.Second, "/usr/sbin/sshd", "-T")
 	if err != nil {
 		writeError(w, 502, "Cannot verify SSH ports; firewall was not changed: "+err.Error())
 		return
@@ -198,7 +212,7 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 	profile.Inbound = uniqueFirewallPorts(profile.Inbound)
 	profile.Outbound = uniqueFirewallPorts(profile.Outbound)
 	err = applyRequiredFirewall(profile, a.system.firewallBackend(), func(cmd string, args ...string) (string, error) {
-		return runHostCommand(ctx, 25*time.Second, cmd, args...)
+		return runFirewallCommand(ctx, 25*time.Second, cmd, args...)
 	})
 	if err != nil {
 		writeError(w, 502, "Firewall profile was not fully applied; existing rules were preserved. Reapply to finish: "+err.Error())

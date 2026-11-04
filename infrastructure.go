@@ -352,6 +352,9 @@ func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remov
 	if err := validateFirewallRule(rule); err != nil {
 		return err
 	}
+	if rule.Direction == "inbound" && rule.Protocol == "tcp" && containsString(savedFirewallSSHPorts(s.dataDir), strconv.Itoa(rule.Port)+"/tcp") && (rule.Source == "any" || rule.Source == "cloudflare") {
+		return errors.New("unscoped changes and Cloudflare restrictions on the configured SSH port are protected")
+	}
 	if rule.Source == "cloudflare" {
 		return s.applyCloudflareFirewall(ctx, rule, remove)
 	}
