@@ -9,3 +9,7 @@
 :root[data-theme] .environment-summary dd.environment-error {color:#ed6b6b;font-weight:600;}
 :root[data-theme] .environment-summary dd.environment-info {color:#5ca9ee;font-weight:600;}
 @media(max-width:1100px){.environment-summary {grid-template-columns:minmax(0,1fr);}}
+
+:root[data-theme="light"] .environment-summary dd.environment-good{color:#23723e;}
+:root[data-theme="light"] .environment-summary dd.environment-error{color:#b42323;}
+:root[data-theme="light"] .environment-summary dd.environment-info{color:#1565a8;}

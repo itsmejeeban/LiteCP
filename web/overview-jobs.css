@@ -5,7 +5,7 @@
 .overview-job-heading h2{font-size:15px;margin:0;overflow-wrap:anywhere}
 .overview-job-heading .button{flex-shrink:0;white-space:nowrap}
 .overview-running-job p{margin:10px 0;overflow-wrap:anywhere}
-.overview-running-job small{display:block;margin-top:8px;color:#b8bcc4}
+.overview-running-job small{display:block;margin-top:8px;color:var(--muted)}
 .overview-job-progress{height:8px;overflow:hidden;border-radius:8px;background:#252a32}
 .overview-job-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#438cd6,#32b49c,#9474d4)}
 .overview-job-progress.indeterminate span{animation:overview-job-working 1.8s ease-in-out infinite}

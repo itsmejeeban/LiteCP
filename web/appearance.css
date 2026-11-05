@@ -29,7 +29,7 @@
 
 :root[data-theme="light"][data-ui-theme="default"]{--canvas:#fafafa;--paper:#fff;--surface-soft:#f4f4f5;--line:#d4d4d8;--ink:#18181b;--muted:#52525b;--muted-2:#71717a;--ui-accent:#18181b;--ui-accent-hover:#3f3f46;--ui-accent-ink:#fafafa;--ui-radius:6px;--ui-button-radius:6px;--ui-shadow:none;--teal:#18181b;--teal-dark:#3f3f46}
 :root[data-theme] .color-mode-toggle{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 34px;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:6px;padding:7px}
-.color-mode-toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+:root[data-theme] .color-mode-toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 :root[data-theme="dark"] .color-mode-toggle .mode-moon,:root[data-theme="light"] .color-mode-toggle .mode-sun{display:none}
 
 :root[data-theme="light"] #fmActionDialog,:root[data-theme="light"] #fmActionDialog :is(.fm-dialog-body,.fm-search-results){background:var(--paper)!important;color:var(--ink)!important;color-scheme:light}

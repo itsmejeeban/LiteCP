@@ -6,3 +6,8 @@
 .integrity-page [data-settings]{display:flex;flex-wrap:wrap;align-items:end;gap:16px;margin:20px 0}.integrity-page [data-settings] label{display:block}.integrity-page [data-settings] select{display:block;margin-top:6px}.integrity-page code{overflow-wrap:anywhere}.integrity-page progress{width:100%}.integrity-page [hidden]{display:none!important}
 .firewall-direction{display:inline-block;padding:3px 8px;border-radius:5px;border:1px solid;font-size:12px;font-weight:500;white-space:nowrap}.firewall-direction-inbound{color:#93c5fd;background:#172e50;border-color:#315f99}.firewall-direction-outbound{color:#d8b4fe;background:#35204e;border-color:#75509b}.firewall-remarks{white-space:pre-wrap;overflow-wrap:anywhere;min-width:180px;max-width:420px}
 .two-factor-panel{max-width:780px;margin-bottom:16px}.two-factor-panel .settings-body{padding:18px}.two-factor-panel [data-mfa-enrollment]{padding:16px 0}.two-factor-panel [data-mfa-secret],.two-factor-panel pre{overflow-wrap:anywhere;white-space:pre-wrap}.two-factor-panel [hidden]{display:none!important}.two-factor-panel [data-mfa-enrollment] img{background:#fff;max-width:100%;height:auto}.two-factor-panel .field{margin:14px 0}
+
+/* Keep wide rule tables scrollable without widening the mobile page. */
+[data-page-view="firewall"] #firewallTable,
+[data-page-view="firewall"] .settings-body:has(> .data-table){max-width:100%;overflow-x:auto;}
+[data-page-view="firewall"] .management-grid>*{min-width:0;}
