@@ -756,6 +756,8 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
+ if redisEnabled(site) && !s.demo {settings:=*site.Redis;settings.Enabled=false;if _,err:=s.redisHostAction(ctx,site,settings,"save");err!=nil{return err}}
+
 	if resourceEnabled(site) {
 		if err := resourceHostAction(ctx, s, site, *site.ResourceLimits, "disable"); err != nil {
 			return err

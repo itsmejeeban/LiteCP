@@ -89,6 +89,7 @@
   "/api/sites/",
   "/api/sites/cron",
   "/api/sites/dns",
+  "/api/sites/redis",
   "/api/sites/domain",
   "/api/sites/php",
   "/api/sites/php-settings",

@@ -1,0 +1,7 @@
+:root[data-theme] #sitesTable .row-actions button[data-site-redis]::before{display:none}
+:root[data-theme] #sitesTable .row-actions button[data-site-redis]{order:-97!important;flex-shrink:0}
+:root[data-theme] #sitesTable .row-actions button[data-site-redis] img{display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain}
+[data-page-view="website-redis"] [data-metrics]{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+[data-page-view="website-redis"] [data-metrics]>div{padding:12px;border:1px solid var(--line);border-radius:8px}
+[data-page-view="website-redis"] dt{color:var(--muted);font-size:12px}
+[data-page-view="website-redis"] dd{margin:6px 0 0;font-size:18px;font-weight:500;overflow-wrap:anywhere}

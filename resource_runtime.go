@@ -315,6 +315,9 @@ func resourceRuntimeStart(p resourceRuntimePlan) error {
 	if err := resourceRun("systemctl", "start", resourceUnit(p.Site.ID, "php"), resourceUnit(p.Site.ID, "web")); err != nil {
 		return err
 	}
+	if err := redisResumeForResource(p); err != nil {
+		return err
+	}
 	// systemd may reset the slice OOM grouping while attaching child services.
 	return resourceSetOOMGroup(p.Site.ID)
 }

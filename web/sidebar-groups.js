@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const groups = [
-    {id:"website-tools", title:"Website Tools", icon:"tools", after:"websites", pages:["file-manager","files","databases","website-backups","website-cron","website-ftp","website-ssl","website-resource-limits","website-traffic","website-dns","php-settings","website-node","website-python","website-ruby"]},
+    {id:"website-tools", title:"Website Tools", icon:"tools", after:"websites", pages:["file-manager","files","databases","website-backups","website-cron","website-ftp","website-ssl","website-resource-limits","website-traffic","website-dns", "website-redis","php-settings","website-node","website-python","website-ruby"]},
     {id:"security", title:"Security", icon:"security", after:"email", pages:["security-dashboard","file-integrity","brute-force","firewall","security","waf","two-factor","ssh-port","panel-port"]},
     {id:"environment", title:"Server Environment", icon:"server-environment", pages:["applications","extensions"]}
   ];

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.134"
+var version = "4.0.135"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,13 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "website-redis" {
+		if err := redisRuntimeCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "resource-runtime" {
 		if err := resourceRuntimeCommand(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -327,6 +334,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/sites/cron", only(http.MethodPost, a.withAuth(a.toggleCron)))
 	mux.HandleFunc("/api/sites/php", only(http.MethodPost, a.withAuth(a.changeSitePHP)))
 	mux.HandleFunc("/api/sites/php-settings", a.withAuth(a.sitePHPSettings))
+	mux.HandleFunc("/api/sites/redis", a.withAuth(a.websiteRedis))
 	mux.HandleFunc("/api/sites/dns", a.withAuth(a.websiteDNS))
 	mux.HandleFunc("/api/sites/resource-limits", a.withAuth(a.websiteResourceLimits))
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))

@@ -308,6 +308,12 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
+	if redisEnabled(*site) && (p.Enabled || resourceEnabled(*site)) {
+		if !resourceEnabled(*site) || !p.Enabled || p != *site.ResourceLimits {
+			writeError(w, 409, "Disable the website Redis cache before changing resource enforcement; enable Redis again afterward.")
+			return
+		}
+	}
 	if resourceEnabled(*site) && p.Enabled {
 		if p != *site.ResourceLimits {
 			writeError(w, 409, "Disable enforcement before changing its allowance values, then enable it again.")

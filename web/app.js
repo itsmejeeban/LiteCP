@@ -628,7 +628,7 @@
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "server-waf", "website-waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "website-resource-limits", "website-traffic", "website-dns", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "file-integrity", "brute-force", "two-factor", "analytics", "disk-usage", "live-process", "activities", "documentation", "applications", "system-updates"];
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "server-waf", "website-waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "website-resource-limits", "website-traffic", "website-dns", "website-redis", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "file-integrity", "brute-force", "two-factor", "analytics", "disk-usage", "live-process", "activities", "documentation", "applications", "system-updates"];
     if (!allowed.includes(page) && page !== 'ssh-port' && page !== 'panel-port') page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {

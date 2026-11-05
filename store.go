@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+	Redis          *WebsiteRedis          `json:"redis,omitempty"`
 	DNSZone        *WebsiteDNSZone        `json:"dnsZone,omitempty"`
 	ResourceLimits *WebsiteResourceLimits `json:"resourceLimits,omitempty"`
 	PHPSettings    map[string]string      `json:"phpSettings,omitempty"`
