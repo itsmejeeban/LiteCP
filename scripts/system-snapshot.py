@@ -67,14 +67,32 @@ def add_tree(z,key,root,manifest):
             else: raise ValueError('Unsupported special file: '+str(p))
             manifest['files'][entry]={'mode':stat.S_IMODE(s.st_mode),'uid':s.st_uid,'gid':s.st_gid,'size':len(data) if data is not None else s.st_size,'sha256':hashlib.sha256(data).hexdigest() if data is not None else (digest(p) if p.is_file() else '')}
 
-def pause_containers():
-    if not shutil.which('podman'):return []
-    result=run(['podman','ps','--format','{{.ID}} {{.Names}}']).decode().splitlines();ids=[]
+def pause_containers(ids=None):
+    # Mutate the caller's recovery list before stopping: Podman may return an
+    # error after it already stopped the process, or after earlier apps stopped.
+    if ids is None:ids=[]
+    if not shutil.which('podman'):return ids
+    result=run(['podman','ps','--format','{{.ID}} {{.Names}}']).decode().splitlines()
     for line in result:
         fields=line.split()
         if len(fields)==2 and fields[1].startswith('litecp-app-'):
-            run(['podman','stop','--time','20',fields[0]]);ids.append(fields[0])
+            ids.append(fields[0])
+            try:run(['podman','stop','--time','20',fields[0]])
+            except Exception:
+                # A stop can report a conmon exit error despite successful stop.
+                state=run(['podman','inspect','--format','{{.State.Status}}',fields[0]]).decode().strip()
+                if state not in ('exited','stopped'):raise
     return ids
+
+def resume_containers(ids):
+    failed=[]
+    for container in ids:
+        try:
+            run(['podman','start',container])
+            state=run(['podman','inspect','--format','{{.State.Status}}',container]).decode().strip()
+            if state!='running':failed.append(container)
+        except Exception:failed.append(container)
+    return failed
 
 def php_units():
     result=subprocess.run(['systemctl','list-units','--all','--plain','--no-legend','php*-fpm.service','php*-php-fpm.service','litecp-php73-fpm.service'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
@@ -214,8 +232,8 @@ def restore(source,confirmation):
     try:
         for unit in ['litecp','nginx','crond','cron','postfix','dovecot','litecp-ftps']+php_units():
             if subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0:
-                run(['systemctl','stop',unit]);stopped.append(unit)
-        containers=pause_containers()
+                stopped.append(unit);run(['systemctl','stop',unit])
+        pause_containers(containers)
         create(recovery)
         # Do not replace MySQL's system schema or the destination root account.
         # Source managed users are replaced with the source grants/password hashes.
@@ -306,9 +324,7 @@ def restore(source,confirmation):
                     run(['mysql','--protocol=socket','--user=root'],input=sql)
         raise
     finally:
-        if not completed:
-            for container in containers:subprocess.run(['podman','start',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        failed_units=[]
+        failed_units=resume_containers(containers) if not completed else []
         for unit in reversed(stopped):
             if subprocess.run(['systemctl','start',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:failed_units.append(unit)
         if failed_units:raise RuntimeError('Data operation finished but services need attention: '+', '.join(failed_units))
@@ -331,12 +347,11 @@ def main():
         try:
             for unit in creation_pause_units():
                 if subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0:
-                    run(['systemctl','stop',unit]);stopped.append(unit)
-            containers=pause_containers()
+                    stopped.append(unit);run(['systemctl','stop',unit])
+            pause_containers(containers)
             result=create(path)
         finally:
-            for container in containers:subprocess.run(['podman','start',container],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-            failed_units=[]
+            failed_units=resume_containers(containers)
             for unit in reversed(stopped):
                 if subprocess.run(['systemctl','start',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:failed_units.append(unit)
             if failed_units:raise RuntimeError('Snapshot saved but services need attention: '+', '.join(failed_units))

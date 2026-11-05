@@ -17,6 +17,30 @@ class SnapshotTests(unittest.TestCase):
    self.assertIn('php83-php-fpm.service',units)
    self.assertIn('dovecot',units)
   finally:s.php_units=original
+ def test_partial_pause_retains_recovery_list(self):
+  original=s.run;original_which=s.shutil.which;ids=[]
+  try:
+   s.shutil.which=lambda _:True
+   def command(args,**kw):
+    if args[1]=='ps':return b'first litecp-app-one\nsecond litecp-app-two\n'
+    if args[1]=='stop' and args[-1]=='second':raise RuntimeError('stop failed')
+    if args[1]=='inspect':return b'running'
+    return b''
+   s.run=command
+   with self.assertRaises(RuntimeError):s.pause_containers(ids)
+   self.assertEqual(ids,['first','second'])
+  finally:s.run=original;s.shutil.which=original_which
+ def test_stop_error_after_exit_is_verified(self):
+  original=s.run;original_which=s.shutil.which
+  try:
+   s.shutil.which=lambda _:True
+   def command(args,**kw):
+    if args[1]=='ps':return b'first litecp-app-one\n'
+    if args[1]=='stop':raise RuntimeError('conmon exited')
+    return b'exited'
+   s.run=command;self.assertEqual(s.pause_containers(),['first'])
+   self.assertEqual(s.resume_containers(['first']),['first'])
+  finally:s.run=original;s.shutil.which=original_which
  def test_round_trip_checksums_modes_and_stage(self):
   path=s.BASE/'test.zip';s.create(path);stage=self.root/'stage';stage.mkdir();m=s.inspect(path,stage);self.assertEqual(m['format'],'litecp-system-snapshot');self.assertEqual((stage/'data/websites/index.php').read_text(),'<?php echo "snapshot";')
  def test_live_quota_image_is_not_captured(self):
@@ -55,7 +79,7 @@ class SnapshotTests(unittest.TestCase):
   path=s.BASE/'test.zip';s.create(path);pathlib.Path(s.ROOTS['websites'],'index.php').write_text('destination old data')
   original_run=s.run;original_sub=s.subprocess.run;original_php=s.php_units;original_pause=s.pause_containers
   try:
-   s.run=lambda *a,**kw:b'';s.subprocess.run=lambda *a,**kw:types.SimpleNamespace(returncode=1,stdout=b'');s.php_units=lambda:[];s.pause_containers=lambda:[]
+   s.run=lambda *a,**kw:b'';s.subprocess.run=lambda *a,**kw:types.SimpleNamespace(returncode=1,stdout=b'');s.php_units=lambda:[];s.pause_containers=lambda ids=None:[]
    result=s.restore(path,'RESTORE ENTIRE LITECP')
    self.assertTrue(result['restored']);self.assertEqual(pathlib.Path(s.ROOTS['websites'],'index.php').read_text(),'<?php echo "snapshot";');self.assertTrue(pathlib.Path(result['recovery']).exists())
   finally:s.run=original_run;s.subprocess.run=original_sub;s.php_units=original_php;s.pause_containers=original_pause
@@ -66,7 +90,7 @@ class SnapshotTests(unittest.TestCase):
    def command(args,**kw):
     if args==['nginx','-t']:raise RuntimeError('test failure')
     return b''
-   s.run=command;s.subprocess.run=lambda *a,**kw:types.SimpleNamespace(returncode=1,stdout=b'');s.php_units=lambda:[];s.pause_containers=lambda:[]
+   s.run=command;s.subprocess.run=lambda *a,**kw:types.SimpleNamespace(returncode=1,stdout=b'');s.php_units=lambda:[];s.pause_containers=lambda ids=None:[]
    with self.assertRaises(RuntimeError):s.restore(path,'RESTORE ENTIRE LITECP')
    self.assertEqual(pathlib.Path(s.ROOTS['websites'],'index.php').read_text(),'destination old data')
   finally:s.run=original_run;s.subprocess.run=original_sub;s.php_units=original_php;s.pause_containers=original_pause
