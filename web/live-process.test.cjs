@@ -19,3 +19,24 @@ test('sidebar navigation loads immediately without hashchange and polls until le
  app.location.hash='#websites';app.features.navigate('websites');assert.equal(app.interval,null);
 });
 test('direct Live Process URL loads without Refresh',async()=>{const app=setup('#live-process');await new Promise(setImmediate);assert.equal(app.requests,1);assert.equal(typeof app.interval,'function');});
+
+test('empty process searches show a clear message',()=>{
+ const source=fs.readFileSync(__dirname+'/live-process.js','utf8');
+ const code=source.slice(source.indexOf(' function render()'),source.indexOf(' async function load()'));
+ const body={},controls={'[data-sort]':{value:'cpu-desc'},'[data-search]':{value:'missing'},tbody:body};
+ const context={page:{querySelector:key=>controls[key]},entries:[],cp:{formatBytes:String},esc:String};
+ vm.runInNewContext(code+';render();',context);
+ assert.match(body.innerHTML,/No processes match your search/);
+ controls['[data-search]'].value='';vm.runInNewContext('render()',context);assert.match(body.innerHTML,/No processes available/);
+});
+
+test('process responses from a previous page visit are ignored',async()=>{
+ const source=fs.readFileSync(__dirname+'/live-process.js','utf8');
+ const code=source.slice(source.indexOf(' async function load()'),source.indexOf(' const features='));
+ let resolve;const summary={},location={hash:'#live-process'};
+ const context=vm.createContext({busy:false,generation:0,entries:[],timer:null,location,document:{hidden:false},cp:{api:()=>new Promise(done=>resolve=done)},render(){throw Error('stale response rendered');},page:{querySelector:()=>summary},clearInterval(){},setInterval(){}});
+ vm.runInContext(code+';this.pending=load();',context);
+ location.hash='#dashboard';vm.runInContext('activate()',context);
+ location.hash='#live-process';resolve({processes:[{pid:1}]});await context.pending;
+ assert.equal(context.entries.length,0);assert.equal(summary.textContent,undefined);
+});
