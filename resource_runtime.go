@@ -32,13 +32,14 @@ type resourceRuntimePlan struct {
 }
 type resourceRuntimeStatus struct {
 	resourcePolicyState
-	Enforced    bool           `json:"enforced"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	Sample      resourceSample `json:"sample"`
-	CPUPercent  *float64       `json:"cpuPercent,omitempty"`
-	MemoryBytes int64          `json:"memoryBytes"`
-	Processes   int            `json:"processes"`
-	Error       string         `json:"error,omitempty"`
+	Enforced         bool           `json:"enforced"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
+	Sample           resourceSample `json:"sample"`
+	CPUPercent       *float64       `json:"cpuPercent,omitempty"`
+	MemoryBytes      int64          `json:"memoryBytes"`
+	Processes        int            `json:"processes"`
+	Error            string         `json:"error,omitempty"`
+	RetryRequestedAt time.Time      `json:"retryRequestedAt,omitempty"`
 }
 
 func resourceDirectory(id string) string {
@@ -228,13 +229,37 @@ func resourceRuntimeCommand(args []string) error {
 		return resourceRuntimeDisable(s, p)
 	case "retry":
 		st := resourceRuntimeRead(p.Site.ID)
-		st.NextRecovery = time.Now()
-		return resourceRuntimeSave(p.Site.ID, st)
+		if !st.Enforced || (st.State != "Resource blocked" && !(st.State == "Active" && time.Since(st.UpdatedAt) > 10*time.Second)) {
+			return fmt.Errorf("recovery is available only for a resource-blocked website")
+		}
+		// Keep control requests separate from monitor-owned status. A monitor
+		// heartbeat must never overwrite an administrator's recovery request.
+		if err := resourceWriteRetry(resourceDirectory(p.Site.ID), time.Now()); err != nil {
+			return err
+		}
+		return resourceRun("systemctl", "start", resourceUnit(p.Site.ID, "watch"))
 	case "watch":
 		return resourceRuntimeWatch(s, p)
 	}
 	return fmt.Errorf("unknown resource runtime action")
 }
+func resourceWriteRetry(dir string, at time.Time) error {
+	b, err := json.Marshal(at)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(dir, "retry-request.json"), b, 0600)
+}
+func resourceConsumeRetry(dir string, st resourceRuntimeStatus) resourceRuntimeStatus {
+	var at time.Time
+	b, err := os.ReadFile(filepath.Join(dir, "retry-request.json"))
+	if err == nil && json.Unmarshal(b, &at) == nil && at.After(st.RetryRequestedAt) {
+		st.RetryRequestedAt = at
+		st.NextRecovery = at
+	}
+	return st
+}
+
 func resourceRuntimeSave(id string, st resourceRuntimeStatus) error {
 	st.UpdatedAt = time.Now()
 	b, err := json.Marshal(st)
@@ -619,7 +644,7 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 			return err
 		}
 	}
-	if err = resourceRuntimeSave(p.Site.ID, resourceRuntimeStatus{resourcePolicyState: resourcePolicyState{State: "Active"}, Enforced: true}); err != nil {
+	if err = resourceRuntimeSave(p.Site.ID, resourceRuntimeStatus{resourcePolicyState: resourcePolicyState{State: "Active"}, Enforced: true, RetryRequestedAt: time.Now()}); err != nil {
 		return err
 	}
 	watchTouched = true
@@ -797,10 +822,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 		}
 		if st.State == "Resource blocked" {
 			st.Sample.DiskBytes = disk
-			latest := resourceRuntimeRead(site.ID)
-			if latest.NextRecovery.Before(st.NextRecovery) {
-				st.NextRecovery = latest.NextRecovery
-			}
+			st = resourceConsumeRetry(resourceDirectory(site.ID), st)
 			if time.Now().Before(st.NextRecovery) {
 				if err = resourceRuntimeSave(site.ID, st); err != nil {
 					return err

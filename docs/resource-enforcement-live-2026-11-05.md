@@ -27,3 +27,19 @@ This is native PHP/static coverage, not complete CloudLinux equivalence. Applica
 containers, PHP 7.3, XFS activation and optional I/O rates remain unsupported and are
 explicitly rejected. Reboot, backup restoration, every PHP version and all lifecycle
 combinations have not been certified. Audit temporary files remain on the test server.
+
+## 4.0.134 recovery hardening
+
+Fixed an unchanged enabled-policy save attempting to activate an already active
+boundary. Changed allowance values now give an explicit disable/edit/enable message.
+Blocked unchanged saves no longer claim that recovery succeeded.
+
+Recovery requests now use a separate persistent control file, so a monitor heartbeat
+cannot overwrite them. Each request is consumed once; later cooldowns remain intact.
+Retry also starts a stopped monitor service.
+
+The Linux candidate passed a live stopped-monitor test: CPU blocking returned 503,
+Retry restarted the stopped audit monitor and recovered to 200. A subsequent bounded
+memory test produced local OOM blocking and recovered to 200. Disable succeeded and
+the panel, Nginx and MySQL remained active. Installed panel binary was not replaced.
+Eight focused JavaScript/encoding tests passed. Linux candidate build succeeded.

@@ -9,7 +9,7 @@ function panel(hash='',options={} ){
  const page=new Element(),root=new Element();let rows=options.rows||[],mutations=[];
  const settings={enabled:!!options.enabled,cpuPercent:25,memoryMiB:256,diskMiB:1024,tasks:64,concurrentRequests:8};
  const state={sites:[{id:'qa',domain:'qa.example.test'}]};
- const api=async(url,options)=>{if(options){mutations.push(options);rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];return {}}if(url.includes('?'))return {settings,capabilities:{ready:true,prerequisites:[]}};return {items:rows,updatedAt:new Date().toISOString()}};
+ const api=async(url,request)=>{if(request){mutations.push(request);rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];return {state:options.resultState||'Active'}}if(url.includes('?'))return {settings,capabilities:{ready:true,prerequisites:[]}};return {items:rows,updatedAt:new Date().toISOString()}};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../web/website-resource-limits.js'),'utf8'),{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},window:{LiteCP:{escapeHTML:String,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
  return {page,mutations,open:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate)},save:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate);await page.querySelector('[data-editor]').onsubmit({preventDefault(){}})}};
 }
@@ -40,4 +40,8 @@ test('blocked rows explain the cause and recovery while active rows hide stale c
  row.state='Active';await ui.page.querySelector('[data-refresh]').onclick();html=ui.page.querySelector('[data-resources]').innerHTML;
  assert.doesNotMatch(html,/Cause: CPU|Next recovery/);
  row.state='Error';row.error='Monitor stopped';await ui.page.querySelector('[data-refresh]').onclick();assert.match(ui.page.querySelector('[data-resources]').innerHTML,/Monitor stopped/);
+});
+
+test('saving unchanged blocked settings does not claim recovery succeeded',async()=>{
+ const ui=panel('',{enabled:true,resultState:'Resource blocked'});await ui.save();assert.match(ui.page.querySelector('[data-status]').textContent,/remains resource blocked/);
 });

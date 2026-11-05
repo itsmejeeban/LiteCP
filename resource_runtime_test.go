@@ -118,3 +118,30 @@ func TestResourceCronTestUsesSameSliceOnlyWhenEnabled(t *testing.T) {
 		t.Fatal("cron test escapes enabled website slice")
 	}
 }
+
+func TestResourceRetrySurvivesMonitorHeartbeatAndIsConsumedOnce(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+	st := resourceRuntimeStatus{resourcePolicyState: resourcePolicyState{State: "Resource blocked", NextRecovery: now.Add(5 * time.Minute)}, RetryRequestedAt: now.Add(-time.Minute)}
+	if err := resourceWriteRetry(dir, now); err != nil {
+		t.Fatal(err)
+	}
+	// A status heartbeat retains its old cooldown; the separate request survives.
+	st = resourceConsumeRetry(dir, st)
+	if !st.NextRecovery.Equal(now) {
+		t.Fatal("recovery request was lost")
+	}
+	later := now.Add(5 * time.Minute)
+	st.NextRecovery = later
+	st = resourceConsumeRetry(dir, st)
+	if !st.NextRecovery.Equal(later) {
+		t.Fatal("old retry bypassed a later cooldown")
+	}
+	if err := resourceWriteRetry(dir, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	st = resourceConsumeRetry(dir, st)
+	if !st.NextRecovery.Equal(now.Add(time.Second)) {
+		t.Fatal("new retry was ignored")
+	}
+}

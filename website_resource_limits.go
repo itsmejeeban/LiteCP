@@ -308,6 +308,19 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
+	if resourceEnabled(*site) && p.Enabled {
+		if p != *site.ResourceLimits {
+			writeError(w, 409, "Disable enforcement before changing its allowance values, then enable it again.")
+			return
+		}
+		st := resourceStatusForSite(*site)
+		if !st.Enforced {
+			writeError(w, 409, "The saved boundary requires recovery or revalidation; unchanged settings were retained.")
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "state": st.State, "enforced": st.Enforced})
+		return
+	}
 	if p.Enabled {
 		caps := inspectResourceCapabilities(*site)
 		if !caps.Ready {
