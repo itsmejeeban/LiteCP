@@ -490,7 +490,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 
 /* Shared list pagination, including popup account and backup lists. */
 .list-page-hidden {display:none!important}
-.list-pagination {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid #343434;color:#b9bec5;font-size:13px}
+.list-pagination {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
 .list-pagination[hidden] {display:none!important}
 .list-pagination label,.list-pagination>div {display:flex;align-items:center;gap:8px}
 .list-pagination select {width:auto!important;min-width:64px;min-height:34px;padding:5px 10px!important}
@@ -612,3 +612,7 @@ body.fm-fullscreen-open .sidebar-toggle-bar {display:none;}
 :root[data-theme] #sitesTable .row-actions button[data-site-dns]::before {display:none;}
 :root[data-theme] #sitesTable .row-actions button[data-site-dns] {order:-98!important;flex-shrink:0;}
 :root[data-theme] #sitesTable .row-actions button[data-site-dns] img {display:block;width:28px;height:28px;flex:0 0 28px;object-fit:contain;}
+
+/* Supporting labels must remain readable in both color modes. */
+:root[data-theme] :is(.metric-value span,.service-unit,.log-live){color:var(--muted);}
+:root[data-theme] :is(.service-unit,.log-live){font-size:11px;}

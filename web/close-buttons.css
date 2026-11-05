@@ -58,3 +58,7 @@
   outline: 2px solid #8bc4ef;
   outline-offset: 1px;
 }
+
+/* Global SVG colors must not dim the X on red close controls. */
+:root[data-theme] button[aria-label^="Close"] svg,
+:root[data-theme] button[aria-label^="Close"] svg *{color:inherit!important;stroke:currentColor!important;}
