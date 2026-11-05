@@ -74,6 +74,7 @@ install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 bash "$work/source/scripts/repair-waf-labels.sh"
+bash "$work/source/scripts/repair-php73-selinux.sh"
 systemctl start litecp
 bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do

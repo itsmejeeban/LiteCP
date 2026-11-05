@@ -14,6 +14,7 @@ if command -v selinuxenabled >/dev/null && selinuxenabled; then
   done
 fi
 bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-waf-labels.sh"
+bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-php73-selinux.sh"
 config=/etc/selinux/config
 grep -Eq '^SELINUX=(permissive|enforcing)$' "$config" || { echo 'Unrecognized SELinux configuration.' >&2; exit 1; }
 backup="/var/backups/litecp/selinux-$(date -u +%Y%m%dT%H%M%S)-$$.config"

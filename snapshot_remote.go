@@ -195,6 +195,10 @@ func (a *App) snapshotRemoteAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Cannot read snapshot settings")
 		return
 	}
+	if strings.TrimSpace(cfg.Destination.Host) == "" {
+		writeError(w, 400, "Configure and save snapshot remote storage before scanning or retrieving snapshots.")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 35*time.Minute)
 	defer cancel()
 	if r.Method == http.MethodGet {

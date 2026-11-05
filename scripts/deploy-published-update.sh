@@ -33,6 +33,7 @@ switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/scripts/install-privilege-services.sh"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 bash "$work/scripts/repair-waf-labels.sh"
+bash "$work/scripts/repair-php73-selinux.sh"
 systemctl start litecp
 bash "$work/scripts/repair-webmail-runtime.sh"
 echo '[Server 4/4] Checking service...'

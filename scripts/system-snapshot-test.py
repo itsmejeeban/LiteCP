@@ -19,6 +19,22 @@ class SnapshotTests(unittest.TestCase):
   finally:s.php_units=original
  def test_round_trip_checksums_modes_and_stage(self):
   path=s.BASE/'test.zip';s.create(path);stage=self.root/'stage';stage.mkdir();m=s.inspect(path,stage);self.assertEqual(m['format'],'litecp-system-snapshot');self.assertEqual((stage/'data/websites/index.php').read_text(),'<?php echo "snapshot";')
+ def test_live_quota_image_is_not_captured(self):
+  pathlib.Path(s.ROOTS['panel'],'website-storage.ext4').write_bytes(b'live filesystem image')
+  path=s.BASE/'quota.zip';s.create(path);s.inspect(path)
+  with zipfile.ZipFile(path) as z:
+   self.assertNotIn('data/panel/website-storage.ext4',z.namelist())
+   self.assertIn('data/websites/index.php',z.namelist())
+ def test_legacy_snapshot_cannot_replace_live_quota_image(self):
+  path=s.BASE/'original.zip';s.create(path);other=s.BASE/'legacy.zip';name='data/panel/website-storage.ext4';data=b'live filesystem image'
+  with zipfile.ZipFile(path) as source,zipfile.ZipFile(other,'w') as dest:
+   for item in source.infolist():
+    content=source.read(item)
+    if item.filename=='manifest.json':
+     m=json.loads(content);m['files'][name]={'mode':0o600,'uid':0,'gid':0,'size':len(data),'sha256':hashlib.sha256(data).hexdigest()};content=json.dumps(m).encode()
+    dest.writestr(item,content)
+   dest.writestr(name,data)
+  with self.assertRaisesRegex(ValueError,'Invalid data location'):s.inspect(other)
  def test_snapshot_settings_do_not_replay_source_upload(self):
   settings=pathlib.Path(s.ROOTS['panel'],'snapshot-settings.json');settings.write_text(json.dumps({'enabled':True,'pending':'old.zip','uploadStatus':'Uploading','destination':{'host':'backup.example'}}),encoding='utf-8')
   path=s.BASE/'test.zip';s.create(path);s.inspect(path)

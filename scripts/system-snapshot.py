@@ -36,6 +36,9 @@ def safe_name(name):
     return p
 
 def excluded(key,rel):
+    # The mounted quota filesystem is captured through /home/litecp, never as
+    # its live backing image. Restoring that image would corrupt active storage.
+    if key=='panel' and rel=='website-storage.ext4':return True
     return any(rel==x or rel.startswith(x+'/') for x in EXCLUDE.get(key,set()))
 
 def add_tree(z,key,root,manifest):

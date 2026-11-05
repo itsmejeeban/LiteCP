@@ -81,3 +81,14 @@ func TestSnapshotRemoteOnlyCleanup(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotRemoteRequiresConfiguredDestination(t *testing.T) {
+	a := &App{system: &System{dataDir: t.TempDir()}}
+	for _, method := range []string{"GET", "POST"} {
+		response := httptest.NewRecorder()
+		a.snapshotRemoteAPI(response, httptest.NewRequest(method, "/api/system-snapshots/remote", nil))
+		if response.Code != 400 || !strings.Contains(response.Body.String(), "Configure and save snapshot remote storage") {
+			t.Fatal(response.Code, response.Body.String())
+		}
+	}
+}
