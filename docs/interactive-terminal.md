@@ -1,5 +1,12 @@
 # Interactive terminal
 
+Installed privilege-separated panels intentionally do not expose a browser
+shell. The Terminal page checks availability before enabling Connect and directs
+administrators to their SSH client. This restriction prevents the web service
+from obtaining a root shell through the management broker.
+
+The behavior below applies only to runtimes where browser shells are supported.
+
 Management → Terminal → Connect opens a persistent bash session in a Linux
 pseudo-terminal. The shell runs with the LiteCP service account's privileges.
 Directory changes, shell variables, interactive prompts and command history

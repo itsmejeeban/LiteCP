@@ -1,10 +1,34 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
+
+func TestTerminalCapabilitiesSeparatedMode(t *testing.T) {
+	previous := os.Args
+	os.Args = []string{"litecp", "broker"}
+	defer func() { os.Args = previous }()
+	response := httptest.NewRecorder()
+	app := &App{}
+	app.terminalCapabilities(response, httptest.NewRequest(http.MethodGet, "/api/shell-capabilities", nil))
+	var result struct {
+		Available bool
+		Reason    string
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != 200 || result.Available || result.Reason == "" {
+		t.Fatalf("unexpected capabilities: %s", response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("capabilities must not be cached")
+	}
+}
 
 func TestTerminalSessionBoundToBrowser(t *testing.T) {
 	ownerRequest := httptest.NewRequest(http.MethodGet, "/api/terminal/session", nil)

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.115"
+var version = "4.0.116"
 var buildRevision = ""
 
 //go:embed web/*
@@ -398,6 +398,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/mail/aliases", only(http.MethodPost, a.withAuth(a.createMailAlias)))
 	mux.HandleFunc("/api/terminal", only(http.MethodPost, a.withAuth(a.terminalCommand)))
 	mux.HandleFunc("/api/terminal/session", a.withAuth(a.interactiveTerminal))
+	mux.HandleFunc("/api/shell-capabilities", only(http.MethodGet, a.withAuth(a.terminalCapabilities)))
 	mux.HandleFunc("/api/security/ssh-port", a.withAuth(a.sshPortSettings))
 	mux.HandleFunc("/api/security/brute-force", a.withAuth(a.bruteForceProtection))
 	mux.HandleFunc("/api/security/panel-port", a.withAuth(a.panelPortSettings))

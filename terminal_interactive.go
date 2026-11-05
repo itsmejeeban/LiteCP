@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -16,6 +18,17 @@ import (
 
 //go:embed scripts/terminal-pty.py
 var terminalPTY string
+
+func (a *App) terminalCapabilities(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	reason := ""
+	if len(os.Args) == 2 && os.Args[1] == "broker" {
+		reason = "Browser terminal is unavailable in privilege-separated mode. Use your SSH client for server shell access."
+	} else if a.system.demo || runtime.GOOS != "linux" {
+		reason = "Terminal requires the installed Linux server."
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"available": reason == "", "reason": reason})
+}
 
 type interactiveTerminal struct {
 	mu      sync.Mutex
