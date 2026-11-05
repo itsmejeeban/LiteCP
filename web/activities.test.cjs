@@ -14,3 +14,11 @@ test('cancelled confirmation releases operation guard without deleting events',a
  const h=setup();let prompts=0;h.context.window.LiteCPDialogs.confirm=async()=>{prompts++;return false;};
  await h.context.changePolicy(true);await h.context.changePolicy(false);assert.equal(prompts,2);assert.equal(h.writes.length,0);
 });
+
+test('malformed activity responses show a retry message and clear after recovery',async()=>{
+ const h=setup(),original=h.context.cp.api;
+ h.context.cp.api=async()=>({});await h.context.reload();
+ assert.match(h.node('#activityPolicyStatus').textContent,/Press Refresh to retry/);
+ assert.equal(h.node('#refreshActivities').disabled,false);
+ h.context.cp.api=original;await h.context.reload();assert.equal(h.node('#activityPolicyStatus').textContent,'');
+});
