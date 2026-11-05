@@ -256,7 +256,7 @@
     $("#sitesTable").addEventListener("change", handlePHPChange);
     $("#siteSearch").addEventListener("input", () => { sitesPage = 1; renderSites(); });
     $("#servicesGrid").addEventListener("click", handleServiceAction);
-    $("#restartAll").addEventListener("click", restartAll);
+    for (const action of ["start", "stop", "restart"]) $("#" + action + "All").addEventListener("click", () => controlAllServices(action));
     $$('[data-quick-backup]').forEach(button => button.addEventListener("click", runBackup));
     $("#backupRunForm").addEventListener("submit", runBackup);
     $("#backupDestinationForm").addEventListener("submit", createBackupDestination);
@@ -881,19 +881,33 @@
     } catch (error) { handleError(error); button.textContent = label; button.disabled = false; }
   }
 
-  async function restartAll() {
-    const button = $("#restartAll");
-    if (!await window.LiteCPDialogs.confirm(`Restart Nginx, PHP-FPM, ${currentState.system.databaseEngine || "database"}, mail and cron in sequence?`)) return;
-    button.disabled = true;
+  let allServicesBusy = false;
+  async function controlAllServices(action) {
+    if (allServicesBusy) return;
+    const services = (currentState.system.services || []).filter(service => service.state !== "not installed");
+    if (!services.length) { showToast("No services available", "No installed hosting services were found.", "info"); return; }
+    if (!await window.LiteCPDialogs.confirm(`${titleCase(action)} all installed hosting services: ${services.map(service => service.label).join(", ")}? ${action === "stop" ? "Websites, email, scheduled jobs and protection services will be unavailable until started again. " : "Services may be briefly unavailable. "}The LiteCP panel and SSH are not included.`)) return;
+    allServicesBusy = true;
+    const button = $("#" + action + "All");
+    const buttons = [$("#startAll"), $("#stopAll"), $("#restartAll")];
+    buttons.forEach(item => item.disabled = true);
+    $("#servicesGrid").inert = true;
     const original = button.innerHTML;
-    button.textContent = "Restarting stack…";
+    const failures = [];
+    let succeeded = 0;
+    // Keep the web frontend available until every other operation is sent.
+    services.sort((a, b) => Number(a.key === "nginx") - Number(b.key === "nginx"));
     try {
-      for (const service of ["php", "database", ...(currentState.settings.emailHostingEnabled === false ? [] : ["mail"]), "cron", "nginx"]) await api("/api/services/action", { method: "POST", body: { service, action: "restart" } });
-      showToast("Stack restarted", "All essential services restarted successfully.");
+      for (const [index, service] of services.entries()) {
+        button.textContent = `${titleCase(action)} ${index + 1}/${services.length}: ${service.label}`;
+        try { await api("/api/services/action", { method: "POST", body: { service: service.key, action } }); succeeded++; }
+        catch (error) { failures.push(`${service.label}: ${error.message}`); }
+      }
+      showToast(failures.length ? "Some services need attention" : "Services updated", `${succeeded}/${services.length} service groups completed. ${failures.join("; ")}`, failures.length ? "error" : "success");
       currentState = await api("/api/state");
       renderAll();
     } catch (error) { handleError(error); }
-    finally { button.disabled = false; button.innerHTML = original; }
+    finally { allServicesBusy = false; buttons.forEach(item => item.disabled = false); button.innerHTML = original; $("#servicesGrid").inert = false; }
   }
 
   async function runBackup(event) {

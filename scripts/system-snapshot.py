@@ -88,7 +88,7 @@ def resume_containers(ids):
     failed=[]
     for container in ids:
         try:
-            run(['podman','start',container])
+            run(['systemd-run','--scope','--quiet','podman','start',container])
             state=run(['podman','inspect','--format','{{.State.Status}}',container]).decode().strip()
             if state!='running':failed.append(container)
         except Exception:failed.append(container)
@@ -226,8 +226,9 @@ def restore(source,confirmation):
         if version!='7.3' and not any(os.path.exists(p) for p in candidates):raise ValueError('Install required PHP '+version+' before restore')
     for unit,needed in [('dovecot',bool(cfg.get('mailboxes'))),('litecp-ftps',(stage/'data/panel/ftp/installed').exists())]:
         if needed and subprocess.run(['systemctl','cat',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0:raise ValueError('Install required service '+unit+' before restore')
-    recovery=BASE/('before-restore-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'.zip')
-    stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S');rollback=BASE/('recovery-'+stamp);rollback.mkdir(mode=0o700)
+    stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+    recovery=BASE/('before-restore-'+stamp+'.zip')
+    rollback=BASE/('recovery-'+stamp);rollback.mkdir(mode=0o700)
     stopped=[];moves=[];written=[];containers=[];completed=False
     try:
         for unit in ['litecp','nginx','crond','cron','postfix','dovecot','litecp-ftps']+php_units():
@@ -252,7 +253,9 @@ def restore(source,confirmation):
         for key,root in ROOTS.items():
             incoming=stage/'data'/key;target=pathlib.Path(root)
             if not incoming.exists():continue
-            if key in ['panel','backups']:
+            # Mount points cannot be renamed (EBUSY). Keep the filesystem in
+            # place and retain each child separately, including on rollback.
+            if key in ['panel','backups'] or os.path.ismount(target):
                 target.mkdir(parents=True,exist_ok=True)
                 for child in list(target.iterdir()):
                     if excluded(key,child.name):continue
@@ -274,11 +277,15 @@ def restore(source,confirmation):
                 save=rollback/'configuration'/p.lstrip('/');save.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(target,save)
             shutil.copy2(stage/'configuration'/p.lstrip('/'),target);written.append(target)
         # Restore file owners/modes; recreate only validated in-tree symlinks.
+        # Read the central directory once: reopening it for every file makes
+        # metadata restoration quadratic on large website snapshots.
+        with zipfile.ZipFile(source) as z:
+            archive_modes={item.filename.rstrip('/'):item.external_attr>>16 for item in z.infolist()}
         for name,meta in m['files'].items():
             parts=pathlib.PurePosixPath(name).parts
             if parts[0] in ['mysql','runtime']:continue
             target=pathlib.Path(ROOTS[parts[1]]).joinpath(*parts[2:]) if parts[0]=='data' else pathlib.Path('/'+name[len('configuration/'):])
-            with zipfile.ZipFile(source) as z: mode=z.getinfo(name if name in z.namelist() else name+'/').external_attr>>16
+            mode=archive_modes[name]
             if stat.S_ISLNK(mode):
                 link=target.read_text();target.unlink();target.symlink_to(link)
             else:os.chmod(target,meta['mode'] & 0o777);os.chown(target,meta['uid'],meta['gid'])
@@ -292,7 +299,15 @@ def restore(source,confirmation):
         if 'mail-config' in ROOTS:owners.extend([(ROOTS['mail-config']+'/users','dovecot'),(ROOTS['mail-config']+'/webmail-master-users','dovecot'),(ROOTS['mail-config']+'/dkim','opendkim')])
         for root,owner in owners:
             if os.path.exists(root):run(['chown','-R',owner+':'+owner,root])
-        run(['/usr/local/bin/litecp','snapshot-reconcile'])
+        # ZIP metadata does not contain SELinux contexts. Staged files otherwise
+        # retain the backup directory's label and services cannot read them.
+        if shutil.which('selinuxenabled') and subprocess.run(['selinuxenabled'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+            paths=[root for root in ROOTS.values() if os.path.exists(root)]
+            paths.extend(p for p in m['configs'] if os.path.exists(p))
+            if paths:run(['restorecon','-R',*paths])
+        # Keep persistent container monitors outside the short-lived snapshot
+        # service. The scope survives while workloads run and is collected later.
+        run(['systemd-run','--scope','--quiet','/usr/local/bin/litecp','snapshot-reconcile'])
         if cfg.get('mailboxes') or cfg.get('mailDomains'):run(['/usr/local/bin/litecp','sync-mail'])
         for unit in ['php83-php-fpm','php8.3-fpm']:
             subprocess.run(['systemctl','try-restart',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -300,7 +315,7 @@ def restore(source,confirmation):
             import sqlite3
             with sqlite3.connect(str(pathlib.Path(ROOTS['webmail'])/'roundcube.db')) as db:db.execute('DELETE FROM session')
         run(['nginx','-t'])
-        if cfg.get('settings',{}).get('emailHostingEnabled'):
+        if cfg.get('settings',{}).get('emailHostingEnabled') and (cfg.get('mailboxes') or cfg.get('mailDomains')):
             for unit in ['postfix','dovecot','opendkim']:
                 if unit not in stopped:stopped.append(unit)
         timezone=cfg.get('settings',{}).get('timezone','UTC')

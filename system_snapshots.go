@@ -205,7 +205,7 @@ func (a *App) restoreSystemSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 	err = a.startSnapshotJob(r.Context(), "restore", path, "RESTORE ENTIRE LITECP")
 	if err != nil {
-		writeError(w, 502, "Cannot start snapshot restore.")
+		writeError(w, 502, "Cannot start snapshot restore: "+err.Error())
 		return
 	}
 	writeJSON(w, 202, map[string]string{"message": "Restore scheduled. The panel will disconnect. Sign in with the snapshot administrator credentials after completion."})
