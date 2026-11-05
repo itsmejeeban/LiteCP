@@ -288,7 +288,11 @@
     $("#mailDomainsTable").addEventListener("click", handleMailAction);
     $("#mailboxesTable").addEventListener("click", handleMailAction);
     $("#mailAliasesTable").addEventListener("click", handleMailAction);
-    $$("form[data-settings-part]").forEach(form => form.addEventListener("submit", saveSettings));
+    $$("form[data-settings-part]").forEach(form => {
+      form.addEventListener("submit", saveSettings);
+      form.addEventListener("input", () => { form.dataset.dirty = "true"; });
+      form.addEventListener("change", () => { form.dataset.dirty = "true"; });
+    });
     $("#passwordForm").addEventListener("submit", changePassword);
     $("#reloadLogs").addEventListener("click", loadLogs);
     $("#copyLogs").addEventListener("click", copyLogs);
@@ -596,9 +600,10 @@
   }
 
   function fillSettings(settings) {
-    $("#settingsEmail").value = settings.email || "";
-    $("#settingsTimezone").value = settings.timezone || "UTC";
-    $("#settingsRetention").value = settings.backupRetention || 14;
+    for (const [selector,value] of [["#settingsEmail",settings.email || ""],["#settingsTimezone",settings.timezone || "UTC"],["#settingsRetention",settings.backupRetention ?? 14]]) {
+      const input=$(selector);
+      if(input.closest("form")?.dataset.dirty!=="true")input.value=value;
+    }
   }
 
   function navigate(page, updateHash = true) {
@@ -1225,7 +1230,8 @@
 
   async function saveSettings(event) {
     event.preventDefault();
-    const submit = $('button[type="submit"]', event.currentTarget);
+    const form=event.currentTarget;
+    const submit = $('button[type="submit"]', form);
     submit.disabled = true;
     try {
       const saved=currentState.settings, part=event.currentTarget.dataset.settingsPart;
@@ -1235,6 +1241,7 @@
       else if(part==="backups")body.backupRetention=Number($("#settingsRetention").value);
       else throw new Error("Choose a settings section before saving.");
       await api("/api/settings", { method: "PUT", body });
+      delete form.dataset.dirty;
       currentState.settings = { ...currentState.settings, ...body };
       renderAll();
       showToast("Preferences saved", "Your LiteCP defaults were updated.");
