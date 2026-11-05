@@ -1,4 +1,4 @@
-/* Use the supplied transparent LiteCP artwork without altering its colors. */
+/* Transparent logo variants preserve the cloud colors on either surface. */
 :root[data-theme] .litecp-logo {display:block;object-fit:contain;max-width:100%;height:auto;flex-shrink:0;}
 :root[data-theme] .sidebar-brand {align-items:center;gap:10px;padding-top:8px;padding-bottom:8px;}
 :root[data-theme] .sidebar-brand .litecp-logo {width:145px;}
@@ -19,5 +19,9 @@
  :root[data-theme] #sidebar .sidebar-brand .litecp-logo {max-height:42px;}
 }
 
-/* Retain the original white wordmark on a contrasting backing in light mode. */
-:root[data-theme="light"] .litecp-logo{background:#18181b;border-radius:6px;padding:4px;box-sizing:border-box;}
+/* Switch only the wordmark variant; never add a backing to the artwork.
+   The File Manager header is always dark, so its untagged logo stays white. */
+:root[data-theme] .litecp-logo{background:transparent;border-radius:0;padding:0;}
+:root[data-theme] .litecp-logo.logo-for-light{display:none;}
+:root[data-theme="light"] .litecp-logo.logo-for-dark{display:none;}
+:root[data-theme="light"] .litecp-logo.logo-for-light{display:block;}
