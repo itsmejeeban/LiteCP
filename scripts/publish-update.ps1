@@ -3,6 +3,7 @@
 # -no-antispoof removes only PuTTY's interactive Return-key pause. Requires Git and Windows OpenSSH; Go is required on the server.
 param([string]$Server = '162.55.50.122', [int]$Port = 369, [string]$User = 'root', [switch]$CheckOnly, [string]$HostKey = $env:LITECP_UPDATE_HOSTKEY)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'publish-git.ps1')
 Set-Location (Split-Path $PSScriptRoot -Parent)
 if ($env:LITECP_UPDATE_PORT) { $Port = [int]$env:LITECP_UPDATE_PORT }
 function Run-Step([string]$Tool, [string[]]$Arguments) {
@@ -100,6 +101,14 @@ try {
     Run-Step 'git' @('status','--short')
     Write-Host 'This publishes all non-ignored changes to GitHub main and deploys that commit to LiteCP.'
     Write-Host 'Starting automatic update. No confirmation input is required.'
+    $releaseRevision = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect local release commit.' }
+    $remoteRevision = Get-PublishRemoteMain
+    $retryingRelease = $releaseRevision -ne $remoteRevision
+    if ($retryingRelease) {
+        & git merge-base --is-ancestor $remoteRevision $releaseRevision
+        if ($LASTEXITCODE -ne 0) { throw 'GitHub main has changes outside the local release history. Reconcile the branches before publishing; no reset or force-push was performed.' }
+    }
     $mainPath = Join-Path (Get-Location) 'main.go'
     $installPath = Join-Path (Get-Location) 'scripts/install.sh'
     $main = [IO.File]::ReadAllText($mainPath)
@@ -111,7 +120,7 @@ try {
     $committedVersion = [regex]::Match($committedMain, 'var version = "(\d+\.\d+\.\d+)"')
     if (!$committedVersion.Success) { throw 'Cannot determine the committed LiteCP version.' }
     $version = '{0}.{1}.{2}' -f $match.Groups[1].Value,$match.Groups[2].Value,$match.Groups[3].Value
-    if ($version -eq $committedVersion.Groups[1].Value) {
+    if (!$retryingRelease -and $version -eq $committedVersion.Groups[1].Value) {
         $version = '{0}.{1}.{2}' -f $match.Groups[1].Value,$match.Groups[2].Value,([int]$match.Groups[3].Value + 1)
     }
     $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -129,10 +138,12 @@ try {
     # earlier updater run; do not discard that staging or alter those files.
     Run-Step 'git' @('--no-pager','diff','--cached','--check','--','.',':(exclude)output/**')
     Write-Host "[3/6] Committing and publishing LiteCP $version..."
-    Run-Step 'git' @('commit','-m',"Update LiteCP to $version")
-    Run-Step 'git' @('push','origin','main')
-    $published = $true
+    if ($staged.Count -gt 0) { Run-Step 'git' @('commit','-m',"Update LiteCP to $version") }
+    else { Write-Host 'Reusing the retained release commit; no new commit is needed.' }
     $revision = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect the release revision.' }
+    Publish-GitRevision $revision
+    $published = $true
     Write-Host '[4/6] Preparing the exact published source for transfer...'
     $output = Join-Path ([IO.Path]::GetTempPath()) ('litecp-update-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $output | Out-Null
