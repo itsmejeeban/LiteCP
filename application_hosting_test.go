@@ -103,3 +103,11 @@ func TestApplicationHostingFeatureGateAndPersistence(t *testing.T){
  if reopened.PublicState().Settings.ApplicationHosting["python"]||reopened.PublicState().Settings.ApplicationHosting["ruby"]{t.Fatal("unselected runtimes enabled")}
  if call(`{"action":"feature","language":"node","enabled":false,"confirm":true}`)!=200{t.Fatal("feature could not be disabled")}
 }
+
+func TestApplicationStoppedRoutingRetainsSourceProtection(t *testing.T){
+ site:=Site{Domain:"example.test",Application:&ApplicationHosting{Enabled:true,Stopped:true,Port:21000}}
+ config:=(&System{}).applicationNginx(site)
+ if !strings.Contains(config,"return 503")||strings.Contains(config,"proxy_pass")||!strings.Contains(config,"X-LiteCP-Application-State maintenance") { t.Fatal("stopped app did not use maintenance routing") }
+ site.Application.Stopped=false
+ if !strings.Contains((&System{}).applicationNginx(site),"proxy_pass http://127.0.0.1:21000") { t.Fatal("resumed app still in maintenance") }
+}

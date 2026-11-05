@@ -25,3 +25,24 @@ func aggregateServiceStates(states []string) string {
 	}
 	return first
 }
+
+// Keep the canonical state for controls and health checks; timer activity is not
+// proof that its one-shot updater is currently executing.
+func timerServiceLabel(state, subState string) string {
+	if state != "running" {
+		return state
+	}
+	if subState == "waiting" {
+		return "Scheduled / waiting"
+	}
+	return "Active timer"
+}
+
+func ftpsServiceUnit(exists func(string) bool) string {
+	for _, unit := range []string{"litecp-ftps", "vsftpd", "pure-ftpd", "proftpd"} {
+		if exists(unit) {
+			return unit
+		}
+	}
+	return ""
+}

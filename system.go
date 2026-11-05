@@ -51,10 +51,11 @@ type ResourceUsage struct {
 }
 
 type ServiceStatus struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Unit  string `json:"unit"`
-	State string `json:"state"`
+	Key        string `json:"key"`
+	Label      string `json:"label"`
+	Unit       string `json:"unit"`
+	State      string `json:"state"`
+	StateLabel string `json:"stateLabel,omitempty"`
 }
 
 type SystemSnapshot struct {
@@ -143,6 +144,10 @@ func (s *System) Snapshot(ctx context.Context, sites []Site) SystemSnapshot {
 					item.State = "degraded"
 				}
 			}
+			if strings.HasSuffix(item.Unit, ".timer") {
+				subState, _ := runCommand(ctx, 3*time.Second, "systemctl", "show", "--property=SubState", "--value", item.Unit)
+				item.StateLabel = timerServiceLabel(item.State, strings.TrimSpace(subState))
+			}
 			snapshot.Services[index] = item
 		}(i, service)
 	}
@@ -224,8 +229,10 @@ func (s *System) serviceUnits() []ServiceStatus {
 		mailLabel = "Postfix, Dovecot"
 	}
 	services = append(services, ServiceStatus{Key: "mail", Label: "Email Hosting", Unit: mailLabel})
+	if unit := ftpsServiceUnit(unitFileExists); unit != "" {
+		services = append(services, ServiceStatus{Key: "ftps", Label: "FTPS", Unit: unit})
+	}
 	for _, extra := range []ServiceStatus{
-		{Key: "ftps", Label: "FTPS", Unit: "vsftpd"},
 		{Key: "redis", Label: "Redis", Unit: "redis"},
 		{Key: "redis-server", Label: "Redis", Unit: "redis-server"},
 		{Key: "fail2ban", Label: "Brute-force protection", Unit: "fail2ban"},

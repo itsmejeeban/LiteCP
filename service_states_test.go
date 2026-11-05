@@ -19,3 +19,21 @@ func TestServiceStates(t *testing.T) {
 		}
 	}
 }
+
+func TestTimerServiceLabel(t *testing.T) {
+	for _, item := range []struct{ state, sub, want string }{{"running", "waiting", "Scheduled / waiting"}, {"running", "elapsed", "Active timer"}, {"failed", "failed", "failed"}, {"stopped", "dead", "stopped"}} {
+		if got := timerServiceLabel(item.state, item.sub); got != item.want {
+			t.Fatalf("%+v: %s", item, got)
+		}
+	}
+}
+func TestFTPSServiceDetection(t *testing.T) {
+	for _, unit := range []string{"litecp-ftps", "vsftpd", "pure-ftpd", "proftpd", ""} {
+		if got := ftpsServiceUnit(func(candidate string) bool { return candidate == unit }); got != unit {
+			t.Fatalf("wanted %s, got %s", unit, got)
+		}
+	}
+	if got := ftpsServiceUnit(func(string) bool { return true }); got != "litecp-ftps" {
+		t.Fatal("LiteCP-managed service must take precedence", got)
+	}
+}

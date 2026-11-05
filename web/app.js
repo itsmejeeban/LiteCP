@@ -40,6 +40,7 @@
     cron: { symbol: "CR", description: "Executes scheduled WHMCS and WordPress automation tasks." },
     mail: { symbol: "MX", description: "Provides authenticated SMTP submission and IMAP mailboxes." },
     fail2ban: { symbol: "BF", description: "Blocks repeated failed authentication attempts." },
+    ftps: { symbol: "FTP", description: "Provides encrypted file transfers for website accounts." },
     "clamav-updates": { symbol: "AV", description: "Keeps the antivirus detection signatures up to date." }
   };
 
@@ -418,13 +419,13 @@
     $("#dashboardServices").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
-      return `<div class="service-row"><span class="service-symbol">${meta.symbol}</span><span class="service-copy"><strong>${escapeHTML(service.label)}</strong><small>${escapeHTML(service.unit)}</small></span><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span></div>`;
+      return `<div class="service-row"><span class="service-symbol">${meta.symbol}</span><span class="service-copy"><strong>${escapeHTML(service.label)}</strong><small>${escapeHTML(service.unit)}</small></span><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.stateLabel || service.state)}</span></div>`;
     }).join("");
     $("#servicesGrid").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
       const unitLabel = service.key === "php" || service.key === "mail" ? service.unit : (service.unit.endsWith(".timer") ? service.unit : `${service.unit}.service`);
-      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.state)}</span><div class="service-controls">${["start", "stop", "restart"].map(action => `<button class="button ${action === "stop" ? "button-danger" : "button-secondary"}" data-service="${escapeHTML(service.key)}" data-action="${action}" ${((action === "start" && service.state === "running") || (action === "stop" && service.state === "stopped") || service.state === "not installed") ? "disabled" : ""}>${titleCase(action)}</button>`).join("")}</div></div></article>`;
+      return `<article class="service-card"><span class="service-card-icon">${meta.symbol}</span><div class="service-card-copy"><h3>${escapeHTML(service.label)}</h3><p>${escapeHTML(meta.description)}</p><span class="service-unit">${escapeHTML(unitLabel)}</span></div><div class="service-card-actions"><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.stateLabel || service.state)}</span><div class="service-controls">${["start", "stop", "restart"].map(action => `<button class="button ${action === "stop" ? "button-danger" : "button-secondary"}" data-service="${escapeHTML(service.key)}" data-action="${action}" ${((action === "start" && service.state === "running") || (action === "stop" && service.state === "stopped") || service.state === "not installed") ? "disabled" : ""}>${titleCase(action)}</button>`).join("")}</div></div></article>`;
     }).join("");
   }
 

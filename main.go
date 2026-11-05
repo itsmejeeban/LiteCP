@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.107"
+var version = "4.0.110"
 var buildRevision = ""
 
 //go:embed web/*
@@ -198,7 +198,7 @@ func main() {
 			}
 		}
 		for _, site := range store.Sites() {
-			if site.Application == nil || !site.Application.Enabled {
+			if site.Application == nil || !site.Application.Enabled || site.Application.Stopped {
 				continue
 			}
 			app := *site.Application

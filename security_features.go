@@ -193,7 +193,7 @@ func (s *System) phpModules(ctx context.Context, version string) (string, error)
 		// Podman needs host storage locks which are read-only in the panel's
 		// filesystem sandbox. Keep the sandbox and use the existing host helper
 		// for this fixed, read-only module query.
-		return runHostCommand(ctx, 20*time.Second, s.phpBinary(version), "-m")
+		return s.applicationHostCommand(ctx, 20*time.Second, s.phpBinary(version), "-m")
 	}
 	return runCommand(ctx, 15*time.Second, s.phpBinary(version), "-m")
 }
@@ -335,7 +335,7 @@ func (s *System) SetPHPExtension(ctx context.Context, version, extension string,
 		}
 	}
 	// Native removal refuses dependency breakage instead of cascading to PHP/FPM.
-	if _, err := runHostCommand(ctx, 10*time.Minute, args[0], args[1:]...); err != nil {
+	if _, err := s.applicationHostCommand(ctx, 10*time.Minute, args[0], args[1:]...); err != nil {
 		return err
 	}
 	unit := s.phpUnitForVersion(version)
@@ -358,7 +358,7 @@ func (s *System) SetPHPExtension(ctx context.Context, version, extension string,
 				rollbackArgs = []string{"rpm", "-e", selected}
 			}
 		}
-		if _, rollbackErr := runHostCommand(context.Background(), 10*time.Minute, rollbackArgs[0], rollbackArgs[1:]...); rollbackErr != nil {
+		if _, rollbackErr := s.applicationHostCommand(context.Background(), 10*time.Minute, rollbackArgs[0], rollbackArgs[1:]...); rollbackErr != nil {
 			return rollbackErr
 		}
 		_, restartErr := runCommand(context.Background(), 45*time.Second, "systemctl", "restart", unit)

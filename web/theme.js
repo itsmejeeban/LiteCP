@@ -6,22 +6,37 @@
   const storageKey="litecp.uiTheme";
   const valid = value => themes.some(theme=>theme.id===value) ? value : "default";
   function read(){try{return valid(localStorage.getItem(storageKey));}catch{return "default";}}
+  const modeKey="litecp.colorMode";
+  function readMode(){try{return localStorage.getItem(modeKey)==="light"?"light":"dark";}catch{return "dark";}}
+  let mode=readMode();
+  function syncMode(){
+    document.documentElement.dataset.theme=mode;
+    const button=document.querySelector('#colorModeToggle');
+    if(button){const label=mode==="dark"?'Switch to light mode':'Switch to dark mode';button.setAttribute('aria-label',label);button.setAttribute('title',label);button.setAttribute('aria-pressed',String(mode==='light'));}
+  }
+  function setMode(value){
+    mode=value==='light'?'light':'dark';
+    try{localStorage.setItem(modeKey,mode);}catch{}
+    syncMode();window.dispatchEvent(new Event('litecp-color-mode'));
+  }
   function apply(value){
     const id=valid(value);
-    document.documentElement.dataset.theme="dark";
+    syncMode();
     document.documentElement.dataset.uiTheme=id;
     return id;
   }
   let saved=read();
   apply(saved);
-  window.LiteCPTheme={themes,apply,current:()=>document.documentElement.dataset.uiTheme};
-  window.addEventListener("storage",event=>{if(event.key===storageKey||event.key===null){saved=read();apply(saved);sync();}});
+  window.LiteCPTheme={themes,apply,current:()=>document.documentElement.dataset.uiTheme,mode:()=>mode,setMode};
+  window.addEventListener("storage",event=>{if(event.key===modeKey||event.key===null){mode=readMode();syncMode();window.dispatchEvent(new Event("litecp-color-mode"));}if(event.key===storageKey||event.key===null){saved=read();apply(saved);sync();}});
   function sync(){
     const selected=document.querySelector('#appearanceTheme');
     if(selected)selected.value=document.documentElement.dataset.uiTheme;
     document.querySelectorAll('[name="appearancePreset"]').forEach(input=>{input.checked=input.value===document.documentElement.dataset.uiTheme;});
   }
   document.addEventListener("DOMContentLoaded",()=>{
+    syncMode();
+    document.querySelector('#colorModeToggle')?.addEventListener('click',()=>setMode(mode==='dark'?'light':'dark'));
     const form=document.querySelector('#appearanceForm');
     if(!form)return;
     const select=form.querySelector('#appearanceTheme'),cards=form.querySelector('#appearancePresets'),status=form.querySelector('#appearanceStatus');

@@ -45,12 +45,13 @@
     <button class="button button-primary" type="submit" id="migrationImportButton" disabled>Import selected website</button><button class="button button-ghost" type="button" id="migrationDiscardButton" disabled>Delete staged archive</button></div></form></div>
     <div class="info-callout"><div><strong>Website files and a selected database only</strong><p>Update application credentials and paths after import. Mail accounts, DNS, SSL, server settings, addon sites and arbitrary cron jobs are not imported. Verify the website before changing DNS.</p></div></div>${resultBox("migrationOutput")}`));
 
-  // LiteCP uses one consistent dark theme, including the file editor.
+  // Keep the editor synchronized with the selected panel color mode, including the file editor.
   function theme() {
-    document.documentElement.dataset.theme = "dark";
-    if (editor) editor.setTheme("ace/theme/tomorrow_night");
+
+    if (editor) editor.setTheme(document.documentElement.dataset.theme === "light" ? "ace/theme/chrome" : "ace/theme/tomorrow_night");
   }
   theme();
+  window.addEventListener("litecp-color-mode", theme);
 
   $(".activity-panel").insertAdjacentHTML("beforeend", '<nav class="pagination" aria-label="Activity pages"><button class="button button-ghost" id="activityPrevious">Previous</button><span id="activityPageLabel" aria-live="polite"></span><button class="button button-ghost" id="activityNext">Next</button></nav>');
   $("#activityPrevious").addEventListener("click", () => { if (activityPage > 1) { activityPage--; activity(); } });
@@ -328,7 +329,7 @@
     });
     const available=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;$("#webmailLink").classList.toggle("hidden",!available);$("#webmailLink").href=state.system.webmailUrl||`https://${location.hostname}:8444/`;
     $$('[data-mail-action="domain-delete"]').forEach(button=>{const domain=state.mailDomains.find(d=>d.id===button.dataset.id);if(domain)button.insertAdjacentHTML("beforebegin",`<button class="text-action" data-mail-enhancement data-dns-domain="${esc(domain.domain)}">DNS records</button>`);});
-    $$('[data-service="mail"]').forEach(button=>{button.disabled=state.settings.emailHostingEnabled===false;});
+    $$('[data-service="mail"]').forEach(button=>{const service=state.system.services?.find(service=>service.key==='mail');button.disabled=state.settings.emailHostingEnabled===false||service?.state==='not installed'||(button.dataset.action==='start'&&service?.state==='running')||(button.dataset.action==='stop'&&service?.state==='stopped');});
     ["scanSite","migrationSite"].forEach(id=>fillSiteSelect(id,state));
     $("#scannerAvailability").textContent=state.system.antivirusAvailable?"ClamAV is available. Scans do not modify website files.":"ClamAV is not installed. Install antivirus support on the server before running a scan.";
     $('#scanForm button[type="submit"]').disabled=!state.system.antivirusAvailable;

@@ -2,7 +2,7 @@ package main
 
 import("context";"io";"errors";"fmt";"hash/fnv";"net";"net/http";"os";"os/exec";"path/filepath";"regexp";"strings";"time")
 
-type ApplicationHosting struct {Language string `json:"language"`;Version string `json:"version"`;Command string `json:"command"`;SetupCommand string `json:"setupCommand,omitempty"`;Port int `json:"port"`;Container string `json:"container,omitempty"`;Enabled bool `json:"enabled"`;Certificate string `json:"certificate,omitempty"`;CertificateKey string `json:"certificateKey,omitempty"`;Backup string `json:"backup,omitempty"`}
+type ApplicationHosting struct {Language string `json:"language"`;Version string `json:"version"`;Command string `json:"command"`;SetupCommand string `json:"setupCommand,omitempty"`;Port int `json:"port"`;Container string `json:"container,omitempty"`;Enabled bool `json:"enabled"`;Stopped bool `json:"stopped,omitempty"`;Certificate string `json:"certificate,omitempty"`;CertificateKey string `json:"certificateKey,omitempty"`;Backup string `json:"backup,omitempty"`}
 var hostingImages=map[string]map[string]string{
  "node":{"22":"docker.io/library/node:22-bookworm-slim","24":"docker.io/library/node:24-bookworm-slim"},
  "python":{"3.11":"docker.io/library/python:3.11-slim-bookworm","3.12":"docker.io/library/python:3.12-slim-bookworm","3.13":"docker.io/library/python:3.13-slim-bookworm","3.14":"docker.io/library/python:3.14-slim"},
@@ -27,7 +27,7 @@ func(s *System) applicationNginx(site Site)string{
  app:=site.Application;tls:="";if app.Certificate!=""&&app.CertificateKey!=""{tls=fmt.Sprintf("    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;",app.Certificate,app.CertificateKey)+"\n    if ($scheme = http) { return 301 https://$host$request_uri; }"}
  marker:="    add_header X-LiteCP-Application-State maintenance always;"
  routing:="    location / { return 503; }"
- if app.Enabled{marker="";routing=fmt.Sprintf(`    location / {
+ if app.Enabled&&!app.Stopped{marker="";routing=fmt.Sprintf(`    location / {
         proxy_pass http://127.0.0.1:%d;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -57,7 +57,7 @@ server {
 }
 func(s *System) writeApplicationProxy(ctx context.Context,site Site)error{
  if err:=s.writeApplicationRouting(ctx,site,[]byte(s.nginxConfig(site)));err!=nil{return err}
- if site.Application!=nil&&!site.Application.Enabled{return waitApplicationMaintenance(ctx,"http://127.0.0.1:80/",site.Domain,3*time.Second)};return nil
+ if site.Application!=nil&&(!site.Application.Enabled||site.Application.Stopped){return waitApplicationMaintenance(ctx,"http://127.0.0.1:80/",site.Domain,3*time.Second)};return nil
 }
 func waitApplicationMaintenance(ctx context.Context,endpoint,domain string,timeout time.Duration)error{
  ctx,cancel:=context.WithTimeout(ctx,timeout);defer cancel()
@@ -134,7 +134,7 @@ func(a *App) applicationHosting(w http.ResponseWriter,r *http.Request){
  case "start":
   if app.Enabled{
    if _,err:=a.system.preserveApplicationNginx(*site,&app);err!=nil{writeError(w,502,err.Error());return}
-   if err:=a.system.startApplicationContainer(r.Context(),app);err!=nil{writeError(w,502,err.Error());return}
+   if err:=a.system.startApplicationContainer(r.Context(),app);err!=nil{writeError(w,502,err.Error());return};app.Stopped=false
    if err:=a.system.writeApplicationProxy(r.Context(),*site);err!=nil{_ = a.system.stopApplicationContainer(context.Background(),app.Container);writeError(w,502,"Cannot restore application routing: "+err.Error());return}
    if err:=save();err!=nil{writeError(w,500,"Application is running; certificate state could not be saved");return};writeJSON(w,200,map[string]bool{"ok":true});return
   }
@@ -153,6 +153,9 @@ func(a *App) applicationHosting(w http.ResponseWriter,r *http.Request){
   if _,err:=a.system.applicationHostCommand(r.Context(),30*time.Second,"systemctl","enable","podman-restart.service");err!=nil{writeError(w,502,"Application is running, but boot restart could not be enabled; inspect podman-restart.service");return}
  case "stop":
   if app.Container!=""{if err:=a.system.stopApplicationContainer(r.Context(),app.Container);err!=nil{writeError(w,502,"Application stop failed: "+err.Error());return}}
+  app.Stopped=true;site.Application=&app
+  if err:=a.system.writeApplicationProxy(r.Context(),*site);err!=nil{writeError(w,502,"Application stopped but maintenance routing failed: "+err.Error());return}
+  if err:=save();err!=nil{writeError(w,500,"Application stopped but stopped state could not be saved");return}
  case "disable":
   if app.Container!=""{if err:=a.system.stopApplicationContainer(r.Context(),app.Container);err!=nil{writeError(w,502,"Application could not be stopped; check its container status: "+err.Error());return}}
   app.Enabled=false;site.Application=&app

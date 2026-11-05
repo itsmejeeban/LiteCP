@@ -268,3 +268,14 @@ test('mail action enhancements stay single across repeated retained-table refres
   assert.equal(added.filter(node=>node.tag.includes('data-webmail-unavailable')).length,1);
   assert.equal(added.filter(node=>node.tag.startsWith('<a')).length,0);
 });
+
+ test('Application Hosting retains its catalogue and gives an actionable error for incomplete refresh responses',async()=>{
+ let result=structuredClone(catalogue);const ui=panel('application-hosting.js',async()=>result);
+ ui.cp.navigate('applications');await tick();const before=ui.element('#applicationList').innerHTML;
+ result={};await ui.element('#applicationsRefresh').onclick();
+ assert.equal(ui.element('#applicationList').innerHTML,before);
+ assert.match(ui.element('#applicationStatus').textContent,/Refresh to retry/);
+ result=structuredClone(catalogue);await ui.element('#applicationsRefresh').onclick();
+ assert.match(ui.element('#applicationList').innerHTML,/example.test/);
+ assert.equal(ui.element('#applicationStatus').textContent,'');
+ });
