@@ -11,6 +11,7 @@
   let credentialText = "";
   let logTimer = null;
   let logRequest = 0;
+  let displayedLogs = null;
   let currentFilePath = "";
   let fileListingRequest = 0;
   let lastFileListing = null;
@@ -290,6 +291,8 @@
     $$("form[data-settings-part]").forEach(form => form.addEventListener("submit", saveSettings));
     $("#passwordForm").addEventListener("submit", changePassword);
     $("#reloadLogs").addEventListener("click", loadLogs);
+    $("#copyLogs").addEventListener("click", copyLogs);
+    $("#downloadLogs").addEventListener("click", downloadLogs);
     $("#logTarget").addEventListener("change", loadLogs);
     $("#mobileMenu").addEventListener("click", toggleSidebar);
     $("#sidebarScrim").addEventListener("click", closeSidebar);
@@ -1261,11 +1264,15 @@
     const target = $("#logTarget").value;
     const viewer = $("#logViewer code");
     const status = $("#logStatus");
+    displayedLogs = null;
+    $("#copyLogs").disabled = $("#downloadLogs").disabled = true;
     status.textContent = "Loading…";
     viewer.textContent = "Loading log entries…";
     try {
       const result = await api(`/api/logs?target=${encodeURIComponent(target)}`);
       if (request !== logRequest) return;
+      displayedLogs = {target, text: result.lines.join("\n")};
+      $("#copyLogs").disabled = $("#downloadLogs").disabled = !result.lines.length;
       viewer.textContent = result.lines.length ? result.lines.join("\n") : "No recent entries for this source.";
       status.textContent = `Up to 100 entries · Updated ${new Date().toLocaleTimeString()} · Refreshes every 30 seconds`;
     } catch (error) {
@@ -1273,6 +1280,28 @@
       viewer.textContent = `Could not load logs: ${error.message}`;
       status.textContent = "Refresh failed · Retry with Refresh";
     }
+  }
+
+  async function copyLogs() {
+    if (!displayedLogs?.text) return;
+    try {
+      await navigator.clipboard.writeText(displayedLogs.text);
+      showToast("Copied", "Displayed log entries copied to your clipboard.");
+    } catch (error) {
+      showToast("Copy failed", "Clipboard access is unavailable. Use Download instead.", "error");
+    }
+  }
+
+  function downloadLogs() {
+    if (!displayedLogs?.text) return;
+    const url = URL.createObjectURL(new Blob([displayedLogs.text + "\n"], {type: "text/plain;charset=utf-8"}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `litecp-${displayedLogs.target}-${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function toggleSidebar() { $("#sidebar").classList.toggle("open"); $("#sidebarScrim").classList.toggle("visible"); }

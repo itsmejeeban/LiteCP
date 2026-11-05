@@ -286,6 +286,8 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .retention-chip { margin-left: auto; white-space: nowrap; color: #b7cecf; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08); padding: 7px 10px; border-radius: 13px; font-size: 8px; }
 .log-panel { overflow: hidden; }
 .log-toolbar { min-height: 75px; padding: 13px 19px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.log-toolbar { flex-wrap: wrap; gap: 12px; }
+.log-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .log-toolbar label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 8px; font-weight: 750; }
 .log-toolbar select { width: 210px; height: 34px; border: 1px solid var(--line); border-radius: 7px; padding: 0 9px; color: var(--ink); background: white; outline: none; font-size: 10px; }
 .log-live { font-size: 8px; color: #829597; display: flex; align-items: center; gap: 8px; }
