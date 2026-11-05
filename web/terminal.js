@@ -2,6 +2,7 @@
   "use strict";
   const host=document.getElementById('interactiveTerminal');if(!host)return;
   const connect=document.getElementById('terminalConnect'),disconnect=document.getElementById('terminalDisconnect'),status=document.getElementById('terminalStatus'),panel=host.closest('.terminal-panel');
+  const feedback=document.createElement('span');feedback.id='terminalFeedback';feedback.setAttribute('role','status');status.after(feedback);
   const terminal=new Terminal({cursorBlink:false,cursorStyle:"block",cursorInactiveStyle:"outline",fontSize:14,fontFamily:'Consolas, "Liberation Mono", monospace',scrollback:10000,convertEol:false,theme:{background:'#0b1017',foreground:'#dce4ed',cursor:'#f8fafc',cursorAccent:'#0b1017',selectionBackground:'#385672'}});
   const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(host);
   host.addEventListener("pointerdown",event=>{if(event.button===0)terminal.focus();});
@@ -17,15 +18,15 @@
   panel.append(menu);
   function closeMenu(){menu.hidden=true;}
   async function copySelection(){
-    const text=terminal.getSelection();if(!text){status.textContent='Select terminal text to copy.';return;}
+    const text=terminal.getSelection();if(!text){feedback.textContent='Select terminal text to copy.';return;}
     try{
       if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(text);
       else {
         const input=document.createElement('textarea');input.value=text;input.style.position='fixed';input.style.opacity='0';panel.append(input);input.select();
         try{if(!document.execCommand('copy'))throw new Error('Clipboard unavailable');}finally{input.remove();terminal.focus();}
       }
-      status.textContent='Selected text copied.';
-    }catch(error){status.textContent='Copy was blocked by the browser. Allow clipboard access and try again.';}
+      feedback.textContent='Selected text copied.';
+    }catch(error){feedback.textContent='Copy was blocked by the browser. Allow clipboard access and try again.';}
   }
   function manualPaste(){
     const dialog=document.createElement('dialog');dialog.className='terminal-paste-dialog';
@@ -33,7 +34,7 @@
     panel.append(dialog);dialog.addEventListener('close',()=>{if(dialog.returnValue==='paste'&&id)terminal.paste(dialog.querySelector('textarea').value);dialog.remove();terminal.focus();});dialog.showModal();dialog.querySelector('textarea').focus();
   }
   async function pasteClipboard(){
-    if(!id){status.textContent='Connect the terminal before pasting.';return;}
+    if(!id){feedback.textContent='Connect the terminal before pasting.';return;}
     try{const text=await navigator.clipboard.readText();if(!id)return;terminal.paste(text);terminal.focus();}
     catch(error){manualPaste();}
   }
@@ -65,7 +66,20 @@
   connect.onclick=async()=>{if(!available||connect.disabled)return;connect.disabled=true;status.textContent='Connecting…';try{const session=await api('POST',{});id=session.id;cursor=0;pending='';terminal.reset();disconnect.disabled=false;status.textContent='Connected';resize();terminal.focus();poll(++generation);}catch(error){status.textContent=error.message;connect.disabled=false;}};
   disconnect.onclick=async()=>{if(!id)return;disconnect.disabled=true;try{await api('DELETE',null,'?id='+encodeURIComponent(id));generation++;clearTimeout(timer);id=null;pending='';status.textContent='Disconnected';connect.disabled=false;}catch(error){disconnect.disabled=false;status.textContent=error.message;}};
   document.getElementById('terminalClear').onclick=()=>{terminal.clear();terminal.focus();};
-  document.getElementById('terminalFullscreen').onclick=async()=>{try{if(document.fullscreenElement===panel)await document.exitFullscreen();else await panel.requestFullscreen();resize();terminal.focus();}catch(error){status.textContent=error.message;}};
+  function toggleExpandedTerminal() {
+    const expanded=panel.classList.toggle('terminal-expanded');
+    document.getElementById('terminalFullscreen').textContent=expanded?'Exit full screen':'Full screen';
+    feedback.textContent=expanded?'Expanded within this browser window. Press Escape to exit.':'';
+    resize();terminal.focus();
+  }
+  document.getElementById('terminalFullscreen').onclick=async()=>{
+    if(panel.classList.contains('terminal-expanded')){toggleExpandedTerminal();return;}
+    try{
+      if(document.fullscreenElement===panel)await document.exitFullscreen();else await panel.requestFullscreen();
+      feedback.textContent='';resize();terminal.focus();
+    }catch(error){toggleExpandedTerminal();}
+  };
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&panel.classList.contains('terminal-expanded'))toggleExpandedTerminal();});
   document.addEventListener('fullscreenchange',()=>{document.getElementById('terminalFullscreen').textContent=document.fullscreenElement===panel?'Exit full screen':'Full screen';resize();});
   window.addEventListener('beforeunload',()=>{if(id)fetch('/api/terminal/session?id='+encodeURIComponent(id),{method:'DELETE',credentials:'same-origin',keepalive:true}).catch(()=>{});});
 })();
