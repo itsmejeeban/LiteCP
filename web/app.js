@@ -10,6 +10,7 @@
   let currentState = null;
   let credentialText = "";
   let logTimer = null;
+  let logRequest = 0;
   let currentFilePath = "";
   let fileListingRequest = 0;
   let lastFileListing = null;
@@ -632,6 +633,7 @@
     closeSidebar();
     window.scrollTo({ top: 0, behavior: "smooth" });
     clearInterval(logTimer);
+    logRequest++;
     if (page === "logs") {
       loadLogs();
       logTimer = setInterval(loadLogs, 30000);
@@ -1255,12 +1257,22 @@
   }
 
   async function loadLogs() {
+    const request = ++logRequest;
+    const target = $("#logTarget").value;
     const viewer = $("#logViewer code");
+    const status = $("#logStatus");
+    status.textContent = "Loading…";
     viewer.textContent = "Loading log entries…";
     try {
-      const result = await api(`/api/logs?target=${encodeURIComponent($("#logTarget").value)}`);
+      const result = await api(`/api/logs?target=${encodeURIComponent(target)}`);
+      if (request !== logRequest) return;
       viewer.textContent = result.lines.length ? result.lines.join("\n") : "No recent entries for this source.";
-    } catch (error) { viewer.textContent = `Could not load logs: ${error.message}`; }
+      status.textContent = `Up to 100 entries · Updated ${new Date().toLocaleTimeString()} · Refreshes every 30 seconds`;
+    } catch (error) {
+      if (request !== logRequest) return;
+      viewer.textContent = `Could not load logs: ${error.message}`;
+      status.textContent = "Refresh failed · Retry with Refresh";
+    }
   }
 
   function toggleSidebar() { $("#sidebar").classList.toggle("open"); $("#sidebarScrim").classList.toggle("visible"); }
