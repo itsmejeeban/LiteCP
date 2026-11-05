@@ -26,12 +26,14 @@ type websiteObservedUsage struct {
 	DiskAt    time.Time `json:"diskUpdatedAt,omitempty"`
 }
 type websiteResourceRow struct {
-	ID       string                 `json:"id"`
-	Domain   string                 `json:"domain"`
-	Settings *WebsiteResourceLimits `json:"settings"`
-	State    string                 `json:"state"`
-	Enforced bool                   `json:"enforced"`
-	Usage    websiteObservedUsage   `json:"usage"`
+	ID           string                 `json:"id"`
+	Domain       string                 `json:"domain"`
+	Settings     *WebsiteResourceLimits `json:"settings"`
+	State        string                 `json:"state"`
+	Enforced     bool                   `json:"enforced"`
+	Usage        websiteObservedUsage   `json:"usage"`
+	NextRecovery time.Time              `json:"nextRecovery,omitempty"`
+	Error        string                 `json:"error,omitempty"`
 }
 
 var websiteUsageSamples = struct {
@@ -156,11 +158,17 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 			sites = append(sites, site)
 		}
 	}
+	observedSites := []Site{}
+	for _, site := range sites {
+		if !resourceEnabled(site) {
+			observedSites = append(observedSites, site)
+		}
+	}
 	rows := []websiteResourceRow{}
 	now := time.Now().UTC()
 	note := ""
 	var counters map[int]websiteProcessCounter
-	if len(sites) > 0 && runtime.GOOS == "linux" && !a.system.demo {
+	if len(observedSites) > 0 && runtime.GOOS == "linux" && !a.system.demo {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
 		if output, err := exec.CommandContext(ctx, "ps", "-eo", "uid=,pid=,etimes=,cputimes=,rss=").Output(); err == nil {
@@ -168,8 +176,8 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 		} else {
 			note = "Process measurements are unavailable."
 		}
-		refreshWebsiteDiskSamples(a.system.dataDir, sites)
-	} else if len(sites) > 0 {
+		refreshWebsiteDiskSamples(a.system.dataDir, observedSites)
+	} else if len(observedSites) > 0 {
 		note = "Live measurements require the installed Linux server."
 	}
 	websiteUsageSamples.Lock()
@@ -192,7 +200,23 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 			u.DiskAt = websiteDiskSamples.At
 		}
 		websiteDiskSamples.Unlock()
-		rows = append(rows, websiteResourceRow{ID: site.ID, Domain: site.Domain, Settings: site.ResourceLimits, State: "Disabled", Usage: u})
+		row := websiteResourceRow{ID: site.ID, Domain: site.Domain, Settings: site.ResourceLimits, State: "Disabled", Usage: u}
+		if resourceEnabled(site) {
+			st := resourceStatusForSite(site)
+			row.State = st.State
+			row.NextRecovery = st.NextRecovery
+			row.Error = st.Error
+			row.Enforced = st.Enforced && time.Since(st.UpdatedAt) < 10*time.Second
+			row.Usage = websiteObservedUsage{Available: row.Enforced, CPU: st.CPUPercent, Memory: st.MemoryBytes, Processes: st.Processes}
+			if row.Enforced {
+				disk := st.Sample.DiskBytes
+				row.Usage.Disk = &disk
+				row.Usage.DiskAt = st.UpdatedAt
+			} else {
+				row.State = "Error: resource monitor unavailable"
+			}
+		}
+		rows = append(rows, row)
 	}
 	if counters != nil {
 		websiteUsageSamples.At = now
@@ -200,5 +224,5 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 	}
 	websiteUsageSamples.Unlock()
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"items": rows, "updatedAt": now, "note": note, "coverage": "Observed website-UID processes only. Shared Nginx/MySQL/mail and container processes with remapped UIDs are excluded. Memory is summed RSS. CPU needs two samples; disk refreshes every 60 seconds. Saved settings are not enforced."})
+	writeJSON(w, 200, map[string]any{"items": rows, "updatedAt": now, "note": note, "coverage": "Observed website-UID processes only. Shared Nginx/MySQL/mail and container processes with remapped UIDs are excluded. Memory is summed RSS. CPU needs two samples; disk refreshes every 60 seconds. Enabled rows use verified kernel counters; disabled rows are observations only."})
 }

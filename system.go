@@ -531,6 +531,9 @@ func demoCredentials(domain string) DBCredentials {
 }
 
 func (s *System) EnableSSL(ctx context.Context, site Site, email string, renew ...bool) error {
+	if resourceEnabled(site) {
+		return errors.New("disable resource enforcement before changing SSL, then re-enable it; existing certificates remain active")
+	}
 	if site.Application != nil && site.Application.Enabled {
 		return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")
 	}
@@ -579,11 +582,22 @@ func (s *System) SetCron(site Site, enabled bool) error {
 	if s.usesPHP73Container(site.PHPVersion) {
 		command = fmt.Sprintf("/usr/bin/podman exec --user %d:%d litecp-php73 php -q %s", site.RuntimeUID, site.RuntimeGID, cronScript)
 	}
+	if resourceEnabled(site) {
+		path := filepath.Join(resourceDirectory(site.ID), "builtin.sh")
+		// The host executor prepares this root-owned file during activation.
+		if _, err := os.Stat(path); err != nil {
+			return errors.New("resource cron script is not prepared")
+		}
+		command = fmt.Sprintf("%s resource-cron %s %s %s", cronShellQuote(resourceRuntimeExecutable()), cronShellQuote(s.dataDir), cronShellQuote(site.ID), cronShellQuote(path))
+	}
 	content := fmt.Sprintf("SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nMAILTO=\"\"\n*/5 * * * * %s %s >/dev/null 2>&1\n", cronUser, command)
 	return writeAtomic(cronPath, []byte(content), 0644)
 }
 
 func (s *System) SetPHPVersion(ctx context.Context, site Site, phpVersion string) error {
+	if resourceEnabled(site) {
+		return errors.New("disable resource enforcement before changing PHP; re-enable it after the runtime change")
+	}
 	if site.Application != nil && site.Application.Enabled {
 		return errors.New("disable the application runtime before changing PHP")
 	}
@@ -742,6 +756,11 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
+	if resourceEnabled(site) {
+		if err := resourceHostAction(ctx, s, site, *site.ResourceLimits, "disable"); err != nil {
+			return err
+		}
+	}
 	if !domainPattern.MatchString(site.Domain) {
 		return errors.New("website domain is invalid")
 	}
@@ -773,6 +792,9 @@ func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
 }
 
 func (s *System) ChangeSiteDomain(ctx context.Context, current, updated Site) error {
+	if resourceEnabled(current) {
+		return errors.New("disable resource enforcement before renaming this website; re-enable it after the rename")
+	}
 	if !domainPattern.MatchString(current.Domain) || !domainPattern.MatchString(updated.Domain) {
 		return errors.New("website domain is invalid")
 	}
@@ -963,6 +985,15 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) (content string) {
+	if resourceEnabled(site) {
+		if saved, err := os.ReadFile(filepath.Join(resourceDirectory(site.ID), "frontend.conf")); err == nil {
+			updated, e := replaceWAFBlock(string(saved), site, site.WAFMode)
+			if e == nil {
+				return suspensionSiteConfig(updated, site, site.Suspended)
+			}
+		}
+		return fmt.Sprintf("server { listen 80; listen [::]:80; server_name %s; return 503 'Website resource boundary requires revalidation.'; }\n", site.Domain)
+	}
 	defer func() { content = injectTrafficLogging(content, site) }()
 	defer func() { content = suspensionSiteConfig(content, site, site.Suspended) }()
 	if site.Application != nil {
@@ -1216,6 +1247,9 @@ func (s *System) ReconcileSites(ctx context.Context, sites []Site) error {
 }
 
 func (s *System) reconcileSiteRuntime(ctx context.Context, site Site, configPath string) error {
+	if resourceEnabled(site) {
+		return s.reconcileSiteNginx(site, configPath)
+	}
 	if siteHome(site) != "" {
 		if err := s.ensureSiteHome(site); err != nil {
 			return err

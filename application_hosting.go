@@ -9,6 +9,7 @@ var hostingImages=map[string]map[string]string{
  "ruby":{"3.3":"docker.io/library/ruby:3.3-slim","3.4":"docker.io/library/ruby:3.4-slim","4.0":"docker.io/library/ruby:4.0-slim"},
 }
 func validateApplicationHosting(site Site,app ApplicationHosting)error{
+ if resourceEnabled(site){return errors.New("disable resource enforcement before changing application hosting")}
  if site.AppType!="regular"{return errors.New("use a Regular PHP/HTML website dedicated to this application; WordPress and WHMCS sites cannot be converted")}
  if site.RuntimeUID<1000||site.RuntimeGID<1000{return errors.New("website isolation identity is missing")}
  if hostingImages[app.Language][app.Version]==""{return errors.New("select a supported runtime version")}

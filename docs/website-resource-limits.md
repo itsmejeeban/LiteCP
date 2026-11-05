@@ -1,3 +1,29 @@
+# Website resource limits: native runtime enforcement (4.0.132)
+
+Native PHP and static websites can now enable Linux-enforced limits. Activation
+requires cgroup v2, systemd, native PHP-FPM and an ext4 project-quota filesystem.
+The API refuses unsupported configurations instead of reporting false enforcement.
+Settings remain disabled by default.
+
+Each enabled website uses a dedicated slice, FPM instance and local HTTP worker.
+Managed cron runs enter the same slice. CPU, memory and process counters come from
+cgroups; disk usage comes from project quotas. Protected runtime temporary storage
+on the website filesystem shares the site's quota, including PHP and HTTP buffering.
+The monitor blocks web access on CPU exhaustion, OOM or disk exhaustion, preserves
+manual suspension, and retries recovery every five minutes. Files are preserved.
+
+Application containers, PHP 7.3 compatibility containers, XFS activation and optional
+I/O bandwidth limits are not supported by this executor. Disable enforcement before
+changing PHP version, domain, SSL or PHP settings, then enable it again. Shared MySQL,
+mail, FTP and the panel are outside the website CPU/memory boundary. Restore and
+reboot behavior still require dedicated end-to-end acceptance testing.
+
+See [live audit](resource-enforcement-live-2026-11-05.md) for verified behavior and limits.
+
+## Historical draft-only implementation notes
+
+The following describes the implementation before 4.0.132 and is retained for history.
+
 # Website resource limits: development status
 
 This is an incomplete implementation, not a production isolation feature.

@@ -73,6 +73,13 @@ func (a *App) runWebsiteCron(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
 	defer cancel()
+	if resourceEnabled(*site) {
+		st := resourceRuntimeRead(site.ID)
+		if st.State != "Active" || !st.Enforced || site.Suspended {
+			writeError(w, 409, "Website workloads are blocked by resource limits or manual suspension")
+			return
+		}
+	}
 	args := cronTestArguments(*site)
 	command := exec.CommandContext(ctx, "systemd-run", args...)
 	command.Stdin = strings.NewReader(string(script))
@@ -96,5 +103,9 @@ func (a *App) runWebsiteCron(w http.ResponseWriter, r *http.Request) {
 func cronTestArguments(site Site) []string {
 	// Website IDs deliberately have no system login account. Drop credentials
 	// before the shell starts, as scheduled cron does, without NSS user lookup.
-	return []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--property=RuntimeMaxSec=30", "--property=TimeoutStopSec=2", "--property=KillMode=control-group", "--property=NoNewPrivileges=yes", "--property=MemoryMax=256M", "--property=TasksMax=32", "--setenv=PATH=/usr/local/bin:/usr/bin:/bin", "--", "/usr/bin/setpriv", fmt.Sprintf("--reuid=%d", site.RuntimeUID), fmt.Sprintf("--regid=%d", site.RuntimeGID), "--clear-groups", "--no-new-privs", "/bin/sh"}
+	args := []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--property=RuntimeMaxSec=30", "--property=TimeoutStopSec=2", "--property=KillMode=control-group", "--property=NoNewPrivileges=yes", "--property=MemoryMax=256M", "--property=TasksMax=32", "--setenv=PATH=/usr/local/bin:/usr/bin:/bin", "--", "/usr/bin/setpriv", fmt.Sprintf("--reuid=%d", site.RuntimeUID), fmt.Sprintf("--regid=%d", site.RuntimeGID), "--clear-groups", "--no-new-privs", "/bin/sh"}
+	if resourceEnabled(site) {
+		args = append([]string{"--slice=" + resourceSliceName(site.ID), "--property=PrivateTmp=yes", "--property=BindPaths=" + resourceProtectedStorage(site) + "/tmp:/tmp " + resourceProtectedStorage(site) + "/tmp:/var/tmp"}, args...)
+	}
+	return args
 }

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.131"
+var version = "4.0.132"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,18 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "resource-runtime" {
+		if err := resourceRuntimeCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "resource-cron" {
+		if err := resourceCronCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "web" {
 		if err := runUnprivilegedWeb(); err != nil {
 			log.Fatal(err)

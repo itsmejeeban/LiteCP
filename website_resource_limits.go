@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -121,9 +122,17 @@ func inspectResourceCapabilities(site Site) resourceCapabilities {
 	if !c.ProjectQuota {
 		c.Prerequisites = append(c.Prerequisites, "project quotas must already be enabled on the website-home filesystem; LiteCP does not change mounts")
 	}
-	// Kernel availability alone is insufficient: every execution path and the
-	// edge proxy must be switched transactionally before enforcement is offered.
-	c.Prerequisites = append(c.Prerequisites, "dedicated PHP/static workers, cron and container isolation are not yet integrated; activation is unavailable")
+	if c.Filesystem != "ext4" {
+		c.Prerequisites = append(c.Prerequisites, "native website enforcement currently requires ext4 project quotas")
+	}
+	if !resourceExecutableAvailable() {
+		c.Prerequisites = append(c.Prerequisites, "install the quota package (setquota) before activation")
+	}
+	plan := resourceRuntimePlan{Site: site, DataDir: "/var/lib/litecp", Policy: WebsiteResourceLimits{CPUPercent: 25, MemoryMiB: 256, DiskMiB: 1024, Tasks: 64, ConcurrentRequests: 8}}
+	if err := resourceRuntimeValidate(plan); err != nil {
+		c.Prerequisites = append(c.Prerequisites, err.Error())
+	}
+	c.Ready = len(c.Prerequisites) == 0
 	return c
 }
 
@@ -233,8 +242,8 @@ func readResourceCounters(dir string, at time.Time) (resourceSample, error) {
 }
 
 func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete {
-		writeError(w, 405, "Use GET, PUT or DELETE")
+	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		writeError(w, 405, "Use GET, PUT, POST or DELETE")
 		return
 	}
 	// Authenticated mutations are already serialized by withAuth.
@@ -248,7 +257,24 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		writeJSON(w, 200, map[string]any{"settings": site.ResourceLimits, "state": "Disabled", "enforced": false, "capabilities": inspectResourceCapabilities(*site), "usage": nil, "history": []any{}, "nextRecovery": nil})
+		st := resourceStatusForSite(*site)
+		writeJSON(w, 200, map[string]any{"settings": site.ResourceLimits, "state": st.State, "enforced": st.Enforced && time.Since(st.UpdatedAt) < 10*time.Second, "capabilities": inspectResourceCapabilities(*site), "usage": st, "nextRecovery": st.NextRecovery, "history": resourceHistory(site.ID)})
+		return
+	}
+	if r.Method == http.MethodPost {
+		if site.ResourceLimits == nil || !site.ResourceLimits.Enabled {
+			writeError(w, 409, "Enable resource enforcement before retrying recovery")
+			return
+		}
+		if site.Suspended {
+			writeError(w, 409, "This website is manually suspended")
+			return
+		}
+		if err := resourceHostAction(r.Context(), a.system, *site, *site.ResourceLimits, "retry"); err != nil {
+			writeError(w, 502, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
 		return
 	}
 	if r.Method == http.MethodDelete {
@@ -283,13 +309,42 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.Enabled {
-		writeError(w, 409, "Resource enforcement is not available yet. Dedicated workers and project-quota enforcement must be integrated and verified before activation. Existing website configuration was preserved.")
-		return
+		caps := inspectResourceCapabilities(*site)
+		if !caps.Ready {
+			writeError(w, 409, "Cannot enable resource limits: "+strings.Join(caps.Prerequisites, "; "))
+			return
+		}
+	}
+	if p.Enabled || site.ResourceLimits != nil && site.ResourceLimits.Enabled {
+		if a.system == nil {
+			writeError(w, 409, "Linux host executor is unavailable")
+			return
+		}
+		action := "disable"
+		if p.Enabled {
+			action = "apply"
+		}
+		if err := resourceHostAction(r.Context(), a.system, *site, p, action); err != nil {
+			writeError(w, 502, "Resource transition failed: "+err.Error())
+			return
+		}
 	}
 	if err := a.store.UpdateSite(site.ID, func(s *Site) { s.ResourceLimits = &p }); err != nil {
-		writeError(w, 500, "Could not save resource settings")
+		var rollback error
+		if p.Enabled {
+			rollback = resourceHostAction(context.Background(), a.system, *site, p, "disable")
+		} else if resourceEnabled(*site) {
+			rollback = resourceHostAction(context.Background(), a.system, *site, *site.ResourceLimits, "apply")
+		}
+		writeError(w, 500, fmt.Sprintf("Could not save resource settings; runtime rollback result: %v", rollback))
 		return
 	}
-	_ = a.store.AddActivity("Resource limit draft saved", site.Domain, "info")
-	writeJSON(w, 200, map[string]any{"ok": true, "state": "Disabled", "enforced": false})
+	activity := "Resource limit draft saved"
+	if p.Enabled {
+		activity = "Resource enforcement enabled"
+	} else if resourceEnabled(*site) {
+		activity = "Resource enforcement disabled"
+	}
+	_ = a.store.AddActivity(activity, site.Domain, "info")
+	writeJSON(w, 200, map[string]any{"ok": true, "state": resourceRuntimeRead(site.ID).State, "enforced": p.Enabled})
 }

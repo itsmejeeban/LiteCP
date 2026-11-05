@@ -176,6 +176,10 @@ func (a *App) sitePHPSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"settings": site.PHPSettings, "customSettings": custom, "supportedCustom": customPHPSettingTypes, "defaults": phpSettingDefaults, "version": site.PHPVersion})
 		return
 	}
+	if resourceEnabled(*site) {
+		writeError(w, 409, "Disable resource enforcement before changing PHP settings, then re-enable it.")
+		return
+	}
 	var input struct {
 		Settings map[string]string `json:"settings"`
 		Custom   string            `json:"custom"`

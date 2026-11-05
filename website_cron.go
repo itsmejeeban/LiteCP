@@ -237,6 +237,9 @@ func (s *System) renderWebsiteCron(site Site, jobs []WebsiteCronJob) ([]byte, er
 		// executes it. Keeping commands out of cron also preserves '%' characters
 		// and stays within Debian/Vixie cron's 1000-byte command limit.
 		command := fmt.Sprintf("/bin/cat %s | /usr/bin/setpriv --reuid=%d --regid=%d --clear-groups --no-new-privs /bin/sh >/dev/null 2>&1", cronShellQuote(path), site.RuntimeUID, site.RuntimeGID)
+		if resourceEnabled(site) {
+			command = fmt.Sprintf("%s resource-cron %s %s %s >/dev/null 2>&1", cronShellQuote(resourceRuntimeExecutable()), cronShellQuote(s.dataDir), cronShellQuote(site.ID), cronShellQuote(path))
+		}
 		if len(command) >= 1000 {
 			return nil, errors.New("cron script path is too long for the system scheduler")
 		}
