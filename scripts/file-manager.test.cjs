@@ -136,3 +136,16 @@ test('search discards responses from a previous website and older request', asyn
   pending[1]({entries:['latest']});await latest;pending[0]({entries:['stale']});await older;
   assert.equal(shown.length,1);assert.deepEqual(shown[0].entries,['latest']);
 });
+
+test('server explorer disables mutation actions even when selected',()=>{
+  const fs=require('node:fs'),vm=require('node:vm');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../web/file-manager.js'),'utf8');
+  const code=source.slice(source.indexOf('  function syncSelection()'),source.indexOf('  function render(value)'))+';syncSelection';
+  const actions=['upload-url','chmod','restore-items','edit','delete','download','view'].map(action=>({dataset:{fmAction:action},disabled:false}));
+  const sandbox={page:{querySelector:()=>null,querySelectorAll:selector=>selector==='[data-fm-action]'?actions:[]},$:()=>({}),picked:()=>[{type:'file',size:1}],cp:{formatBytes:()=>''},siteID:()=>'server-explorer',listing:{trash:false},editableFile:()=>true,htmlFile:()=>false,extractableFile:()=>false,icon:()=>'',esc:value=>value,displayPath:()=>'',rows:()=>[],selected:new Set()};
+  sandbox.cp.formatDateTime=()=>'';
+  sandbox.kind=()=> 'File';
+  vm.runInNewContext(code,sandbox)();
+  assert.ok(actions.slice(0,5).every(action=>action.disabled));
+  assert.ok(actions.slice(5).every(action=>!action.disabled));
+});

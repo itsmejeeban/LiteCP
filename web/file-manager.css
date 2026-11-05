@@ -453,3 +453,5 @@ body.fm-fullscreen-open { overflow: hidden; }
   padding:0 10px!important;box-sizing:border-box;white-space:nowrap;
   font-size:13px!important;line-height:1.2!important;overflow:visible;
 }
+.server-file-explorer [data-fm-action="upload-url"],.server-file-explorer [data-fm-action="restore-items"],.server-file-explorer [data-fm-action="purge-items"],.server-file-explorer .fm-drop-hint{display:none!important}
+.server-file-explorer .fm-mode{pointer-events:none;cursor:default}
