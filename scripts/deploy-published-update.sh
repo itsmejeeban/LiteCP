@@ -8,12 +8,16 @@ revision="$2"
 for tool in go systemctl install cp curl python3; do command -v "$tool" >/dev/null; done
 work="$PWD"
 switched=0
+snapshot_helper_switched=0
 rollback() {
   trap - ERR
   if [[ "$switched" == 1 ]]; then
     echo 'Restoring the previous LiteCP binary...'
     systemctl stop litecp litecp-broker.service litecp-broker.socket || true
     if [[ -d "$work/service-recovery" ]]; then bash "$work/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
+    if [[ "$snapshot_helper_switched" == 1 && -f "$work/previous-system-snapshot.py" ]]; then
+      install -m 0700 "$work/previous-system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
+    fi
     install -m 0755 "$work/previous-litecp" /usr/local/bin/litecp
     systemctl restart litecp || true
   fi
@@ -32,6 +36,13 @@ systemctl stop litecp
 switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/scripts/install-privilege-services.sh"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
+install -d -m 0755 /usr/local/lib/litecp
+if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then
+  cp --preserve=mode /usr/local/lib/litecp/system-snapshot.py "$work/previous-system-snapshot.py"
+fi
+snapshot_helper_switched=1
+install -m 0700 "$work/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
+cmp "$work/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 bash "$work/scripts/repair-waf-labels.sh"
 bash "$work/scripts/repair-php73-selinux.sh"
 systemctl start litecp
