@@ -101,6 +101,7 @@
   let jobsRequest=0;
   async function loadJobs(){
     const request=++jobsRequest;
+    renderJobs();
     if(cp.demo){$('#liveJobs').innerHTML='<div class="empty-state"><p>Live migration requires the installed Linux server.</p></div>';return;}
     try{const result=await cp.api('/api/live-migrations');if(request!==jobsRequest)return;const updated=result.items;for(const job of updated){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));if(request!==jobsRequest)return;Object.assign(job,current);}}jobs=updated;renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
     catch(error){if(request===jobsRequest)$('#liveJobs').textContent=error.message;}

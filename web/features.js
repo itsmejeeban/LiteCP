@@ -303,11 +303,17 @@
   $("#migrationImportForm").addEventListener("submit",async event=>{event.preventDefault();if(!preview)return;const form=event.currentTarget;if(!await window.LiteCPDialogs.confirm("Import files and the selected database into this empty target? Confirm that the target website and database are empty and unused."))return;busy(form,async()=>{const data=new FormData(form);output("migrationOutput","Staging and validating the import... Keep this page open.");const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:preview.id,siteId:data.get("siteId"),root:data.get("root"),sql:data.get("sql"),password:data.get("password")}});form.elements.password.value="";output("migrationOutput",result.note);await cp.refresh();});});
   $("#migrationDiscardButton").addEventListener("click",async()=>{if(!preview||!await window.LiteCPDialogs.confirm("Delete the staged migration archive? Imported website files will be kept."))return;try{await cp.api(`/api/migrations/${encodeURIComponent(preview.id)}`,{method:"DELETE"});preview=null;$("#migrationImportButton").disabled=true;$("#migrationDiscardButton").disabled=true;$("#migrationRoot").innerHTML="";$("#migrationSQL").innerHTML='<option value="">Files only</option>';$("#migrationSummary").textContent="Upload an archive first.";output("migrationOutput","Staged archive deleted.");}catch(error){notifyError(error);}});
   $("#migrationStagesRefresh").addEventListener("click",async()=>{
-    try { if(cp.demo)throw new Error("Migration staging requires the installed server.");const result=await cp.api("/api/migrations");const container=$("#migrationStages");container.replaceChildren();
+    const button=$("#migrationStagesRefresh"),container=$("#migrationStages");
+    if(button.disabled)return;
+    button.disabled=true;container.textContent="Loading staged archives…";
+    try { if(cp.demo)throw new Error("Migration staging requires the installed server.");const result=await cp.api("/api/migrations");
+      if(!Array.isArray(result?.items))throw new Error("Could not read the staged archive list. Click Show staged archives to retry.");
+      container.replaceChildren();
       if(!result.items.length)container.textContent="No staged archives.";
       result.items.forEach(item=>{const button=document.createElement("button");button.type="button";button.className="button button-ghost";button.textContent=`${item.platform} | ${cp.formatDateTime(item.createdAt)} | ${cp.formatBytes(item.bytes)}`;
         button.addEventListener("click",()=>{preview=item;$("#migrationRoot").innerHTML=item.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+item.databases.map(file=>`<option>${esc(file)}</option>`).join("");$("#migrationSummary").textContent=`${item.files} files | ${cp.formatBytes(item.bytes)} | ${item.skipped} skipped`;$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Staged archive selected: ${item.id}`);});container.append(button);});
-    } catch(error){notifyError(error);}
+    } catch(error){container.textContent=error.message;notifyError(error);}
+    finally{button.disabled=false;}
   });
 
   function fillSiteSelect(id,state){const node=$(`#${id}`),value=node.value;node.innerHTML=state.sites.map(s=>`<option value="${esc(s.id)}">${esc(s.domain)}</option>`).join("");if(state.sites.some(s=>s.id===value))node.value=value;}
