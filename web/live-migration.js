@@ -75,7 +75,7 @@
   function renderJobs(){
     replacedAttempts=migrationReplacements(jobs);
     const queuePositions = migrationQueuePositions(jobs);
-    const section=location.hash.split('/')[1],allJobs=jobs,visibleJobs=section==='jobs'?jobs.filter(job=>active(job)||job.status==='queued'):section==='pending'?jobs.filter(pendingMigration):section==='completed'?jobs.filter(job=>!active(job)&&job.status!=='queued'&&job.status!=='connected'&&!pendingMigration(job)):jobs;
+    const section=location.hash.split('/')[1],allJobs=jobs,visibleJobs=section==='jobs'?jobs.filter(job=>active(job)||job.status==='queued'):section==='pending'?jobs.filter(pendingMigration):section==='completed'?jobs.filter(job=>!active(job)&&job.status!=='queued'&&job.status!=='connected'&&!pendingMigration(job)):['cpanel','plesk','litecp'].includes(section)?jobs.filter(job=>job.source?.platform===section):jobs;
     const heading = page.querySelector('.live-jobs-panel h2');
     if (section === 'jobs') {
       const total = visibleJobs.filter(job => job.account).length;
@@ -98,10 +98,12 @@
     document.querySelectorAll('.live-job[data-job-status="review"] [data-live-review]').forEach(control=>control.remove());
     document.querySelectorAll('[data-live-capture]').forEach(form=>{const selected=accountSelections.get(form.dataset.liveCapture);if(selected)selected.forEach(id=>pickAccount(form,id));});
   }
+  let jobsRequest=0;
   async function loadJobs(){
+    const request=++jobsRequest;
     if(cp.demo){$('#liveJobs').innerHTML='<div class="empty-state"><p>Live migration requires the installed Linux server.</p></div>';return;}
-    try{const result=await cp.api('/api/live-migrations');jobs=result.items;for(const job of jobs){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));Object.assign(job,current);}}renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
-    catch(error){$('#liveJobs').textContent=error.message;}
+    try{const result=await cp.api('/api/live-migrations');if(request!==jobsRequest)return;const updated=result.items;for(const job of updated){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));if(request!==jobsRequest)return;Object.assign(job,current);}}jobs=updated;renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
+    catch(error){if(request===jobsRequest)$('#liveJobs').textContent=error.message;}
   }
   async function revealMigrationJob(job){
     expandedJobs.add(job.id);

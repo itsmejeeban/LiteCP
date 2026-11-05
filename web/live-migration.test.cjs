@@ -77,6 +77,15 @@ test('fresh capture remains available after artifacts are cleaned and disappears
   assert.doesNotMatch(result.html, /data-live-retry="/);
 });
 
+test('source pages show only jobs belonging to that panel',()=>{
+  const cpanel={...healthReview,status:'connected'};
+  const plesk={...cpanel,id:'plesk-job',source:{platform:'plesk',host:'other.test'}};
+  const items=[cpanel,plesk];
+  const result=render(cpanel,items,'#migrations/cpanel');
+  assert.match(result.html,/data-job-id="old-job"/);
+  assert.doesNotMatch(result.html,/data-job-id="plesk-job"/);
+});
+
 test('post-restore review does not widen the committed-site health retry guard', () => {
   for (const change of [{ cpanelWebsiteId: '' }, { source: { platform: 'plesk', host: 'source.example.test' } }, { artifactsCleaned: true }]) {
     const result = render({ ...healthReview, ...change });
