@@ -6,7 +6,7 @@ function panel(hash='',options={} ){
   querySelectorAll(){return [...this.children.values()].flatMap(x=>[x,...x.children.values()])}
   append(){}insertAdjacentHTML(){}reset(){}
  }
- const page=new Element(),root=new Element();let rows=[],mutations=[];
+ const page=new Element(),root=new Element();let rows=options.rows||[],mutations=[];
  const settings={enabled:!!options.enabled,cpuPercent:25,memoryMiB:256,diskMiB:1024,tasks:64,concurrentRequests:8};
  const state={sites:[{id:'qa',domain:'qa.example.test'}]};
  const api=async(url,options)=>{if(options){mutations.push(options);rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];return {}}if(url.includes('?'))return {settings,capabilities:{ready:true,prerequisites:[]}};return {items:rows,updatedAt:new Date().toISOString()}};
@@ -30,4 +30,14 @@ test('editing an enabled policy preserves activation instead of silently disabli
 });
 test('explicit disable sends a disabled policy and retains its allowance values',async()=>{
  const ui=panel('',{enabled:true});await ui.open();assert.equal(ui.page.querySelector('[data-disable]').hidden,false);ui.page.querySelector('[data-disable]').onclick();await new Promise(setImmediate);assert.equal(ui.mutations[0].body.enabled,false);assert.equal(ui.mutations[0].body.cpuPercent,25);
+});
+
+test('blocked rows explain the cause and recovery while active rows hide stale cooldowns',async()=>{
+ const settings={enabled:true,cpuPercent:25,memoryMiB:64,diskMiB:256,tasks:64,concurrentRequests:8};
+ const row={id:'qa',domain:'qa.example.test',settings,state:'Resource blocked',reason:'CPU',nextRecovery:'2026-11-05T15:00:00Z',enforced:true,usage:{available:true,memoryBytes:0,processes:0}};
+ const ui=panel('',{rows:[row]});await ui.page.querySelector('[data-refresh]').onclick();
+ let html=ui.page.querySelector('[data-resources]').innerHTML;assert.match(html,/Cause: CPU/);assert.match(html,/Next recovery/);
+ row.state='Active';await ui.page.querySelector('[data-refresh]').onclick();html=ui.page.querySelector('[data-resources]').innerHTML;
+ assert.doesNotMatch(html,/Cause: CPU|Next recovery/);
+ row.state='Error';row.error='Monitor stopped';await ui.page.querySelector('[data-refresh]').onclick();assert.match(ui.page.querySelector('[data-resources]').innerHTML,/Monitor stopped/);
 });

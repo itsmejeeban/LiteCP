@@ -831,6 +831,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			} else {
 				st.State = "Active"
 				st.Reason = ""
+				st.NextRecovery = time.Time{}
 				st.CPUExhaustedFor = 0
 				st.Error = ""
 				if err = resourceRuntimeGate(site.ID, false); err != nil {

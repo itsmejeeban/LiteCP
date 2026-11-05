@@ -30,6 +30,7 @@ type websiteResourceRow struct {
 	Domain       string                 `json:"domain"`
 	Settings     *WebsiteResourceLimits `json:"settings"`
 	State        string                 `json:"state"`
+	Reason       string                 `json:"reason,omitempty"`
 	Enforced     bool                   `json:"enforced"`
 	Usage        websiteObservedUsage   `json:"usage"`
 	NextRecovery time.Time              `json:"nextRecovery,omitempty"`
@@ -204,6 +205,7 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 		if resourceEnabled(site) {
 			st := resourceStatusForSite(site)
 			row.State = st.State
+			row.Reason = st.Reason
 			row.NextRecovery = st.NextRecovery
 			row.Error = st.Error
 			row.Enforced = st.Enforced && time.Since(st.UpdatedAt) < 10*time.Second
