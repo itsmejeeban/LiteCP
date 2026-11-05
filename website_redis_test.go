@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestRedisPrivateCacheConfiguration(t *testing.T) {
 		}
 	}
 	unit := redisService(p, "/usr/bin/redis-server")
-	for _, value := range []string{"User=", "MemoryMax=128M", "MemorySwapMax=0", "NoNewPrivileges=yes", "RestrictAddressFamilies=AF_UNIX", "RuntimeDirectoryMode=0700", "Restart=no"} {
+	for _, value := range []string{"DynamicUser=yes", "User=", "MemoryMax=128M", "MemorySwapMax=0", "NoNewPrivileges=yes", "RestrictAddressFamilies=AF_UNIX", "RuntimeDirectoryMode=0700", "Restart=no"} {
 		if !strings.Contains(unit, value) {
 			t.Fatalf("missing %s", value)
 		}
@@ -79,5 +80,28 @@ func TestRedisSettingsPersistWithWebsite(t *testing.T) {
 	var restored Site
 	if json.Unmarshal(b, &restored) != nil || restored.Redis == nil || *restored.Redis != *site.Redis {
 		t.Fatal("site serialization lost Redis settings")
+	}
+}
+
+func TestRedisPHPAllowlistIncludesOnlyOwnSocketDirectory(t *testing.T) {
+	s := &System{os: OSInfo{ID: "almalinux"}}
+	a := nativeResourcePlan().Site
+	b := a
+	b.ID = "other-audit"
+	cfg := s.phpPoolConfig(a)
+	if !strings.Contains(cfg, filepath.Dir(redisSocket(a.ID))) || strings.Contains(cfg, filepath.Dir(redisSocket(b.ID))) {
+		t.Fatal("PHP Redis socket boundary missing or too broad")
+	}
+	if strings.Contains(cfg, "open_basedir] = /run:") {
+		t.Fatal("entire runtime tree exposed")
+	}
+}
+
+func TestRedisCacheCannotChangeAdministrativeConfiguration(t *testing.T) {
+	config := redisConfig(redisPlan{Site: nativeResourcePlan().Site, Settings: WebsiteRedis{MemoryMiB: 32}})
+	for _, denied := range []string{"-config", "-acl", "-module", "-replicaof", "-bgrewriteaof"} {
+		if !strings.Contains(config, denied) {
+			t.Fatalf("missing command restriction %s", denied)
+		}
 	}
 }

@@ -1106,6 +1106,7 @@ func (s *System) phpPoolConfig(site Site) string {
 		allowed = home
 		temporary = filepath.Join(home, "tmp")
 	}
+ if site.RuntimeUID>0 && !s.usesPHP73Container(site.PHPVersion) {allowed += ":"+filepath.Dir(redisSocket(site.ID))}
 	webUser := s.webUser()
 	socketOwner, socketGroup := webUser, webUser
 	if s.usesPHP73Container(site.PHPVersion) {

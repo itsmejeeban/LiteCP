@@ -72,14 +72,16 @@ func validateRedisPlan(p redisPlan) error {
 	return nil
 }
 func redisConfig(p redisPlan) string {
-	return fmt.Sprintf("port 0\nunixsocket %s\nunixsocketperm 600\ndaemonize no\nsupervised no\nlogfile \"\"\nsave \"\"\nappendonly no\nmaxmemory %dmb\nmaxmemory-policy allkeys-lru\nmaxclients 128\nprotected-mode yes\n", redisSocket(p.Site.ID), p.Settings.MemoryMiB)
+	return fmt.Sprintf("port 0\nunixsocket %s\nunixsocketperm 600\ndaemonize no\nsupervised no\nlogfile \"\"\nsave \"\"\nappendonly no\nmaxmemory %dmb\nmaxmemory-policy allkeys-lru\nmaxclients 128\nprotected-mode yes\nuser default on nopass ~* &* +@all -config -module -acl -debug -shutdown -save -bgsave -bgrewriteaof -replicaof -slaveof\n", redisSocket(p.Site.ID), p.Settings.MemoryMiB)
 }
 func redisService(p redisPlan, binary string) string {
 	slice := ""
 	if resourceEnabled(p.Site) {
 		slice = "Slice=" + resourceSliceName(p.Site.ID) + "\n"
 	}
-	return fmt.Sprintf("[Unit]\nDescription=LiteCP website Redis cache\nAfter=local-fs.target\n[Service]\nType=simple\nUser=%d\nGroup=%d\nRuntimeDirectory=litecp-redis-%x\nRuntimeDirectoryMode=0700\nExecStart=%s %s/redis.conf\nRestart=no\nUMask=0077\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=strict\nProtectHome=yes\nProtectKernelTunables=yes\nProtectKernelModules=yes\nProtectControlGroups=yes\nRestrictAddressFamilies=AF_UNIX\nCapabilityBoundingSet=\nTasksMax=32\nMemoryMax=%dM\nMemorySwapMax=0\n%s[Install]\nWantedBy=multi-user.target\n", p.Site.RuntimeUID, p.Site.RuntimeGID, []byte(p.Site.ID), binary, redisDirectory(p.Site.ID), p.Settings.MemoryMiB+64, slice)
+	// DynamicUser supports numeric IDs without passwd entries. Execute the vendor
+	// binary directly so SELinux enters redis_t; no root cache worker is needed.
+	return fmt.Sprintf("[Unit]\nDescription=LiteCP website Redis cache\nAfter=local-fs.target\n[Service]\nType=simple\nDynamicUser=yes\nUser=%d\nGroup=%d\nRuntimeDirectory=litecp-redis-%x\nRuntimeDirectoryMode=0700\nExecStart=%s %s/redis.conf\nRestart=no\nUMask=0077\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=strict\nProtectHome=yes\nProtectKernelTunables=yes\nProtectKernelModules=yes\nProtectControlGroups=yes\nRestrictAddressFamilies=AF_UNIX\nCapabilityBoundingSet=\nTasksMax=32\nMemoryMax=%dM\nMemorySwapMax=0\n%s[Install]\nWantedBy=multi-user.target\n", p.Site.RuntimeUID, p.Site.RuntimeGID, []byte(p.Site.ID), binary, redisDirectory(p.Site.ID), p.Settings.MemoryMiB+64, slice)
 }
 func redisRuntimeCommand(args []string) (result error) {
 	if runtime.GOOS != "linux" || os.Geteuid() != 0 || len(args) != 1 {
@@ -115,6 +117,9 @@ func redisRuntimeCommand(args []string) (result error) {
 	}
 	if redisBinary() == "" || redisCLI() == "" {
 		return fmt.Errorf("install Redis server and CLI through the OS package manager first")
+	}
+	if warning := redisPHPPolicyWarning(); warning != "" {
+		return fmt.Errorf("%s", warning)
 	}
 	if resourceEnabled(p.Site) {
 		st := resourceStatusForSite(p.Site)
@@ -164,11 +169,27 @@ func redisRuntimeCommand(args []string) (result error) {
 	if err = os.MkdirAll("/var/lib/litecp-redis", 0755); err != nil {
 		return err
 	}
+	if err = os.Chmod("/var/lib/litecp-redis", 0755); err != nil {
+		return err
+	}
 	dir := redisDirectory(p.Site.ID)
 	if err = os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
+	if err = os.Chmod(dir, 0750); err != nil {
+		return err
+	}
 	if err = os.Chown(dir, 0, p.Site.RuntimeGID); err != nil {
+		return err
+	}
+	runtimeDir := filepath.Dir(redisSocket(p.Site.ID))
+	if err = os.MkdirAll(runtimeDir, 0700); err != nil {
+		return err
+	}
+	if err = os.Chmod(runtimeDir, 0700); err != nil {
+		return err
+	}
+	if err = os.Chown(runtimeDir, p.Site.RuntimeUID, p.Site.RuntimeGID); err != nil {
 		return err
 	}
 	// Keep the configuration outside the website-owned tree.
@@ -189,7 +210,7 @@ func redisRuntimeCommand(args []string) (result error) {
 				}
 			}
 		}
-		if err = resourceRun("restorecon", "-R", "/var/lib/litecp-redis"); err != nil {
+		if err = resourceRun("restorecon", "-R", "/var/lib/litecp-redis", runtimeDir); err != nil {
 			return err
 		}
 	}
@@ -211,6 +232,9 @@ func redisRuntimeCommand(args []string) (result error) {
 	for ctx.Err() == nil {
 		out, e := runCommand(ctx, time.Second, redisCLI(), "-s", redisSocket(p.Site.ID), "PING")
 		if e == nil && strings.TrimSpace(out) == "PONG" {
+			if err = redisPreparePHP(p.Site); err != nil {
+				return err
+			}
 			return redisPrintStatus(p)
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -219,12 +243,12 @@ func redisRuntimeCommand(args []string) (result error) {
 	return fmt.Errorf("Redis health check failed; inspect journalctl -u %s", redisUnit(p.Site.ID))
 }
 func redisStatus(p redisPlan) map[string]any {
-	out := map[string]any{"installed": redisBinary() != "" && redisCLI() != "", "running": false, "socket": redisSocket(p.Site.ID), "mode": "Cache only", "settings": p.Settings, "metrics": map[string]string{}}
+	out := map[string]any{"installed": redisBinary() != "" && redisCLI() != "", "running": false, "socket": redisSocket(p.Site.ID), "mode": "Cache only", "settings": p.Settings, "phpWarning": redisPHPPolicyWarning(), "metrics": map[string]string{}}
 	if redisCLI() != "" {
 		raw, err := runCommand(context.Background(), 3*time.Second, redisCLI(), "-s", redisSocket(p.Site.ID), "INFO")
 		if err == nil && !strings.HasPrefix(raw, "Could not") {
 			metrics := map[string]string{}
-			allowed := map[string]bool{"used_memory_human": true, "used_memory_rss_human": true, "maxmemory_human": true, "connected_clients": true, "keyspace_hits": true, "keyspace_misses": true, "evicted_keys": true, "uptime_in_seconds": true, "redis_version": true}
+			allowed := map[string]bool{"used_memory_human": true, "used_memory_rss_human": true, "maxmemory_human": true, "connected_clients": true, "keyspace_hits": true, "keyspace_misses": true, "evicted_keys": true, "uptime_in_seconds": true, "redis_version": true, "valkey_version": true}
 			for _, line := range strings.Split(raw, "\n") {
 				kv := strings.SplitN(strings.TrimSpace(line), ":", 2)
 				if len(kv) == 2 && allowed[kv[0]] {
@@ -236,6 +260,17 @@ func redisStatus(p redisPlan) map[string]any {
 		}
 	}
 	return out
+}
+func redisPHPPolicyWarning() string {
+	out, err := exec.Command("getenforce").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "Enforcing" {
+		return ""
+	}
+	out, err = exec.Command("getsebool", "httpd_can_network_redis").Output()
+	if err == nil && strings.HasSuffix(strings.TrimSpace(string(out)), "off") {
+		return "SELinux httpd_can_network_redis is off. Administrator approval is required before enabling this shared Redis access policy; PHP socket access has not been verified."
+	}
+	return ""
 }
 func redisPrintStatus(p redisPlan) error {
 	b, err := json.Marshal(redisStatus(p))
@@ -339,6 +374,31 @@ func redisResumeForResource(p resourceRuntimePlan) error {
 			return err
 		}
 		return resourceRun("systemctl", "start", unit)
+	}
+	return nil
+}
+
+func redisPreparePHP(site Site) error {
+	s := NewSystem("/var/lib/litecp")
+	if !resourceEnabled(site) {
+		return s.ensureSitePHPPool(context.Background(), site)
+	}
+	file := filepath.Join(resourceDirectory(site.ID), "php.conf")
+	previous, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	php, _, _ := resourceNativeConfigs(s, resourceRuntimePlan{Site: site, Policy: *site.ResourceLimits})
+	if err = writeAtomic(file, []byte(php), 0644); err != nil {
+		return err
+	}
+	if err = resourceRun(resourcePHPExecutable(s, site), "-t", "-y", file); err != nil {
+		_ = writeAtomic(file, previous, 0644)
+		return err
+	}
+	if err = resourceRun("systemctl", "kill", "--kill-whom=main", "--signal=USR2", resourceUnit(site.ID, "php")); err != nil {
+		_ = writeAtomic(file, previous, 0644)
+		return err
 	}
 	return nil
 }
