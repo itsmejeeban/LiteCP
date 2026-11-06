@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.141"
+var version = "4.0.142"
 var buildRevision = ""
 
 //go:embed web/*
@@ -46,6 +46,7 @@ type loginAttempt struct {
 }
 
 type App struct {
+	apiBuckets map[string]loginAttempt
 	store      *Store
 	system     *System
 	sessions   map[string]session
@@ -302,6 +303,8 @@ func (a *App) routes() http.Handler {
 
 func (a *App) routeMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/access", a.withAuth(a.apiAccess))
+	mux.HandleFunc("/api/v1", only(http.MethodPost, a.externalAPI))
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))

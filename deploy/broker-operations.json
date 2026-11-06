@@ -1,4 +1,6 @@
 [
+  "/api/access",
+  "/api/v1",
   "/api/shell-capabilities",
   "/api/activities",
   "/api/activity-policy",

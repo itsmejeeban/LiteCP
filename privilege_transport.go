@@ -5,6 +5,7 @@ package main
 // authentication/validation, and streams its bounded request/response body.
 import (
 	"context"
+	"crypto/tls"
 	_ "embed"
 	"encoding/binary"
 	"encoding/json"
@@ -45,6 +46,7 @@ func runtimeRootHTTPForbidden(args []string, demo bool) bool {
 }
 
 type brokerRequest struct {
+	TLS           bool        `json:"tls,omitempty"`
 	Operation     string      `json:"operation"`
 	Suffix        string      `json:"suffix,omitempty"`
 	Method        string      `json:"method"`
@@ -251,6 +253,9 @@ func serveBrokerRequest(conn net.Conn, app *App, mux *http.ServeMux, expectedUID
 	defer cancel()
 	body := &brokerBodyReader{source: conn, remaining: brokerStreamLimit, onEOF: func() { go func() { var extra [1]byte; _, _ = conn.Read(extra[:]); cancel() }() }}
 	r := &http.Request{Method: input.Method, URL: &url.URL{Path: path, RawQuery: input.Query}, Host: input.Host, RemoteAddr: input.RemoteAddr, Header: input.Header, ContentLength: input.ContentLength, Body: io.NopCloser(body)}
+	if input.TLS {
+		r.TLS = &tls.ConnectionState{}
+	}
 	r = r.WithContext(ctx)
 	w := &brokerResponseWriter{conn: conn, header: make(http.Header), body: brokerBodyWriter{target: conn, remaining: brokerStreamLimit}}
 	// Disconnects cancel the handler once it has consumed the framed body.
@@ -291,6 +296,7 @@ func forwardBrokerRequest(w http.ResponseWriter, r *http.Request, mux *http.Serv
 		}
 	}()
 	input := brokerRequest{Operation: op, Suffix: suffix, Method: r.Method, Query: r.URL.RawQuery, Host: r.Host, RemoteAddr: r.RemoteAddr, Header: r.Header.Clone(), ContentLength: r.ContentLength}
+	input.TLS = r.TLS != nil
 	if err = writeBrokerJSON(conn, input); err != nil {
 		writeError(w, 502, "Management request metadata is invalid or too large.")
 		return

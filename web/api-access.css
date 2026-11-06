@@ -1,0 +1,12 @@
+.api-access-page .api-table-wrap{overflow-x:auto;margin:18px 0;}
+.api-access-page table{width:100%;border-collapse:collapse;text-align:left;}
+.api-access-page th,.api-access-page td{padding:12px;vertical-align:top;border-bottom:1px solid var(--border,#444);}
+.api-access-page small{display:block;margin-top:5px;}
+.api-access-page code{overflow-wrap:anywhere;}
+.api-access-page .api-editor{border:1px solid var(--border,#444);border-radius:8px;padding:20px;margin-bottom:20px;}
+.api-access-page fieldset{margin:16px 0;padding:12px;min-width:0;border:1px solid var(--border,#444);border-radius:6px;}
+.api-access-page .api-choice{display:flex;align-items:center;gap:8px;margin:9px 0;font-weight:400;}
+.api-access-page .api-choice input[type=checkbox]{width:18px!important;height:18px!important;min-height:18px!important;padding:0!important;margin:0;flex:0 0 18px;}
+.api-access-page [role=tablist]{display:flex;flex-wrap:wrap;gap:10px;}
+.api-access-page [hidden]{display:none!important;}
+.api-access-page pre{white-space:pre-wrap;overflow-wrap:anywhere;}

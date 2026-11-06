@@ -138,6 +138,8 @@ type Admin struct {
 }
 
 type Config struct {
+	APIRules           []APIRule           `json:"apiRules,omitempty"`
+	APICredentials     []APICredential     `json:"apiCredentials,omitempty"`
 	BackupSchedules    []BackupSchedule    `json:"backupSchedules,omitempty"`
 	SchemaVersion      int                 `json:"schemaVersion"`
 	Admin              Admin               `json:"admin"`

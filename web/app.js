@@ -628,7 +628,7 @@
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
-    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "server-waf", "website-waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "website-resource-limits", "website-traffic", "website-dns", "website-redis", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "file-integrity", "brute-force", "two-factor", "analytics", "disk-usage", "live-process", "activities", "documentation", "applications", "system-updates"];
+    const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "server-waf", "website-waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "website-resource-limits", "website-traffic", "website-dns", "website-redis", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "file-integrity", "brute-force", "two-factor", "analytics", "disk-usage", "live-process", "activities", "api-access", "documentation", "applications", "system-updates"];
     if (!allowed.includes(page) && page !== 'ssh-port' && page !== 'panel-port') page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
@@ -778,7 +778,7 @@
     $("#credentialsModal .modal-head p").textContent = description;
     $("#credentialList").innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join("");
     $$("#credentialList > div").forEach((row, index) => {
-      if (/password/i.test(rows[index][0])) {
+      if (/password|secret/i.test(rows[index][0])) {
         const input=document.createElement("input");input.type="password";input.value=String(rows[index][1]);input.readOnly=true;input.autocomplete="off";input.setAttribute("aria-label",rows[index][0]);
         row.querySelector("dd").replaceChildren(input);window.LiteCPPasswordCopy.enhance(input);
       } else if (/^username$/i.test(rows[index][0])) {
