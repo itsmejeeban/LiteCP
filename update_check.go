@@ -17,6 +17,7 @@ type releaseStatus struct {
 	Latest    string `json:"latest,omitempty"`
 	Available bool   `json:"available"`
 	Checked   bool   `json:"checked"`
+	Message   string `json:"message,omitempty"`
 	URL       string `json:"url,omitempty"`
 }
 
@@ -25,6 +26,7 @@ var releaseCache struct {
 	until   time.Time
 	tag     string
 	checked bool
+	message string
 }
 
 func releaseNumbers(tag string) ([3]int, bool) {
@@ -74,6 +76,7 @@ func checkRelease(current string) releaseStatus {
 	if time.Now().After(releaseCache.until) {
 		releaseCache.checked = false
 		releaseCache.tag = ""
+		releaseCache.message = "The release service is unavailable. Try again later."
 		releaseCache.until = time.Now().Add(5 * time.Minute)
 		client := &http.Client{Timeout: 8 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 		req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/itsmejeeban/LiteCP/releases/latest", nil)
@@ -83,7 +86,7 @@ func checkRelease(current string) releaseStatus {
 		if err == nil {
 			defer response.Body.Close()
 			if response.StatusCode == http.StatusNotFound {
-				releaseCache.checked = true
+				releaseCache.message = "No public stable release is accessible. The repository may be private or no stable release has been published."
 			}
 			if response.StatusCode == http.StatusOK {
 				var release struct {
@@ -99,11 +102,12 @@ func checkRelease(current string) releaseStatus {
 				}
 			}
 			if releaseCache.checked {
+				releaseCache.message = ""
 				releaseCache.until = time.Now().Add(time.Hour)
 			}
 		}
 	}
-	status := releaseStatus{Current: current, Build: buildRevision, Latest: releaseCache.tag, Checked: releaseCache.checked, Available: newerRelease(releaseCache.tag, current)}
+	status := releaseStatus{Current: current, Build: buildRevision, Latest: releaseCache.tag, Checked: releaseCache.checked, Message: releaseCache.message, Available: newerRelease(releaseCache.tag, current)}
 	if status.Available {
 		status.URL = fmt.Sprintf("https://github.com/itsmejeeban/LiteCP/releases/tag/%s", releaseCache.tag)
 	}

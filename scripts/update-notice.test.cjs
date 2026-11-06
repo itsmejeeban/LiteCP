@@ -26,3 +26,25 @@ test('update page displays the installed build revision',async()=>{
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(versions.textContent,'Installed: 0.5.1 (build c432478abcde)');
 });
+
+test('inaccessible release reason is displayed on the update page',async()=>{
+ const message={textContent:''},notice={querySelector:()=>({}),classList:{toggle(){}}};
+ const elements={'#updateNotice':notice,'#appView':{classList:{contains:()=>false}},'#panelUpdateMessage':message};
+ vm.runInNewContext(code,{document:{querySelector:s=>elements[s]},MutationObserver:class{observe(){}},fetch:async()=>({ok:true,json:async()=>({checked:false,message:'No public stable release is accessible.'})}),Date,setInterval(){}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(message.textContent,'No public stable release is accessible.');
+});
+
+test('transient updater defines its own private Go cache paths',()=>{
+ const worker=fs.readFileSync('scripts/update-panel.sh','utf8');
+ assert.match(worker,/export GOPATH="\$work\/go" GOMODCACHE="\$work\/go\/pkg\/mod" GOCACHE="\$work\/go-build"/);
+ assert.ok(worker.indexOf('export GOPATH=')<worker.indexOf('go build -p=1'));
+});
+
+test('network fetch failures explain connection and certificate checks',async()=>{
+ const message={textContent:''},notice={querySelector:()=>({}),classList:{toggle(){}}};
+ const elements={'#updateNotice':notice,'#appView':{classList:{contains:()=>false}},'#panelUpdateMessage':message};
+ vm.runInNewContext(code,{document:{querySelector:s=>elements[s]},MutationObserver:class{observe(){}},TypeError,fetch:async()=>{throw new TypeError('Failed to fetch');},Date,setInterval(){}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(message.textContent,/connection and the panel HTTPS certificate/);
+});

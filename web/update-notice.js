@@ -22,9 +22,9 @@
    notice.classList.toggle('hidden',!available);
    if(available){label.textContent=`LiteCP ${result.latest.replace(/^v/,'')} version available for update`;notice.href='#settings/update';}
    if(versions)versions.textContent=`Installed: ${result.current}${/^[a-f0-9]{7,40}$/i.test(result.build||'')?' (build '+result.build.slice(0,12)+')':''}${result.latest?' · Latest stable release: '+result.latest:''}`;
-   if(!running)say(!result.checked?'The release service is unavailable. Try again later.':available?'A new LiteCP version is ready to install.':'No newer stable LiteCP release is available.');
+   if(!running)say(!result.checked?(result.message||'The release service is unavailable. Try again later.'):available?'A new LiteCP version is ready to install.':'No newer stable LiteCP release is available.');
    if(install)install.disabled=running||!available;
-  }catch(error){say(error.message);}
+  }catch(error){say(error instanceof TypeError?'Could not reach the panel. Check your connection and the panel HTTPS certificate, then try again.':error.message);}
   finally{checking=false;if(checkButton)checkButton.disabled=false;}
  }
  checkButton?.addEventListener('click',()=>check(true));

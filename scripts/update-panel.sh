@@ -31,6 +31,9 @@ status running "Downloading the official LiteCP release."
 for tool in curl python3 go systemctl; do command -v "$tool" >/dev/null; done
 install -d -m 0700 /usr/local/lib/litecp-updates
 work="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
+# Transient system services need not have HOME or GOPATH. Keep build caches
+# private to this update rather than relying on an interactive root login.
+export GOPATH="$work/go" GOMODCACHE="$work/go/pkg/mod" GOCACHE="$work/go-build"
 curl --fail --location --proto '=https' --tlsv1.2 --max-time 180 --max-filesize 52428800 "https://api.github.com/repos/itsmejeeban/LiteCP/tarball/$tag" -o "$work/source.tar.gz"
 mkdir "$work/source"
 python3 - "$work/source.tar.gz" "$work/source" <<'PY'
