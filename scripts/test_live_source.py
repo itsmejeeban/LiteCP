@@ -13,6 +13,29 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_plesk_subdomain_capture_uses_subscription_and_selected_root(self):
+        def query(args, log=None):
+            if args[1:]==['bin','site','--list']:
+                return 'example.test\napi.example.test\n'
+            if args[1:3]==['bin','pleskbackup']:
+                return ''
+            if 'SELECT name,login,www_root' in args[-1]:
+                return 'api.example.test\towner\t/var/www/vhosts/example.test/api\n'
+            self.fail('Unexpected Plesk command: '+repr(args))
+        with patch.object(source.os,'geteuid',return_value=0,create=True), patch.object(source.shutil,'which',return_value='/usr/sbin/plesk'), patch.object(source,'command',side_effect=query) as command, patch.object(source,'plesk_backup_subscription',return_value='example.test'), patch.object(source,'plesk_website_databases',return_value=['api_db']) as databases, patch.object(source.pathlib.Path,'mkdir'), patch.object(source.pathlib.Path,'is_file',return_value=True), patch.object(source.pathlib.Path,'is_dir',return_value=True), patch.object(source.pathlib.Path,'is_absolute',return_value=True), patch.object(source.pathlib.Path,'is_symlink',return_value=False), patch('builtins.open',unittest.mock.mock_open()), patch.object(source.os,'chmod'), patch.object(source,'describe',return_value={'path':'fixture'}), patch.object(source.tarfile,'open') as archive, patch.object(source.subprocess,'run',return_value=types.SimpleNamespace(returncode=0)) as dump:
+            result=source.export({'platform':'plesk','mode':'capture','account':'api.example.test','job':'abcdefghijklmnop'})
+            backup=next(call.args[0] for call in command.call_args_list if call.args[0][1:3]==['bin','pleskbackup'])
+            self.assertEqual(backup[3:5],['--domains-name','example.test'])
+            self.assertIn('-keep-local-backup',backup)
+            self.assertEqual(databases.call_args.args[1:3],('api.example.test','example.test'))
+            self.assertEqual(databases.call_args.args[3],pathlib.Path('/var/www/vhosts/example.test/api'))
+            self.assertEqual(dump.call_args.args[0][:4],['/usr/sbin/plesk','db','dump','api_db'])
+            added=archive.return_value.__enter__.return_value.add.call_args_list
+            self.assertEqual(added[0].args[0],pathlib.Path('/var/www/vhosts/example.test/api'))
+            self.assertEqual([call.kwargs['arcname'] for call in added],['httpdocs','databases/api_db.sql'])
+            self.assertIsNotNone(result['native'])
+            self.assertIsNotNone(result['portable'])
+
     def test_cpanel_private_directory_names_are_not_account_metadata(self):
         with tempfile.TemporaryDirectory() as directory:
             archive=pathlib.Path(directory)/'native.tar.gz'
