@@ -29,6 +29,14 @@ class LiveSourceTests(unittest.TestCase):
             self.assertEqual(archive.return_value.__enter__.return_value.add.call_args.kwargs['arcname'], 'public_html')
             self.assertEqual(result['native'],result['portable'])
 
+    def test_litecp_capture_exports_owned_and_primary_databases_only(self):
+        config = {'sites':[{'id':'-audit','domain':'audit.example.test','root':'/home/litecp/audit/public_html','database':'primary_db'}], 'databases':[{'siteId':'-audit','name':'owned_db'},{'siteId':'other','name':'unrelated_db'}]}
+        with patch.object(source.os,'geteuid',return_value=0,create=True), patch('builtins.open',unittest.mock.mock_open(read_data=json.dumps(config))), patch.object(source.pathlib.Path,'mkdir'), patch.object(source.pathlib.Path,'resolve',return_value=pathlib.PurePosixPath('/home/litecp/audit/public_html')), patch.object(source.pathlib.Path,'is_symlink',return_value=False), patch.object(source.pathlib.Path,'is_dir',return_value=True), patch.object(source.os,'chmod'), patch.object(source.tarfile,'open') as archive, patch.object(source,'describe',return_value={'path':'fixture.tar.gz'}), patch.object(source.subprocess,'run',return_value=types.SimpleNamespace(returncode=0)) as run:
+            source.export({'platform':'litecp','mode':'capture','account':'-audit','job':'abcdefghijklmnop'})
+            self.assertEqual([call.args[0][-1] for call in run.call_args_list], ['owned_db','primary_db'])
+            names=[call.kwargs['arcname'] for call in archive.return_value.__enter__.return_value.add.call_args_list]
+            self.assertEqual(names,['public_html','databases/owned_db.sql','databases/primary_db.sql'])
+
     def test_plesk_subdomain_selects_referenced_parent_database_only(self):
         inventory = 'securese_jk\tsecureserver.top\nother_db\tsecureserver.top\ndirect_db\tapi.secureserver.top\n'
         with patch.object(source, 'command', return_value=inventory), patch.object(source.os, 'walk', return_value=[('/website', [], ['.env'])]), patch.object(source.pathlib.Path, 'is_symlink', return_value=False), patch.object(source.pathlib.Path, 'is_file', return_value=True), patch.object(source.pathlib.Path, 'stat', return_value=types.SimpleNamespace(st_size=100)), patch.object(source.pathlib.Path, 'read_text', return_value='DB_DATABASE=securese_jk\nDB_PASSWORD=private\n'):
