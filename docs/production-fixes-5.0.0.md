@@ -37,3 +37,13 @@ This follows the original production-readiness report; it does not erase its his
 - General archive-at-rest encryption and external tamper-resistant security logging remain separate design/operations boundaries.
 
 The local version remains the requested 5.0.0. The live binary is still 4.0.160 until the user runs the updater. No production binary/package was generated or deployed. Existing Makefile retained. No user website, database, mailbox data, backups or audit baselines were deleted or silently reset.
+
+## Updated-panel acceptance - 6 November 2026
+
+- Live version endpoint reports 5.0.0, build 908122a81cc0083aba6156480ae6bff37e344d02. This supersedes the older deployment-status paragraph above.
+- Read-only service checks confirm panel, broker, Nginx, MySQL, Postfix, Dovecot, OpenDKIM and authoritative DNS active. Webmail returns HTTPS 200; DNS runs as named with CAP_NET_BIND_SERVICE and its writable runtime directory.
+- Chrome on the trusted hostname confirms the dashboard renders, including running PHP state and backup ages. Website summary widths are 270/90/110/72/105 pixels, and Ctrl+K focuses panelSearchInput.
+- Found and fixed locally: enabled Node.js/Python/Ruby websites incorrectly displayed the PHP application logo. Rendering now uses the active runtime icon and escaped version title; disabled/unknown runtimes preserve the configured application icon. app.js cache version updated to 5.0.0. This new source change is not deployed by this audit.
+- Complete frontend suite after this repair: 184/184 passed. app.js syntax check passed. Existing Makefile retained; no build, release package or deployment performed in this acceptance pass.
+- User reports successful 2FA testing. Enrollment was not changed by this audit; prior server inspection still reported the current administrator enrollment disabled. Functional testing and actual production enrollment are separate checks.
+- Production acceptance remains conditional on public mail DNS/delivery, key-based SSH with an independent recovery route, separate-destination restore acceptance, fresh-install/reboot/rollback coverage and integrity baseline review. DNS provider and separate recovery destination have not been supplied. Do not present these as completed.

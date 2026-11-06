@@ -1382,6 +1382,13 @@
     return Object.keys(labels).filter(key=>enabled[key]).map(key=>`<button type="button" data-site-runtime="${key}" data-runtime-site="${escapeHTML(site.id)}" title="Select ${labels[key]} version" aria-label="${labels[key]} version for ${escapeHTML(site.domain)}"><img src="assets/sidebar/runtime-${key}.svg?v=3.7.2" width="28" height="28" alt=""><span class="site-action-label">${labels[key]}</span></button>`).join("");
   }
   function renderApplicationLogo(site) {
+    const runtimeNames = {node: "Node.js", python: "Python", ruby: "Ruby"};
+    const runtime = site.application;
+    if (runtime?.enabled && Object.prototype.hasOwnProperty.call(runtimeNames, runtime.language)) {
+      const name = runtimeNames[runtime.language];
+      const detail = runtime.version ? `${name} ${runtime.version}` : name;
+      return `<span class="application-logo application-logo-${runtime.language}" title="${escapeHTML(detail)}"><img src="assets/sidebar/runtime-${runtime.language}.svg?v=3.7.2" alt="${name} logo"></span>`;
+    }
     const type = site.appType === "wordpress" ? "wordpress" : site.appType === "whmcs" ? "whmcs" : "php";
     const name = type === "wordpress" ? "WordPress" : type === "whmcs" ? "WHMCS" : "PHP";
     const detail = site.appVersion ? `${name} ${site.appVersion}` : name;
