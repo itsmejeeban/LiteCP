@@ -29,8 +29,8 @@ type CaptchaPolicy struct {
 
 func captchaEnabled(site Site) bool { return site.Captcha != nil && site.Captcha.Mode != "off" }
 func (p CaptchaPolicy) validate() error {
-	if p.Mode != "off" && p.Mode != "monitor" && p.Mode != "challenge" {
-		return fmt.Errorf("Choose Off, Monitor or Challenge all visitors")
+	if p.Mode != "off" && p.Mode != "monitor" && p.Mode != "challenge" && p.Mode != "auto" {
+		return fmt.Errorf("Choose Off, Monitor, Challenge all visitors or Automatic")
 	}
 	if p.ClearanceMinutes < 5 || p.ClearanceMinutes > 1440 || p.RequestsPerSecond < 1 || p.RequestsPerSecond > 1000 || p.SiteRequestsPerSecond < 1 || p.SiteRequestsPerSecond > 100000 || p.Connections < 1 || p.Connections > 1000 || p.AttemptsPerMinute < 3 || p.AttemptsPerMinute > 120 || p.ChallengesPerMinute < 10 || p.ChallengesPerMinute > 1200 {
 		return fmt.Errorf("Limits are outside the supported range")
@@ -49,10 +49,40 @@ func (p CaptchaPolicy) validate() error {
 var captchaManagedBlock = regexp.MustCompile(`(?ms)\n[ \t]*# BEGIN LITECP CAPTCHA\n.*?^[ \t]*# END LITECP CAPTCHA\n`)
 var captchaServerStart = regexp.MustCompile(`(?m)^[ \t]*server\s*\{`)
 
+func captchaResourceSignal(site Site, record captchaRuntimeSite, st resourceRuntimeStatus, now time.Time) captchaRuntimeSite {
+	if record.Policy.Mode != "auto" || !resourceEnabled(site) {
+		record.AutoUntil = time.Time{}
+		record.AutoStarted = time.Time{}
+		record.ResourceBlocked = false
+		return record
+	}
+	p := site.ResourceLimits
+	// A missing/stale enforced boundary must never become an access bypass.
+	record.ResourceBlocked = !st.Enforced || st.State == "Resource blocked" || st.State == "Recovering" || st.State == "Error"
+	breach := record.ResourceBlocked || st.CPUExhaustedFor > 0 || (p.MemoryMiB > 0 && st.MemoryBytes >= p.MemoryMiB*1048576) || (p.DiskMiB > 0 && st.Sample.DiskBytes >= p.DiskMiB*1048576) || (p.Tasks > 0 && st.Processes >= p.Tasks)
+	if breach {
+		if !record.AutoUntil.After(now) {
+			record.AutoStarted = now
+		}
+		record.AutoUntil = now.Add(5 * time.Minute)
+	}
+	return record
+}
+
 func injectCaptchaConfig(config string, site Site) string {
 	config = captchaManagedBlock.ReplaceAllString(config, "")
+	gate := fmt.Sprintf(" if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n", resourceDirectory(site.ID))
+	if resourceEnabled(site) && strings.Contains(config, "# LiteCP enforced website resource boundary") && (site.Captcha == nil || site.Captcha.Mode != "auto") && !strings.Contains(config, gate) {
+		config = captchaServerStart.ReplaceAllStringFunc(config, func(start string) string { return start + "\n" + gate })
+	}
 	if !captchaEnabled(site) {
 		return config
+	}
+	if site.Captcha.Mode == "auto" {
+		// The gateway handles the resource gate before proxying; this permits
+		// verification while stopped workloads remain inaccessible. Suspension
+		// directives and the private worker's cgroup limits are never removed.
+		config = strings.ReplaceAll(config, fmt.Sprintf(" if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n", resourceDirectory(site.ID)), "")
 	}
 	p := site.Captcha
 	dry := "off"
@@ -128,9 +158,29 @@ func (a *App) syncCaptchaRuntime(sites []Site) error {
 		return err
 	}
 	runtime := captchaRuntime{Key: string(key), Sites: map[string]captchaRuntimeSite{}}
+	var previous captchaRuntime
+	if content, e := os.ReadFile(captchaRuntimeFile); e == nil {
+		_ = json.Unmarshal(content, &previous)
+	}
 	for _, site := range sites {
 		if captchaEnabled(site) {
-			runtime.Sites[site.ID] = captchaRuntimeSite{Domain: site.Domain, Policy: *site.Captcha}
+			record := captchaRuntimeSite{Domain: site.Domain, Policy: *site.Captcha}
+			if site.Captcha.Mode == "auto" && resourceEnabled(site) {
+				old := previous.Sites[site.ID]
+				if old.Policy.Revision == record.Policy.Revision && old.Domain == record.Domain {
+					record.AutoUntil = old.AutoUntil
+					record.AutoStarted = old.AutoStarted
+				}
+				record = captchaResourceSignal(site, record, resourceStatusForSite(site), time.Now())
+				if _, e := os.Stat(filepath.Join(resourceDirectory(site.ID), "blocked")); e == nil {
+					if !record.AutoUntil.After(time.Now()) {
+						record.AutoStarted = time.Now()
+					}
+					record.ResourceBlocked = true
+					record.AutoUntil = time.Now().Add(5 * time.Minute)
+				}
+			}
+			runtime.Sites[site.ID] = record
 		}
 	}
 	content, _ := json.Marshal(runtime)
@@ -173,7 +223,7 @@ func (a *App) startCaptchaReconcile() {
 		return
 	}
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			a.mutationMu.Lock()
@@ -185,8 +235,15 @@ func (a *App) startCaptchaReconcile() {
 func (a *App) captchaSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		items := []map[string]any{}
+		var runtime captchaRuntime
+		if !a.system.demo {
+			if content, e := os.ReadFile(captchaRuntimeFile); e == nil {
+				_ = json.Unmarshal(content, &runtime)
+			}
+		}
 		for _, site := range a.store.Sites() {
-			items = append(items, map[string]any{"id": site.ID, "domain": site.Domain, "ssl": site.SSL || (site.Application != nil && site.Application.Certificate != ""), "settings": site.Captcha})
+			automatic := runtime.Sites[site.ID]
+			items = append(items, map[string]any{"id": site.ID, "domain": site.Domain, "ssl": site.SSL || (site.Application != nil && site.Application.Certificate != ""), "settings": site.Captcha, "automaticActive": automatic.AutoUntil.After(time.Now()), "automaticUntil": automatic.AutoUntil, "resourceBlocked": automatic.ResourceBlocked, "resourceLimitsEnabled": resourceEnabled(site)})
 		}
 		metrics := map[string]any{}
 		if !a.system.demo {
@@ -230,6 +287,10 @@ func (a *App) captchaSettings(w http.ResponseWriter, r *http.Request) {
 	input.Settings.Revision = time.Now().UnixNano()
 	updated := *site
 	updated.Captcha = &input.Settings
+	if input.Settings.Mode == "auto" && !resourceEnabled(updated) {
+		writeError(w, 409, "Enable Website Resource Limit for this website before selecting Automatic CAPTCHA")
+		return
+	}
 	if a.system.demo {
 		if err := a.store.UpdateSite(site.ID, func(s *Site) { s.Captcha = updated.Captcha }); err != nil {
 			writeError(w, 500, "Could not save CAPTCHA policy")

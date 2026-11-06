@@ -54,3 +54,19 @@ real-client addressing in Nginx first; otherwise clients share the proxy's allow
 Run focused verification with `go test -run TestCaptcha .`. The existing Makefile remains
 the build entry point. Linux Nginx parsing and live browser/SELinux behavior must be
 verified on the destination before claiming production readiness.
+
+## Automatic mode
+
+Automatic requires Resource Limit enabled for the selected website and HTTPS. Healthy
+websites pass without a challenge. Verified runtime CPU exhaustion, memory/disk/process
+allowance saturation, and resource blocking activate verification. The broker projects
+resource state every two seconds; the gateway reloads within one second. Protection
+remains active for five minutes after the last detected breach and survives panel restarts.
+A new overload period invalidates clearance from the previous period.
+
+Hard resource isolation is preserved: a stopped or recovering website stays unavailable
+(HTTP 503) after verification. CAPTCHA does not restart workloads or override manual
+suspension. Unverified visitors can see verification while the resource block is active.
+Disabling CAPTCHA reinstates the normal frontend resource gate. Disabling resource
+limits makes Automatic inactive. Stale resource enforcement fails closed. The settings
+page shows the current automatic state after Refresh.

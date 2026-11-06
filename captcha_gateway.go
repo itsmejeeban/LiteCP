@@ -31,8 +31,11 @@ type captchaRuntime struct {
 	Sites map[string]captchaRuntimeSite `json:"sites"`
 }
 type captchaRuntimeSite struct {
-	Domain string        `json:"domain"`
-	Policy CaptchaPolicy `json:"policy"`
+	Domain          string        `json:"domain"`
+	Policy          CaptchaPolicy `json:"policy"`
+	AutoUntil       time.Time     `json:"autoUntil,omitempty"`
+	AutoStarted     time.Time     `json:"autoStarted,omitempty"`
+	ResourceBlocked bool          `json:"resourceBlocked,omitempty"`
 }
 type captchaChallenge struct {
 	Site, Domain, Return, Binding, Digest string
@@ -122,7 +125,11 @@ func (g *captchaGateway) event(site, message string) {
 	}
 }
 func (g *captchaGateway) clearance(site string, record captchaRuntimeSite, binding string, expiry int64) string {
-	payload := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%d", site, record.Domain, record.Policy.Revision, binding, expiry)
+	revision := record.Policy.Revision
+	if record.Policy.Mode == "auto" && !record.AutoStarted.IsZero() {
+		revision ^= record.AutoStarted.UnixNano()
+	}
+	payload := fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%d", site, record.Domain, revision, binding, expiry)
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(payload))
 	return encoded + "." + captchaMAC(g.runtime.Key, encoded)
 }
@@ -153,8 +160,8 @@ func (g *captchaGateway) verified(r *http.Request, site string, record captchaRu
 var captchaPage = template.Must(template.New("challenge").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Verify to continue</title>
 <style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100svh;padding:24px;display:grid;place-items:center;font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f8fafc;background:radial-gradient(ellipse at 15% 15%,#263c75 0,transparent 48%),radial-gradient(ellipse at 90% 85%,#36265c 0,transparent 48%),linear-gradient(145deg,#101827,#0b101c 65%)}main{width:100%;max-width:420px;padding:40px 28px;text-align:center;border:1px solid #ffffff24;border-radius:24px;background:#111827e8;box-shadow:0 24px 80px #0005}h1{margin:0;font-size:clamp(25px,5vw,30px);font-weight:650;letter-spacing:-.7px}.domain{margin:12px 0 28px;color:#b9c6df;font-size:14px;overflow-wrap:anywhere}img{display:block;width:264px;max-width:100%;height:auto;margin:0 auto 24px;border-radius:12px}form{display:flex;flex-direction:column;align-items:center;gap:18px}input,button{font:inherit;border-radius:12px}input[name=answer]{width:100%;max-width:264px;min-height:54px;border:1px solid #69758c;background:#0c1424;color:#fff;text-align:center;font-size:26px;letter-spacing:8px;padding:10px 8px 10px 16px}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #93c5fd;outline-offset:4px}button{width:100%;max-width:264px;min-height:50px;padding:12px 18px;border:1px solid #6b9bff;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 24px #2563eb30}button:hover{background:#1d4ed8}.retry{display:inline-block;margin-top:24px;color:#b9d4ff;font-size:14px;text-underline-offset:4px}.retry:hover{color:#fff}@media(max-width:360px){body{padding:16px}main{padding:32px 20px}}
-</style></head><body><main><h1>Verify to continue</h1><p class="domain">{{.Domain}}</p><img src="/_litecp_captcha/image?id={{.ID}}" width="264" height="84" alt="CAPTCHA image containing six digits"><form method="post" action="/_litecp_captcha/verify"><input type="hidden" name="id" value="{{.ID}}"><input id="answer" name="answer" aria-label="Verification digits" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="off"><button type="submit">Verify and Open</button></form><a class="retry" href="{{.Retry}}">Get a new challenge</a></main></body></html>`))
+*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100svh;padding:24px;display:grid;place-items:center;font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f8fafc;background:radial-gradient(ellipse at 15% 15%,#263c75 0,transparent 48%),radial-gradient(ellipse at 90% 85%,#36265c 0,transparent 48%),linear-gradient(145deg,#101827,#0b101c 65%)}main{width:100%;max-width:420px;padding:40px 28px;text-align:center;border:1px solid #ffffff24;border-radius:24px;background:#111827e8;box-shadow:0 24px 80px #0005}h1{margin:0;font-size:clamp(25px,5vw,30px);font-weight:650;letter-spacing:-.7px}.domain{margin:12px 0 28px;color:#b9c6df;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px}.domain span{min-width:0;overflow-wrap:anywhere}.ssl-lock{width:17px;height:17px;flex:none;color:#6ee7b7}img{display:block;width:264px;max-width:100%;height:auto;margin:0 auto 24px;border-radius:12px}form{display:flex;flex-direction:column;align-items:center;gap:18px}input,button{font:inherit;border-radius:12px}input[name=answer]{width:100%;max-width:264px;min-height:54px;border:1px solid #69758c;background:#0c1424;color:#fff;text-align:center;font-size:26px;letter-spacing:8px;padding:10px 8px 10px 16px}input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #93c5fd;outline-offset:4px}button{width:100%;max-width:264px;min-height:50px;padding:12px 18px;border:1px solid #6b9bff;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 24px #2563eb30}button:hover{background:#1d4ed8}.retry{display:inline-block;margin-top:24px;color:#b9d4ff;font-size:14px;text-underline-offset:4px}.retry:hover{color:#fff}@media(max-width:360px){body{padding:16px}main{padding:32px 20px}}
+</style></head><body><main><h1>Verify to continue</h1><p class="domain"><svg class="ssl-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Secured by SSL"><title>Secured by SSL</title><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span>https://{{.Domain}}</span></p><img src="/_litecp_captcha/image?id={{.ID}}" width="264" height="84" alt="CAPTCHA image containing six digits"><form method="post" action="/_litecp_captcha/verify"><input type="hidden" name="id" value="{{.ID}}"><input id="answer" name="answer" aria-label="Verification digits" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="off"><button type="submit">Verify and Open</button></form><a class="retry" href="{{.Retry}}">Get a new challenge</a></main></body></html>`))
 
 func (g *captchaGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	select {
@@ -210,6 +217,15 @@ func (g *captchaGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(204)
 			return
 		}
+		if record.Policy.Mode == "auto" && record.ResourceBlocked {
+			w.Header().Set("X-LiteCP-Captcha-Blocked", "1")
+			w.WriteHeader(401)
+			return
+		}
+		if record.Policy.Mode == "auto" && !record.AutoUntil.After(g.now()) {
+			w.WriteHeader(204)
+			return
+		}
 		ipOK := g.limitWindow("rps:ip:"+site+":"+r.Header.Get("X-LiteCP-IP"), record.Policy.RequestsPerSecond, time.Second)
 		siteOK := g.limitWindow("rps:site:"+site, record.Policy.SiteRequestsPerSecond, time.Second)
 		if !ipOK || !siteOK {
@@ -245,6 +261,11 @@ func (g *captchaGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if mode != "public" && mode != "challenge" {
 		http.Error(w, "Forbidden", 403)
+		return
+	}
+	if mode == "challenge" && record.Policy.Mode == "auto" && record.ResourceBlocked && g.verified(r, site, record) {
+		w.Header().Set("Retry-After", "300")
+		http.Error(w, "This website is temporarily unavailable due to resource limits. Please try again later.", 503)
 		return
 	}
 	if mode == "challenge" && r.Header.Get("X-LiteCP-Limited") == "1" {
