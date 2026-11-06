@@ -81,3 +81,24 @@ test('archive deletion uses the confirmed archive and preserves a newer selectio
   vm.runInContext(handler,context);const pending=click();context.preview={id:'new-selection'};confirm(true);await pending;
   assert.equal(deleted,'/api/migrations/confirmed-archive');assert.equal(context.preview.id,'new-selection');
 });
+
+test('live job polling resumes after a transient refresh failure',async()=>{
+  const timers=[],output={};let fail=true;
+  const context=vm.createContext({cp:{demo:false,api:async()=>{if(fail)throw Error('Temporary connection failure');return{items:[{id:'busy',status:'running',stage:'capture'}],id:'busy',status:'running'};}},$:()=>output,active:job=>job.status==='running',renderJobs(){},clearTimeout(){},setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},pollTimer:null,jobs:[{id:'busy',status:'running'}]});
+  vm.runInContext(code+';this.load=loadJobs;',context);await context.load();
+  assert.match(output.textContent,/Temporary connection/);assert.equal(timers.length,1);assert.equal(timers[0].delay,5000);
+  fail=false;await timers[0].fn();assert.equal(context.jobs[0].id,'busy');assert.equal(timers.length,2);
+  context.jobs=[{id:'done',status:'restored'}];fail=true;await context.load();assert.equal(timers.length,2);
+});
+
+test('upload status stays on Upload tab until a job explicitly opens staged review',()=>{
+  const tabs=fs.readFileSync(require('node:path').join(__dirname,'../web/migration-tabs.js'),'utf8');
+  function element(){const classes=new Set();return{classList:{toggle(key,on){if(on)classes.add(key);else classes.delete(key);},add(...keys){keys.forEach(key=>classes.add(key));},remove(...keys){keys.forEach(key=>classes.delete(key));},contains:key=>classes.has(key)},setAttribute(){},removeAttribute(){},querySelector(){return element();}};}
+  const entries=['upload','jobs','pending','completed'].map(key=>Object.assign([key,key],{link:element()})),output=element(),events={};
+  const context=vm.createContext({entries,output,location:{hash:'#migrations/upload'},page:{dataset:{},querySelectorAll:()=>[],querySelector:()=>element()},toggle:element(),source:element(),upload:element(),importForm:element(),jobs:element(),database:element(),litecp:element(),expand(){},Event:class{},document:{dispatchEvent(){},addEventListener(name,fn){events[name]=fn;}}});
+  const start=tabs.indexOf("  let lastRoute='';");vm.runInContext(tabs.slice(start,tabs.indexOf('  const previous=',start)),context);
+  vm.runInContext('sync()',context);assert.equal(output.classList.contains('migration-output-hidden'),false);
+  for(const key of ['jobs','pending','completed']){context.location.hash='#migrations/'+key;vm.runInContext('sync()',context);assert.equal(output.classList.contains('migration-output-hidden'),true);}
+  const review=tabs.slice(tabs.indexOf("  document.addEventListener('migration-show-review'"),tabs.indexOf('const navigate='));vm.runInContext(review,context);
+  events['migration-show-review']();assert.equal(output.classList.contains('migration-output-hidden'),false);
+});
