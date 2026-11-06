@@ -39,18 +39,19 @@ type apiAction struct {
 	Name        string `json:"name"`
 	Group       string `json:"group"`
 	Description string `json:"description"`
+	Unavailable string `json:"unavailable,omitempty"`
 }
 
 var apiActions = []apiAction{
-	{"sites.list", "Websites", "List websites"}, {"sites.create", "Websites", "Create website"}, {"sites.suspend", "Websites", "Suspend website"}, {"sites.unsuspend", "Websites", "Unsuspend website"}, {"sites.delete", "Websites", "Permanently remove website data (backups retained)"}, {"sites.php", "Websites", "Change PHP version"}, {"sites.domain", "Websites", "Rename domain"}, {"sites.ssl", "Websites", "Issue or renew SSL"},
-	{"databases.list", "Databases", "List managed databases"}, {"databases.create", "Databases", "Create database and local user"}, {"databases.password", "Databases", "Reset database password"}, {"databases.delete", "Databases", "Permanently delete database and user"},
-	{"mailboxes.list", "Email", "List mailboxes (no password hashes)"}, {"mailboxes.create", "Email", "Create mailbox"}, {"mailboxes.password", "Email", "Reset mailbox password"}, {"mailboxes.delete", "Email", "Disable mailbox, retain messages"}, {"maildomains.list", "Email", "List mail domains"}, {"maildomains.create", "Email", "Add mail domain"},
-	{"dns.read", "DNS", "Read website DNS zone"}, {"dns.write", "DNS", "Update website DNS zone"},
+	{"sites.list", "Websites", "List websites", ""}, {"sites.create", "Websites", "Create website", ""}, {"sites.suspend", "Websites", "Suspend website", ""}, {"sites.unsuspend", "Websites", "Unsuspend website", ""}, {"sites.delete", "Websites", "Permanently remove website data (backups retained)", ""}, {"sites.php", "Websites", "Change PHP version", ""}, {"sites.domain", "Websites", "Rename domain", ""}, {"sites.ssl", "Websites", "Issue or renew SSL", ""},
+	{"databases.list", "Databases", "List managed databases", ""}, {"databases.create", "Databases", "Create database and local user", ""}, {"databases.password", "Databases", "Reset database password", ""}, {"databases.delete", "Databases", "Permanently delete database and user", ""},
+	{"mailboxes.list", "Email", "List mailboxes (no password hashes)", ""}, {"mailboxes.create", "Email", "Create mailbox", ""}, {"mailboxes.password", "Email", "Reset mailbox password", ""}, {"mailboxes.delete", "Email", "Disable mailbox, retain messages", ""}, {"maildomains.list", "Email", "List mail domains", ""}, {"maildomains.create", "Email", "Add mail domain", ""},
+	{"dns.read", "DNS", "Read website DNS zone", ""}, {"dns.write", "DNS", "Update website DNS zone", ""},
 }
 
 func knownAPIPermission(value string) bool {
 	for _, p := range apiActions {
-		if p.Name == value {
+		if p.Name == value && p.Unavailable == "" {
 			return true
 		}
 	}
@@ -371,7 +372,8 @@ func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 429, "API request limit exceeded")
 		return
 	}
-	if r.URL.RawQuery != "" {
+	rawMode := r.URL.Path == "/api/v1/request"
+	if !rawMode && r.URL.RawQuery != "" {
 		writeError(w, 400, "Use headers for credentials and a JSON request body")
 		return
 	}
@@ -383,13 +385,31 @@ func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Action     string          `json:"action"`
 		Parameters json.RawMessage `json:"parameters"`
+		ObjectID   string          `json:"objectId"`
+		Query      url.Values      `json:"query"`
 	}
-	if err := decodeJSONWithLimit(r, &input, 64<<10); err != nil {
+	if rawMode {
+		input.Action = r.Header.Get("X-LiteCP-Action")
+		input.ObjectID = r.Header.Get("X-LiteCP-Object-ID")
+		input.Query = r.URL.Query()
+		if _, ok := apiRouteActions[input.Action]; !ok {
+			writeError(w, 400, "Streaming requests require an explicit panel action from the catalog")
+			return
+		}
+	} else if err := decodeJSONWithLimit(r, &input, 64<<10); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
-	a.mutationMu.Lock()
-	defer a.mutationMu.Unlock()
+	// Reads and interactive terminal traffic must not wait behind long uploads
+	// or hold the global mutation lock while a client polls output.
+	mutating := true
+	if route, ok := apiRouteActions[input.Action]; ok {
+		mutating = route.Method != http.MethodGet && route.Path != "/api/terminal/session" && route.Path != "/api/live-migrations/cancel" && route.Path != "/api/files/upload-url"
+	}
+	if mutating {
+		a.mutationMu.Lock()
+		defer a.mutationMu.Unlock()
+	}
 	a.store.mu.Lock()
 	var credential *APICredential
 	for i := range a.store.cfg.APICredentials {
@@ -438,6 +458,21 @@ func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.store.mu.Unlock()
+	if _, ok := apiRouteActions[input.Action]; ok {
+		if !rawMode {
+			if len(input.Parameters) == 0 {
+				input.Parameters = json.RawMessage(`{}`)
+			}
+			var object map[string]json.RawMessage
+			if json.Unmarshal(input.Parameters, &object) != nil || object == nil {
+				writeError(w, 400, "parameters must be a JSON object")
+				return
+			}
+		}
+		a.store.AddActivity("External API action", input.Action+" via "+id+" from "+ip, "info")
+		a.dispatchAPIRoute(w, r, input.Action, input.ObjectID, input.Query, input.Parameters, rawMode)
+		return
+	}
 	if len(input.Parameters) == 0 {
 		input.Parameters = json.RawMessage(`{}`)
 	}

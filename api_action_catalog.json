@@ -1,0 +1,1438 @@
+[
+  {
+    "name": "panel.access.get",
+    "group": "API Administration",
+    "description": "API credentials and rules — GET /api/access",
+    "method": "GET",
+    "path": "/api/access",
+    "objectID": false
+  },
+  {
+    "name": "panel.access.post",
+    "group": "API Administration",
+    "description": "API credentials and rules — POST /api/access",
+    "method": "POST",
+    "path": "/api/access",
+    "objectID": false
+  },
+  {
+    "name": "panel.state.get",
+    "group": "Overview",
+    "description": "Overview and panel state — GET /api/state",
+    "method": "GET",
+    "path": "/api/state",
+    "objectID": false
+  },
+  {
+    "name": "panel.activity_policy.get",
+    "group": "Recent Activities",
+    "description": "activity policy — GET /api/activity-policy",
+    "method": "GET",
+    "path": "/api/activity-policy",
+    "objectID": false
+  },
+  {
+    "name": "panel.activity_policy.put",
+    "group": "Recent Activities",
+    "description": "activity policy — PUT /api/activity-policy",
+    "method": "PUT",
+    "path": "/api/activity-policy",
+    "objectID": false
+  },
+  {
+    "name": "panel.activity_policy.delete",
+    "group": "Recent Activities",
+    "description": "activity policy — DELETE /api/activity-policy",
+    "method": "DELETE",
+    "path": "/api/activity-policy",
+    "objectID": false
+  },
+  {
+    "name": "panel.activities.get",
+    "group": "Recent Activities",
+    "description": "activities — GET /api/activities",
+    "method": "GET",
+    "path": "/api/activities",
+    "objectID": false
+  },
+  {
+    "name": "panel.php.extensions.get",
+    "group": "Server Environment",
+    "description": "PHP extensions — GET /api/php/extensions",
+    "method": "GET",
+    "path": "/api/php/extensions",
+    "objectID": false
+  },
+  {
+    "name": "panel.php.extensions.put",
+    "group": "Server Environment",
+    "description": "PHP extensions — PUT /api/php/extensions",
+    "method": "PUT",
+    "path": "/api/php/extensions",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.scan.post",
+    "group": "Security",
+    "description": "Website malware scan — POST /api/security/scan",
+    "method": "POST",
+    "path": "/api/security/scan",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.server_scan.get",
+    "group": "Security",
+    "description": "Server malware scan and schedule — GET /api/security/server-scan",
+    "method": "GET",
+    "path": "/api/security/server-scan",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.server_scan.post",
+    "group": "Security",
+    "description": "Server malware scan and schedule — POST /api/security/server-scan",
+    "method": "POST",
+    "path": "/api/security/server-scan",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.server_scan.put",
+    "group": "Security",
+    "description": "Server malware scan and schedule — PUT /api/security/server-scan",
+    "method": "PUT",
+    "path": "/api/security/server-scan",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.malware_files.get",
+    "group": "Security",
+    "description": "Malware quarantine, restore and delete — GET /api/security/malware-files",
+    "method": "GET",
+    "path": "/api/security/malware-files",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.malware_files.post",
+    "group": "Security",
+    "description": "Malware quarantine, restore and delete — POST /api/security/malware-files",
+    "method": "POST",
+    "path": "/api/security/malware-files",
+    "objectID": false
+  },
+  {
+    "name": "panel.live_migrations.auto_restore.post",
+    "group": "Migration",
+    "description": "Retry migration restore — POST /api/live-migrations/auto-restore",
+    "method": "POST",
+    "path": "/api/live-migrations/auto-restore",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_schedules.get",
+    "group": "Backups",
+    "description": "Backup schedules — GET /api/backup-schedules",
+    "method": "GET",
+    "path": "/api/backup-schedules",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_schedules.post",
+    "group": "Backups",
+    "description": "Backup schedules — POST /api/backup-schedules",
+    "method": "POST",
+    "path": "/api/backup-schedules",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_schedules.put",
+    "group": "Backups",
+    "description": "Backup schedules — PUT /api/backup-schedules",
+    "method": "PUT",
+    "path": "/api/backup-schedules",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_schedules.delete",
+    "group": "Backups",
+    "description": "Backup schedules — DELETE /api/backup-schedules",
+    "method": "DELETE",
+    "path": "/api/backup-schedules",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.posture.get",
+    "group": "Security",
+    "description": "security / posture — GET /api/security/posture",
+    "method": "GET",
+    "path": "/api/security/posture",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.integrity.get",
+    "group": "Security",
+    "description": "File integrity monitoring — GET /api/security/integrity",
+    "method": "GET",
+    "path": "/api/security/integrity",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.integrity.post",
+    "group": "Security",
+    "description": "File integrity monitoring — POST /api/security/integrity",
+    "method": "POST",
+    "path": "/api/security/integrity",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.selinux.get",
+    "group": "Security",
+    "description": "SELinux repair — GET /api/security/selinux",
+    "method": "GET",
+    "path": "/api/security/selinux",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.selinux.post",
+    "group": "Security",
+    "description": "SELinux repair — POST /api/security/selinux",
+    "method": "POST",
+    "path": "/api/security/selinux",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.two_factor.get",
+    "group": "Security",
+    "description": "Two-factor authentication — GET /api/security/two-factor",
+    "method": "GET",
+    "path": "/api/security/two-factor",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.two_factor.post",
+    "group": "Security",
+    "description": "Two-factor authentication — POST /api/security/two-factor",
+    "method": "POST",
+    "path": "/api/security/two-factor",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.waf_events.get",
+    "group": "Security",
+    "description": "security / waf events — GET /api/security/waf-events",
+    "method": "GET",
+    "path": "/api/security/waf-events",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.waf_policies.get",
+    "group": "Security",
+    "description": "Website WAF rules — GET /api/security/waf-policies",
+    "method": "GET",
+    "path": "/api/security/waf-policies",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.waf_policies.put",
+    "group": "Security",
+    "description": "Website WAF rules — PUT /api/security/waf-policies",
+    "method": "PUT",
+    "path": "/api/security/waf-policies",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.waf_logs.get",
+    "group": "Website Tools",
+    "description": "sites / waf logs — GET /api/sites/waf-logs",
+    "method": "GET",
+    "path": "/api/sites/waf-logs",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.waf.put",
+    "group": "Website Tools",
+    "description": "sites / waf — PUT /api/sites/waf",
+    "method": "PUT",
+    "path": "/api/sites/waf",
+    "objectID": false
+  },
+  {
+    "name": "panel.system.hostname.put",
+    "group": "Settings",
+    "description": "system / hostname — PUT /api/system/hostname",
+    "method": "PUT",
+    "path": "/api/system/hostname",
+    "objectID": false
+  },
+  {
+    "name": "panel.system.resolvers.put",
+    "group": "Settings",
+    "description": "system / resolvers — PUT /api/system/resolvers",
+    "method": "PUT",
+    "path": "/api/system/resolvers",
+    "objectID": false
+  },
+  {
+    "name": "panel.system.reboot.post",
+    "group": "Settings",
+    "description": "Reboot server — POST /api/system/reboot",
+    "method": "POST",
+    "path": "/api/system/reboot",
+    "objectID": false
+  },
+  {
+    "name": "panel.services.action.post",
+    "group": "Services",
+    "description": "Start, stop or restart a service group — POST /api/services/action",
+    "method": "POST",
+    "path": "/api/services/action",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.post",
+    "group": "Website Tools",
+    "description": "sites — POST /api/sites",
+    "method": "POST",
+    "path": "/api/sites",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.sizes.get",
+    "group": "Website Tools",
+    "description": "sites / sizes — GET /api/sites/sizes",
+    "method": "GET",
+    "path": "/api/sites/sizes",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.traffic.get",
+    "group": "Website Tools",
+    "description": "sites / traffic — GET /api/sites/traffic",
+    "method": "GET",
+    "path": "/api/sites/traffic",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.suspension.put",
+    "group": "Website Tools",
+    "description": "sites / suspension — PUT /api/sites/suspension",
+    "method": "PUT",
+    "path": "/api/sites/suspension",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.wordpress.setup.post",
+    "group": "Website Tools",
+    "description": "sites / wordpress / setup — POST /api/sites/wordpress/setup",
+    "method": "POST",
+    "path": "/api/sites/wordpress/setup",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.ssl.post",
+    "group": "Website Tools",
+    "description": "sites / ssl — POST /api/sites/ssl",
+    "method": "POST",
+    "path": "/api/sites/ssl",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.cron.post",
+    "group": "Website Tools",
+    "description": "sites / cron — POST /api/sites/cron",
+    "method": "POST",
+    "path": "/api/sites/cron",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.php.post",
+    "group": "Website Tools",
+    "description": "sites / php — POST /api/sites/php",
+    "method": "POST",
+    "path": "/api/sites/php",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.php_settings.get",
+    "group": "Website Tools",
+    "description": "Website PHP.ini settings — GET /api/sites/php-settings",
+    "method": "GET",
+    "path": "/api/sites/php-settings",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.php_settings.put",
+    "group": "Website Tools",
+    "description": "Website PHP.ini settings — PUT /api/sites/php-settings",
+    "method": "PUT",
+    "path": "/api/sites/php-settings",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.redis.get",
+    "group": "Website Tools",
+    "description": "Website Redis cache — GET /api/sites/redis",
+    "method": "GET",
+    "path": "/api/sites/redis",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.redis.put",
+    "group": "Website Tools",
+    "description": "Website Redis cache — PUT /api/sites/redis",
+    "method": "PUT",
+    "path": "/api/sites/redis",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.redis.post",
+    "group": "Website Tools",
+    "description": "Website Redis cache — POST /api/sites/redis",
+    "method": "POST",
+    "path": "/api/sites/redis",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.dns.get",
+    "group": "Website Tools",
+    "description": "sites / dns — GET /api/sites/dns",
+    "method": "GET",
+    "path": "/api/sites/dns",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.dns.put",
+    "group": "Website Tools",
+    "description": "sites / dns — PUT /api/sites/dns",
+    "method": "PUT",
+    "path": "/api/sites/dns",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.resource_limits.get",
+    "group": "Website Tools",
+    "description": "Website resource limits — GET /api/sites/resource-limits",
+    "method": "GET",
+    "path": "/api/sites/resource-limits",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.resource_limits.put",
+    "group": "Website Tools",
+    "description": "Website resource limits — PUT /api/sites/resource-limits",
+    "method": "PUT",
+    "path": "/api/sites/resource-limits",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.resource_limits.delete",
+    "group": "Website Tools",
+    "description": "Website resource limits — DELETE /api/sites/resource-limits",
+    "method": "DELETE",
+    "path": "/api/sites/resource-limits",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.resource_limits.post",
+    "group": "Website Tools",
+    "description": "Website resource limits — POST /api/sites/resource-limits",
+    "method": "POST",
+    "path": "/api/sites/resource-limits",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.domain.put",
+    "group": "Website Tools",
+    "description": "sites / domain — PUT /api/sites/domain",
+    "method": "PUT",
+    "path": "/api/sites/domain",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.delete",
+    "group": "Website Tools",
+    "description": "sites — DELETE /api/sites/",
+    "method": "DELETE",
+    "path": "/api/sites/",
+    "objectID": true
+  },
+  {
+    "name": "panel.overview.jobs.get",
+    "group": "Overview",
+    "description": "overview / jobs — GET /api/overview/jobs",
+    "method": "GET",
+    "path": "/api/overview/jobs",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.counts.get",
+    "group": "Backups",
+    "description": "backups / counts — GET /api/backups/counts",
+    "method": "GET",
+    "path": "/api/backups/counts",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.restore_direct.get",
+    "group": "Backups",
+    "description": "Website backup restore and automatic recreation — GET /api/backups/restore-direct",
+    "method": "GET",
+    "path": "/api/backups/restore-direct",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.restore_direct.post",
+    "group": "Backups",
+    "description": "Website backup restore and automatic recreation — POST /api/backups/restore-direct",
+    "method": "POST",
+    "path": "/api/backups/restore-direct",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.restorable.get",
+    "group": "Backups",
+    "description": "backups / restorable — GET /api/backups/restorable",
+    "method": "GET",
+    "path": "/api/backups/restorable",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.item.get",
+    "group": "Backups",
+    "description": "backups / item — GET /api/backups/item",
+    "method": "GET",
+    "path": "/api/backups/item",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.item.delete",
+    "group": "Backups",
+    "description": "backups / item — DELETE /api/backups/item",
+    "method": "DELETE",
+    "path": "/api/backups/item",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.item.post",
+    "group": "Backups",
+    "description": "backups / item — POST /api/backups/item",
+    "method": "POST",
+    "path": "/api/backups/item",
+    "objectID": false
+  },
+  {
+    "name": "panel.backups.post",
+    "group": "Backups",
+    "description": "backups — POST /api/backups",
+    "method": "POST",
+    "path": "/api/backups",
+    "objectID": false
+  },
+  {
+    "name": "panel.application_hosting.get",
+    "group": "Server Environment",
+    "description": "Node.js, Python and Ruby application hosting — GET /api/application-hosting",
+    "method": "GET",
+    "path": "/api/application-hosting",
+    "objectID": false
+  },
+  {
+    "name": "panel.application_hosting.post",
+    "group": "Server Environment",
+    "description": "Node.js, Python and Ruby application hosting — POST /api/application-hosting",
+    "method": "POST",
+    "path": "/api/application-hosting",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_updates.get",
+    "group": "Updates",
+    "description": "Operating system updates — GET /api/system-updates",
+    "method": "GET",
+    "path": "/api/system-updates",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_updates.post",
+    "group": "Updates",
+    "description": "Operating system updates — POST /api/system-updates",
+    "method": "POST",
+    "path": "/api/system-updates",
+    "objectID": false
+  },
+  {
+    "name": "panel.environment_inventory.get",
+    "group": "Server Environment",
+    "description": "Server environment inventory — GET /api/environment-inventory",
+    "method": "GET",
+    "path": "/api/environment-inventory",
+    "objectID": false
+  },
+  {
+    "name": "panel.analytics.processes.get",
+    "group": "Analytics",
+    "description": "analytics / processes — GET /api/analytics/processes",
+    "method": "GET",
+    "path": "/api/analytics/processes",
+    "objectID": false
+  },
+  {
+    "name": "panel.analytics.usage.get",
+    "group": "Analytics",
+    "description": "analytics / usage — GET /api/analytics/usage",
+    "method": "GET",
+    "path": "/api/analytics/usage",
+    "objectID": false
+  },
+  {
+    "name": "panel.analytics.disk_usage.get",
+    "group": "Analytics",
+    "description": "analytics / disk usage — GET /api/analytics/disk-usage",
+    "method": "GET",
+    "path": "/api/analytics/disk-usage",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_ftp.get",
+    "group": "Website Tools",
+    "description": "Website FTP accounts and passwords — GET /api/website-ftp",
+    "method": "GET",
+    "path": "/api/website-ftp",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_ftp.post",
+    "group": "Website Tools",
+    "description": "Website FTP accounts and passwords — POST /api/website-ftp",
+    "method": "POST",
+    "path": "/api/website-ftp",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_ftp.put",
+    "group": "Website Tools",
+    "description": "Website FTP accounts and passwords — PUT /api/website-ftp",
+    "method": "PUT",
+    "path": "/api/website-ftp",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_ftp.delete",
+    "group": "Website Tools",
+    "description": "Website FTP accounts and passwords — DELETE /api/website-ftp",
+    "method": "DELETE",
+    "path": "/api/website-ftp",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_cron.run.post",
+    "group": "Website Tools",
+    "description": "website cron / run — POST /api/website-cron/run",
+    "method": "POST",
+    "path": "/api/website-cron/run",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_cron.get",
+    "group": "Website Tools",
+    "description": "Website cron jobs — GET /api/website-cron",
+    "method": "GET",
+    "path": "/api/website-cron",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_cron.post",
+    "group": "Website Tools",
+    "description": "Website cron jobs — POST /api/website-cron",
+    "method": "POST",
+    "path": "/api/website-cron",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_cron.put",
+    "group": "Website Tools",
+    "description": "Website cron jobs — PUT /api/website-cron",
+    "method": "PUT",
+    "path": "/api/website-cron",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_cron.delete",
+    "group": "Website Tools",
+    "description": "Website cron jobs — DELETE /api/website-cron",
+    "method": "DELETE",
+    "path": "/api/website-cron",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_backups.get",
+    "group": "Backups",
+    "description": "Website local and remote backups — GET /api/website-backups",
+    "method": "GET",
+    "path": "/api/website-backups",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_backups.delete",
+    "group": "Backups",
+    "description": "Website local and remote backups — DELETE /api/website-backups",
+    "method": "DELETE",
+    "path": "/api/website-backups",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_backups.post",
+    "group": "Backups",
+    "description": "Website local and remote backups — POST /api/website-backups",
+    "method": "POST",
+    "path": "/api/website-backups",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_backups.upload.post",
+    "group": "Backups",
+    "description": "website backups / upload — POST /api/website-backups/upload",
+    "method": "POST",
+    "path": "/api/website-backups/upload",
+    "objectID": false
+  },
+  {
+    "name": "panel.website_backups.restore.post",
+    "group": "Backups",
+    "description": "website backups / restore — POST /api/website-backups/restore",
+    "method": "POST",
+    "path": "/api/website-backups/restore",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.post",
+    "group": "Backups",
+    "description": "Backup remote destinations — POST /api/backup-destinations",
+    "method": "POST",
+    "path": "/api/backup-destinations",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.put",
+    "group": "Backups",
+    "description": "Backup remote destinations — PUT /api/backup-destinations",
+    "method": "PUT",
+    "path": "/api/backup-destinations",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.test.post",
+    "group": "Backups",
+    "description": "backup destinations / test — POST /api/backup-destinations/test",
+    "method": "POST",
+    "path": "/api/backup-destinations/test",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.storage.post",
+    "group": "Backups",
+    "description": "backup destinations / storage — POST /api/backup-destinations/storage",
+    "method": "POST",
+    "path": "/api/backup-destinations/storage",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.delete",
+    "group": "Backups",
+    "description": "backup destinations — DELETE /api/backup-destinations/",
+    "method": "DELETE",
+    "path": "/api/backup-destinations/",
+    "objectID": true
+  },
+  {
+    "name": "panel.files.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files — GET /api/files",
+    "method": "GET",
+    "path": "/api/files",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.delete",
+    "group": "File Manager and Server File Explorer",
+    "description": "files — DELETE /api/files",
+    "method": "DELETE",
+    "path": "/api/files",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.search.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / search — GET /api/files/search",
+    "method": "GET",
+    "path": "/api/files/search",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.trash.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / trash — GET /api/files/trash",
+    "method": "GET",
+    "path": "/api/files/trash",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.trash.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / trash — POST /api/files/trash",
+    "method": "POST",
+    "path": "/api/files/trash",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.trash.delete",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / trash — DELETE /api/files/trash",
+    "method": "DELETE",
+    "path": "/api/files/trash",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.post",
+    "group": "Migration",
+    "description": "migrations — POST /api/migrations",
+    "method": "POST",
+    "path": "/api/migrations",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.get",
+    "group": "Migration",
+    "description": "migrations — GET /api/migrations",
+    "method": "GET",
+    "path": "/api/migrations",
+    "objectID": false
+  },
+  {
+    "name": "panel.databases.phpmyadmin.post",
+    "group": "Databases",
+    "description": "databases / phpmyadmin — POST /api/databases/phpmyadmin",
+    "method": "POST",
+    "path": "/api/databases/phpmyadmin",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.webmail_configure.get",
+    "group": "Email",
+    "description": "Webmail configuration — GET /api/mail/webmail-configure",
+    "method": "GET",
+    "path": "/api/mail/webmail-configure",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.webmail_configure.post",
+    "group": "Email",
+    "description": "Webmail configuration — POST /api/mail/webmail-configure",
+    "method": "POST",
+    "path": "/api/mail/webmail-configure",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.webmail_login.post",
+    "group": "Email",
+    "description": "Webmail launch — POST /api/mail/webmail-login",
+    "method": "POST",
+    "path": "/api/mail/webmail-login",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.delivery.get",
+    "group": "Email",
+    "description": "Email delivery logs — GET /api/mail/delivery",
+    "method": "GET",
+    "path": "/api/mail/delivery",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.smtp_port_check.post",
+    "group": "Email",
+    "description": "SMTP port checks — POST /api/mail/smtp-port-check",
+    "method": "POST",
+    "path": "/api/mail/smtp-port-check",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.settings.get",
+    "group": "System Snapshot",
+    "description": "Snapshot remote storage and scheduling — GET /api/system-snapshots/settings",
+    "method": "GET",
+    "path": "/api/system-snapshots/settings",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.settings.post",
+    "group": "System Snapshot",
+    "description": "Snapshot remote storage and scheduling — POST /api/system-snapshots/settings",
+    "method": "POST",
+    "path": "/api/system-snapshots/settings",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.remote.get",
+    "group": "System Snapshot",
+    "description": "Snapshot remote scan and retrieval — GET /api/system-snapshots/remote",
+    "method": "GET",
+    "path": "/api/system-snapshots/remote",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.remote.post",
+    "group": "System Snapshot",
+    "description": "Snapshot remote scan and retrieval — POST /api/system-snapshots/remote",
+    "method": "POST",
+    "path": "/api/system-snapshots/remote",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.get",
+    "group": "System Snapshot",
+    "description": "System snapshots, status and download — GET /api/system-snapshots",
+    "method": "GET",
+    "path": "/api/system-snapshots",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.post",
+    "group": "System Snapshot",
+    "description": "System snapshots, status and download — POST /api/system-snapshots",
+    "method": "POST",
+    "path": "/api/system-snapshots",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.upload.post",
+    "group": "System Snapshot",
+    "description": "Snapshot upload — POST /api/system-snapshots/upload",
+    "method": "POST",
+    "path": "/api/system-snapshots/upload",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.inspect.post",
+    "group": "System Snapshot",
+    "description": "system snapshots / inspect — POST /api/system-snapshots/inspect",
+    "method": "POST",
+    "path": "/api/system-snapshots/inspect",
+    "objectID": false
+  },
+  {
+    "name": "panel.system_snapshots.restore.post",
+    "group": "System Snapshot",
+    "description": "Entire system snapshot restore — POST /api/system-snapshots/restore",
+    "method": "POST",
+    "path": "/api/system-snapshots/restore",
+    "objectID": false
+  },
+  {
+    "name": "panel.live_migrations.get",
+    "group": "Migration",
+    "description": "cPanel, Plesk and LiteCP migrations and jobs — GET /api/live-migrations",
+    "method": "GET",
+    "path": "/api/live-migrations",
+    "objectID": false
+  },
+  {
+    "name": "panel.live_migrations.post",
+    "group": "Migration",
+    "description": "cPanel, Plesk and LiteCP migrations and jobs — POST /api/live-migrations",
+    "method": "POST",
+    "path": "/api/live-migrations",
+    "objectID": false
+  },
+  {
+    "name": "panel.live_migrations.cancel.post",
+    "group": "Migration",
+    "description": "Cancel migration jobs — POST /api/live-migrations/cancel",
+    "method": "POST",
+    "path": "/api/live-migrations/cancel",
+    "objectID": false
+  },
+  {
+    "name": "panel.live_migrations.download.get",
+    "group": "Migration",
+    "description": "live migrations / download — GET /api/live-migrations/download",
+    "method": "GET",
+    "path": "/api/live-migrations/download",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.database.post",
+    "group": "Migration",
+    "description": "migrations / database — POST /api/migrations/database",
+    "method": "POST",
+    "path": "/api/migrations/database",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.import.post",
+    "group": "Migration",
+    "description": "migrations / import — POST /api/migrations/import",
+    "method": "POST",
+    "path": "/api/migrations/import",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.delete",
+    "group": "Migration",
+    "description": "migrations — DELETE /api/migrations/",
+    "method": "DELETE",
+    "path": "/api/migrations/",
+    "objectID": true
+  },
+  {
+    "name": "panel.files.create.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / create — POST /api/files/create",
+    "method": "POST",
+    "path": "/api/files/create",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.transfer.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / transfer — POST /api/files/transfer",
+    "method": "POST",
+    "path": "/api/files/transfer",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.upload_url.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / upload url — POST /api/files/upload-url",
+    "method": "POST",
+    "path": "/api/files/upload-url",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.download_selected.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / download selected — GET /api/files/download-selected",
+    "method": "GET",
+    "path": "/api/files/download-selected",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.download_selected.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / download selected — POST /api/files/download-selected",
+    "method": "POST",
+    "path": "/api/files/download-selected",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.content.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / content — GET /api/files/content",
+    "method": "GET",
+    "path": "/api/files/content",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.content.put",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / content — PUT /api/files/content",
+    "method": "PUT",
+    "path": "/api/files/content",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.encodings.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / encodings — GET /api/files/encodings",
+    "method": "GET",
+    "path": "/api/files/encodings",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.upload.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / upload — POST /api/files/upload",
+    "method": "POST",
+    "path": "/api/files/upload",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.directory.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / directory — POST /api/files/directory",
+    "method": "POST",
+    "path": "/api/files/directory",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.rename.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / rename — POST /api/files/rename",
+    "method": "POST",
+    "path": "/api/files/rename",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.permissions.put",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / permissions — PUT /api/files/permissions",
+    "method": "PUT",
+    "path": "/api/files/permissions",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.archive.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / archive — POST /api/files/archive",
+    "method": "POST",
+    "path": "/api/files/archive",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.extract.post",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / extract — POST /api/files/extract",
+    "method": "POST",
+    "path": "/api/files/extract",
+    "objectID": false
+  },
+  {
+    "name": "panel.files.download.get",
+    "group": "File Manager and Server File Explorer",
+    "description": "files / download — GET /api/files/download",
+    "method": "GET",
+    "path": "/api/files/download",
+    "objectID": false
+  },
+  {
+    "name": "panel.databases.post",
+    "group": "Databases",
+    "description": "databases — POST /api/databases",
+    "method": "POST",
+    "path": "/api/databases",
+    "objectID": false
+  },
+  {
+    "name": "panel.databases.sizes.get",
+    "group": "Databases",
+    "description": "databases / sizes — GET /api/databases/sizes",
+    "method": "GET",
+    "path": "/api/databases/sizes",
+    "objectID": false
+  },
+  {
+    "name": "panel.databases.password.put",
+    "group": "Settings",
+    "description": "databases / password — PUT /api/databases/password",
+    "method": "PUT",
+    "path": "/api/databases/password",
+    "objectID": false
+  },
+  {
+    "name": "panel.databases.delete",
+    "group": "Databases",
+    "description": "databases — DELETE /api/databases/",
+    "method": "DELETE",
+    "path": "/api/databases/",
+    "objectID": true
+  },
+  {
+    "name": "panel.firewall.apply_litecp.post",
+    "group": "Security",
+    "description": "LiteCP required firewall rules — POST /api/firewall/apply-litecp",
+    "method": "POST",
+    "path": "/api/firewall/apply-litecp",
+    "objectID": false
+  },
+  {
+    "name": "panel.firewall.apply_litecp.get",
+    "group": "Security",
+    "description": "LiteCP required firewall rules — GET /api/firewall/apply-litecp",
+    "method": "GET",
+    "path": "/api/firewall/apply-litecp",
+    "objectID": false
+  },
+  {
+    "name": "panel.firewall.apply_litecp.delete",
+    "group": "Security",
+    "description": "LiteCP required firewall rules — DELETE /api/firewall/apply-litecp",
+    "method": "DELETE",
+    "path": "/api/firewall/apply-litecp",
+    "objectID": false
+  },
+  {
+    "name": "panel.backup_destinations.host_key.post",
+    "group": "Backups",
+    "description": "backup destinations / host key — POST /api/backup-destinations/host-key",
+    "method": "POST",
+    "path": "/api/backup-destinations/host-key",
+    "objectID": false
+  },
+  {
+    "name": "panel.firewall.post",
+    "group": "Security",
+    "description": "Create firewall rule — POST /api/firewall",
+    "method": "POST",
+    "path": "/api/firewall",
+    "objectID": false
+  },
+  {
+    "name": "panel.firewall.delete",
+    "group": "Security",
+    "description": "Custom firewall rules — DELETE /api/firewall/",
+    "method": "DELETE",
+    "path": "/api/firewall/",
+    "objectID": true
+  },
+  {
+    "name": "panel.firewall.put",
+    "group": "Security",
+    "description": "Custom firewall rules — PUT /api/firewall/",
+    "method": "PUT",
+    "path": "/api/firewall/",
+    "objectID": true
+  },
+  {
+    "name": "panel.mail.hosting.put",
+    "group": "Email",
+    "description": "mail / hosting — PUT /api/mail/hosting",
+    "method": "PUT",
+    "path": "/api/mail/hosting",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.dns.get",
+    "group": "Email",
+    "description": "mail / dns — GET /api/mail/dns",
+    "method": "GET",
+    "path": "/api/mail/dns",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.domains.post",
+    "group": "Email",
+    "description": "mail / domains — POST /api/mail/domains",
+    "method": "POST",
+    "path": "/api/mail/domains",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.domains.delete",
+    "group": "Email",
+    "description": "mail / domains — DELETE /api/mail/domains/",
+    "method": "DELETE",
+    "path": "/api/mail/domains/",
+    "objectID": true
+  },
+  {
+    "name": "panel.mail.mailboxes.post",
+    "group": "Email",
+    "description": "mail / mailboxes — POST /api/mail/mailboxes",
+    "method": "POST",
+    "path": "/api/mail/mailboxes",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.mailboxes.password.put",
+    "group": "Email",
+    "description": "mail / mailboxes / password — PUT /api/mail/mailboxes/password",
+    "method": "PUT",
+    "path": "/api/mail/mailboxes/password",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.mailboxes.delete",
+    "group": "Email",
+    "description": "mail / mailboxes — DELETE /api/mail/mailboxes/",
+    "method": "DELETE",
+    "path": "/api/mail/mailboxes/",
+    "objectID": true
+  },
+  {
+    "name": "panel.mail.aliases.post",
+    "group": "Email",
+    "description": "mail / aliases — POST /api/mail/aliases",
+    "method": "POST",
+    "path": "/api/mail/aliases",
+    "objectID": false
+  },
+  {
+    "name": "panel.terminal.post",
+    "group": "Terminal",
+    "description": "Terminal commands — POST /api/terminal",
+    "method": "POST",
+    "path": "/api/terminal",
+    "objectID": false,
+    "unavailable": "Shell execution is disabled by the privilege-separated panel. Use SSH; API permissions do not bypass this boundary."
+  },
+  {
+    "name": "panel.terminal.session.post",
+    "group": "Terminal",
+    "description": "Interactive terminal session — POST /api/terminal/session",
+    "method": "POST",
+    "path": "/api/terminal/session",
+    "objectID": false,
+    "unavailable": "Shell execution is disabled by the privilege-separated panel. Use SSH; API permissions do not bypass this boundary."
+  },
+  {
+    "name": "panel.terminal.session.get",
+    "group": "Terminal",
+    "description": "Interactive terminal session — GET /api/terminal/session",
+    "method": "GET",
+    "path": "/api/terminal/session",
+    "objectID": false,
+    "unavailable": "Shell execution is disabled by the privilege-separated panel. Use SSH; API permissions do not bypass this boundary."
+  },
+  {
+    "name": "panel.terminal.session.delete",
+    "group": "Terminal",
+    "description": "Interactive terminal session — DELETE /api/terminal/session",
+    "method": "DELETE",
+    "path": "/api/terminal/session",
+    "objectID": false,
+    "unavailable": "Shell execution is disabled by the privilege-separated panel. Use SSH; API permissions do not bypass this boundary."
+  },
+  {
+    "name": "panel.shell_capabilities.get",
+    "group": "Terminal",
+    "description": "shell capabilities — GET /api/shell-capabilities",
+    "method": "GET",
+    "path": "/api/shell-capabilities",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.ssh_port.get",
+    "group": "Security",
+    "description": "security / ssh port — GET /api/security/ssh-port",
+    "method": "GET",
+    "path": "/api/security/ssh-port",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.ssh_port.put",
+    "group": "Security",
+    "description": "security / ssh port — PUT /api/security/ssh-port",
+    "method": "PUT",
+    "path": "/api/security/ssh-port",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.brute_force.get",
+    "group": "Security",
+    "description": "Brute force protection settings and attempts — GET /api/security/brute-force",
+    "method": "GET",
+    "path": "/api/security/brute-force",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.brute_force.put",
+    "group": "Security",
+    "description": "Brute force protection settings and attempts — PUT /api/security/brute-force",
+    "method": "PUT",
+    "path": "/api/security/brute-force",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.panel_port.get",
+    "group": "Security",
+    "description": "security / panel port — GET /api/security/panel-port",
+    "method": "GET",
+    "path": "/api/security/panel-port",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.panel_port.put",
+    "group": "Security",
+    "description": "security / panel port — PUT /api/security/panel-port",
+    "method": "PUT",
+    "path": "/api/security/panel-port",
+    "objectID": false
+  },
+  {
+    "name": "panel.mail.aliases.put",
+    "group": "Email",
+    "description": "mail / aliases — PUT /api/mail/aliases/",
+    "method": "PUT",
+    "path": "/api/mail/aliases/",
+    "objectID": true
+  },
+  {
+    "name": "panel.mail.aliases.delete",
+    "group": "Email",
+    "description": "mail / aliases — DELETE /api/mail/aliases/",
+    "method": "DELETE",
+    "path": "/api/mail/aliases/",
+    "objectID": true
+  },
+  {
+    "name": "panel.logs.get",
+    "group": "Logs",
+    "description": "logs — GET /api/logs",
+    "method": "GET",
+    "path": "/api/logs",
+    "objectID": false
+  },
+  {
+    "name": "panel.settings.put",
+    "group": "Settings",
+    "description": "Administrator email, time zone and panel settings — PUT /api/settings",
+    "method": "PUT",
+    "path": "/api/settings",
+    "objectID": false
+  },
+  {
+    "name": "panel.password.put",
+    "group": "Settings",
+    "description": "Administrator password — PUT /api/password",
+    "method": "PUT",
+    "path": "/api/password",
+    "objectID": false
+  },
+  {
+    "name": "panel.updates.install.post",
+    "group": "Updates",
+    "description": "Panel update installation — POST /api/updates/install",
+    "method": "POST",
+    "path": "/api/updates/install",
+    "objectID": false
+  },
+  {
+    "name": "panel.developer_mode.get",
+    "group": "Server",
+    "description": "Developer access configuration — GET /api/developer-mode",
+    "method": "GET",
+    "path": "/api/developer-mode",
+    "objectID": false
+  },
+  {
+    "name": "panel.developer_mode.put",
+    "group": "Server",
+    "description": "Developer access configuration — PUT /api/developer-mode",
+    "method": "PUT",
+    "path": "/api/developer-mode",
+    "objectID": false
+  },
+  {
+    "name": "panel.updates.status.get",
+    "group": "Updates",
+    "description": "updates / status — GET /api/updates/status",
+    "method": "GET",
+    "path": "/api/updates/status",
+    "objectID": false
+  },
+  {
+    "name": "panel.updates.get",
+    "group": "Updates",
+    "description": "updates — GET /api/updates",
+    "method": "GET",
+    "path": "/api/updates",
+    "objectID": false
+  },
+  {
+    "name": "panel.version.get",
+    "group": "Server",
+    "description": "version — GET /api/version",
+    "method": "GET",
+    "path": "/api/version",
+    "objectID": false
+  }
+]

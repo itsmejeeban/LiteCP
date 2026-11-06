@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.142"
+var version = "4.0.144"
 var buildRevision = ""
 
 //go:embed web/*
@@ -305,6 +305,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/access", a.withAuth(a.apiAccess))
 	mux.HandleFunc("/api/v1", only(http.MethodPost, a.externalAPI))
+	mux.HandleFunc("/api/v1/request", only(http.MethodPost, a.externalAPI))
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))
@@ -501,6 +502,12 @@ func only(method string, next http.HandlerFunc) http.HandlerFunc {
 
 func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Set only by the external API dispatcher after credential, permission,
+		// expiry, IP and rate checks. It is bound to this exact route and method.
+		if validExternalAPIGrant(r) {
+			next(w, r)
+			return
+		}
 		cookie, err := r.Cookie("litecp_session")
 		if (err != nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
 			writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")

@@ -1,6 +1,7 @@
 [
   "/api/access",
   "/api/v1",
+  "/api/v1/request",
   "/api/shell-capabilities",
   "/api/activities",
   "/api/activity-policy",
