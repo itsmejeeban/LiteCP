@@ -1287,7 +1287,11 @@ func (s *System) reconcileSiteNginx(site Site, configPath string) error {
 		return err
 	}
 	var updated string
-	if site.Application != nil {
+	if resourceEnabled(site) {
+		// The public resource frontend proxies to a private worker and has no
+		// FastCGI directive. Preserve its TLS and runtime gate during restart.
+		updated = string(content)
+	} else if site.Application != nil {
 		app := *site.Application
 		if err := updateApplicationCertificates(site, &app, content); err != nil {
 			return err

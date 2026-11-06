@@ -42,7 +42,7 @@ func TestCaptchaNginxGatewayFlow(t *testing.T) {
 	listener.Close()
 	root := t.TempDir()
 	site := Site{ID: "test", Domain: record.Domain, Captcha: &policy}
-	config := injectCaptchaConfig("server {\nlisten "+address+";\nserver_name "+record.Domain+";\nlimit_req_dry_run on;\nlocation / { proxy_pass "+content.URL+"; }\n}\n", site)
+	config := injectCaptchaConfig("server {\nlisten "+address+";\nserver_name "+record.Domain+";\nlimit_req_dry_run on;\nlocation / { proxy_pass "+content.URL+"; proxy_intercept_errors on; "+resourceProxyErrors+" }\n location @resource_unavailable { return 503; }\n}\n", site)
 	config = strings.ReplaceAll(config, "http://"+captchaAddress, gateway.URL)
 	// Simulate HTTPS termination; actual certificate behavior is tested separately.
 	config = strings.ReplaceAll(config, "X-LiteCP-Scheme $scheme", "X-LiteCP-Scheme https")

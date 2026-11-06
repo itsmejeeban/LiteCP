@@ -104,16 +104,22 @@ func TestCaptchaAutomaticRoutingRestoresResourceGate(t *testing.T) {
 	p.Mode = "auto"
 	site := Site{ID: "test", Domain: "audit.example.com", Captcha: &p, ResourceLimits: &WebsiteResourceLimits{Enabled: true}}
 	gate := " if (-f " + resourceDirectory(site.ID) + "/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n"
-	original := "# LiteCP enforced website resource boundary\nserver {\n" + gate + " if ($host = manual-suspension.test) { return 503; }\n location / { proxy_pass http://unix:/private/http.sock:; }\n}\n"
+	original := "# LiteCP enforced website resource boundary\nserver {\n" + gate + " if ($host = manual-suspension.test) { return 503; }\n location / { proxy_pass http://unix:/private/http.sock:; error_page 502 503 =503 @resource_unavailable; }\n}\n"
 	auto := injectCaptchaConfig(original, site)
 	if strings.Contains(auto, gate) || !strings.Contains(auto, "manual-suspension.test") || !strings.Contains(auto, "auth_request /_litecp_captcha_check;") {
 		t.Fatal("automatic mode lost isolation or manual suspension")
+	}
+	if !strings.Contains(auto, captchaResourceProxyErrors) {
+		t.Fatal("resource error handling overrides CAPTCHA")
 	}
 	if injectCaptchaConfig(auto, site) != auto {
 		t.Fatal("automatic injection not idempotent")
 	}
 	p.Mode = "off"
 	disabled := injectCaptchaConfig(auto, site)
+	if strings.Contains(disabled, captchaResourceProxyErrors) {
+		t.Fatal("disabled CAPTCHA left a named error handler")
+	}
 	if strings.Count(disabled, gate) != 1 || strings.Contains(disabled, "auth_request") {
 		t.Fatal("turning off CAPTCHA did not restore resource gate")
 	}

@@ -49,6 +49,9 @@ func (p CaptchaPolicy) validate() error {
 var captchaManagedBlock = regexp.MustCompile(`(?ms)\n[ \t]*# BEGIN LITECP CAPTCHA\n.*?^[ \t]*# END LITECP CAPTCHA\n`)
 var captchaServerStart = regexp.MustCompile(`(?m)^[ \t]*server\s*\{`)
 
+const resourceProxyErrors = "error_page 502 503 =503 @resource_unavailable;"
+const captchaResourceProxyErrors = resourceProxyErrors + " error_page 401 = @litecp_captcha;"
+
 func captchaResourceSignal(site Site, record captchaRuntimeSite, st resourceRuntimeStatus, now time.Time) captchaRuntimeSite {
 	if record.Policy.Mode != "auto" || !resourceEnabled(site) {
 		record.AutoUntil = time.Time{}
@@ -71,6 +74,7 @@ func captchaResourceSignal(site Site, record captchaRuntimeSite, st resourceRunt
 
 func injectCaptchaConfig(config string, site Site) string {
 	config = captchaManagedBlock.ReplaceAllString(config, "")
+	config = strings.ReplaceAll(config, captchaResourceProxyErrors, resourceProxyErrors)
 	gate := fmt.Sprintf(" if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n", resourceDirectory(site.ID))
 	if resourceEnabled(site) && strings.Contains(config, "# LiteCP enforced website resource boundary") && (site.Captcha == nil || site.Captcha.Mode != "auto") && !strings.Contains(config, gate) {
 		config = captchaServerStart.ReplaceAllStringFunc(config, func(start string) string { return start + "\n" + gate })
@@ -78,6 +82,9 @@ func injectCaptchaConfig(config string, site Site) string {
 	if !captchaEnabled(site) {
 		return config
 	}
+	// A location with any error_page directive stops inheriting the server's
+	// 401 handler. Preserve resource 503 handling and explicitly route CAPTCHA.
+	config = strings.ReplaceAll(config, resourceProxyErrors, captchaResourceProxyErrors)
 	if site.Captcha.Mode == "auto" {
 		// The gateway handles the resource gate before proxying; this permits
 		// verification while stopped workloads remain inaccessible. Suspension

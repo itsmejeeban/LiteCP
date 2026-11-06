@@ -44,6 +44,7 @@ ReadWritePaths=-/etc/litecp/waf
 ReadWritePaths=-/etc/litecp/dns
 ReadWritePaths=/home/litecp
 ReadWritePaths=-/var/lib/litecp-captcha
+ReadWritePaths=-/var/lib/litecp-resources
 ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
 
 [Install]

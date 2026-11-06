@@ -17,6 +17,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -562,6 +563,25 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 		if e = resourceRun("chcon", "-R", "-t", "httpd_sys_rw_content_t", filepath.Join(resourceProtectedStorage(p.Site), "tmp")); e != nil {
 			return e
 		}
+		// Existing log files may have been relabeled as read-only website
+		// content by a snapshot restore. FPM must retain its log-specific type.
+		logPath := filepath.Join(resourceProtectedStorage(p.Site), "php-error.log")
+		logFile, e := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if e != nil {
+			return e
+		}
+		if e = logFile.Close(); e != nil {
+			return e
+		}
+		pattern = regexp.QuoteMeta(logPath)
+		if e = resourceRun("semanage", "fcontext", "-a", "-t", "httpd_log_t", pattern); e != nil {
+			if e = resourceRun("semanage", "fcontext", "-m", "-t", "httpd_log_t", pattern); e != nil {
+				return e
+			}
+		}
+		if e = resourceRun("restorecon", "-F", logPath); e != nil {
+			return e
+		}
 	}
 	if err = resourceRun(resourcePHPExecutable(s, p.Site), "-t", "-y", filepath.Join(dir, "php.conf")); err != nil {
 		return err
@@ -870,6 +890,12 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			}
 			before = resourceSample{}
 			continue
+		}
+		// systemd can reset this kernel-only slice attribute on daemon-reload
+		// or when a new child unit joins. Restore the required grouping before
+		// verifying all other kernel allowances; never relax their checks.
+		if err = resourceSetOOMGroup(site.ID); err != nil {
+			return err
 		}
 		if err = resourceVerifyKernel(site.ID, p.Policy); err != nil {
 			return err
