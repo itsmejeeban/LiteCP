@@ -1415,7 +1415,9 @@ func (s *System) phpStackState(ctx context.Context, sites []Site) string {
 		return state
 	}
 	for _, site := range sites {
-		info, err := os.Stat(s.sitePHPSocket(site))
+		path := phpHealthSocket(s.sitePHPSocket(site), site, resourceRuntimeRead(site.ID))
+		if path == "" { continue } // Deliberate resource blocking is not a shared FPM failure.
+		info, err := os.Stat(path)
 		if err != nil || info.Mode()&os.ModeSocket == 0 {
 			return "degraded"
 		}

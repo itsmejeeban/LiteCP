@@ -31,6 +31,7 @@ function panel(options={}) {
   const document={body:new Element('body'),activeElement:null,createElement:tag=>new Element(tag),querySelector:selector=>selector.startsWith('dialog[')?null:node(selector),querySelectorAll:selector=>selector==='[data-page-view]'?[page]:[],addEventListener:(name,callback)=>listeners[name]=callback};
   if(options.collapsed)document.body.classList.add('sidebar-collapsed');
   node('#mobileMenu').click=()=>{menuClicks++;document.body.classList.remove('sidebar-collapsed');node('#sidebar').classList.add('open');};
+  node('#sidebarBottomToggle').click=node('#mobileMenu').click;
   const state=options.state===undefined?{sites:[{domain:'my.example.test'}],databases:[{name:'customer_database',username:'db_user'}],mailboxes:[{address:'admin@example.test'}]}:options.state;
   const window={innerWidth:options.width||1440,innerHeight:options.height||900,LiteCP:{state:()=>state,navigate:page=>navigations.push(page)},addEventListener:(name,callback)=>windowListeners[name]=callback};
   vm.runInNewContext(source,{window,document,fetch:options.fetch||(async()=>({ok:false})),Event:class{constructor(type){this.type=type;}},setTimeout:callback=>{timers.push(callback);return timers.length;},clearTimeout(){}});
@@ -55,7 +56,7 @@ test('keyboard selection, Enter, Escape and Ctrl+K work without invoking setting
   const ui=panel();ui.query('hosting');assert.equal(ui.input.attributes['aria-expanded'],'true');
   const next=ui.list.children[1].children[0].textContent;ui.key('ArrowDown');assert.equal(ui.list.children[1].attributes['aria-selected'],'true');ui.key('Enter');assert.equal(ui.navigations.length,1);assert.equal(ui.dropdown.hidden,true);
   ui.query('dns');ui.key('Escape');assert.equal(ui.dropdown.hidden,true);assert.equal(ui.input.attributes['aria-activedescendant'],undefined);
-  let prevented=false;ui.listeners.keydown({key:'k',ctrlKey:true,preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(ui.input.selected,true);assert.equal(ui.navigations.length,1);
+  let prevented=false;ui.listeners.keydown({key:'k',ctrlKey:true,preventDefault(){prevented=true;},stopPropagation(){}});assert.equal(prevented,true);assert.equal(ui.input.selected,true);assert.equal(ui.navigations.length,1);
   assert.ok(next);
 });
 test('manual topics augment search safely and target the user manual filter',async()=>{
@@ -78,7 +79,7 @@ test('search sits below the logo and results are outside the scrolling sidebar',
 });
 test('keyboard shortcut reveals hidden navigation and narrow results stay inside the viewport',()=>{
   for(const options of [{collapsed:true},{width:390,height:700,rect:{left:-232,bottom:120}}]){
-    const ui=panel(options);ui.listeners.keydown({key:'k',ctrlKey:true,preventDefault(){}});
+    const ui=panel(options);ui.listeners.keydown({key:'k',ctrlKey:true,preventDefault(){},stopPropagation(){}});
     assert.equal(ui.menuClicks(),1);assert.equal(ui.input.selected,true);assert.equal(ui.input.attributes['aria-expanded'],'true');
     if(options.width){assert.equal(ui.dropdown.style.width,'366px');assert.equal(ui.dropdown.style.left,'12px');assert.ok(parseInt(ui.dropdown.style.top)+parseInt(ui.dropdown.style.maxHeight)<=options.height-12);}
   }

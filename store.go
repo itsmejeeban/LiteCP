@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -317,7 +318,30 @@ func (s *Store) CheckPassword(username, password string) bool {
 	s.mu.RLock()
 	admin := s.cfg.Admin
 	s.mu.RUnlock()
-	return checkAdminCredentials(admin, username, password, verifyPassword)
+	if !checkAdminCredentials(admin, username, password, verifyPassword) {
+		return false
+	}
+	if !strings.HasPrefix(admin.PasswordHash, "pbkdf2-sha256$") {
+		return true
+	}
+	// Upgrade only after correct authentication; retain legacy verification for
+	// restored configurations and never overwrite a concurrent password change.
+	next, err := hashPassword(password)
+	if err != nil {
+		log.Print("Administrator password hash upgrade deferred: hashing failed")
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg.Admin.PasswordHash != admin.PasswordHash {
+		return false
+	}
+	s.cfg.Admin.PasswordHash = next
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Admin.PasswordHash = admin.PasswordHash
+		log.Print("Administrator password hash upgrade deferred: configuration save failed")
+	}
+	return true
 }
 
 func checkAdminCredentials(admin Admin, username, password string, verify func(string, string) bool) bool {

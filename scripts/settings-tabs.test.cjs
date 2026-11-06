@@ -24,7 +24,7 @@ function settingsUI(hash='#dashboard'){
  return {node,group,toggle,submenu,location,navigate:cp.navigate,oldNavigations,panels:()=>node('grid').children.filter(child=>child.dataset.settingsPanel),clickToggle:()=>toggle.handlers.click(),visible:()=>node('grid').children.filter(child=>child.dataset.settingsPanel&&!child.classList.contains('hidden')).map(child=>child.dataset.settingsPanel)};
 }
 test('Settings expands and collapses eight ordered sub-tabs without changing the open page',()=>{
- const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Time zone','Server hostname','DNS resolver','Developer mode','Update','Reboot server']);
+ const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Time zone','Appearance','Server hostname','DNS resolver','Developer mode','Update','Reboot server']);
  assert.equal(ui.toggle.getAttribute('aria-expanded'),'false');ui.clickToggle();assert.equal(ui.toggle.getAttribute('aria-expanded'),'true');assert.equal(ui.submenu.classList.contains('hidden'),false);assert.equal(ui.location.hash,'#dashboard');
  ui.clickToggle();assert.equal(ui.submenu.classList.contains('hidden'),true);assert.equal(ui.location.hash,'#dashboard');
 });
@@ -49,8 +49,8 @@ test('saving a settings sub-tab preserves saved values from other sections',asyn
  }
 });
 test('main navigation retains settings sub-routes while activating the Settings page',()=>{
- const source=fs.readFileSync('web/app.js','utf8'),start=source.indexOf('  function navigate('),end=source.indexOf('  function openSiteModal(',start),location={hash:'#dashboard'},active={},calls=[];
+ const source=fs.readFileSync('web/app.js','utf8'),start=source.indexOf('  function navigate('),end=source.indexOf('  function syncWordPressSetup(',start),location={hash:'#dashboard'},active={},calls=[];
  const views=['dashboard','settings'].map(id=>({dataset:{pageView:id},classList:{toggle:(name,value)=>active[id]=value}}));
- const navigate=vm.runInNewContext(source.slice(start,end)+'\nnavigate',{location,history:{pushState(a,b,value){location.hash=value;}},$$:selector=>selector==='[data-page-view]'?views:[],closeSidebar(){},window:{scrollTo(){},LiteCPFeatures:{navigate:page=>calls.push(page)}},clearInterval(){},logTimer:0,loadLogs(){},loadFiles(){}});
+ const navigate=vm.runInNewContext(source.slice(start,end)+'\nnavigate',{location,history:{pushState(a,b,value){location.hash=value;}},$$:selector=>selector==='[data-page-view]'?views:[],closeSidebar(){},window:{scrollTo(){},LiteCPFeatures:{navigate:page=>calls.push(page)}},clearInterval(){},logTimer:0,logRequest:0,document:{querySelector:()=>({textContent:"",classList:{toggle(){}}})},loadLogs(){},loadFiles(){}});
  navigate('settings/hostname');assert.equal(location.hash,'#settings/hostname');assert.equal(active.settings,true);assert.equal(active.dashboard,false);assert.deepEqual(calls,['settings']);
 });

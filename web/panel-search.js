@@ -148,6 +148,14 @@
     if(event.key==="Enter"){event.preventDefault();if(!dropdown.hidden&&results[selected])open(results[selected]);}
     if(event.key==="Tab")close();
   });
+  document.addEventListener("keydown",event=>{
+    if(!(event.ctrlKey||event.metaKey)||String(event.key).toLowerCase()!=="k"||!cp.state())return;
+    event.preventDefault();event.stopPropagation();
+    const sidebar=document.querySelector("#sidebar");
+    if(window.innerWidth>900&&document.body.classList.contains("sidebar-collapsed"))document.querySelector("#sidebarBottomToggle")?.click();
+    else if(window.innerWidth<=900&&!sidebar.classList.contains("open"))document.querySelector("#mobileMenu")?.click();
+    input.focus();input.select();show();loadManual();
+  });
   document.addEventListener("click",event=>{if(!search.contains(event.target)&&!dropdown.contains(event.target))close();});
   document.querySelector("#sidebar").addEventListener("scroll",close);
   window.addEventListener("resize",()=>{if(!dropdown.hidden)positionResults();});

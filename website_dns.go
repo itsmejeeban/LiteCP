@@ -347,7 +347,7 @@ func dnsSiteFile(site Site) string {
 }
 func dnsNamedConfig(zones map[string]string) string {
 	var out strings.Builder
-	out.WriteString("options { directory \"/etc/litecp/dns\"; recursion no; allow-recursion { none; }; allow-query-cache { none; }; allow-query { any; }; allow-transfer { none; }; dnssec-validation no; include \"/etc/litecp/dns/listen.conf\"; managed-keys-directory \"/run/litecp-dns\"; pid-file \"/run/litecp-dns/named.pid\"; session-keyfile \"/run/litecp-dns/session.key\"; };\ncontrols {};\n")
+	out.WriteString("options { directory \"/run/litecp-dns\"; recursion no; allow-recursion { none; }; allow-query-cache { none; }; allow-query { any; }; allow-transfer { none; }; dnssec-validation no; include \"/etc/litecp/dns/listen.conf\"; managed-keys-directory \"/run/litecp-dns\"; pid-file \"/run/litecp-dns/named.pid\"; session-keyfile \"/run/litecp-dns/session.key\"; };\ncontrols {};\n")
 	// Deterministic configuration makes review and rollback straightforward.
 	for _, domain := range sortedDNSDomains(zones) {
 		fmt.Fprintf(&out, "zone %q { type master; file %q; allow-update { none; }; };\n", domain, zones[domain])

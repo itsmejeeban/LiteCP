@@ -52,6 +52,7 @@ function popup(kind, api) {
     }
     showModal() { this.open = true; }
     close() { this.open = false; }
+    insertAdjacentHTML() {}
     append() {}
     prepend() {}
     setAttribute() {}
@@ -74,7 +75,7 @@ function popup(kind, api) {
     refresh: async () => { refreshes++; }
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'web', `website-${kind}.js`), 'utf8'), {
-    document, window: { LiteCP: cp, LiteCPFeatures: { render() {} }, LiteCPPasswordCopy:{enhance(){}}, LiteCPDialogs:{confirm:async()=>true} },
+    setInterval(){},clearInterval(){},document, window: { addEventListener(){}, LiteCP: cp, LiteCPFeatures: { render() {} }, LiteCPPasswordCopy:{enhance(){}}, LiteCPDialogs:{confirm:async()=>true} },
     FormData: class { constructor(form) { this.values = form.values || {}; } get(name) { return this.values[name] || null; } }
   });
   function click(selector, dataset = {}) {
@@ -172,7 +173,7 @@ for (const kind of ['backups', 'ftp']) {
     pending[1].resolve({});
     await second;
     assert.equal(currentControl.disabled, false);
-    assert.match(ui.dialog.querySelector(statusSelector).textContent, kind === 'backups' ? /Backup ready/ : /FTP account updated/);
+    assert.match(ui.dialog.querySelector(statusSelector).textContent, kind === 'backups' ? /Backup started.*continues on the server/ : /FTP account updated/);
   });
 }
 

@@ -2,8 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 test('integrity page is admitted, grouped and loaded after dashboard',()=>{
  const index=fs.readFileSync('web/index.html','utf8');
  assert.ok(index.indexOf('integrity.js?')>index.indexOf('security-dashboard.js?'));
- assert.match(fs.readFileSync('web/app.js','utf8'),/"security-dashboard", "file-integrity"/);
- assert.match(fs.readFileSync('web/sidebar-groups.js','utf8'),/"security-dashboard","file-integrity"/);
+ assert.match(fs.readFileSync('web/app.js','utf8'),/"security-dashboard"[^\n]*"file-integrity"/);
+ assert.match(fs.readFileSync('web/sidebar-groups.js','utf8'),/"security-dashboard"[^\n]*"file-integrity"/);
  assert.match(fs.readFileSync('web/security-dashboard.js','utf8'),/href="#file-integrity"/);
  for(const tag of index.matchAll(/<script\s+([^>]+)>/g))assert.match(tag[1],/src="[^"<>]+"/);
 });

@@ -9,12 +9,17 @@ function setup(action){
  return {answer,calls,button,request:()=>request,run:()=>context.run({target:{closest:()=>button}})};
 }
 test('SSL requests wait for the validated email dialog; cancelling sends no request',async()=>{
- const p=setup('ssl'),work=p.run();assert.equal(p.calls.length,0);assert.equal(p.request().options.type,'email');assert.equal(p.request().options.required,true);assert.equal(p.request().options.confirmText,'Enable SSL');
+ const p=setup('ssl'),work=p.run();assert.equal(p.calls.length,0);assert.equal(p.request().options.type,'email');assert.equal(p.request().options.required,true);assert.equal(p.request().options.confirmText,'Install SSL');
  p.answer(null);await work;assert.equal(p.calls.length,0);assert.equal(p.button.disabled,false);
  const accepted=setup('ssl'),running=accepted.run();accepted.answer('owner@example.test');await running;assert.equal(accepted.calls[0].url,'/api/sites/ssl');assert.equal(accepted.calls[0].options.body.email,'owner@example.test');
 });
-test('detach keeps its destructive scope and waits for explicit styled confirmation',async()=>{
- const p=setup('delete'),work=p.run();assert.equal(p.calls.length,0);assert.equal(p.request().options.confirmText,'Detach website');assert.equal(p.request().options.danger,true);assert.match(p.request().message,/files and database will be preserved/);
+test('website removal keeps its destructive scope and waits for explicit styled confirmation',async()=>{
+ const p=setup('delete'),work=p.run();assert.equal(p.calls.length,0);assert.equal(p.request().options.confirmText,'Remove permanently');assert.equal(p.request().options.danger,true);assert.match(p.request().message,/website files, Trash, linked managed databases and FTP accounts/);assert.match(p.request().message,/Local and remote backups are kept/);assert.match(p.request().message,/Type fixture.example.test to confirm/);
  p.answer(false);await work;assert.equal(p.calls.length,0);
- const accepted=setup('delete'),running=accepted.run();accepted.answer(true);await running;assert.equal(accepted.calls[0].url,'/api/sites/site1');assert.equal(accepted.calls[0].options.method,'DELETE');
+ const accepted=setup('delete'),running=accepted.run();accepted.answer('fixture.example.test');await running;assert.equal(accepted.calls[0].url,'/api/sites/site1?deleteData=true');assert.equal(accepted.calls[0].options.method,'DELETE');
+});
+
+
+test('website removal rejects a mismatched domain confirmation',async()=>{
+ const p=setup('delete'),work=p.run();p.answer('different.example.test');await work;assert.equal(p.calls.length,0);
 });

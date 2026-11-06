@@ -2,13 +2,14 @@ const test = require('node:test'), assert = require('node:assert/strict'), fs = 
 function setup(writeText = async () => {}) {
   const notifications = [];
   class Element {
-    constructor(tag) { this.tag = tag; this.children = []; this.attributes = {}; this.handlers = {}; this.dataset={};this.events=[];this.value = ''; this.type = 'password'; this.className = ''; this.classList = { contains: name => this.className.split(' ').includes(name) }; }
+    constructor(tag) { this.tag = tag; this.children = []; this.attributes = {}; this.handlers = {}; this.dataset={};this.events=[];this.value = ''; this.type = 'password'; this.className = ''; this.classList = { add: name => {this.className+=' '+name;},contains: name => this.className.split(' ').includes(name) }; }
     setAttribute(name, value) { this.attributes[name] = value; }
     addEventListener(name, callback) { this.handlers[name] = callback; }
     append(...items) { for (const item of items) { if (item.parentElement) item.parentElement.children = item.parentElement.children.filter(child => child !== item); item.parentElement = this; this.children.push(item); } }
     prepend(item){item.parentElement=this;this.children.unshift(item);}
     insertAdjacentElement(position, item) { assert.ok(['beforebegin','afterend'].includes(position)); const parent = this.parentElement; parent.children.splice(parent.children.indexOf(this)+(position==='afterend'?1:0), 0, item); item.parentElement = parent; }
     dispatchEvent(event){this.events.push(event.type);}
+    closest(selector){return this.parentElement;}
     focus() { this.focused = true; }
     select() { this.selected = true; }
   }
@@ -48,7 +49,7 @@ test('all generated password entry points use the shared copy control', () => {
   const features = fs.readFileSync('web/features.js','utf8'), ftp = fs.readFileSync('web/website-ftp.js','utf8'), app = fs.readFileSync('web/app.js','utf8'), index = fs.readFileSync('web/index.html','utf8');
   assert.match(features, /window\.LiteCPPasswordCopy\.enhance\(input\)/);
   assert.match(ftp, /LiteCPPasswordCopy\.enhance\(dialog\.querySelector\('input\[name="password"\]'\)\)/);
-  assert.match(app, /\/password\/i\.test\(rows\[index\]\[0\]\)/);assert.match(app,/input\.readOnly=true/);assert.match(app,/LiteCPPasswordCopy\.enhance\(input\)/);
+  assert.match(app, /\/password\|secret\/i\.test\(rows\[index\]\[0\]\)/);assert.match(app,/input\.readOnly=true/);assert.match(app,/LiteCPPasswordCopy\.enhance\(input\)/);
   assert.ok(index.indexOf('password-copy.js') < index.indexOf('src="app.js'));
 });
 test('eye icon appears before copy and reveals/hides without changing or submitting the password',async()=>{
@@ -67,7 +68,7 @@ test('Generate is a secondary button and still fills password confirmation',asyn
   const ui=setup();ui.input.name='next';ui.input.form={elements:{confirm:{value:''}}};
   const source=fs.readFileSync('web/features.js','utf8'),start=source.indexOf('  function enhancePasswords('),end=source.indexOf('  function askPassword(',start);
   vm.runInNewContext(source.slice(start,end)+'\nenhancePasswords();',{document:ui.document,window:{LiteCPPasswordCopy:ui.helper},$$:()=>[ui.input],generatePassword:()=> 'Generated-fixture-password',Event:class{constructor(type){this.type=type;}}});
-  const actions=ui.parent.children[1],generate=actions.children[0];assert.equal(generate.tag,'button');assert.equal(generate.type,'button');assert.equal(generate.className,'button button-secondary');assert.equal(generate.textContent,'Generate');
+  const wrapper=ui.parent.children[0],actions=wrapper.children.at(-1),generate=actions.children[0];assert.equal(generate.tag,'button');assert.equal(generate.type,'button');assert.equal(generate.className,'button button-secondary');assert.equal(generate.textContent,'Generate');
   await click(generate);assert.equal(ui.input.value,'Generated-fixture-password');assert.equal(ui.input.form.elements.confirm.value,ui.input.value);assert.deepEqual(ui.input.events,['input']);
   assert.equal(actions.children.length,1);
 });

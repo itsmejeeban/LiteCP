@@ -67,7 +67,7 @@ fi
 if [[ ! -f /etc/litecp/dns/named.conf ]]; then
   cat > /etc/litecp/dns/named.conf <<'EOF'
 options {
-  directory "/etc/litecp/dns";
+  directory "/run/litecp-dns";
   recursion no; allow-recursion { none; }; allow-query-cache { none; };
   allow-query { any; }; allow-transfer { none; }; dnssec-validation no;
   include "/etc/litecp/dns/listen.conf";
@@ -78,6 +78,7 @@ options {
 controls {};
 EOF
 fi
+python3 "$(dirname "${BASH_SOURCE[0]}")/repair-dns-runtime.py"
 chmod 0644 /etc/litecp/dns/{named,listen}.conf
 named-checkconf /etc/litecp/dns/named.conf
 echo '[DNS 4/5] Installing dedicated service...'
@@ -88,12 +89,15 @@ After=network-online.target
 Wants=network-online.target
 [Service]
 Type=simple
+User=$dns_user
+Group=$dns_user
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ExecStart=/usr/sbin/named -g -c /etc/litecp/dns/named.conf -u $dns_user
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RuntimeDirectory=litecp-dns
 RuntimeDirectoryMode=0755
-ExecStartPre=+/usr/bin/chown $dns_user:$dns_user /run/litecp-dns
 ExecStartPre=+/bin/sh -c 'if command -v restorecon >/dev/null; then restorecon -R /run/litecp-dns; fi'
 ProtectSystem=strict
 ReadWritePaths=/run/litecp-dns

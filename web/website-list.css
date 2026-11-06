@@ -16,3 +16,12 @@
 :root[data-theme] #sitesTable input[type=checkbox]{appearance:auto;position:static;width:16px;height:16px;min-width:16px;margin:0;flex:none;accent-color:#0875f9;cursor:pointer}
 #sitesTable .domain-cell{gap:8px}
 @media(max-width:720px){.website-bulk-actions{margin-left:0;width:100%}.website-bulk-result{flex-wrap:wrap;gap:4px}.website-bulk-result>span{text-align:left}}
+/* Fixed summary widths keep short values compact and leave room for actions. */
+#sitesTable .website-col-domain{width:270px}
+#sitesTable .website-col-application{width:90px}
+#sitesTable .website-col-runtime{width:110px}
+#sitesTable .website-col-size{width:72px}
+#sitesTable .website-col-database-size{width:105px}
+#sitesTable .website-col-actions{width:auto}
+#sitesTable .websites-table th,#sitesTable .websites-table td{padding-left:10px;padding-right:10px}
+#sitesTable .domain-copy{min-width:0;overflow-wrap:anywhere}

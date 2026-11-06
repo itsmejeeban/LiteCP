@@ -46,3 +46,17 @@ func ftpsServiceUnit(exists func(string) bool) string {
 	}
 	return ""
 }
+
+// Resource-enforced sites use a dedicated FPM instance, not the shared pool.
+func phpHealthSocket(shared string, site Site, state resourceRuntimeStatus) string {
+	if site.Suspended {
+		return ""
+	}
+	if site.ResourceLimits == nil || !site.ResourceLimits.Enabled {
+		return shared
+	}
+	if state.Enforced && state.State == "Resource blocked" {
+		return ""
+	}
+	return resourceSocket(site.ID, "php")
+}

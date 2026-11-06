@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.160"
+var version = "5.0.0"
 var buildRevision = ""
 
 //go:embed web/*
@@ -1358,17 +1358,8 @@ func randomToken(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buffer), nil
 }
 
-func hashPassword(password string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	const iterations = 600000
-	derived := pbkdf2SHA256([]byte(password), salt, iterations, 32)
-	return fmt.Sprintf("pbkdf2-sha256$%d$%s$%s", iterations, hex.EncodeToString(salt), hex.EncodeToString(derived)), nil
-}
-
 func verifyPassword(encoded, password string) bool {
+ if strings.HasPrefix(encoded, "$argon2id$") { return verifyArgon2Password(encoded,password) }
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 4 || parts[0] != "pbkdf2-sha256" {
 		return false

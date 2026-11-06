@@ -58,6 +58,7 @@ function panel(script, api, options = {}) {
   const cp = {
     api,
     escapeHTML: value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),
+    activityTimestamp: value => value,
     formatDateTime: value => value,
     state: () => ({ sites: [{ id: 'site1', domain: 'example.test', appType: 'regular' }] }),
     navigate(page) { location.hash = '#' + page; features.navigate(page); },
@@ -170,7 +171,7 @@ function editorWorkflow(api) {
   const editor = vm.runInNewContext(`let editorFilePath='',editorSiteID='',editorRequest=0,editorSaving=false,editorOriginal='',editorEncoding='UTF-8';
     ${functions}
     ({openEditor,closeEditor,saveEditor,snapshot:()=>({path:editorFilePath,site:editorSiteID,saving:editorSaving})})`, {
-    $: element, api, window: {LiteCPDialogs:{confirm:async()=>true}}, encodeURIComponent,
+    $$:()=>[], $: element, api, window: {LiteCPDialogs:{confirm:async()=>true}}, encodeURIComponent,
     loadFiles: async () => {}, showToast() {}, handleError: error => errors.push(error.message)
   });
   return { ...editor, element, errors };
@@ -261,10 +262,10 @@ test('mail action enhancements stay single across repeated retained-table refres
   });
   const state={mailboxes:[{id:'mail1',address:'admin@example.test',domain:'example.test'}],mailDomains:[{id:'domain1',domain:'example.test'}],system:{webmailAvailable:true,webmailUrl:'https://mail.example.test'},settings:{emailHostingEnabled:true}};
   for(let i=0;i<5;i++)render(state);
-  assert.equal(added.length,3);
-  assert.equal(added.filter(node=>node.tag.startsWith('<a')).length,1);
+  assert.equal(added.length,4);
+  assert.equal(added.filter(node=>node.tag.includes('data-webmail-login=')).length,1);
   state.system.webmailAvailable=false;render(state);
-  assert.equal(added.length,3);
+  assert.equal(added.length,4);
   assert.equal(added.filter(node=>node.tag.includes('data-webmail-unavailable')).length,1);
   assert.equal(added.filter(node=>node.tag.startsWith('<a')).length,0);
 });

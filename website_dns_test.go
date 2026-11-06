@@ -150,3 +150,13 @@ func TestWebsiteDNSRenameAndExport(t *testing.T) {
 		t.Fatal("unpublish preparation changed saved zone")
 	}
 }
+
+func TestDNSConfigurationUsesPrivateWritableRuntimeDirectory(t *testing.T) {
+	config := dnsNamedConfig(map[string]string{"example.test": "/etc/litecp/dns/revision-test/example.zone"})
+	if !strings.Contains(config, `directory "/run/litecp-dns";`) || strings.Contains(config, `directory "/etc/litecp/dns";`) {
+		t.Fatal(config)
+	}
+	if !strings.Contains(config, `file "/etc/litecp/dns/revision-test/example.zone"`) {
+		t.Fatal("zone paths must remain absolute and root-managed", config)
+	}
+}

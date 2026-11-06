@@ -7,8 +7,8 @@ function setup(saved,blocked=false){
   const fields={'#appearanceTheme':select,'#appearancePresets':cards,'#appearanceStatus':status,'#appearanceCancel':cancel};
   form.querySelector=key=>fields[key];
   const document={documentElement:{dataset:{}},createElement:node,querySelector:key=>key==='#appearanceForm'?form:fields[key],querySelectorAll:()=>cards.children.map(label=>label.children[0]),addEventListener:(name,fn)=>events[name]=fn};
-  const window={addEventListener:(name,fn)=>windowEvents[name]=fn};
-  vm.runInNewContext(source,{document,window,localStorage:{getItem:key=>{if(blocked)throw Error('blocked');return memory.get(key);},setItem:(key,value)=>{if(blocked)throw Error('blocked');memory.set(key,value);}}});
+  const window={dispatchEvent(){},addEventListener:(name,fn)=>windowEvents[name]=fn};
+  vm.runInNewContext(source,{Event:class{constructor(type){this.type=type;}},document,window,localStorage:{getItem:key=>{if(blocked)throw Error('blocked');return memory.get(key);},setItem:(key,value)=>{if(blocked)throw Error('blocked');memory.set(key,value);}}});
   events.DOMContentLoaded();
   return {document,window,select,cards,status,cancel,form,memory,windowEvents};
 }
@@ -57,5 +57,5 @@ test('every preset has styles and appearance has a routable settings entry',()=>
   for(const theme of setup().window.LiteCPTheme.themes){if(theme.id!=='default')assert.ok(css.includes(`[data-ui-theme="${theme.id}"]`));}
   assert.match(fs.readFileSync('web/settings-tabs.js','utf8'),/id:"appearance"/);
   assert.match(fs.readFileSync('web/app.js','utf8'),/"developer","appearance"/);
-  assert.match(fs.readFileSync('web/index.html','utf8'),/appearance\.css\?v=4\.0\.63/);
+  assert.match(fs.readFileSync('web/index.html','utf8'),/appearance\.css\?v=[^"\s]+/);
 });

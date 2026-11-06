@@ -4,8 +4,8 @@ test('security actions reflect installed capabilities and recover after installa
  const start=source.indexOf('  function render(state){'),end=source.indexOf('  window.LiteCPFeatures=',start);
  assert.ok(start>=0&&end>start);
  const nodes=new Map(),wafSelect={disabled:false};
- const $=selector=>{if(!nodes.has(selector))nodes.set(selector,{value:'',classList:{toggle(){}},innerHTML:'',textContent:'',disabled:false});return nodes.get(selector);};
- const scope={$, $$:selector=>selector==='#wafTable select'?[wafSelect]:[],esc:String,fillSiteSelect(){},document:{activeElement:null},location:{hostname:'panel.example.test'}};
+ const $=selector=>{if(!nodes.has(selector))nodes.set(selector,{dataset:{},value:'',classList:{toggle(){}},innerHTML:'',textContent:'',disabled:false});return nodes.get(selector);};
+ const scope={$, $$:selector=>selector==='#wafTable select'?[wafSelect]:[],esc:String,fillSiteSelect(){},document:{activeElement:null},location:{hostname:'panel.example.test'},renderExtensionTable(){},extensionItems:[]};
  vm.runInNewContext(source.slice(start,end)+'\nthis.render=render;',scope);
  const state={sites:[],mailboxes:[],mailDomains:[],settings:{},system:{antivirusAvailable:false,wafEngine:'not installed'}};
  scope.render(state);
