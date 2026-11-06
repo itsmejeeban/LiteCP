@@ -316,7 +316,10 @@ def restore(source,confirmation):
             with sqlite3.connect(str(pathlib.Path(ROOTS['webmail'])/'roundcube.db')) as db:db.execute('DELETE FROM session')
         run(['nginx','-t'])
         if cfg.get('settings',{}).get('emailHostingEnabled') and (cfg.get('mailboxes') or cfg.get('mailDomains')):
-            for unit in ['postfix','dovecot','opendkim']:
+            mail_units=['postfix','dovecot']
+            for optional in ['opendkim','rspamd']:
+                if subprocess.run(['systemctl','cat',optional],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:mail_units.append(optional)
+            for unit in mail_units:
                 if unit not in stopped:stopped.append(unit)
         timezone=cfg.get('settings',{}).get('timezone','UTC')
         if '..' not in timezone and (pathlib.Path('/usr/share/zoneinfo')/timezone).is_file():run(['timedatectl','set-timezone',timezone])

@@ -101,7 +101,7 @@ class SnapshotTests(unittest.TestCase):
   for fail in (False,True):
    with self.subTest(rollback=fail):
     website=pathlib.Path(s.ROOTS['websites']);marker=website/'index.php'
-    config_path=pathlib.Path(s.ROOTS['panel'],'config.json');cfg=json.loads(config_path.read_text());cfg['settings']={'emailHostingEnabled':True};config_path.write_text(json.dumps(cfg))
+    config_path=pathlib.Path(s.ROOTS['panel'],'config.json');cfg=json.loads(config_path.read_text());cfg['settings']={'emailHostingEnabled':True};cfg['mailDomains']=[{'domain':'audit.example'}];config_path.write_text(json.dumps(cfg))
     marker.write_text('snapshot content');path=s.BASE/('mount-'+str(fail)+'.zip');s.create(path)
     marker.write_text('destination content');inode=website.stat().st_ino
     original_move=s.shutil.move
@@ -116,13 +116,13 @@ class SnapshotTests(unittest.TestCase):
     service_calls=[]
     def subprocess_run(args,**kwargs):
      service_calls.append(args)
-     return types.SimpleNamespace(returncode=0 if args==['selinuxenabled'] else 1,stdout=b'')
+     return types.SimpleNamespace(returncode=0 if args==['selinuxenabled'] or args[:2]==['systemctl','start'] else 1,stdout=b'')
     with patch.object(s.zipfile,'ZipFile',wraps=s.zipfile.ZipFile) as archives,patch.object(s.os.path,'ismount',side_effect=lambda p:pathlib.Path(p)==website),patch.object(s.shutil,'move',side_effect=move),patch.object(s.shutil,'which',return_value='/usr/sbin/selinuxenabled'),patch.object(s,'run',side_effect=command),patch.object(s.subprocess,'run',side_effect=subprocess_run),patch.object(s,'php_units',return_value=[]),patch.object(s,'pause_containers',return_value=[]):
      if fail:
       with self.assertRaisesRegex(RuntimeError,'mounted rollback test'):s.restore(path,'RESTORE ENTIRE LITECP')
      else:self.assertTrue(s.restore(path,'RESTORE ENTIRE LITECP')['restored'])
      self.assertLessEqual(archives.call_count,4,'archive directory must not be reopened for each restored file')
-    self.assertNotIn(['systemctl','start','opendkim'],service_calls,'do not start an unconfigured signer when no mail domains exist')
+    self.assertNotIn(['systemctl','start','opendkim'],service_calls,'do not start an optional signer that is not installed')
     self.assertEqual(website.stat().st_ino,inode)
     relabel=next(i for i,args in enumerate(commands) if args[0]=='restorecon')
     self.assertLess(relabel,commands.index(['systemd-run','--scope','--quiet','/usr/local/bin/litecp','snapshot-reconcile']))

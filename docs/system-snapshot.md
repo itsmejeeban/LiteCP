@@ -12,6 +12,8 @@ A recovery ZIP and previous data are retained in the snapshot directory before o
 
 Dedicated website-storage mounts stay mounted during restoration: their contents are retained and replaced individually. The live backing image is excluded from snapshots. SELinux contexts are reapplied from the destination policy before runtime reconciliation. Resumed application container monitors survive completion of the snapshot job.
 
+Managed database schemas, rows, local database users and grants are restored together. Mailbox password hashes, quotas and Maildir messages are restored with mail domains and aliases. Optional OpenDKIM and Rspamd services are resumed only when installed; they are not prerequisites for restoring an otherwise supported Postfix/Dovecot mailbox.
+
 For portable backups, external symlinks and special files are rejected instead of silently omitted. Databases not registered in LiteCP and data stored outside LiteCP's managed roots are not included. Quiesce application containers and external writers during capture; third-party external services are outside this backup's scope.
 
 
