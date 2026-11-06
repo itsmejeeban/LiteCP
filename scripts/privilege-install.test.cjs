@@ -14,6 +14,7 @@ test('updates runtime-check the namespace before stopping the current panel',()=
   assert.ok(body.indexOf('--prepare-only')>=0&&body.indexOf('--prepare-only')<body.indexOf('systemctl stop litecp'),path);
  }
  const checker=read('scripts/check-web-sandbox.sh');
+ assert.doesNotMatch(checker,/'--pipe'/,'background probes must not inherit journald descriptors');
  for(const signal of ['systemd-run','/etc/shadow','/var/lib/litecp/secret.key','CapEff','NoNewPrivs'])assert.ok(checker.includes(signal),signal);
 });
 test('broker socket admits only root and the dedicated service group',()=>{

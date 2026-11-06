@@ -31,7 +31,9 @@ if any(int(fields[key].strip(),16) for key in ('CapEff','CapPrm','CapInh','CapAm
 if fields['NoNewPrivs'].strip()!='1': raise SystemExit('NoNewPrivileges is missing')
 print('Runtime web preflight: UID='+str(os.geteuid())+', private data unreadable, capabilities empty.')
 """
-command=['systemd-run','--quiet','--wait','--pipe','--collect','--unit='+name,
+# Do not pass the parent service's journald socket as a pipe to another unit.
+# This probe also runs inside the background updater, without an interactive TTY.
+command=['systemd-run','--quiet','--wait','--collect','--unit='+name,
          '--property=RuntimeMaxSec=20','--property=TimeoutStartSec=20','--property=Restart=no']+properties+['/usr/bin/python3','-c',probe]
 result=subprocess.run(command,timeout=30)
 if result.returncode:
