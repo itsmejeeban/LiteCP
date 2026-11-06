@@ -39,3 +39,17 @@ test('new API routes require an explicit broker policy entry and root terminal i
  assert.deepEqual([...policy].sort(),[...new Set(routes)].sort());
  assert.ok(!policy.some(path=>path==='/'||path.startsWith('/api/terminal')));
 });
+
+test('broker and PHP compatibility runtime keep their shared socket directory through boot ordering',()=>{
+ const broker=read('deploy/litecp-broker.service'),php=read('deploy/litecp-php73-fpm.service');
+ assert.match(broker,/^RuntimeDirectory=litecp litecp-php73$/m);
+ for(const unit of [broker,php])assert.match(unit,/^RuntimeDirectoryPreserve=yes$/m);
+});
+
+test('application restart waits for database sockets and the quota mount in every split install',()=>{
+ const installer=read('scripts/install-privilege-services.sh'),order=read('scripts/install-application-boot-order.sh');
+ assert.ok(installer.includes('scripts/install-application-boot-order.sh'));
+ assert.ok(order.includes('After=mysqld.service mysql.service mariadb.service'));
+ assert.ok(order.includes('RequiresMountsFor=/home/litecp'));
+ assert.ok(order.includes('cp -p "$path" "$backup/previous.conf"'));
+});

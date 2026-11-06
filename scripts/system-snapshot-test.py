@@ -3,10 +3,77 @@ spec=importlib.util.spec_from_file_location('snapshot',pathlib.Path(__file__).wi
 class SnapshotTests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);s.BASE=self.root/'snapshots';s.BASE.mkdir();s.ROOTS={'panel':str(self.root/'panel'),'websites':str(self.root/'websites')};s.EXCLUDE={};s.osinfo=lambda:('testos','1')
+  self.original_generated=s.GENERATED_CONFIGS;s.GENERATED_CONFIGS=[str(self.root/'generated'/pathlib.Path(p).name) for p in self.original_generated]
   for p in s.ROOTS.values():pathlib.Path(p).mkdir()
   pathlib.Path(s.ROOTS['panel'],'config.json').write_text('{"admin":{"username":"qa","passwordHash":"pbkdf2-sha256$600000$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000"},"sites":[],"databases":[],"mailboxes":[]}');pathlib.Path(s.ROOTS['websites'],'index.php').write_text('<?php echo "snapshot";')
   s.config=lambda:json.loads(pathlib.Path(s.ROOTS['panel'],'config.json').read_text());s.managed_configs=lambda:[]
- def tearDown(self):self.tmp.cleanup()
+ def tearDown(self):s.GENERATED_CONFIGS=self.original_generated;self.tmp.cleanup()
+ def test_argon2_administrator_snapshot_inspection(self):
+  import base64
+  encoded=lambda value:base64.b64encode(value).decode().rstrip('=')
+  password='$argon2id$v=19$m=19456,t=2,p=1$'+encoded(bytes(16))+'$'+encoded(bytes(32))
+  config_path=pathlib.Path(s.ROOTS['panel'],'config.json');cfg=json.loads(config_path.read_text());cfg['admin']['passwordHash']=password;config_path.write_text(json.dumps(cfg))
+  path=s.BASE/'argon2.zip';s.create(path);self.assertEqual(s.inspect(path)['format'],'litecp-system-snapshot')
+ def test_administrator_hash_format_bounds(self):
+  import base64
+  encoded=lambda value:base64.b64encode(value).decode().rstrip('=')
+  valid='$argon2id$v=19$m=19456,t=2,p=1$'+encoded(bytes(16))+'$'+encoded(bytes(32))
+  self.assertTrue(s.supported_admin_password_hash(valid))
+  for value in [None,{},'',valid.replace('v=19','v=16'),valid.replace('m=19456','m=19455'),valid.replace('m=19456','m=65537'),valid.replace('m=19456','m=019456'),valid.replace('t=2','t=6'),valid.replace('p=1','p=0'),valid.replace('p=1','p=5'),valid+'=',valid[:-1]+'B',valid.replace(encoded(bytes(16)),encoded(bytes(15)),1)]:
+   with self.subTest(value=value):self.assertFalse(s.supported_admin_password_hash(value))
+  legacy='pbkdf2-sha256$600000$'+'0'*32+'$'+'0'*64
+  self.assertTrue(s.supported_admin_password_hash(legacy))
+  self.assertFalse(s.supported_admin_password_hash(legacy.replace('600000','99999')))
+  self.assertFalse(s.supported_admin_password_hash(legacy.replace('600000','2000001')))
+ def test_missing_service_accounts_are_checked_before_replacement(self):
+  from unittest.mock import patch
+  path=s.BASE/'preflight.zip';s.create(path)
+  with patch.object(s,'validate_restore_accounts',side_effect=ValueError('Install required service account opendkim')),patch.object(s,'config',side_effect=AssertionError('destination processing must not start')):
+   with self.assertRaisesRegex(ValueError,'required service account opendkim'):s.restore(path,'RESTORE ENTIRE LITECP')
+  self.assertEqual(pathlib.Path(s.ROOTS['websites'],'index.php').read_text(),'<?php echo "snapshot";')
+ def test_optional_account_requirement_follows_snapshot_contents(self):
+  from unittest.mock import patch
+  stage=self.root/'preflight';(stage/'data/mail-config/dkim').mkdir(parents=True)
+  with patch('pwd.getpwnam',side_effect=KeyError):
+   with self.assertRaisesRegex(ValueError,'required service account opendkim'):s.validate_restore_accounts(stage)
+  with patch('pwd.getpwnam') as lookup:s.validate_restore_accounts(stage);lookup.assert_called_once_with('opendkim')
+ def test_mysql_preflight_rejects_unmanaged_collisions_and_root(self):
+  from unittest.mock import patch
+  cfg={'databases':[{'name':'qa_import','username':'qa_user'}]}
+  with patch.object(s,'mysql_existing',return_value=['qa_import']):
+   with self.assertRaisesRegex(ValueError,'unmanaged MySQL'):s.preflight_mysql_replacement(cfg,{})
+  with self.assertRaisesRegex(ValueError,'database user'):s.mysql_managed_objects({'databases':[{'name':'qa_import','username':'root'}]})
+  with self.assertRaisesRegex(ValueError,'managed database'):s.mysql_managed_objects({'databases':[{'name':'mysql','username':'qa_user'}]})
+ def test_mysql_rollback_retains_failed_data_before_drop(self):
+  from unittest.mock import patch
+  source={'databases':[{'name':'qa_import','username':'qa_user'}]};rollback=self.root/'sql-recovery';rollback.mkdir();recovery=self.root/'mysql-recovery.zip'
+  with zipfile.ZipFile(recovery,'x') as archive:
+   archive.writestr('mysql/users.sql','-- original users');archive.writestr('mysql/databases.sql','-- original databases')
+  commands=[]
+  def command(args,**kw):
+   query=kw.get('input',b'').decode();commands.append(query)
+   if query.startswith('SHOW CREATE USER'):return b"CREATE USER 'qa_user'@'localhost' IDENTIFIED BY 'fixture';\nGRANT USAGE ON *.* TO 'qa_user'@'localhost'\n"
+   if query.startswith('DROP '):
+    self.assertEqual((rollback/'failed-restored-databases.sql').read_bytes(),b'-- failed database retained')
+    self.assertIn('CREATE USER',(rollback/'failed-restored-users.sql').read_text())
+   return b''
+  def dump(args,**kw):kw['stdout'].write(b'-- failed database retained');kw['stdout'].flush();return types.SimpleNamespace(returncode=0)
+  with patch.object(s,'mysql_existing',side_effect=lambda kind,names:['qa_import'] if kind=='databases' else ['qa_user']),patch.object(s,'run',side_effect=command),patch.object(s.subprocess,'run',side_effect=dump):s.rollback_mysql(source,{},recovery,rollback)
+  self.assertIn('DROP DATABASE IF EXISTS `qa_import`;',commands)
+  self.assertIn("DROP USER IF EXISTS 'qa_user'@'localhost';",commands)
+  self.assertEqual(commands[-2:],['-- original users','-- original databases'])
+ def test_failed_sql_backup_prevents_rollback_drop(self):
+  from unittest.mock import patch
+  with patch.object(s,'mysql_existing',return_value=['qa_import']),patch.object(s.subprocess,'run',side_effect=RuntimeError('backup failed')),patch.object(s,'run') as command:
+   with self.assertRaisesRegex(RuntimeError,'backup failed'):s.rollback_mysql({'databases':[{'name':'qa_import','username':'qa_user'}]},{},self.root/'none.zip',self.root)
+  command.assert_not_called()
+ def test_restore_preserves_optional_destination_configuration_missing_from_source(self):
+  from unittest.mock import patch
+  path=s.BASE/'old-source.zip';s.create(path)
+  optional=self.root/'optional-signer.conf';optional.write_text('destination signer config')
+  with patch.object(s,'SERVICE_CONFIGS',[str(optional)]),patch.object(s,'managed_configs',return_value=[str(optional)]),patch.object(s,'run',return_value=b''),patch.object(s.subprocess,'run',return_value=types.SimpleNamespace(returncode=1,stdout=b'')),patch.object(s,'php_units',return_value=[]),patch.object(s,'pause_containers',return_value=[]):
+   self.assertTrue(s.restore(path,'RESTORE ENTIRE LITECP')['restored'])
+  self.assertEqual(optional.read_text(),'destination signer config')
  def test_creation_keeps_panel_proxy_running(self):
   original=s.php_units
   try:

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "5.0.2"
+var version = "5.0.3"
 var buildRevision = ""
 
 //go:embed web/*
@@ -201,10 +201,13 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		system := NewSystem(dataDir)
+		if err := reconcileSnapshotWAFHTTP(wafPolicyPath, wafHTTPPath); err != nil {
+			log.Fatal(err)
+		}
 		if err := (&App{store: store, system: system}).syncCaptchaRuntime(store.Sites()); err != nil {
 			log.Fatal(err)
 		}
-		if err := system.reconcileTrafficLogging(ctx, store.Sites()); err != nil {
+		if err := system.reconcileTrafficLoggingMode(ctx, store.Sites(), false); err != nil {
 			log.Fatal(err)
 		}
 		if err := system.reconcileWebsiteCron(store.Sites()); err != nil {
@@ -226,6 +229,7 @@ func main() {
 				log.Fatal(err)
 			}
 		}
+		restoredApplications := false
 		for _, site := range store.Sites() {
 			if site.Application == nil || !site.Application.Enabled || site.Application.Stopped {
 				continue
@@ -235,6 +239,11 @@ func main() {
 				log.Fatal(err)
 			}
 			if _, err := runCommand(ctx, 15*time.Second, "podman", "container", "exists", app.Container); err == nil {
+				// Retained recovery containers must not claim the replacement
+				// application ports on the next boot. Keep their data intact.
+				if _, err = runCommand(ctx, 15*time.Second, "podman", "update", "--restart=no", app.Container); err != nil {
+					log.Fatal(err)
+				}
 				_, _ = runCommand(ctx, 30*time.Second, "podman", "stop", app.Container)
 				if _, err = runCommand(ctx, 15*time.Second, "podman", "rename", app.Container, app.Container+"-recovery-"+time.Now().Format("20060102150405")); err != nil {
 					log.Fatal(err)
@@ -244,6 +253,12 @@ func main() {
 				log.Fatal(err)
 			}
 			if _, err := runCommand(ctx, 15*time.Second, "podman", "update", "--restart=always", app.Container); err != nil {
+				log.Fatal(err)
+			}
+			restoredApplications = true
+		}
+		if restoredApplications {
+			if _, err := runCommand(ctx, 15*time.Second, "systemctl", "enable", "podman-restart.service"); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -1359,7 +1374,9 @@ func randomToken(bytes int) (string, error) {
 }
 
 func verifyPassword(encoded, password string) bool {
- if strings.HasPrefix(encoded, "$argon2id$") { return verifyArgon2Password(encoded,password) }
+	if strings.HasPrefix(encoded, "$argon2id$") {
+		return verifyArgon2Password(encoded, password)
+	}
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 4 || parts[0] != "pbkdf2-sha256" {
 		return false

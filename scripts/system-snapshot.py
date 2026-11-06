@@ -3,7 +3,8 @@
 import argparse, contextlib, datetime, hashlib, json, os, pathlib, platform, shutil, stat, subprocess, sys, tempfile, zipfile
 BASE=pathlib.Path('/var/backups/litecp/system-snapshots')
 ROOTS={'panel':'/var/lib/litecp','websites':'/home/litecp','legacy-websites':'/var/www/litecp','mail':'/var/vmail','mail-config':'/etc/litecp/mail','panel-tls':'/etc/litecp/tls','certificates':'/etc/letsencrypt','backups':'/var/backups/litecp','webmail':'/var/lib/litecp-webmail','webmail-config':'/opt/litecp/webmail/config','waf':'/etc/litecp/waf'}
-SERVICE_CONFIGS=['/etc/postfix/main.cf','/etc/postfix/master.cf','/etc/dovecot/conf.d/99-litecp.conf','/etc/dovecot/conf.d/zz-litecp-webmail-tls.conf','/etc/dovecot/conf.d/00-litecp-webmail-signon.conf','/etc/opendkim.conf','/etc/nginx/conf.d/litecp-webmail.conf','/etc/nginx/conf.d/00-litecp-captcha-zones.conf']
+GENERATED_CONFIGS=['/etc/nginx/conf.d/00-litecp-waf-policy.conf','/etc/nginx/conf.d/00-litecp-traffic.conf','/etc/nginx/conf.d/00-litecp-captcha-zones.conf']
+SERVICE_CONFIGS=['/etc/postfix/main.cf','/etc/postfix/master.cf','/etc/dovecot/conf.d/99-litecp.conf','/etc/dovecot/conf.d/zz-litecp-webmail-tls.conf','/etc/dovecot/conf.d/00-litecp-webmail-signon.conf','/etc/opendkim.conf','/etc/nginx/conf.d/litecp-webmail.conf','/etc/nginx/conf.d/00-litecp-captcha-zones.conf','/etc/nginx/conf.d/00-litecp-waf-policy.conf','/etc/nginx/conf.d/00-litecp-traffic.conf']
 EXCLUDE={'panel':{'application-hosting/command-logs','developer-trust.json','sessions.json','developer-mode.json'},'backups':{'system-snapshots'},'webmail':{'temp','logs'}}
 def run(args, **kw):
     return subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kw).stdout
@@ -155,6 +156,24 @@ def create(destination):
     os.chmod(destination,0o600)
     return {'path':str(destination),'size':os.stat(destination).st_size,**{k:manifest[k] for k in ['createdAt','sites','databases','mailboxes']}}
 
+def supported_admin_password_hash(encoded):
+    # Match the formats and work-factor bounds accepted by the panel. Never
+    # derive a password hash while inspecting an untrusted archive.
+    import base64, binascii, re
+    if not isinstance(encoded,str) or len(encoded)>256:return False
+    legacy=re.fullmatch(r'pbkdf2-sha256\$([0-9]+)\$[a-fA-F0-9]{32}\$[a-fA-F0-9]{64}',encoded)
+    if legacy:return 100000<=int(legacy[1])<=2000000
+    argon=re.fullmatch(r'\$argon2id\$v=19\$m=([0-9]+),t=([0-9]+),p=([0-9]+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)',encoded)
+    if not argon:return False
+    memory,iterations,parallelism=map(int,argon.group(1,2,3))
+    if any(str(value)!=raw for value,raw in zip((memory,iterations,parallelism),argon.group(1,2,3))):return False
+    if not (19456<=memory<=65536 and 2<=iterations<=5 and 1<=parallelism<=4):return False
+    try:
+        salt,key=(base64.b64decode(raw+'='*((-len(raw))%4),validate=True) for raw in argon.group(4,5))
+    except (ValueError,binascii.Error):return False
+    if not (16<=len(salt)<=32 and len(key)==32):return False
+    return all(base64.b64encode(value).decode().rstrip('=')==raw for value,raw in zip((salt,key),argon.group(4,5)))
+
 def inspect(source,stage=None):
     with zipfile.ZipFile(source) as z:
         if len(z.infolist())>2000000:raise ValueError('Too many archive entries')
@@ -205,17 +224,71 @@ def inspect(source,stage=None):
         if set(m['configs'])!=config_paths:raise ValueError('Configuration manifest mismatch')
         if 'data/panel/config.json' not in seen:raise ValueError('Panel configuration missing')
         panel=json.loads(z.read('data/panel/config.json'))
-        import re
         password_hash=panel.get('admin',{}).get('passwordHash','')
-        if not panel.get('admin',{}).get('username') or not re.fullmatch(r'pbkdf2-sha256\$[0-9]+\$[a-fA-F0-9]{32}\$[a-fA-F0-9]{64}',password_hash):raise ValueError('Snapshot administrator credentials are missing or invalid')
+        if not panel.get('admin',{}).get('username') or not supported_admin_password_hash(password_hash):raise ValueError('Snapshot administrator credentials are missing or invalid')
         return m
+
+def validate_restore_accounts(stage):
+    import pwd
+    # Check destination package identities before replacing databases or data.
+    # Preserving numeric source IDs can assign private files to another user.
+    paths={'mail':'vmail','webmail':'litecp-webmail','mail-config/users':'dovecot','mail-config/webmail-master-users':'dovecot','mail-config/dkim':'opendkim'}
+    for relative,owner in paths.items():
+        if not (stage/'data'/relative).exists():continue
+        try:pwd.getpwnam(owner)
+        except KeyError:raise ValueError('Install required service account '+owner+' before restore (snapshot contains '+relative+')') from None
+
+def mysql_managed_objects(cfg):
+    dbs=sorted({d['name'] for d in cfg.get('databases',[])}|{site['database'] for site in cfg.get('sites',[]) if site.get('database')})
+    users=sorted({d['username'] for d in cfg.get('databases',[])}|{site['dbUser'] for site in cfg.get('sites',[]) if site.get('dbUser')})
+    for name in dbs:
+        if not isinstance(name,str) or not name.replace('_','').isalnum() or name.lower() in ['mysql','sys','performance_schema','information_schema']:raise ValueError('Invalid managed database')
+    for user in users:
+        if not isinstance(user,str) or not user.replace('_','').isalnum() or user.lower()=='root':raise ValueError('Invalid managed database user')
+    return dbs,users
+
+def mysql_existing(kind,names):
+    if not names:return []
+    values=','.join('0x'+name.encode().hex() for name in names)
+    query=('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ('+values+');') if kind=='databases' else ('SELECT User FROM mysql.user WHERE Host=0x6c6f63616c686f7374 AND User IN ('+values+');')
+    rows=run(['mysql','--protocol=socket','--user=root','--batch','--raw','--skip-column-names'],input=query.encode()).decode().splitlines()
+    if any(row not in names for row in rows):raise ValueError('Unexpected database inventory')
+    return sorted(set(rows))
+
+def preflight_mysql_replacement(source_cfg,destination_cfg):
+    source_dbs,source_users=mysql_managed_objects(source_cfg);destination_dbs,destination_users=mysql_managed_objects(destination_cfg)
+    for kind,source,destination in [('databases',source_dbs,destination_dbs),('users',source_users,destination_users)]:
+        if mysql_existing(kind,sorted(set(source)-set(destination))):raise ValueError('Snapshot conflicts with unmanaged MySQL '+kind+'; retain/export and resolve the collision before restore')
+
+def rollback_mysql(source_cfg,destination_cfg,recovery,rollback):
+    source_dbs,source_users=mysql_managed_objects(source_cfg);destination_dbs,destination_users=mysql_managed_objects(destination_cfg)
+    dbs=mysql_existing('databases',sorted(set(source_dbs+destination_dbs)));users=mysql_existing('users',sorted(set(source_users+destination_users)))
+    # Keep failed imported SQL and grants before any rollback DROP. These are
+    # exclusively the validated managed objects covered by whole-panel consent.
+    if dbs:
+        with open(rollback/'failed-restored-databases.sql','xb') as output:
+            subprocess.run(['mysqldump','--protocol=socket','--user=root','--single-transaction','--add-drop-database','--routines','--events','--triggers','--hex-blob','--databases',*dbs],stdout=output,stderr=subprocess.PIPE,check=True)
+    if users:
+        grants=[]
+        for user in users:
+            query="SHOW CREATE USER '%s'@'localhost'; SHOW GRANTS FOR '%s'@'localhost';"%(user,user)
+            rows=run(['mysql','--protocol=socket','--user=root','--batch','--raw','--skip-column-names'],input=query.encode()).decode().splitlines()
+            if not rows:raise ValueError('Cannot retain failed database user grants')
+            grants.extend(row.split('\t')[-1]+';' for row in rows)
+        with open(rollback/'failed-restored-users.sql','x') as output:output.write('\n'.join(grants))
+    for name in dbs:run(['mysql','--protocol=socket','--user=root'],input=('DROP DATABASE IF EXISTS `'+name+'`;').encode())
+    for user in users:run(['mysql','--protocol=socket','--user=root'],input=("DROP USER IF EXISTS '%s'@'localhost';"%user).encode())
+    with zipfile.ZipFile(recovery) as archive:
+        for name in ['users.sql','databases.sql']:run(['mysql','--protocol=socket','--user=root'],input=archive.read('mysql/'+name))
 
 def restore(source,confirmation):
     if confirmation!='RESTORE ENTIRE LITECP':raise ValueError('Explicit restore confirmation required')
     stage=pathlib.Path(tempfile.mkdtemp(prefix='restore-stage-',dir=BASE));m=inspect(source,stage)
     if m.get('testFixture'):raise ValueError('An inspection-only QA fixture cannot be restored')
+    validate_restore_accounts(stage)
     destination_cfg=config()
     cfg=json.loads((stage/'data/panel/config.json').read_text())
+    preflight_mysql_replacement(cfg,destination_cfg)
     if m.get('mysqlMajor') and run(['mysql','--protocol=socket','--user=root','--batch','--skip-column-names','-e','SELECT VERSION()']).decode().strip().split('.')[0]!=m['mysqlMajor']:raise ValueError('Install the same MySQL major version before restore')
     for site in cfg.get('sites',[]):
         root=site.get('root','')
@@ -229,23 +302,21 @@ def restore(source,confirmation):
     stamp=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     recovery=BASE/('before-restore-'+stamp+'.zip')
     rollback=BASE/('recovery-'+stamp);rollback.mkdir(mode=0o700)
-    stopped=[];moves=[];written=[];containers=[];completed=False
+    stopped=[];moves=[];written=[];containers=[];completed=False;mysql_started=False
     try:
         for unit in ['litecp','nginx','crond','cron','postfix','dovecot','litecp-ftps']+php_units():
             if subprocess.run(['systemctl','is-active','--quiet',unit]).returncode==0:
                 stopped.append(unit);run(['systemctl','stop',unit])
         pause_containers(containers)
         create(recovery)
+        mysql_started=True
         # Do not replace MySQL's system schema or the destination root account.
         # Source managed users are replaced with the source grants/password hashes.
-        for d in destination_cfg.get('databases',[]):
-            name=d['name']
-            if not name.replace('_','').isalnum() or name in ['mysql','sys','performance_schema','information_schema']:raise ValueError('Invalid managed database')
+        for name in mysql_managed_objects(destination_cfg)[0]:
             run(['mysql','--protocol=socket','--user=root'],input=('DROP DATABASE IF EXISTS `'+name+'`;').encode())
-        for d in destination_cfg.get('databases',[])+cfg.get('databases',[]):
-            u=d['username']
-            if not u.replace('_','').isalnum():raise ValueError('Invalid database user')
-            run(['mysql','--protocol=socket','--user=root'],input=("DROP USER IF EXISTS '%s'@'localhost';"%u).encode())
+        users=sorted(set(mysql_managed_objects(destination_cfg)[1]+mysql_managed_objects(cfg)[1]))
+        for user in users:
+            run(['mysql','--protocol=socket','--user=root'],input=("DROP USER IF EXISTS '%s'@'localhost';"%user).encode())
         if m.get('images'):run(['podman','load','--input',str(stage/'runtime/images.tar')])
         for name in ['users.sql','databases.sql']:
             with open(stage/'mysql'/name,'rb') as f:run(['mysql','--protocol=socket','--user=root'],stdin=f)
@@ -270,6 +341,10 @@ def restore(source,confirmation):
                     shutil.move(str(target),rollback/key);moves.append((rollback/key,target))
                 target.parent.mkdir(parents=True,exist_ok=True);shutil.move(str(incoming),target);written.append(target)
         for old in managed_configs():
+            # An older source may not contain an optional destination service.
+            # Keep its package configuration instead of leaving an enabled unit
+            # without a config at the next boot. Site configs still replace.
+            if old in SERVICE_CONFIGS and old not in m['configs']:continue
             oldpath=pathlib.Path(old);save=rollback/'old-configurations'/old.lstrip('/');save.parent.mkdir(parents=True,exist_ok=True);shutil.move(str(oldpath),save);moves.append((save,oldpath))
         for p in m['configs']:
             target=pathlib.Path(p);target.parent.mkdir(parents=True,exist_ok=True)
@@ -299,6 +374,11 @@ def restore(source,confirmation):
         if 'mail-config' in ROOTS:owners.extend([(ROOTS['mail-config']+'/users','dovecot'),(ROOTS['mail-config']+'/webmail-master-users','dovecot'),(ROOTS['mail-config']+'/dkim','opendkim')])
         for root,owner in owners:
             if os.path.exists(root):run(['chown','-R',owner+':'+owner,root])
+        # ZIP mode metadata does not retain the signer's traversal ACL.
+        # Reapply only its existing package identity, never world-readable access.
+        mail_config=ROOTS.get('mail-config')
+        if mail_config and os.path.isdir(mail_config+'/dkim'):
+            run(['setfacl','-m','u:opendkim:--x',str(pathlib.Path(mail_config).parent),mail_config])
         # ZIP metadata does not contain SELinux contexts. Staged files otherwise
         # retain the backup directory's label and services cannot read them.
         if shutil.which('selinuxenabled') and subprocess.run(['selinuxenabled'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
@@ -307,6 +387,10 @@ def restore(source,confirmation):
             if paths:run(['restorecon','-R',*paths])
         # Keep persistent container monitors outside the short-lived snapshot
         # service. The scope survives while workloads run and is collected later.
+        # Older archives omit generated HTTP-context includes. Reconciliation
+        # recreates them; retain/remove them with the same rollback bookkeeping.
+        for generated in GENERATED_CONFIGS:
+            if pathlib.Path(generated) not in written:written.append(pathlib.Path(generated))
         run(['systemd-run','--scope','--quiet','/usr/local/bin/litecp','snapshot-reconcile'])
         if cfg.get('mailboxes') or cfg.get('mailDomains'):run(['/usr/local/bin/litecp','sync-mail'])
         for unit in ['php83-php-fpm','php8.3-fpm']:
@@ -335,17 +419,20 @@ def restore(source,confirmation):
         for saved,target in reversed(moves):
             if saved.exists() or saved.is_symlink():
                 target.parent.mkdir(parents=True,exist_ok=True);shutil.move(str(saved),target)
-        if recovery.exists():
-            with zipfile.ZipFile(recovery) as z:
-                for name in ['users.sql','databases.sql']:
-                    sql=z.read('mysql/'+name)
-                    run(['mysql','--protocol=socket','--user=root'],input=sql)
+        if recovery.exists() and mysql_started:rollback_mysql(cfg,destination_cfg,recovery,rollback)
         raise
     finally:
         failed_units=resume_containers(containers) if not completed else []
         for unit in reversed(stopped):
             if subprocess.run(['systemctl','start',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:failed_units.append(unit)
-        if failed_units:raise RuntimeError('Data operation finished but services need attention: '+', '.join(failed_units))
+        if failed_units:
+            message='Data operation finished but services need attention: '+', '.join(failed_units)
+            original=sys.exc_info()[1]
+            if original is not None:
+                detail=str(original)
+                if isinstance(original,subprocess.CalledProcessError):detail+='; '+(original.stderr or b'').decode(errors='replace')[:800]
+                message+='; original operation error: '+detail
+            raise RuntimeError(message)
 
 def status(value):
     path=BASE/'status.json';temporary=BASE/'status.tmp';temporary.write_text(json.dumps(value));os.replace(temporary,path)

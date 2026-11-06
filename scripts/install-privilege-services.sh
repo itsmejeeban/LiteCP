@@ -56,4 +56,5 @@ for unit in "${units[@]}"; do install -m 0644 "$source_dir/deploy/$unit" "/etc/s
 systemctl daemon-reload
 [[ $(systemctl show litecp.service -p User --value) == litecp-web ]] || { echo 'A service override prevents unprivileged operation. Previous units are retained for recovery.' >&2; exit 1; }
 systemctl enable litecp-captcha.service
+bash "$source_dir/scripts/install-application-boot-order.sh"
 echo "Privilege-separated service units installed. Previous units retained in $recovery"

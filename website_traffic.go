@@ -87,6 +87,10 @@ func injectTrafficLogging(content string, site Site) string {
 }
 
 func (s *System) reconcileTrafficLogging(ctx context.Context, sites []Site) error {
+	return s.reconcileTrafficLoggingMode(ctx, sites, true)
+}
+
+func (s *System) reconcileTrafficLoggingMode(ctx context.Context, sites []Site, reload bool) error {
 	if s.demo {
 		return nil
 	}
@@ -154,6 +158,11 @@ func (s *System) reconcileTrafficLogging(ctx context.Context, sites []Site) erro
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "nginx", "-t"); err != nil {
 		return recoverChanges(fmt.Errorf("analytics Nginx validation: %w", err))
+	}
+	// Snapshot restoration validates configuration while the public listener
+	// remains stopped; its caller starts Nginx only after all data is ready.
+	if !reload {
+		return nil
 	}
 	if _, err := runCommand(ctx, 15*time.Second, "systemctl", "reload", "nginx"); err != nil {
 		err = recoverChanges(fmt.Errorf("analytics Nginx reload: %w", err))

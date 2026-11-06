@@ -7,6 +7,7 @@ Before=nginx.service
 [Service]
 Type=simple
 RuntimeDirectory=litecp-php73
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0755
 ExecStartPre=-/usr/bin/podman rm --force litecp-php73
 ExecStart=/usr/bin/podman run --rm --name litecp-php73 --pull=never --network=host --read-only --security-opt label=disable --cap-drop=ALL --cap-add=CHOWN --cap-add=SETGID --cap-add=SETUID --pids-limit=96 --memory=512m --cpus=1.5 --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m --tmpfs=/usr/local/var/run:rw,nosuid,nodev,size=8m --volume=/run/litecp-php73:/run/litecp-php73:rw --volume=/run/mysqld:/run/mysqld:ro --volume=/var/www/litecp:/var/www/litecp:rw --volume=/home/litecp:/home/litecp:rw --volume=/etc/litecp/php73-pools.conf:/usr/local/etc/php-fpm.d/zz-litecp-sites.conf:ro localhost/litecp-php73:7.3.33-3
