@@ -89,9 +89,12 @@ func (g *captchaGateway) reload() error {
 	return nil
 }
 func (g *captchaGateway) limit(key string, maximum int) bool {
+	return g.limitWindow(key, maximum, time.Minute)
+}
+func (g *captchaGateway) limitWindow(key string, maximum int, window time.Duration) bool {
 	now := g.now()
 	bucket := g.buckets[key]
-	if now.Sub(bucket.Since) >= time.Minute {
+	if now.Sub(bucket.Since) >= window {
 		bucket = loginAttempt{Since: now}
 	}
 	if bucket.Count >= maximum {
@@ -199,7 +202,23 @@ func (g *captchaGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.SplitN(original, "?", 2)[0]
 	if mode == "check" {
 		stats.Checked++
-		if record.Policy.Mode == "monitor" || strings.HasPrefix(path, "/.well-known/acme-challenge/") {
+		if strings.HasPrefix(path, "/.well-known/acme-challenge/") {
+			w.WriteHeader(204)
+			return
+		}
+		ipOK := g.limitWindow("rps:ip:"+site+":"+r.Header.Get("X-LiteCP-IP"), record.Policy.RequestsPerSecond, time.Second)
+		siteOK := g.limitWindow("rps:site:"+site, record.Policy.SiteRequestsPerSecond, time.Second)
+		if !ipOK || !siteOK {
+			stats.Limited++
+			if record.Policy.Mode != "monitor" {
+				// auth_request accepts only 2xx, 401 and 403. Route through the
+				// named proxy handler to return a real 429 to the visitor.
+				w.Header().Set("X-LiteCP-Captcha-Limited", "1")
+				w.WriteHeader(401)
+				return
+			}
+		}
+		if record.Policy.Mode == "monitor" {
 			w.WriteHeader(204)
 			return
 		}
@@ -222,6 +241,11 @@ func (g *captchaGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if mode != "public" && mode != "challenge" {
 		http.Error(w, "Forbidden", 403)
+		return
+	}
+	if mode == "challenge" && r.Header.Get("X-LiteCP-Limited") == "1" {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "Website request limit reached. Retry in one second.", 429)
 		return
 	}
 	if !g.limit("global", 1200) || !g.limit(site+":total", record.Policy.ChallengesPerMinute) || !g.limit(site+":"+r.Header.Get("X-LiteCP-IP"), record.Policy.AttemptsPerMinute) {

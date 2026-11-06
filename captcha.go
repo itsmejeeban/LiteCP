@@ -49,14 +49,12 @@ func (p CaptchaPolicy) validate() error {
 var captchaManagedBlock = regexp.MustCompile(`(?ms)\n[ \t]*# BEGIN LITECP CAPTCHA\n.*?^[ \t]*# END LITECP CAPTCHA\n`)
 var captchaServerStart = regexp.MustCompile(`(?m)^[ \t]*server\s*\{`)
 
-func captchaZoneID(site Site) string { return fmt.Sprintf("%x", siteRuntimeID(site.ID)) }
 func injectCaptchaConfig(config string, site Site) string {
 	config = captchaManagedBlock.ReplaceAllString(config, "")
 	if !captchaEnabled(site) {
 		return config
 	}
 	p := site.Captcha
-	zone := captchaZoneID(site)
 	dry := "off"
 	if p.Mode == "monitor" {
 		dry = "on"
@@ -65,11 +63,8 @@ func injectCaptchaConfig(config string, site Site) string {
 	block := fmt.Sprintf(`
  # BEGIN LITECP CAPTCHA
  auth_request /_litecp_captcha_check;
+ auth_request_set $litecp_captcha_limited $upstream_http_x_litecp_captcha_limited;
  error_page 401 = @litecp_captcha;
- limit_req zone=cap_ip_%s burst=%d nodelay;
- limit_req zone=cap_site_%s burst=%d nodelay;
- limit_req_status 429;
- limit_req_dry_run %s;
  limit_conn cap_conn %d;
  limit_conn_status 429;
  limit_conn_dry_run %s;
@@ -94,22 +89,17 @@ func injectCaptchaConfig(config string, site Site) string {
  proxy_pass_request_body off;
  proxy_set_header Content-Length "";
  proxy_set_header X-LiteCP-Mode challenge;
+ proxy_set_header X-LiteCP-Limited $litecp_captcha_limited;
  %s
  }
  # END LITECP CAPTCHA
-`, zone, p.RequestsPerSecond*2, zone, p.SiteRequestsPerSecond, dry, p.Connections, dry, headers, headers, headers)
+`, p.Connections, dry, headers, headers, headers)
 	return captchaServerStart.ReplaceAllStringFunc(config, func(start string) string { return start + block })
 }
-func captchaZones(sites []Site) string {
-	text := "# Managed LiteCP CAPTCHA zones\nlimit_conn_zone \"$binary_remote_addr$server_name\" zone=cap_conn:4m;\n"
-	for _, site := range sites {
-		if !captchaEnabled(site) {
-			continue
-		}
-		id := captchaZoneID(site)
-		text += fmt.Sprintf("limit_req_zone \"$binary_remote_addr$server_name\" zone=cap_ip_%s:1m rate=%dr/s;\nlimit_req_zone $server_name zone=cap_site_%s:1m rate=%dr/s;\n", id, site.Captcha.RequestsPerSecond, id, site.Captcha.SiteRequestsPerSecond)
-	}
-	return text
+func captchaZones(_ []Site) string {
+	// Request rates live in the gateway so WAF and CAPTCHA can independently
+	// monitor or enforce. Nginx only permits one limit_req_dry_run per context.
+	return "# Managed LiteCP CAPTCHA zones\nlimit_conn_zone \"$binary_remote_addr$server_name\" zone=cap_conn:4m;\n"
 }
 func (a *App) syncCaptchaRuntime(sites []Site) error {
 	if a.system.demo {

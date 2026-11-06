@@ -1,7 +1,7 @@
 # Self-hosted CAPTCHA
 
 Security → Self-hosted CAPTCHA configures each website separately. The default is Off.
-Monitor counts checks and puts Nginx request/connection limits in dry-run mode.
+Monitor counts checks and observes request/connection limits without enforcing them.
 Challenge all visitors requires a six-digit local image verification before website access.
 No Cloudflare account, external CAPTCHA provider, or new package dependency is used.
 
@@ -32,7 +32,7 @@ Configuration changes test Nginx before reload and restore previous configuratio
 failure. Settings travel with website/snapshot metadata; restore revalidates service
 availability. The runtime configuration and rate zones are reconstructed on panel start.
 Updates restart the gateway so it uses the updated binary. In-memory challenges and
-activity counters reset on gateway restart. Website Nginx error logs record rate limits.
+activity counters reset on gateway restart. The gateway counts CAPTCHA request-rate violations; website Nginx error logs record connection and WAF limits. CAPTCHA request rates use bounded one-second windows in the gateway so WAF Detect/Block settings remain independent.
 
 ## API
 

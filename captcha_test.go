@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/png"
 	"io"
 	"net/http"
@@ -53,16 +54,24 @@ func TestCaptchaNginxParser(t *testing.T) {
 	if err != nil {
 		t.Skip("Nginx parser unavailable on this host")
 	}
-	root := t.TempDir()
-	policy := captchaTestPolicy()
-	site := Site{ID: "parser", Domain: "captcha.example.test", Captcha: &policy}
-	config := "pid " + filepath.ToSlash(filepath.Join(root, "nginx.pid")) + ";\nerror_log stderr;\nevents {}\nhttp { access_log off;\n" + captchaZones([]Site{site}) + injectCaptchaConfig("server {\nlisten 127.0.0.1:19876;\nserver_name captcha.example.test;\nlocation / { root /var/empty; }\n}\n", site) + "}\n"
-	path := filepath.Join(root, "nginx.conf")
-	if err = os.WriteFile(path, []byte(config), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if output, err := exec.Command(binary, "-t", "-p", root+string(os.PathSeparator), "-c", path).CombinedOutput(); err != nil {
-		t.Fatalf("CAPTCHA Nginx syntax rejected: %v %s", err, output)
+	for _, mode := range []string{"challenge", "monitor"} {
+		for _, dry := range []string{"on", "off"} {
+			t.Run(mode+"-waf-dry-"+dry, func(t *testing.T) {
+				root := t.TempDir()
+				policy := captchaTestPolicy()
+				policy.Mode = mode
+				site := Site{ID: "parser", Domain: "captcha.example.test", Captcha: &policy}
+				waf := "limit_req zone=waf_fixture;\nlimit_req_status 429;\nlimit_req_dry_run " + dry + ";\n"
+				config := fmt.Sprintf("pid %q;\nerror_log stderr;\nevents {}\nhttp { access_log off;\nlimit_req_zone $binary_remote_addr zone=waf_fixture:1m rate=10r/s;\n%s%s}\n", filepath.ToSlash(filepath.Join(root, "nginx.pid")), captchaZones([]Site{site}), injectCaptchaConfig("server {\nlisten 127.0.0.1:19876;\nserver_name captcha.example.test;\n"+waf+"location / { root /var/empty; }\n}\n", site))
+				path := filepath.Join(root, "nginx.conf")
+				if err := os.WriteFile(path, []byte(config), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if output, err := exec.Command(binary, "-t", "-p", root+string(os.PathSeparator), "-c", path).CombinedOutput(); err != nil {
+					t.Fatalf("CAPTCHA/WAF Nginx syntax rejected: %v %s", err, output)
+				}
+			})
+		}
 	}
 }
 
@@ -208,7 +217,7 @@ func TestCaptchaNginxIntegrationAndValidation(t *testing.T) {
 	site := Site{ID: "captcha-audit", Domain: "audit.example.com", Root: "/home/litecp/audit.example.com/public_html", PHPVersion: "8.4", AppType: "regular", Captcha: &policy}
 	system := &System{demo: true}
 	config := system.nginxConfig(site)
-	for _, text := range []string{"auth_request /_litecp_captcha_check;", "location @litecp_captcha", "location ^~ /_litecp_captcha/", "limit_req_status 429;", "location ~ \\.php$", "location ~* \\.(?:css"} {
+	for _, text := range []string{"auth_request /_litecp_captcha_check;", "location @litecp_captcha", "location ^~ /_litecp_captcha/", "limit_conn_status 429;", "auth_request_set $litecp_captcha_limited", "location ~ \\.php$", "location ~* \\.(?:css"} {
 		if !strings.Contains(config, text) {
 			t.Fatal("missing protected route or control", text)
 		}
@@ -232,6 +241,83 @@ func TestCaptchaNginxIntegrationAndValidation(t *testing.T) {
 	site.Application = &ApplicationHosting{Language: "node", Enabled: true, Port: 20001}
 	if !strings.Contains(system.applicationNginx(site), "auth_request /_litecp_captcha_check;") {
 		t.Fatal("application hosting bypasses protection")
+	}
+}
+
+func TestCaptchaRequestRatesIndependentOfWAF(t *testing.T) {
+	g := captchaFixture()
+	record := g.runtime.Sites["test"]
+	record.Policy.RequestsPerSecond = 1
+	g.runtime.Sites["test"] = record
+	if w := captchaRequest(g, "check", "/check", "GET", "", nil); w.Code != 401 || w.Header().Get("X-LiteCP-Captcha-Limited") != "" {
+		t.Fatal("first request rate-limited")
+	}
+	w := captchaRequest(g, "check", "/check", "GET", "", nil)
+	if w.Code != 401 || w.Header().Get("X-LiteCP-Captcha-Limited") != "1" {
+		t.Fatal("IP rate was not enforced")
+	}
+	r := httptest.NewRequest("GET", "http://localhost/", nil)
+	for k, v := range map[string]string{"X-LiteCP-Mode": "challenge", "X-LiteCP-Site": "test", "X-LiteCP-Host": "audit.example.com", "X-LiteCP-Scheme": "https", "X-LiteCP-Limited": "1"} {
+		r.Header.Set(k, v)
+	}
+	w = httptest.NewRecorder()
+	g.ServeHTTP(w, r)
+	if w.Code != 429 || w.Header().Get("Retry-After") != "1" {
+		t.Fatal("rate response did not reach visitor")
+	}
+	now := g.now()
+	g.now = func() time.Time { return now.Add(1100 * time.Millisecond) }
+	g.loaded = g.now()
+	if w = captchaRequest(g, "check", "/check", "GET", "", nil); w.Header().Get("X-LiteCP-Captcha-Limited") != "" {
+		t.Fatal("one-second allowance did not recover")
+	}
+	for _, mode := range []string{"challenge", "monitor"} {
+		policy := captchaTestPolicy()
+		policy.Mode = mode
+		site := Site{ID: "test", Captcha: &policy}
+		for _, dry := range []string{"on", "off"} {
+			original := "server {\n# LITECP_WAF_BEGIN\nlimit_req_dry_run " + dry + ";\nlimit_req_status 429;\nlimit_req zone=waf_fixture;\n# LITECP_WAF_END\n}\n"
+			config := injectCaptchaConfig(original, site)
+			if strings.Count(config, "limit_req_dry_run") != 1 || !strings.Contains(config, "limit_req_dry_run "+dry+";") || strings.Count(config, "limit_req_status") != 1 {
+				t.Fatal("CAPTCHA altered or duplicated WAF rate policy", mode, dry)
+			}
+			if injectCaptchaConfig(config, site) != config {
+				t.Fatal("WAF composition is not idempotent")
+			}
+			site.Captcha = nil
+			if injectCaptchaConfig(config, site) != original {
+				t.Fatal("disabling CAPTCHA altered WAF")
+			}
+			site.Captcha = &policy
+		}
+	}
+	g = captchaFixture()
+	record = g.runtime.Sites["test"]
+	record.Policy.Mode = "monitor"
+	record.Policy.RequestsPerSecond = 1
+	g.runtime.Sites["test"] = record
+	for i := 0; i < 3; i++ {
+		if w := captchaRequest(g, "check", "/check", "GET", "", nil); w.Code != 204 {
+			t.Fatal("monitor blocked requests")
+		}
+	}
+	if g.stats["test"].Limited != 2 {
+		t.Fatal("monitor did not count rate violations")
+	}
+	g = captchaFixture()
+	record = g.runtime.Sites["test"]
+	record.Policy.SiteRequestsPerSecond = 1
+	g.runtime.Sites["test"] = record
+	for i, ip := range []string{"192.0.2.1", "192.0.2.2"} {
+		r = httptest.NewRequest("GET", "http://localhost/check", nil)
+		for k, v := range map[string]string{"X-LiteCP-Mode": "check", "X-LiteCP-Site": "test", "X-LiteCP-Host": "audit.example.com", "X-LiteCP-IP": ip} {
+			r.Header.Set(k, v)
+		}
+		w = httptest.NewRecorder()
+		g.ServeHTTP(w, r)
+		if i == 1 && w.Header().Get("X-LiteCP-Captcha-Limited") != "1" {
+			t.Fatal("aggregate website rate bypassed")
+		}
 	}
 }
 func TestCaptchaAuthenticatedSettingsAndPersistence(t *testing.T) {
