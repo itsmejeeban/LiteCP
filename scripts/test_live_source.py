@@ -13,6 +13,18 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_cpanel_private_directory_names_are_not_account_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive=pathlib.Path(directory)/'native.tar.gz'
+            portable=pathlib.Path(directory)/'portable.tar.gz'
+            names=['cpmove-user/homedir/public_html/index.php','cpmove-user/homedir/app/public_html/index.php','cpmove-user/homedir/app/mysql/schema.sql','cpmove-user/mysql/user_db.sql','cpmove-user/other/public_html/injected.php']
+            with tarfile.open(archive,'w:gz') as target:
+                for name in names:
+                    info=tarfile.TarInfo(name);info.size=4;target.addfile(info,io.BytesIO(b'test'))
+            self.assertEqual(source.cpanel_portable(archive,portable),(1,2,0))
+            with tarfile.open(portable) as result:
+                self.assertEqual(result.getnames(),['public_html/index.php','private_home/app/public_html/index.php','private_home/app/mysql/schema.sql','mysql/user_db.sql','cpanel_account/format.json'])
+
     def test_litecp_urlsafe_identifier_reaches_capture(self):
         for account in ['-vYbtz2ZL38', '_leading_underscore']:
             config = {'sites': [{'id': account, 'domain': 'audit.example.test', 'root': '/home/litecp/audit/public_html'}]}

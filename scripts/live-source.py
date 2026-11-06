@@ -76,13 +76,12 @@ def cpanel_portable(archive, portable, source_home=""):
                     destination = 'cpanel_account/mail/' + '/'.join(relative)
                 elif relative_account[1] == 'etc' and len(relative) == 2 and relative[1] in ('shadow', 'passwd', 'quota'):
                     destination = 'cpanel_account/etc/' + '/'.join(relative)
-            elif 'public_html' in parts:
-                destination = '/'.join(parts[parts.index('public_html'):])
-            elif 'mysql' in parts and member.name.lower().endswith('.sql') and parts[-1].lower() != 'mysql.sql':
-                destination = 'mysql/' + parts[-1]
-            elif 'homedir' in parts:
-                home_index = parts.index('homedir')
-                relative = parts[home_index + 1:]
+            elif len(relative_account) >= 2 and relative_account[:2] == ('homedir', 'public_html'):
+                destination = '/'.join(relative_account[1:])
+            elif len(relative_account) == 2 and relative_account[0] == 'mysql' and member.isfile() and member.name.lower().endswith('.sql') and relative_account[-1].lower() != 'mysql.sql':
+                destination = 'mysql/' + relative_account[-1]
+            elif relative_account and relative_account[0] == 'homedir':
+                relative = relative_account[1:]
                 if relative and relative[0] not in excluded_home_directories and (not relative[0].startswith('.') or relative[0] == '.env'):
                     destination = 'private_home/' + '/'.join(relative)
             if not destination:
