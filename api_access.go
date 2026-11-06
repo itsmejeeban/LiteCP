@@ -359,6 +359,28 @@ func (a *App) apiRateAllowed(key string, limit int) bool {
 	a.apiBuckets[key] = bucket
 	return true
 }
+
+// Reject invalid credentials before reading an untrusted body. Authentication is
+// checked again under the mutation lock after parsing to preserve revocation.
+func (a *App) validAPICredentialsBeforeBody(id, secret, ip string) bool {
+	a.store.mu.RLock()
+	defer a.store.mu.RUnlock()
+	var credential *APICredential
+	for i := range a.store.cfg.APICredentials {
+		if a.store.cfg.APICredentials[i].Identifier == id {
+			credential = &a.store.cfg.APICredentials[i]
+			break
+		}
+	}
+	expected := strings.Repeat("0", 64)
+	if credential != nil {
+		expected = credential.SecretHash
+	}
+	valid := subtle.ConstantTimeCompare([]byte(apiSecretHash(secret)), []byte(expected)) == 1
+	return valid && credential != nil && credential.Enabled && credential.RevokedAt == nil &&
+		(credential.ExpiresAt == nil || credential.ExpiresAt.After(time.Now())) && apiIPAllowed(credential.AllowedIPs, ip)
+}
+
 func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if !requestIsHTTPS(r) {
@@ -380,6 +402,10 @@ func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 	id, secret := r.Header.Get("X-LiteCP-Identifier"), r.Header.Get("X-LiteCP-Secret")
 	if len(id) > 128 || len(secret) > 256 || id == "" || secret == "" {
 		writeError(w, 401, "Invalid API credentials")
+		return
+	}
+	if !a.validAPICredentialsBeforeBody(id, secret, ip) {
+		writeError(w, 401, "Invalid API credentials or source address")
 		return
 	}
 	var input struct {

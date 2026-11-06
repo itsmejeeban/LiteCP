@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.158"
+var version = "4.0.159"
 var buildRevision = ""
 
 //go:embed web/*
@@ -1318,13 +1318,17 @@ func decodeJSON(r *http.Request, dst any) error {
 }
 
 func decodeJSONWithLimit(r *http.Request, dst any, limit int64) error {
-	decoder := json.NewDecoder(io.LimitReader(r.Body, limit+1))
+	limited := &io.LimitedReader{R: r.Body, N: limit + 1}
+	decoder := json.NewDecoder(limited)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		return fmt.Errorf("invalid request: %w", err)
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return errors.New("invalid request: only one JSON object is allowed")
+	}
+	if limited.N == 0 {
+		return errors.New("invalid request: JSON body exceeds the size limit")
 	}
 	return nil
 }
