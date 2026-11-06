@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 [[ $(id -u) == 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 source_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-units=(litecp.service litecp-broker.service litecp-broker.socket)
+units=(litecp.service litecp-broker.service litecp-broker.socket litecp-captcha.service)
 if [[ ${1:-} == --restore ]]; then
   recovery=${2:?Recovery directory required}
   [[ -d $recovery && ! -L $recovery ]] || exit 1
@@ -25,6 +25,12 @@ fi
 [[ $(id -Gn litecp-web) == litecp-web ]] || { echo 'Remove supplementary groups from litecp-web before installing; no administrator/container groups are permitted.' >&2; exit 1; }
 [[ $(getent passwd litecp-web | cut -d: -f6-7) == /nonexistent:/usr/sbin/nologin ]] || { echo 'The dedicated web account must have /nonexistent as its home and /usr/sbin/nologin as its shell.' >&2; exit 1; }
 install -d -m 0755 /etc/litecp
+if ! id litecp-captcha >/dev/null 2>&1; then
+  useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin litecp-captcha
+fi
+[[ $(id -u litecp-captcha) != 0 && $(id -Gn litecp-captcha) == litecp-captcha ]] || { echo 'Unsafe CAPTCHA service identity.' >&2; exit 1; }
+[[ $(getent passwd litecp-captcha | cut -d: -f6-7) == /nonexistent:/usr/sbin/nologin ]] || { echo 'The CAPTCHA account must use /nonexistent and /usr/sbin/nologin.' >&2; exit 1; }
+install -d -m 0750 -o root -g litecp-captcha /var/lib/litecp-captcha
 if [[ ! -e /etc/litecp/frontend.env ]]; then
   # Copy only the bind setting, never administrator/database secrets.
   bind=$(awk -F= '/^LITECP_BIND=/{value=substr($0,index($0,"=")+1)} END {print value}' /etc/litecp/litecp.env 2>/dev/null || true)
@@ -49,4 +55,5 @@ done
 for unit in "${units[@]}"; do install -m 0644 "$source_dir/deploy/$unit" "/etc/systemd/system/$unit"; done
 systemctl daemon-reload
 [[ $(systemctl show litecp.service -p User --value) == litecp-web ]] || { echo 'A service override prevents unprivileged operation. Previous units are retained for recovery.' >&2; exit 1; }
+systemctl enable litecp-captcha.service
 echo "Privilege-separated service units installed. Previous units retained in $recovery"

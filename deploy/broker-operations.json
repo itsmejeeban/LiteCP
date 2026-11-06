@@ -1,4 +1,5 @@
 [
+  "/api/security/captcha",
   "/api/access",
   "/api/v1",
   "/api/v1/request",

@@ -3,7 +3,7 @@
 import argparse, contextlib, datetime, hashlib, json, os, pathlib, platform, shutil, stat, subprocess, sys, tempfile, zipfile
 BASE=pathlib.Path('/var/backups/litecp/system-snapshots')
 ROOTS={'panel':'/var/lib/litecp','websites':'/home/litecp','legacy-websites':'/var/www/litecp','mail':'/var/vmail','mail-config':'/etc/litecp/mail','panel-tls':'/etc/litecp/tls','certificates':'/etc/letsencrypt','backups':'/var/backups/litecp','webmail':'/var/lib/litecp-webmail','webmail-config':'/opt/litecp/webmail/config','waf':'/etc/litecp/waf'}
-SERVICE_CONFIGS=['/etc/postfix/main.cf','/etc/postfix/master.cf','/etc/dovecot/conf.d/99-litecp.conf','/etc/dovecot/conf.d/zz-litecp-webmail-tls.conf','/etc/dovecot/conf.d/00-litecp-webmail-signon.conf','/etc/opendkim.conf','/etc/nginx/conf.d/litecp-webmail.conf']
+SERVICE_CONFIGS=['/etc/postfix/main.cf','/etc/postfix/master.cf','/etc/dovecot/conf.d/99-litecp.conf','/etc/dovecot/conf.d/zz-litecp-webmail-tls.conf','/etc/dovecot/conf.d/00-litecp-webmail-signon.conf','/etc/opendkim.conf','/etc/nginx/conf.d/litecp-webmail.conf','/etc/nginx/conf.d/00-litecp-captcha-zones.conf']
 EXCLUDE={'panel':{'application-hosting/command-logs','developer-trust.json','sessions.json','developer-mode.json'},'backups':{'system-snapshots'},'webmail':{'temp','logs'}}
 def run(args, **kw):
     return subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kw).stdout

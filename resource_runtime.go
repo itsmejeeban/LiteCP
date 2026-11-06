@@ -145,6 +145,7 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	private := site
 	private.ResourceLimits = nil
 	private.Suspended = false
+	private.Captcha = nil
 	inner := s.nginxConfig(private)
 	inner = strings.ReplaceAll(inner, "include fastcgi_params;", "include /etc/nginx/fastcgi_params;")
 	inner = strings.ReplaceAll(inner, "    listen 80;", "    listen unix:"+filepath.Join(dir, "http.sock")+";")
@@ -168,6 +169,7 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	// Public routing never serves static files or executes PHP itself.
 	front = fmt.Sprintf("# LiteCP enforced website resource boundary\nserver {\n listen 80;\n listen [::]:80;\n server_name %s;\n%s\n%s\n if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n location / { proxy_pass http://unix:%s:; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_read_timeout 120s; proxy_intercept_errors on; error_page 502 503 =503 @resource_unavailable; }\n location @resource_unavailable { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n}\n", site.Domain, wafBlock(site, site.WAFMode), siteLogDirectives(site), dir, filepath.Join(dir, "http.sock"))
 	front = suspensionSiteConfig(front, site, site.Suspended)
+	front = injectCaptchaConfig(front, site)
 	front = strings.Replace(front, "server {", "server {\n add_header X-LiteCP-Resource-Boundary "+fmt.Sprintf("%x", []byte(site.ID))+" always;", 1)
 	return
 }

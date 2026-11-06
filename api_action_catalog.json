@@ -1434,5 +1434,21 @@
     "method": "GET",
     "path": "/api/version",
     "objectID": false
+  },
+  {
+    "name": "panel.security.captcha.get",
+    "group": "Security",
+    "description": "Self-hosted CAPTCHA — GET /api/security/captcha",
+    "method": "GET",
+    "path": "/api/security/captcha",
+    "objectID": false
+  },
+  {
+    "name": "panel.security.captcha.put",
+    "group": "Security",
+    "description": "Self-hosted CAPTCHA — PUT /api/security/captcha",
+    "method": "PUT",
+    "path": "/api/security/captcha",
+    "objectID": false
   }
 ]

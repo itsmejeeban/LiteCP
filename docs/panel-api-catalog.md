@@ -183,3 +183,6 @@ Each row is an explicit permission. Existing credentials gain none automatically
 | `panel.updates.status.get` | Updates | GET | `/api/updates/status` | Supported |
 | `panel.updates.get` | Updates | GET | `/api/updates` | Supported |
 | `panel.version.get` | Server | GET | `/api/version` | Supported |
+
+| `panel.security.captcha.get` | Security | GET | `/api/security/captcha` | Supported |
+| `panel.security.captcha.put` | Security | PUT | `/api/security/captcha` | Supported |

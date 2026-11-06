@@ -20,6 +20,7 @@ failed() {
     systemctl stop litecp-broker.service litecp-broker.socket || true
     if [[ -d "$work/service-recovery" ]]; then bash "$work/source/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
     cp --preserve=mode "$work/previous-litecp" /usr/local/bin/litecp
+    systemctl try-restart litecp-captcha.service || true
     systemctl start litecp || true
   fi
   status failed "Update failed. The previous panel binary has been retained and restored if necessary. Review journalctl -u litecp-panel-update."
@@ -71,6 +72,7 @@ switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
 cp -a "$data_dir" "$work/panel-data"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
+systemctl try-restart litecp-captcha.service
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 bash "$work/source/scripts/repair-waf-labels.sh"

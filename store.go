@@ -12,6 +12,7 @@ import (
 )
 
 type Site struct {
+	Captcha        *CaptchaPolicy         `json:"captcha,omitempty"`
 	Redis          *WebsiteRedis          `json:"redis,omitempty"`
 	DNSZone        *WebsiteDNSZone        `json:"dnsZone,omitempty"`
 	ResourceLimits *WebsiteResourceLimits `json:"resourceLimits,omitempty"`

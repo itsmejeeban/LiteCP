@@ -43,6 +43,7 @@ ReadWritePaths=-/etc/php -/etc/opt/remi -/etc/php-fpm.d
 ReadWritePaths=-/etc/litecp/waf
 ReadWritePaths=-/etc/litecp/dns
 ReadWritePaths=/home/litecp
+ReadWritePaths=-/var/lib/litecp-captcha
 ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
 
 [Install]

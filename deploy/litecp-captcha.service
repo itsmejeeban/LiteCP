@@ -1,0 +1,31 @@
+[Unit]
+Description=LiteCP self-hosted CAPTCHA gateway
+After=network.target
+ConditionPathExists=/var/lib/litecp-captcha/config.json
+
+[Service]
+User=litecp-captcha
+Group=litecp-captcha
+ExecStart=/usr/local/bin/litecp captcha-gateway
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=128M
+CPUQuota=50%
+TasksMax=32
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

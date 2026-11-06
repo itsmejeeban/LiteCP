@@ -987,6 +987,7 @@ func (s *System) nginxPaths(domain string) (string, string) {
 }
 
 func (s *System) nginxConfig(site Site) (content string) {
+	defer func() { content = injectCaptchaConfig(content, site) }()
 	if resourceEnabled(site) {
 		if saved, err := os.ReadFile(filepath.Join(resourceDirectory(site.ID), "frontend.conf")); err == nil {
 			updated, e := replaceWAFBlock(string(saved), site, site.WAFMode)
@@ -1299,6 +1300,7 @@ func (s *System) reconcileSiteNginx(site Site, configPath string) error {
 			return err
 		}
 	}
+	updated = injectCaptchaConfig(updated, site)
 	if updated == string(content) {
 		return nil
 	}

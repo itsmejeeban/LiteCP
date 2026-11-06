@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "4.0.144"
+var version = "4.0.146"
 var buildRevision = ""
 
 //go:embed web/*
@@ -58,6 +58,12 @@ type App struct {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "captcha-gateway" {
+		if err := runCaptchaGateway(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "website-redis" {
 		if err := redisRuntimeCommand(os.Args[2:]); err != nil {
 			log.Fatal(err)
@@ -195,6 +201,9 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		system := NewSystem(dataDir)
+		if err := (&App{store: store, system: system}).syncCaptchaRuntime(store.Sites()); err != nil {
+			log.Fatal(err)
+		}
 		if err := system.reconcileTrafficLogging(ctx, store.Sites()); err != nil {
 			log.Fatal(err)
 		}
@@ -253,6 +262,11 @@ func main() {
 		attempts: make(map[string]loginAttempt),
 	}
 	reconcileCtx, reconcileCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	if err := app.syncCaptchaRuntime(store.Sites()); err != nil {
+		// Protected websites fail closed while the administrator retains panel access.
+		log.Printf("CAPTCHA runtime needs attention: %v", err)
+	}
+	app.startCaptchaReconcile()
 	if err := app.system.ReconcileSites(reconcileCtx, store.Sites()); err != nil {
 		reconcileCancel()
 		log.Fatalf("reconcile isolated website runtimes: %v", err)
@@ -303,6 +317,7 @@ func (a *App) routes() http.Handler {
 
 func (a *App) routeMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/security/captcha", a.withAuth(a.captchaSettings))
 	mux.HandleFunc("/api/access", a.withAuth(a.apiAccess))
 	mux.HandleFunc("/api/v1", only(http.MethodPost, a.externalAPI))
 	mux.HandleFunc("/api/v1/request", only(http.MethodPost, a.externalAPI))

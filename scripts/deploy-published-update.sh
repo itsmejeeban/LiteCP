@@ -19,6 +19,7 @@ rollback() {
       install -m 0700 "$work/previous-system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
     fi
     install -m 0755 "$work/previous-litecp" /usr/local/bin/litecp
+    systemctl try-restart litecp-captcha.service || true
     systemctl restart litecp || true
   fi
   echo "UPDATE FAILED. Recovery files retained in $work"
@@ -36,6 +37,7 @@ systemctl stop litecp
 switched=1
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/scripts/install-privilege-services.sh"
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
+systemctl try-restart litecp-captcha.service
 install -d -m 0755 /usr/local/lib/litecp
 if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then
   cp --preserve=mode /usr/local/lib/litecp/system-snapshot.py "$work/previous-system-snapshot.py"

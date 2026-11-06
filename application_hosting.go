@@ -24,7 +24,8 @@ func applicationContainerArgs(site Site,app ApplicationHosting,name,command stri
 }
 func applicationPort(siteID string,sites []Site)(int,error){hash:=fnv.New32a();hash.Write([]byte(siteID));start:=20000+int(hash.Sum32()%20000);for offset:=0;offset<20000;offset++{port:=20000+(start-20000+offset)%20000;used:=false;for _,site:=range sites{if site.Application!=nil&&site.Application.Port==port{used=true}};if used{continue};listener,err:=net.Listen("tcp",fmt.Sprintf("127.0.0.1:%d",port));if err==nil{listener.Close();return port,nil}};return 0,errors.New("no free application port")}
 func applicationReady(ctx context.Context,port int)error{deadline:=time.Now().Add(25*time.Second);for time.Now().Before(deadline){connection,err:=net.DialTimeout("tcp",fmt.Sprintf("127.0.0.1:%d",port),time.Second);if err==nil{connection.Close();return nil};select{case <-ctx.Done():return ctx.Err();case <-time.After(500*time.Millisecond):}};return errors.New("application did not listen on 0.0.0.0:8080; review its startup command and logs")}
-func(s *System) applicationNginx(site Site)string{
+func(s *System) applicationNginx(site Site)(content string){
+ defer func(){content=injectCaptchaConfig(content,site)}()
  app:=site.Application;tls:="";if app.Certificate!=""&&app.CertificateKey!=""{tls=fmt.Sprintf("    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;",app.Certificate,app.CertificateKey)+"\n    if ($scheme = http) { return 301 https://$host$request_uri; }"}
  marker:="    add_header X-LiteCP-Application-State maintenance always;"
  routing:="    location / { return 503; }"
