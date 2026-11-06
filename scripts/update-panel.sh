@@ -34,7 +34,30 @@ work="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
 # Transient system services need not have HOME or GOPATH. Keep build caches
 # private to this update rather than relying on an interactive root login.
 export GOPATH="$work/go" GOMODCACHE="$work/go/pkg/mod" GOCACHE="$work/go-build"
-curl --fail --location --proto '=https' --tlsv1.2 --max-time 180 --max-filesize 52428800 "https://api.github.com/repos/itsmejeeban/LiteCP/tarball/$tag" -o "$work/source.tar.gz"
+python3 - "$tag" "$work/source.tar.gz" <<'PY'
+import os,re,stat,subprocess,sys
+token=''
+try:
+    fd=os.open('/etc/litecp/github-update-token',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)
+except FileNotFoundError:
+    pass
+else:
+    with os.fdopen(fd,'rb') as source:
+        info=os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or stat.S_IMODE(info.st_mode)!=0o600:
+            raise SystemExit('Private update credential must be root-owned with mode 0600')
+        data=source.read(4097)
+    if len(data)>4096:raise SystemExit('Invalid private update credential')
+    try:token=data.decode('ascii').strip()
+    except UnicodeError:raise SystemExit('Invalid private update credential')
+    if not re.fullmatch(r'[A-Za-z0-9_]{20,1024}',token):raise SystemExit('Invalid private update credential')
+# Supply authorization on stdin, never argv/environment. curl strips this
+# sensitive header when GitHub redirects to a different download hostname.
+config=('header = "Authorization: Bearer '+token+'"\n') if token else ''
+subprocess.run(['curl','--config','-','--fail','--location','--proto','=https',
+    '--proto-redir','=https','--tlsv1.2','--max-time','180','--max-filesize','52428800',
+    'https://api.github.com/repos/itsmejeeban/LiteCP/tarball/'+sys.argv[1],'-o',sys.argv[2]],input=config,text=True,check=True)
+PY
 mkdir "$work/source"
 python3 - "$work/source.tar.gz" "$work/source" <<'PY'
 import pathlib,sys,tarfile
@@ -78,6 +101,7 @@ install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 systemctl try-restart litecp-captcha.service
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
+install -m 0700 "$work/source/scripts/configure-private-updates.sh" /usr/local/lib/litecp/configure-private-updates.sh
 bash "$work/source/scripts/repair-waf-labels.sh"
 python3 "$work/source/scripts/repair-dns-runtime.py"
 bash "$work/source/scripts/repair-php73-selinux.sh"

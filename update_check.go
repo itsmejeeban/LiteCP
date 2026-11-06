@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,10 +24,11 @@ type releaseStatus struct {
 
 var releaseCache struct {
 	sync.Mutex
-	until   time.Time
-	tag     string
-	checked bool
-	message string
+	until      time.Time
+	tag        string
+	checked    bool
+	message    string
+	credential [32]byte
 }
 
 func releaseNumbers(tag string) ([3]int, bool) {
@@ -71,9 +73,19 @@ func newerRelease(latest, current string) bool {
 }
 
 func checkRelease(current string) releaseStatus {
+	token, err := readPrivateUpdateToken(privateUpdateTokenPath)
+	if err != nil {
+		return releaseStatus{Current: current, Build: buildRevision, Message: err.Error()}
+	}
+	return checkReleaseWithToken(current, token)
+}
+
+func checkReleaseWithToken(current, token string) releaseStatus {
 	releaseCache.Lock()
 	defer releaseCache.Unlock()
-	if time.Now().After(releaseCache.until) {
+	credential := sha256.Sum256([]byte(token))
+	if credential != releaseCache.credential || time.Now().After(releaseCache.until) {
+		releaseCache.credential = credential
 		releaseCache.checked = false
 		releaseCache.tag = ""
 		releaseCache.message = "The release service is unavailable. Try again later."
@@ -82,11 +94,20 @@ func checkRelease(current string) releaseStatus {
 		req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/itsmejeeban/LiteCP/releases/latest", nil)
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "LiteCP-update-check")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 		response, err := client.Do(req)
 		if err == nil {
 			defer response.Body.Close()
 			if response.StatusCode == http.StatusNotFound {
-				releaseCache.message = "No public stable release is accessible. The repository may be private or no stable release has been published."
+				releaseCache.message = "No stable release is accessible. If the repository is private, configure its read-only update token on this server."
+				if token != "" {
+					releaseCache.message = "The update token cannot access a stable LiteCP release. Check repository selection, Contents read permission and published releases."
+				}
+			}
+			if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+				releaseCache.message = "GitHub rejected the update request. Check token expiry, repository access, Contents read permission and API rate limits."
 			}
 			if response.StatusCode == http.StatusOK {
 				var release struct {
