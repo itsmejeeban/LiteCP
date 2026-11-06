@@ -30,6 +30,11 @@ const liveNativeLimit = int64(8 << 30)
 
 var liveJobIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 var liveAccountPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,252}$`)
+
+func validLiveAccount(platform, account string) bool {
+	if platform == "litecp" { return regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`).MatchString(account) }
+	return liveAccountPattern.MatchString(account)
+}
 var liveJobMu sync.Mutex
 
 // Serialize state writes with cancellation so a stale worker cannot revive a
@@ -684,7 +689,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 				found = true
 			}
 		}
-		if !found || !liveAccountPattern.MatchString(input.Account) {
+		if !found || !validLiveAccount(job.Source.Platform, input.Account) {
 			writeError(w, 400, "Select a discovered source account")
 			return
 		}

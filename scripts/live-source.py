@@ -193,7 +193,10 @@ def export(request):
     account, job = request['account'], request['job']
     if not re.fullmatch(r'[A-Za-z0-9_-]{16,64}',job):
         raise RuntimeError('Invalid job identifier')
-    if not re.fullmatch(r'[a-zA-Z0-9_.-]{1,253}', account) or account.startswith('-'):
+    # LiteCP immutable IDs are URL-safe random tokens, not command options.
+    # cPanel/Plesk account names still retain their stricter validation.
+    valid_account = re.fullmatch(r'[A-Za-z0-9_-]{1,128}', account) if platform == 'litecp' else re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,252}', account)
+    if not valid_account:
         raise RuntimeError('Invalid account identifier')
     root = pathlib.Path('/root') / ('litecp-export-' + job)
     if mode == 'cleanup':

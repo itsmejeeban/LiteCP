@@ -13,6 +13,22 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_litecp_urlsafe_identifier_reaches_capture(self):
+        for account in ['-vYbtz2ZL38', '_leading_underscore']:
+            config = {'sites': [{'id': account, 'domain': 'audit.example.test', 'root': '/home/litecp/audit/public_html'}]}
+            with patch.object(source.os, 'geteuid', return_value=0, create=True), patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(config))), patch.object(source.pathlib.Path, 'mkdir', side_effect=RuntimeError('capture reached')):
+                with self.assertRaisesRegex(RuntimeError, 'capture reached'):
+                    source.export({'platform':'litecp','mode':'capture','account':account,'job':'abcdefghijklmnop'})
+
+    def test_litecp_blank_website_capture_needs_no_database(self):
+        config = {'sites': [{'id': '-blank_site', 'domain': 'blank.example.test', 'root': '/home/litecp/blank.example.test/public_html'}], 'databases': []}
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), patch('builtins.open', unittest.mock.mock_open(read_data=json.dumps(config))), patch.object(source.pathlib.Path, 'mkdir'), patch.object(source.pathlib.Path, 'resolve', return_value=pathlib.PurePosixPath('/home/litecp/blank.example.test/public_html')), patch.object(source.pathlib.Path, 'is_symlink', return_value=False), patch.object(source.pathlib.Path, 'is_dir', return_value=True), patch.object(source.os, 'chmod'), patch.object(source.tarfile, 'open') as archive, patch.object(source, 'describe', return_value={'path':'fixture.tar.gz','size':1,'sha256':'fixture'}), patch.object(source.subprocess, 'run') as run:
+            result=source.export({'platform':'litecp','mode':'capture','account':'-blank_site','job':'abcdefghijklmnop'})
+            run.assert_not_called()
+            archive.return_value.__enter__.return_value.add.assert_called_once()
+            self.assertEqual(archive.return_value.__enter__.return_value.add.call_args.kwargs['arcname'], 'public_html')
+            self.assertEqual(result['native'],result['portable'])
+
     def test_plesk_subdomain_selects_referenced_parent_database_only(self):
         inventory = 'securese_jk\tsecureserver.top\nother_db\tsecureserver.top\ndirect_db\tapi.secureserver.top\n'
         with patch.object(source, 'command', return_value=inventory), patch.object(source.os, 'walk', return_value=[('/website', [], ['.env'])]), patch.object(source.pathlib.Path, 'is_symlink', return_value=False), patch.object(source.pathlib.Path, 'is_file', return_value=True), patch.object(source.pathlib.Path, 'stat', return_value=types.SimpleNamespace(st_size=100)), patch.object(source.pathlib.Path, 'read_text', return_value='DB_DATABASE=securese_jk\nDB_PASSWORD=private\n'):
