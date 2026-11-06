@@ -216,6 +216,10 @@ func TestBrokerRejectsUnauthenticatedSlowUploadWithoutWaitingForBody(t *testing.
 	if response.StatusCode != 401 {
 		t.Fatal("unexpected rejection", response.StatusCode)
 	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil || !strings.Contains(string(body), "Your session has expired") {
+		t.Fatalf("early rejection body was truncated: %q, %v", body, err)
+	}
 }
 
 func TestBrokerFrontendStreamsAuthenticatedRequestAndCookies(t *testing.T) {

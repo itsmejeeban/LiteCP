@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -287,11 +288,18 @@ func forwardBrokerRequest(w http.ResponseWriter, r *http.Request, mux *http.Serv
 	}
 	_ = conn.SetDeadline(time.Now().Add(45 * time.Minute))
 	stop := make(chan struct{})
-	defer close(stop)
+	var stopOnce sync.Once
+	stopWatching := func() { stopOnce.Do(func() { close(stop) }) }
+	defer stopWatching()
 	go func() {
 		select {
 		case <-r.Context().Done():
-			_ = conn.Close()
+			select {
+			case <-stop:
+				return
+			default:
+				_ = conn.Close()
+			}
 		case <-stop:
 		}
 	}()
@@ -323,6 +331,10 @@ func forwardBrokerRequest(w http.ResponseWriter, r *http.Request, mux *http.Serv
 		case <-uploadDone:
 		default:
 			if raw, ok := r.Context().Value(frontendConnectionKey{}).(net.Conn); ok {
+				// Interrupting the unfinished HTTP upload cancels r.Context().
+				// Do not let that intentional cancellation close the broker before
+				// its rejection response has been completely forwarded.
+				stopWatching()
 				r.Close = true
 				w.Header().Set("Connection", "close")
 				_ = raw.SetReadDeadline(time.Now())
