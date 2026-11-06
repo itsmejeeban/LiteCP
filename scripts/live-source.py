@@ -20,6 +20,12 @@ def command(args, log=None):
         raise RuntimeError('Source command failed: ' + pathlib.Path(args[0]).name + '; inspect the retained source export log')
     return result.stdout if log is None else ''
 
+def litecp_dump_binary():
+    binary = shutil.which('mysqldump') or shutil.which('mariadb-dump')
+    if not binary:
+        raise RuntimeError('LiteCP database export requires mysqldump or mariadb-dump; source export log retained')
+    return binary
+
 def digest(path):
     value = hashlib.sha256()
     with open(path, 'rb') as source:
@@ -228,12 +234,15 @@ def export(request):
         if site.get('database') and site['database'] not in databases:
             databases.append(site['database'])
         dumps = []
+        dump_binary = None
+        if databases:
+            dump_binary = litecp_dump_binary()
         for index, database in enumerate(databases):
             if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_$-]{0,63}', database) or database.lower() in ('mysql','sys','information_schema','performance_schema'):
                 raise RuntimeError('Unsafe database name')
             dump = root / ('database-' + str(index) + '.sql')
             with open(dump, 'xb') as destination:
-                result = subprocess.run(['mysqldump','--protocol=socket','--user=root','--single-transaction','--routines','--triggers',database],stdout=destination,stderr=log,timeout=3600)
+                result = subprocess.run([dump_binary,'--protocol=socket','--user=root','--single-transaction','--routines','--triggers',database],stdout=destination,stderr=log,timeout=3600)
             os.chmod(dump, 0o600)
             if result.returncode:
                 raise RuntimeError('LiteCP database export failed; source export log retained')
