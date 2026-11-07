@@ -31,7 +31,6 @@
 .live-job-details{box-sizing:border-box;width:100%;min-width:0;padding:6px 0 4px;}
 .live-job-details[hidden]{display:none;}
 .live-job-details>small{display:block;color:var(--muted);font-size:11px;line-height:1.6;margin:10px 0;overflow-wrap:anywhere;}
-:is([data-migration-section="cpanel"],[data-migration-section="plesk"],[data-migration-section="litecp"]) .live-job[data-job-status="connected"] .live-job-details{display:block;}
 :is([data-migration-section="cpanel"],[data-migration-section="plesk"],[data-migration-section="litecp"]) .live-job-view{display:none;}
 @media(max-width:500px){.live-job-heading{gap:8px;}.live-job{padding:12px;}}
 

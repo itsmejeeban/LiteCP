@@ -1,6 +1,20 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../web/live-migration.js'),'utf8');
 const code=source.slice(source.indexOf('  let jobsRequest=0;'),source.indexOf('  async function revealMigrationJob('));
+test('source connection pages render discovered account pickers open',()=>{
+  const nodes=new Map(),node=key=>{if(!nodes.has(key))nodes.set(key,{innerHTML:'',hidden:false,disabled:false});return nodes.get(key);};
+  const context=vm.createContext({location:{hash:''},page:{querySelector:()=>node('heading')},$:node,document:{querySelectorAll:()=>[]},cp:{formatBytes:String},esc:String});
+  const start=source.indexOf('  let jobs=[]');
+  vm.runInContext(source.slice(start,source.indexOf('  let jobsRequest=0;'))+';this.render=renderJobs;this.setJobs=value=>{jobs=value;};',context);
+  for(const platform of ['cpanel','plesk','litecp']){
+    context.location.hash='#migrations/'+platform;
+    context.setJobs([{id:'connection',status:'connected',source:{platform,host:'source.test'},credentialsRetained:true,accounts:[{id:'demo',domain:'demo.test'}]}]);
+    context.render();
+    const html=node('#liveJobs').innerHTML;
+    assert.match(html,/<div class="live-job-details" id="migration-details-connection"\s*>/);
+    assert.match(html,/data-account="demo"/);
+  }
+});
 test('older migration refresh cannot replace newer jobs or errors',async()=>{
   const pending=[],shown=[],output={};
   const context=vm.createContext({cp:{demo:false,api:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},$:()=>output,active:()=>false,renderJobs:()=>shown.push(context.jobs),clearTimeout(){},setTimeout(){},pollTimer:null,jobs:[]});
