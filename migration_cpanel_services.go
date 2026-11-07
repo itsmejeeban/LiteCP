@@ -200,7 +200,7 @@ func planCPanelServices(root string, job LiveMigrationJob) (cpanelServicesPlan, 
 		if validateMailDomain(domain) != nil || validateMailboxAddress(address, domain) != nil || seen[address] {
 			return plan, errors.New("default account mail needs a valid, non-conflicting primary domain")
 		}
-		plan.Mailboxes = append(plan.Mailboxes, cpanelMailboxImport{Mailbox: Mailbox{ID: migrationServiceID(job.ID, "mail", address), Domain: domain, Address: address, PasswordHash: "{CRYPT}*", CreatedAt: time.Now().UTC()}, Source: filepath.Join(base, "mail"), DefaultAccount: true})
+		plan.Mailboxes = append(plan.Mailboxes, cpanelMailboxImport{Mailbox: Mailbox{ID: migrationServiceID(job.ID, "mail", address), Domain: domain, Address: address, PasswordHash: lockedMailboxPasswordHash, CreatedAt: time.Now().UTC()}, Source: filepath.Join(base, "mail"), DefaultAccount: true})
 		plan.Warnings = append(plan.Warnings, "Default account mail preserved as "+address+"; set a mailbox password in LiteCP before login.")
 	}
 	cron, err := readCPanelMetadata(base, "cron/"+job.Account, true)

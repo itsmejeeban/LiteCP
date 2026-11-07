@@ -137,6 +137,9 @@ func (s *System) HashMailboxPassword(ctx context.Context, password string) (stri
 	return "", errors.New("Dovecot did not return a password hash")
 }
 
+// Imported default cPanel inboxes can receive mail before a password is set.
+const lockedMailboxPasswordHash = "{CRYPT}*"
+
 func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailboxes []Mailbox, aliases []MailAlias) error {
 	if s.demo {
 		return nil
@@ -174,7 +177,7 @@ func (s *System) SyncMailConfig(ctx context.Context, domains []MailDomain, mailb
 		if err := validateMailboxAddress(mailbox.Address, mailbox.Domain); err != nil {
 			return err
 		}
-		if !strings.HasPrefix(mailbox.PasswordHash, "{SHA512-CRYPT}") {
+		if mailbox.PasswordHash != lockedMailboxPasswordHash && !strings.HasPrefix(mailbox.PasswordHash, "{SHA512-CRYPT}") {
 			return fmt.Errorf("mailbox %s has an invalid password hash", mailbox.Address)
 		}
 		mailboxMap.WriteString(mailbox.Address + " OK\n")
