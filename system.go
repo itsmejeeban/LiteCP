@@ -87,14 +87,15 @@ type OSInfo struct {
 }
 
 type System struct {
-	dataDir   string
-	os        OSInfo
-	demo      bool
-	cpuMu     sync.Mutex
-	secretMu  sync.Mutex
-	phpPoolMu sync.Mutex
-	prevIdle  uint64
-	prevAll   uint64
+	manualBackupSpaceProbe func(context.Context, string) (int64, error)
+	dataDir                string
+	os                     OSInfo
+	demo                   bool
+	cpuMu                  sync.Mutex
+	secretMu               sync.Mutex
+	phpPoolMu              sync.Mutex
+	prevIdle               uint64
+	prevAll                uint64
 }
 
 var domainPattern = regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$`)
@@ -756,7 +757,13 @@ func (s *System) restoreSiteConfig(ctx context.Context, site Site, backup siteCo
 }
 
 func (s *System) RemoveSiteConfig(ctx context.Context, site Site) error {
- if redisEnabled(site) && !s.demo {settings:=*site.Redis;settings.Enabled=false;if _,err:=s.redisHostAction(ctx,site,settings,"save");err!=nil{return err}}
+	if redisEnabled(site) && !s.demo {
+		settings := *site.Redis
+		settings.Enabled = false
+		if _, err := s.redisHostAction(ctx, site, settings, "save"); err != nil {
+			return err
+		}
+	}
 
 	if resourceEnabled(site) {
 		if err := resourceHostAction(ctx, s, site, *site.ResourceLimits, "disable"); err != nil {
@@ -1107,7 +1114,9 @@ func (s *System) phpPoolConfig(site Site) string {
 		allowed = home
 		temporary = filepath.Join(home, "tmp")
 	}
- if site.RuntimeUID>0 && !s.usesPHP73Container(site.PHPVersion) {allowed += ":"+filepath.Dir(redisSocket(site.ID))}
+	if site.RuntimeUID > 0 && !s.usesPHP73Container(site.PHPVersion) {
+		allowed += ":" + filepath.Dir(redisSocket(site.ID))
+	}
 	webUser := s.webUser()
 	socketOwner, socketGroup := webUser, webUser
 	if s.usesPHP73Container(site.PHPVersion) {
@@ -1416,7 +1425,9 @@ func (s *System) phpStackState(ctx context.Context, sites []Site) string {
 	}
 	for _, site := range sites {
 		path := phpHealthSocket(s.sitePHPSocket(site), site, resourceRuntimeRead(site.ID))
-		if path == "" { continue } // Deliberate resource blocking is not a shared FPM failure.
+		if path == "" {
+			continue
+		} // Deliberate resource blocking is not a shared FPM failure.
 		info, err := os.Stat(path)
 		if err != nil || info.Mode()&os.ModeSocket == 0 {
 			return "degraded"

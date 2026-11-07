@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+func fixtureBackupFreeBytes(context.Context, string) (int64, error) {
+	return 2 << 30, nil
+}
+
 func TestWebsiteBackupIncludesNonPublicDirectories(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"public_html/index.php", "logs/access.log", "tmp/upload.part", "private/.env", ".trash/old/payload", "backups/manual/old.zip", "backups/scheduled/old.zip"} {
@@ -57,7 +61,7 @@ func TestManualBackupInspectsHomeDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	stage := t.TempDir()
-	preview, err := inspectManualBackup(context.Background(), archive, stage)
+	preview, err := inspectManualBackup(context.Background(), archive, stage, fixtureBackupFreeBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

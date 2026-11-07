@@ -16,7 +16,14 @@ import (
 	"time"
 )
 
-func inspectManualBackup(ctx context.Context, archivePath, stage string) (MigrationPreview, error) {
+func (s *System) manualBackupFreeBytes(ctx context.Context, path string) (int64, error) {
+	if s.manualBackupSpaceProbe != nil {
+		return s.manualBackupSpaceProbe(ctx, path)
+	}
+	return migrationFreeBytes(ctx, path)
+}
+
+func inspectManualBackup(ctx context.Context, archivePath, stage string, freeBytes func(context.Context, string) (int64, error)) (MigrationPreview, error) {
 	preview := MigrationPreview{Platform: "LiteCP manual ZIP", Roots: []string{"public_html"}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	outer, err := zip.OpenReader(archivePath)
 	if err != nil {
@@ -87,7 +94,7 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string) (Migrat
 			}
 			required += int64(member.UncompressedSize64)
 		}
-		if available, err := migrationFreeBytes(ctx, stage); err != nil || available < required+(256<<20) {
+		if available, err := freeBytes(ctx, stage); err != nil || available < required+(256<<20) {
 			inner.Close()
 			return preview, errors.New("insufficient free space for extracted backup files")
 		}
@@ -219,7 +226,7 @@ func (a *App) prepareManualBackupStage(ctx context.Context, site Site, archive s
 	if err != nil {
 		return preview, err
 	}
-	if available, err := migrationFreeBytes(ctx, parent); err != nil || available < info.Size()*2+(512<<20) {
+	if available, err := a.system.manualBackupFreeBytes(ctx, parent); err != nil || available < info.Size()*2+(512<<20) {
 		return preview, errors.New("insufficient free space to inspect the uploaded backup safely")
 	}
 	id, err := randomToken(18)
@@ -231,7 +238,7 @@ func (a *App) prepareManualBackupStage(ctx context.Context, site Site, archive s
 	if err = os.Mkdir(root, 0700); err != nil {
 		return preview, err
 	}
-	preview, err = inspectManualBackup(ctx, archive, root)
+	preview, err = inspectManualBackup(ctx, archive, root, a.system.manualBackupFreeBytes)
 	if err != nil {
 		return preview, err
 	}
