@@ -177,6 +177,7 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
                         ('access denied', 'database authentication or permission denied'),
                         ('unknown database', 'database no longer exists'),
                         ("can't connect", 'cannot connect to source MySQL'),
+                        ('read-only file system', 'source database export hit a read-only filesystem; repair source storage before retrying capture'),
                         ('no space left', 'source storage exhausted'),
                         ('unknown option', 'dump client rejected an option'),
                         ('unknown variable', 'dump client rejected a setting'),

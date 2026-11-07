@@ -49,9 +49,11 @@
       if(!latest||Date.parse(job.createdAt)>Date.parse(latest.createdAt))latestBySource.set(key,job);
     }
     for(const job of items){
-      if(!job.account||!['failed','interrupted'].includes(job.status))continue;
+      if(!job.account)continue;
       const newer=latestBySource.get(sourceKey(job));
-      if(newer&&Date.parse(newer.createdAt)>Date.parse(job.createdAt))replacements.set(job.id,newer);
+      if(!newer||Date.parse(newer.createdAt)<=Date.parse(job.createdAt))continue;
+      if(['failed','interrupted'].includes(job.status)||
+         (newer.status==='restored'&&['captured','review','restore-review','restored-review'].includes(job.status)))replacements.set(job.id,newer);
     }
     return replacements;
   }
@@ -66,6 +68,10 @@
   function pendingRetryAction(job){
     if(!pendingMigration(job)||job.status==='awaiting-overwrite')return null;
     if(job.status==='restored-review')return !job.artifactsCleaned && job.source.platform==='cpanel' && job.cpanelWebsiteId && (job.nativeReady||job.preview) ? 'restore' : null;
+    // A retained archive cannot supply a database that the source failed to export.
+    if(job.status==='restore-review'&&job.source.platform==='cpanel'&&job.credentialsRetained&&
+       /matching database dump/i.test(job.message||'')&&
+       job.warnings?.some(warning=>warning.startsWith('Some account databases could not be exported.')))return 'capture';
     if(!job.artifactsCleaned&&(job.nativeReady||job.preview)&&['review','captured','restore-review'].includes(job.status))return 'restore';
     if(job.credentialsRetained&&(job.artifactsCleaned||['failed','interrupted','captured','restore-review'].includes(job.status)))return 'capture';
     return null;

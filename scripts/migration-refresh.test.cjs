@@ -52,6 +52,23 @@ test('pending health-check retries remain visible after rendering filters',()=>{
   assert.equal(node('#liveJobsRetryPending').disabled,false);
 });
 
+test('pending retry recaptures incomplete cPanel database exports and hides superseded attempts',()=>{
+  const start=source.indexOf('  let jobs=[]');
+  const context=vm.createContext({});
+  vm.runInContext(source.slice(start,source.indexOf('  let jobsRequest=0;'))+
+    ';this.retry=pendingRetryAction;this.replacements=migrationReplacements;',context);
+  const job={id:'old',status:'restore-review',createdAt:'2026-11-07T00:00:00Z',
+    source:{platform:'cpanel',host:'source.test'},account:'site',credentialsRetained:true,
+    nativeReady:true,message:'Automatic restore stopped: configuration .env has no matching database dump.',
+    warnings:['Some account databases could not be exported. Check the source export log before restoring.']};
+  assert.equal(context.retry(job),'capture');
+  assert.equal(context.retry({...job,credentialsRetained:false}),'restore');
+  assert.equal(context.retry({...job,message:'Automatic restore stopped: local database server is unavailable.'}),'restore');
+  const replacement={...job,id:'new',createdAt:'2026-11-08T00:00:00Z'};
+  assert.equal(context.replacements([job,{...replacement,status:'queued'}]).size,0);
+  assert.equal(context.replacements([job,{...replacement,status:'restored'}]).get(job.id).id,'new');
+});
+
 test('invalid jobs responses preserve the last successful jobs for refresh retry',async()=>{
   const output={},original=[{id:'kept',status:'restored'}];
   const context=vm.createContext({cp:{demo:false,api:async()=>({})},$:()=>output,active:()=>false,renderJobs(){},clearTimeout(){},setTimeout(){},pollTimer:null,jobs:original});
