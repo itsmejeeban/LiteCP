@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 def command(args, log=None):
@@ -50,8 +51,9 @@ def cleanup_cpanel_export(root, account):
             removed.append(name)
     return removed
 
-def cpanel_portable(archive, portable, source_home=""):
+def cpanel_portable(archive, portable, source_home="", supplement=None):
     website_files, private_files, skipped = 0, 0, 0
+    database_dumps = set()
     # cPanel applications commonly keep private source/configuration beside
     # public_html. Preserve application-owned directories, but never copy
     # account mail, credentials, logs, caches or other cPanel-managed areas.
@@ -106,18 +108,62 @@ def cpanel_portable(archive, portable, source_home=""):
             if member.isfile():
                 with original.extractfile(member) as content:
                     target.addfile(info,content)
+                if destination.startswith('mysql/'):
+                    database_dumps.add(destination[6:-4])
             else:
                 target.addfile(info)
             if destination.startswith('public_html/') and member.isfile():
                 website_files += 1
             elif destination.startswith('private_home/') and member.isfile():
                 private_files += 1
+        if supplement is not None:
+            supplement(target, database_dumps)
         metadata = json.dumps({'version':1, 'sourceHome':source_home}).encode('utf-8')
         info = tarfile.TarInfo('cpanel_account/format.json')
         info.size = len(metadata)
         info.mode = 0o600
         target.addfile(info, io.BytesIO(metadata))
     return website_files, private_files, skipped
+
+
+def supplement_cpanel_databases(target, included, account, root, log, warnings):
+    try:
+        response = json.loads(command(['/usr/local/cpanel/bin/uapi', '--user=' + account,
+                                       '--output=json', 'Mysql', 'list_databases']))
+        result = response.get('result', {})
+        if result.get('status') != 1 or not isinstance(result.get('data'), list):
+            raise ValueError('database inventory unavailable')
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
+        warnings.append('Could not verify the cPanel database inventory. Only native database dumps were captured.')
+        return
+    missing = {row['database'] for row in result['data']
+               if isinstance(row, dict) and isinstance(row.get('database'), str)} - included
+    if not missing:
+        return
+    binary = shutil.which('mysqldump') or shutil.which('mariadb-dump')
+    added = 0
+    for database in sorted(missing):
+        if not binary or not re.fullmatch(r'[A-Za-z0-9_$][A-Za-z0-9_$-]{0,63}', database):
+            continue
+        try:
+            with tempfile.TemporaryFile(dir=root) as dump:
+                process = subprocess.run([binary, '--protocol=socket', '--user=root',
+                                          '--single-transaction', '--quick', '--routines', '--triggers',
+                                          '--', database], stdout=dump, stderr=log, timeout=3600)
+                if process.returncode or not dump.tell():
+                    continue
+                entry = tarfile.TarInfo('mysql/' + database + '.sql')
+                entry.size = dump.tell()
+                entry.mode = 0o600
+                dump.seek(0)
+                target.addfile(entry, dump)
+                added += 1
+        except subprocess.TimeoutExpired:
+            continue
+    if added:
+        warnings.append(str(added) + ' missing account database dump(s) exported directly from source MySQL.')
+    if added < len(missing):
+        warnings.append('Some account databases could not be exported. Check the source export log before restoring.')
 
 def plesk_backup_subscription(binary, account):
     # Plesk native backups are subscription-scoped, not individual subdomains.
@@ -268,7 +314,10 @@ def export(request):
         result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS zones are imported for review and export; registrar delegation, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
         import pwd
-        website_files, private_files, skipped = cpanel_portable(archive, portable, pwd.getpwnam(account).pw_dir)
+        website_files, private_files, skipped = cpanel_portable(
+            archive, portable, pwd.getpwnam(account).pw_dir,
+            lambda target, included: supplement_cpanel_databases(
+                target, included, account, root, log, result['warnings']))
         os.chmod(portable,0o600)
         if website_files:
             result['portable'] = describe(portable)

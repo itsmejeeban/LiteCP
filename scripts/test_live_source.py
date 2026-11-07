@@ -13,6 +13,31 @@ source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 
 class LiveSourceTests(unittest.TestCase):
+    def test_cpanel_supplements_only_missing_account_databases(self):
+        inventory = {'result': {'status': 1, 'data': [
+            {'database': 'already_exported'}, {'database': 'site_wordpress'},
+            {'database': '../unsafe'},
+        ]}}
+
+        def dump(args, stdout, **kwargs):
+            self.assertEqual(args[-2:], ['--', 'site_wordpress'])
+            stdout.write(b'CREATE TABLE fixture(id INT);')
+            return types.SimpleNamespace(returncode=0)
+
+        warnings = []
+        buffer = io.BytesIO()
+        with patch.object(source, 'command', return_value=json.dumps(inventory)), \
+                patch.object(source.shutil, 'which', return_value='/usr/bin/mysqldump'), \
+                patch.object(source.subprocess, 'run', side_effect=dump), \
+                patch.object(source.tempfile, 'TemporaryFile', side_effect=lambda **kwargs: io.BytesIO()):
+            with tarfile.open(fileobj=buffer, mode='w') as target:
+                source.supplement_cpanel_databases(target, {'already_exported'}, 'site', None, None, warnings)
+        buffer.seek(0)
+        with tarfile.open(fileobj=buffer) as archive:
+            self.assertEqual(archive.getnames(), ['mysql/site_wordpress.sql'])
+            self.assertEqual(archive.extractfile('mysql/site_wordpress.sql').read(),
+                             b'CREATE TABLE fixture(id INT);')
+
     def test_plesk_subdomain_capture_uses_subscription_and_selected_root(self):
         def query(args, log=None):
             if args[1:]==['bin','site','--list']:
