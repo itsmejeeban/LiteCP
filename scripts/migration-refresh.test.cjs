@@ -41,15 +41,18 @@ test('staged archive listing reports malformed responses and permits retry',asyn
   response={items:[]};await button.click();assert.equal(container.textContent,'No staged archives.');assert.equal(errors.length,1);
 });
 
-test('pending health-check retries remain visible after rendering filters',()=>{
+test('completed restores with health warnings keep manual checks out of Pending',()=>{
   const nodes=new Map(),node=key=>{if(!nodes.has(key))nodes.set(key,{innerHTML:'',hidden:false,disabled:false});return nodes.get(key);};
   const context=vm.createContext({location:{hash:'#migrations/pending'},page:{querySelector:()=>node('heading')},$:node,document:{querySelectorAll:()=>[]},cp:{formatBytes:String},esc:String});
   const start=source.indexOf('  let jobs=[]');
   vm.runInContext(source.slice(start,source.indexOf('  let jobsRequest=0;'))+`;jobs=[{id:'health',status:'restored-review',stage:'result',createdAt:'2026-11-06T00:00:00Z',source:{platform:'cpanel',host:'source.test'},account:'site',cpanelWebsiteId:'site-id',nativeReady:true}];renderJobs();`,context);
+  assert.doesNotMatch(node('#liveJobs').innerHTML,/data-job-id="health"/);
+  assert.equal(node('#liveJobsRetryPending').disabled,true);
+  context.location.hash='#migrations/completed';
+  vm.runInContext('renderJobs()',context);
   const html=node('#liveJobs').innerHTML;
   assert.match(html,/<button[^>]*data-live-auto="health"[^>]*data-live-retry-restore[^>]*>Retry checks<\/button>/);
   // The post-render cleanup intentionally removes all auto buttons without this marker.
-  assert.equal(node('#liveJobsRetryPending').disabled,false);
 });
 
 test('pending retry recaptures incomplete cPanel database exports and hides superseded attempts',()=>{

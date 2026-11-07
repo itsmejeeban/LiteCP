@@ -53,12 +53,12 @@
       const newer=latestBySource.get(sourceKey(job));
       if(!newer||Date.parse(newer.createdAt)<=Date.parse(job.createdAt))continue;
       if(['failed','interrupted'].includes(job.status)||
-         (newer.status==='restored'&&['captured','review','restore-review','restored-review'].includes(job.status)))replacements.set(job.id,newer);
+         (['restored','restored-review'].includes(newer.status)&&['captured','review','restore-review','restored-review'].includes(job.status)))replacements.set(job.id,newer);
     }
     return replacements;
   }
   let replacedAttempts=new Map();
-  const pendingMigration = job => !replacedAttempts.has(job.id) && !active(job) && !['queued','connected','cancelled','canceled','complete','completed','restored'].includes(job.status);
+  const pendingMigration = job => !replacedAttempts.has(job.id) && !active(job) && !['queued','connected','cancelled','canceled','complete','completed','restored','restored-review'].includes(job.status);
   function migrationJobNotice(job){
     const replacement=replacedAttempts.get(job.id);
     if(replacement)return `<p class="feature-note">Previous attempt. A newer migration is ${esc(replacement.status)}. <button type="button" class="button button-secondary" data-live-open-job="${esc(replacement.id)}">View latest attempt</button></p>`;
@@ -66,8 +66,8 @@
     return '';
   }
   function pendingRetryAction(job){
-    if(!pendingMigration(job)||job.status==='awaiting-overwrite')return null;
     if(job.status==='restored-review')return !job.artifactsCleaned && job.source.platform==='cpanel' && job.cpanelWebsiteId && (job.nativeReady||job.preview) ? 'restore' : null;
+    if(!pendingMigration(job)||job.status==='awaiting-overwrite')return null;
     // A retained archive cannot supply a database that the source failed to export.
     if(job.status==='restore-review'&&job.source.platform==='cpanel'&&job.credentialsRetained&&
        /matching database dump/i.test(job.message||'')&&
@@ -96,7 +96,7 @@
     $('#liveJobsCancelAll').hidden=!allJobs.some(cancellable);
     const retryPending=$('#liveJobsRetryPending');
     retryPending.hidden=section!=='pending';
-    retryPending.disabled=retryPendingBusy||!allJobs.some(job=>pendingRetryAction(job));
+    retryPending.disabled=retryPendingBusy||!allJobs.some(job=>pendingMigration(job)&&pendingRetryAction(job));
     if(!visibleJobs.length&&section==='pending')$('#liveJobs p').textContent='No migrations need review or further action.';
     if(!visibleJobs.length&&section==='completed')$('#liveJobs p').textContent='No completed migration jobs yet.';
     if(!visibleJobs.length&&section==='jobs')$('#liveJobs p').textContent='No queued or running migration jobs.';
