@@ -255,7 +255,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(e)
 			return
 		}
-		a.finishMigrationHealth(ctx, job, existing.Domain)
+		a.finishMigrationHealth(ctx, job, existing.Domain, existing.Root, filepath.Join(root, "files", "private_home"))
 		a.finishSuccessfulMigrationCleanup(job)
 		return
 	}
@@ -696,16 +696,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	}
-	a.finishMigrationHealth(ctx, job, domain)
-	// A truly blank root has no index; Nginx correctly refuses directory listing.
-	if job.Status == "restored-review" && strings.Contains(job.Message, "(status 403)") && blankMigrationWebsite(source, privateSource) {
-		setLiveJobStage(job, "result", "restored", "Blank website and included databases restored. HTTP 403 is expected because the website has no index file; directory listing remains disabled.")
-	}
+	a.finishMigrationHealth(ctx, job, domain, source, privateSource)
 	a.finishSuccessfulMigrationCleanup(job)
 	a.store.AddActivity("Automatic website restore", domain+": "+job.Status, "info")
 }
 
-func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, domain string) {
+func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, domain string, roots ...string) {
 	code, e := retryMigrationHealth(ctx, 2*time.Second, func() (string, error) {
 		return runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
 	})
@@ -714,6 +710,11 @@ func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, 
 		job.Message += " Mail and source cron jobs require separate configuration."
 	}
 	status, parseErr := strconv.Atoi(strings.TrimSpace(code))
+	// A truly blank root has no index; Nginx correctly refuses directory listing.
+	if e == nil && status == 403 && len(roots) > 0 && blankMigrationWebsite(roots...) {
+		setLiveJobStage(job, "result", "restored", "Blank website and included databases restored. HTTP 403 is expected because the website has no index file; directory listing remains disabled.")
+		return
+	}
 	if e != nil || parseErr != nil || status < 200 || status >= 400 {
 		setLiveJobStage(job, "result", "restored-review", "Website restored but its local HTTP health check failed (status "+strings.TrimSpace(code)+"). Review application logs before DNS cutover. Previous files are retained for recovery.")
 	}

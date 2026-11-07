@@ -46,7 +46,11 @@ func (a *App) startPanelUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A fixed transient unit prevents concurrent updates and survives panel restart.
-	_, err := runCommand(r.Context(), 10*time.Second, "systemd-run", "--quiet", "--unit=litecp-panel-update", "--collect", "--property=RuntimeMaxSec=1800", "--property=UMask=0077", "--setenv=GOMAXPROCS=1", "--", "/bin/bash", "-c", panelUpdateScript, "litecp-update", release.Latest, a.system.dataDir)
+	// systemd expands dollar expressions in transient service arguments.
+	// Escape them so Bash receives the script and arguments verbatim.
+	script := strings.ReplaceAll(panelUpdateScript, "$", "$$")
+	dataDir := strings.ReplaceAll(a.system.dataDir, "$", "$$")
+	_, err := runCommand(r.Context(), 10*time.Second, "systemd-run", "--quiet", "--unit=litecp-panel-update", "--collect", "--property=RuntimeMaxSec=1800", "--property=UMask=0077", "--setenv=GOMAXPROCS=1", "--", "/bin/bash", "-c", script, "litecp-update", release.Latest, dataDir)
 	if err != nil {
 		writeError(w, http.StatusConflict, "Could not start the update. Another update may already be running; check its status.")
 		return
