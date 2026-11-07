@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +52,25 @@ func rewriteMigrationDB(content, app string, credentials DBCredentials) (string,
 func (a *App) startAutoMigrationRestores() {
 	if a.system.demo {
 		return
+	}
+	// Restore workers belong to this process. A saved restoring state
+	// at startup has no worker and may contain a partially applied restore.
+	entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("Cannot inspect migration jobs at startup: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		job, err := a.loadLiveJob(entry.Name())
+		if err != nil || job.Status != "restoring" {
+			continue
+		}
+		setLiveJobStage(&job, "restore", "restore-review", "The panel restarted during restore. Review the destination and retained recovery data before retrying. Some changes may already have been applied.")
+		if err := a.saveLiveJob(&job); err != nil {
+			log.Printf("Cannot record interrupted restore %s: %v", job.ID, err)
+		}
 	}
 	go func() {
 		timer := time.NewTicker(10 * time.Second)
