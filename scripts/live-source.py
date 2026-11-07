@@ -142,15 +142,32 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
         return
     binary = shutil.which('mysqldump') or shutil.which('mariadb-dump')
     added = 0
+    failures = set()
     for database in sorted(missing):
         if not binary or not re.fullmatch(r'[A-Za-z0-9_$][A-Za-z0-9_$-]{0,63}', database):
             continue
         try:
-            with tempfile.TemporaryFile(dir=root) as dump:
-                process = subprocess.run([binary, '--protocol=socket', '--user=root',
+            with tempfile.TemporaryFile(dir=root) as dump, tempfile.TemporaryFile(dir=root) as errors:
+                # Honor the source administrator's MySQL client defaults,
+                # including the configured socket or remote database host.
+                process = subprocess.run([binary, '--no-tablespaces',
                                           '--single-transaction', '--quick', '--routines', '--triggers',
-                                          '--', database], stdout=dump, stderr=log, timeout=3600)
+                                          '--', database], stdout=dump, stderr=errors, timeout=3600)
                 if process.returncode or not dump.tell():
+                    errors.seek(0)
+                    diagnostic = errors.read(8192).decode('utf-8', errors='replace')
+                    if log is not None:
+                        log.write(diagnostic)
+                        log.flush()
+                    lower = diagnostic.lower()
+                    for marker, reason in (
+                        ('access denied', 'database authentication or permission denied'),
+                        ('unknown database', 'database no longer exists'),
+                        ("can't connect", 'cannot connect to source MySQL'),
+                        ('no space left', 'source storage exhausted'),
+                    ):
+                        if marker in lower:
+                            failures.add(reason)
                     continue
                 entry = tarfile.TarInfo('mysql/' + database + '.sql')
                 entry.size = dump.tell()
@@ -164,6 +181,8 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
         warnings.append(str(added) + ' missing account database dump(s) exported directly from source MySQL.')
     if added < len(missing):
         warnings.append('Some account databases could not be exported. Check the source export log before restoring.')
+        if failures:
+            warnings.append('Source database export reported: ' + '; '.join(sorted(failures)) + '.')
 
 def plesk_backup_subscription(binary, account):
     # Plesk native backups are subscription-scoped, not individual subdomains.
