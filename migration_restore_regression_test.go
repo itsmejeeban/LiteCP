@@ -35,6 +35,39 @@ func TestMigrationConfigCRLFAndScopedPHP(t *testing.T) {
 	}
 }
 
+func TestMigrationDotenvLiteralDollarAndDynamicReference(t *testing.T) {
+	base := "DB_DATABASE=account_db\nDB_USERNAME=account_user\nDB_HOST=localhost\nDB_PASSWORD="
+	for _, value := range []string{`"literal$part"`, `'literal${part}'`} {
+		plan, err := inspectMigrationConfig(base+value+"\n", "env")
+		if err != nil || plan.Database != "account_db" || plan.Fields["password"] == nil {
+			t.Fatalf("literal dotenv password rejected: %v", err)
+		}
+	}
+	for _, value := range []string{`"${SECRET}"`, `${SECRET}`} {
+		if _, err := inspectMigrationConfig(base+value+"\n", "env"); err == nil {
+			t.Fatal("dynamic dotenv password accepted")
+		}
+	}
+}
+
+func TestMigrationIgnoresSampleEnvForFileBasedSite(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{".env.example", ".env.sample"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("DB_DATABASE=sample\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !migrationHasNoDatabaseReferences(root) {
+		t.Fatal("sample configuration blocked a file-based site")
+	}
+	if err := os.WriteFile(filepath.Join(root, ".env.local"), []byte("DB_DATABASE=active\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if migrationHasNoDatabaseReferences(root) {
+		t.Fatal("active environment configuration was ignored")
+	}
+}
+
 func TestMigrationRepeatedDirectoriesAndDuplicateFiles(t *testing.T) {
 	for _, duplicateFile := range []bool{false, true} {
 		dir := t.TempDir()

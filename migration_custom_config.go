@@ -122,12 +122,16 @@ func inspectMigrationConfig(content, kind string) (migrationConfigPlan, error) {
 			}
 		}
 		value := strings.TrimSpace(content[start:end])
+		quote := byte(0)
 		if len(value) >= 2 && (value[0] == '\'' || value[0] == '"') {
-			quote := value[0]
+			quote = value[0]
 			value = value[1 : len(value)-1]
-			if quote == '"' && strings.Contains(value, "$") {
-				return result, fmt.Errorf("dynamic database configuration requires manual mapping")
-			}
+		}
+		// PHP dotenv interpolates ${...} references, while PHP double-quoted
+		// string literals can also interpolate a bare $variable.
+		if (kind == "env" && quote != '\'' && strings.Contains(value, "${")) ||
+			(kind == "php" && quote == '"' && strings.Contains(value, "$")) {
+			return result, fmt.Errorf("dynamic database configuration requires manual mapping")
 		}
 		if _, exists := result.Fields[field]; exists {
 			return result, fmt.Errorf("multiple database connection values require explicit mapping")

@@ -117,6 +117,10 @@ func migrationHasNoDatabaseReferences(roots ...string) bool {
 			if !strings.HasSuffix(name, ".php") && !strings.HasPrefix(name, ".env") && !strings.HasSuffix(name, ".ini") {
 				return nil
 			}
+			// A sample file does not configure a database for a deployed site.
+			if name == ".env.example" || name == ".env.sample" {
+				return nil
+			}
 			info, err := entry.Info()
 			if err != nil {
 				return err
