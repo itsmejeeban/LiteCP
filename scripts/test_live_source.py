@@ -19,8 +19,12 @@ class LiveSourceTests(unittest.TestCase):
             {'database': '../unsafe'},
         ]}}
 
-        def dump(args, stdout, **kwargs):
-            self.assertEqual(args[-2:], ['--', 'site_wordpress'])
+        def dump(args, stdout, stderr, **kwargs):
+            self.assertEqual(args[-1], 'site_wordpress')
+            if '--no-tablespaces' in args:
+                stdout.write(b'incomplete dump')
+                stderr.write(b"unknown option '--no-tablespaces'")
+                return types.SimpleNamespace(returncode=2)
             stdout.write(b'CREATE TABLE fixture(id INT);')
             return types.SimpleNamespace(returncode=0)
 
@@ -28,10 +32,11 @@ class LiveSourceTests(unittest.TestCase):
         buffer = io.BytesIO()
         with patch.object(source, 'command', return_value=json.dumps(inventory)), \
                 patch.object(source.shutil, 'which', return_value='/usr/bin/mysqldump'), \
-                patch.object(source.subprocess, 'run', side_effect=dump), \
+                patch.object(source.subprocess, 'run', side_effect=dump) as run, \
                 patch.object(source.tempfile, 'TemporaryFile', side_effect=lambda **kwargs: io.BytesIO()):
             with tarfile.open(fileobj=buffer, mode='w') as target:
                 source.supplement_cpanel_databases(target, {'already_exported'}, 'site', None, None, warnings)
+        self.assertEqual(run.call_count, 2)
         buffer.seek(0)
         with tarfile.open(fileobj=buffer) as archive:
             self.assertEqual(archive.getnames(), ['mysql/site_wordpress.sql'])

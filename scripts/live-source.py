@@ -144,27 +144,42 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
     added = 0
     failures = set()
     for database in sorted(missing):
-        if not binary or not re.fullmatch(r'[A-Za-z0-9_$][A-Za-z0-9_$-]{0,63}', database):
+        if not binary:
+            failures.add('mysqldump and mariadb-dump are unavailable')
+            break
+        if not re.fullmatch(r'[A-Za-z0-9_$][A-Za-z0-9_$-]{0,63}', database):
+            failures.add('unsupported database name')
             continue
         try:
             with tempfile.TemporaryFile(dir=root) as dump, tempfile.TemporaryFile(dir=root) as errors:
                 # Honor the source administrator's MySQL client defaults,
                 # including the configured socket or remote database host.
-                process = subprocess.run([binary, '--no-tablespaces',
-                                          '--single-transaction', '--quick', '--routines', '--triggers',
-                                          '--', database], stdout=dump, stderr=errors, timeout=3600)
-                if process.returncode or not dump.tell():
+                args = [binary, '--single-transaction', '--quick', '--routines', '--triggers', database]
+                for options in (['--no-tablespaces'], []):
+                    for stream in (dump, errors):
+                        stream.seek(0)
+                        stream.truncate()
+                    process = subprocess.run(args[:1] + options + args[1:], stdout=dump,
+                                             stderr=errors, timeout=3600)
                     errors.seek(0)
                     diagnostic = errors.read(8192).decode('utf-8', errors='replace')
+                    lower = diagnostic.lower()
+                    if not (options and process.returncode and 'no-tablespaces' in lower
+                            and ('unknown option' in lower or 'unknown variable' in lower)):
+                        break
+                if process.returncode or not dump.tell():
                     if log is not None:
                         log.write(diagnostic)
                         log.flush()
-                    lower = diagnostic.lower()
+                    failures.add('dump client exit status ' + str(process.returncode) if process.returncode
+                                 else 'dump client produced no SQL')
                     for marker, reason in (
                         ('access denied', 'database authentication or permission denied'),
                         ('unknown database', 'database no longer exists'),
                         ("can't connect", 'cannot connect to source MySQL'),
                         ('no space left', 'source storage exhausted'),
+                        ('unknown option', 'dump client rejected an option'),
+                        ('unknown variable', 'dump client rejected a setting'),
                     ):
                         if marker in lower:
                             failures.add(reason)
@@ -176,7 +191,9 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
                 target.addfile(entry, dump)
                 added += 1
         except subprocess.TimeoutExpired:
-            continue
+            failures.add('database dump timed out')
+        except OSError as error:
+            failures.add('source dump I/O error ' + str(error.errno))
     if added:
         warnings.append(str(added) + ' missing account database dump(s) exported directly from source MySQL.')
     if added < len(missing):

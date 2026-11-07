@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "5.0.19"
+var version = "5.0.20"
 var buildRevision = ""
 
 //go:embed web/*
