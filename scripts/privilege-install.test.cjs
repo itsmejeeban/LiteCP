@@ -24,6 +24,12 @@ test('broker socket admits only root and the dedicated service group',()=>{
  assert.match(unit,/ExecStart=\/usr\/local\/bin\/litecp broker/);
  assert.doesNotMatch(unit,/LITECP_BIND/);
 });
+test('fresh install prepares DNS storage before the broker can start',()=>{
+ const installer=read('scripts/install-privilege-services.sh');
+ const preparation=installer.indexOf('install -d -m 0755 -o root -g root /etc/litecp/dns');
+ assert.ok(preparation>=0 && preparation<installer.indexOf('[[ $prepare_only == 0 ]] || exit 0'));
+ assert.match(read('deploy/litecp-broker.service'),/^ReadWritePaths=\/etc\/litecp\/dns\r?$/m);
+});
 test('all installation and update entry points install the split and preserve rollback',()=>{
  for(const path of ['scripts/install.sh','scripts/deploy-published-update.sh','scripts/update-panel.sh'])assert.ok(read(path).includes('scripts/install-privilege-services.sh'),path);
  for(const path of ['scripts/deploy-published-update.sh','scripts/update-panel.sh'])assert.ok(read(path).includes('--restore "$work/service-recovery"'),path);

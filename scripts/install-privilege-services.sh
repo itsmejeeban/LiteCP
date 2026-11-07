@@ -25,6 +25,15 @@ fi
 [[ $(id -Gn litecp-web) == litecp-web ]] || { echo 'Remove supplementary groups from litecp-web before installing; no administrator/container groups are permitted.' >&2; exit 1; }
 [[ $(getent passwd litecp-web | cut -d: -f6-7) == /nonexistent:/usr/sbin/nologin ]] || { echo 'The dedicated web account must have /nonexistent as its home and /usr/sbin/nologin as its shell.' >&2; exit 1; }
 install -d -m 0755 /etc/litecp
+# systemd applies optional writable paths when the broker starts. Reserve
+# the DNS directory now, even when BIND is installed later.
+if [[ -L /etc/litecp/dns || ( -e /etc/litecp/dns && ! -d /etc/litecp/dns ) ]]; then
+  echo 'LiteCP DNS storage must be a real directory.' >&2
+  exit 1
+fi
+if [[ ! -d /etc/litecp/dns ]]; then
+  install -d -m 0755 -o root -g root /etc/litecp/dns
+fi
 if ! id litecp-captcha >/dev/null 2>&1; then
   useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin litecp-captcha
 fi

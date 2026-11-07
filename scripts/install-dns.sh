@@ -150,4 +150,4 @@ elif command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then
 fi
 touch /etc/litecp/dns/enabled
 echo 'LiteCP DNS is running. Allow TCP/UDP 53 in any provider firewall. Save zones in Website Tools > DNS.'
-echo 'On an existing installation, restart LiteCP once to apply its DNS directory sandbox allowance.'
+echo 'If the LiteCP broker started before the DNS directory existed, restart litecp-broker.service to apply its sandbox allowance.'
