@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="5.0.20"
+LITECP_VERSION="5.0.21"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -200,7 +200,7 @@ if [[ "$FRESH_INSTALL" == 1 ]]; then
   bash /usr/local/lib/litecp/prepare-website-quotas.sh --prepare-fresh || {
     quota_result=$?
     [[ "$quota_result" == 2 ]] || fail "Website quota storage preparation failed; existing files were retained."
-    info "Existing filesystem requires quota maintenance. Disk enforcement is unavailable."
+    info "Project quotas could not be verified. Installation will continue. Disk enforcement requires quota maintenance."
   }
 else
   bash /usr/local/lib/litecp/prepare-website-quotas.sh --check || {

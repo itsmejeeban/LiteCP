@@ -77,9 +77,12 @@ quota_prepare_fresh() {
   printf '\n# LiteCP dedicated website storage; preserve this mount before starting websites.\n%s\n' "$entry" >> /etc/fstab
   systemctl daemon-reload
   mount "$website_home" || { quota_die "Mount failed. Image and fstab backup retained: $backup"; return 1; }
+  mountpoint -q "$website_home" || { quota_die "Website storage mount is missing. Image and fstab backup retained: $backup"; return 1; }
   chmod 0755 "$website_home"
-  quota_verify "$website_home" || { quota_die 'Mounted storage failed project-quota verification; installation stopped.'; return 1; }
-  quota_info "Dedicated storage ready. fstab backup: $backup"
+  # Website hosting does not require project quotas. A successfully mounted
+  # filesystem with unverified quotas uses the same degraded mode as an
+  # existing filesystem. Allocation, formatting and mount errors stay fatal.
+  quota_info "Dedicated storage mounted. fstab backup: $backup"
   quota_check "$website_home"
 }
 
