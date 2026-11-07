@@ -46,6 +46,7 @@ snapshot_helper_switched=1
 install -m 0700 "$work/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 cmp "$work/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 install -m 0700 "$work/scripts/configure-private-updates.sh" /usr/local/lib/litecp/configure-private-updates.sh
+install -m 0700 "$work/scripts/panel-rollback.sh" /usr/local/lib/litecp/panel-rollback.sh
 bash "$work/scripts/repair-waf-labels.sh"
 python3 "$work/scripts/repair-dns-runtime.py"
 bash "$work/scripts/repair-php73-selinux.sh"

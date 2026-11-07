@@ -140,6 +140,7 @@ type Admin struct {
 }
 
 type Config struct {
+	Operators          []PanelOperator     `json:"operators,omitempty"`
 	APIRules           []APIRule           `json:"apiRules,omitempty"`
 	APICredentials     []APICredential     `json:"apiCredentials,omitempty"`
 	BackupSchedules    []BackupSchedule    `json:"backupSchedules,omitempty"`
@@ -158,6 +159,7 @@ type Config struct {
 }
 
 type PublicState struct {
+	AccessRole         string              `json:"accessRole,omitempty"`
 	Version            string              `json:"version"`
 	Username           string              `json:"username"`
 	Settings           Settings            `json:"settings"`

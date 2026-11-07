@@ -126,6 +126,8 @@
   "/api/website-cron",
   "/api/website-cron/run",
   "/api/website-ftp",
+  "/api/operations",
+  "/api/operators",
   "/internal/phpmyadmin-ticket",
   "/internal/webmail-ticket"
 ]

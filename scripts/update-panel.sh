@@ -20,6 +20,7 @@ failed() {
     systemctl stop litecp-broker.service litecp-broker.socket || true
     if [[ -d "$work/service-recovery" ]]; then bash "$work/source/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
     cp --preserve=mode "$work/previous-litecp" /usr/local/bin/litecp
+    if [[ -f "$work/previous-system-snapshot.py" ]]; then install -m 0700 "$work/previous-system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py; fi
     systemctl try-restart litecp-captcha.service || true
     systemctl start litecp || true
   fi
@@ -28,7 +29,10 @@ failed() {
 }
 trap failed ERR
 status running "Downloading the official LiteCP release."
-for tool in curl python3 go systemctl; do command -v "$tool" >/dev/null; done
+for tool in curl python3 go systemctl flock; do command -v "$tool" >/dev/null; done
+exec 9>/run/lock/litecp-panel-update.lock
+flock -n 9
+[[ $(df -Pk /usr/local | awk 'NR==2 {print $4}') -ge 1048576 ]] || { echo 'At least 1 GiB free storage is required for a safe update.' >&2; false; }
 install -d -m 0700 /usr/local/lib/litecp-updates
 work="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
 # Transient system services need not have HOME or GOPATH. Keep build caches
@@ -91,6 +95,23 @@ PY
 )"
 CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=${tag#v} -X main.buildRevision=${BUILD_REVISION}" -o "$work/next-litecp" .
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
+if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then cp -p /usr/local/lib/litecp/system-snapshot.py "$work/previous-system-snapshot.py"; fi
+python3 - "$work" <<'PY'
+import hashlib,ipaddress,json,pathlib,urllib.request,datetime,sys
+root=pathlib.Path(sys.argv[1])
+bind='127.0.0.1:9090'
+env=pathlib.Path('/etc/litecp/frontend.env')
+if env.exists():
+    for line in env.read_text().splitlines():
+        if line.startswith('LITECP_BIND='): bind=line.split('=',1)[1].strip().strip('"\x27')
+host,port=bind.rsplit(':',1)
+if not ipaddress.ip_address(host.strip('[]')).is_loopback or not port.isdecimal() or not 1<=int(port)<=65535:
+    raise ValueError('Invalid panel health-check endpoint')
+current=json.load(urllib.request.urlopen('http://'+bind+'/api/version',timeout=3))
+current['healthBind']=bind
+current['sha256']=hashlib.sha256((root/'previous-litecp').read_bytes()).hexdigest();current['savedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+(root/'recovery-manifest.json').write_text(json.dumps(current))
+PY
 status running "Restarting LiteCP and checking the new version."
 bash "$work/source/scripts/install-privilege-services.sh" --prepare-only
 systemctl stop litecp
@@ -102,6 +123,7 @@ systemctl try-restart litecp-captcha.service
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "$work/source/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 install -m 0700 "$work/source/scripts/configure-private-updates.sh" /usr/local/lib/litecp/configure-private-updates.sh
+install -m 0700 "$work/source/scripts/panel-rollback.sh" /usr/local/lib/litecp/panel-rollback.sh
 bash "$work/source/scripts/repair-waf-labels.sh"
 python3 "$work/source/scripts/repair-dns-runtime.py"
 bash "$work/source/scripts/repair-php73-selinux.sh"

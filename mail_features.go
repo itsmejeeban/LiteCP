@@ -223,6 +223,17 @@ func (a *App) mailDNS(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "Configure a public mail hostname such as mail.example.com with matching DNS and TLS first. The current server hostname is not a valid public mail server; DNS records and client settings were not generated.")
 		return
 	}
+	records, dkim := a.mailDNSRecords(host, domain)
+	if r.URL.Query().Get("verify") == "true" {
+		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
+		writeJSON(w, 200, map[string]any{"checks": verifyMailDNS(ctx, records, net.DefaultResolver), "checkedAt": time.Now().UTC(), "note": "Checked using this server's DNS resolver. Recent DNS changes may still be propagating."})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"records": records, "dkimReady": dkim != "" && (a.system.demo || unitFileExists("opendkim")), "hostname": host, "webmailUrl": a.system.WebmailURL(), "note": "Merge SPF with any other senders; do not publish two SPF records. Create postmaster before enabling DMARC reports. Set the IP's PTR/reverse DNS to the mail hostname with your VPS provider. Use trusted TLS and verify forward/reverse DNS, reputation and outbound TCP 25. Start DMARC in monitoring mode; move to quarantine/reject after checking reports. Inbox delivery is not guaranteed."})
+}
+
+func (a *App) mailDNSRecords(host, domain string) ([]DNSRecord, string) {
 	records := []DNSRecord{
 		{Type: "A", Name: host, Value: primaryIP()},
 		{Type: "MX", Name: domain, Value: "10 " + host + "."},
@@ -243,11 +254,5 @@ func (a *App) mailDNS(w http.ResponseWriter, r *http.Request) {
 	if dkim != "" {
 		records = append(records, DNSRecord{Type: "TXT", Name: "default._domainkey." + domain, Value: dkim})
 	}
-	if r.URL.Query().Get("verify") == "true" {
-		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-		defer cancel()
-		writeJSON(w, 200, map[string]any{"checks": verifyMailDNS(ctx, records, net.DefaultResolver), "checkedAt": time.Now().UTC(), "note": "Checked using this server's DNS resolver. Recent DNS changes may still be propagating."})
-		return
-	}
-	writeJSON(w, 200, map[string]any{"records": records, "dkimReady": dkim != "" && (a.system.demo || unitFileExists("opendkim")), "hostname": host, "webmailUrl": a.system.WebmailURL(), "note": "Merge SPF with any other senders; do not publish two SPF records. Create postmaster before enabling DMARC reports. Set the IP's PTR/reverse DNS to the mail hostname with your VPS provider. Use trusted TLS and verify forward/reverse DNS, reputation and outbound TCP 25. Start DMARC in monitoring mode; move to quarantine/reject after checking reports. Inbox delivery is not guaranteed."})
+	return records, dkim
 }

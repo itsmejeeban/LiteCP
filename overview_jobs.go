@@ -11,12 +11,14 @@ import (
 )
 
 type overviewJob struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Message string `json:"message"`
-	Stage   string `json:"stage"`
-	Percent *int64 `json:"percent,omitempty"`
-	Route   string `json:"route"`
+	StartedAt      time.Time `json:"startedAt,omitempty"`
+	ElapsedSeconds int64     `json:"elapsedSeconds,omitempty"`
+	ID             string    `json:"id"`
+	Title          string    `json:"title"`
+	Message        string    `json:"message"`
+	Stage          string    `json:"stage"`
+	Percent        *int64    `json:"percent,omitempty"`
+	Route          string    `json:"route"`
 }
 
 func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +27,7 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 	state := a.store.PublicState()
 	for _, b := range state.Backups {
 		if backupInProgress(b.Status) {
-			items = append(items, overviewJob{ID: "backup-" + b.ID, Title: "Website backup: " + b.Domain, Stage: b.Status, Route: "backups/history"})
+			items = append(items, overviewJob{ID: "backup-" + b.ID, Title: "Website backup: " + b.Domain, Stage: b.Status, Route: "backups/history", StartedAt: b.CreatedAt})
 		}
 	}
 	// Only in-process manual backup workers are live; stale job files are excluded.
@@ -47,7 +49,7 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 		if site := a.store.SiteByID(job.SiteID); site != nil {
 			domain = site.Domain
 		}
-		items = append(items, overviewJob{ID: "zip-" + job.ID, Title: "Website backup: " + domain, Message: job.Message, Stage: job.Status, Route: "website-backups"})
+		items = append(items, overviewJob{ID: "zip-" + job.ID, Title: "Website backup: " + domain, Message: job.Message, Stage: job.Status, Route: "website-backups", StartedAt: job.StartedAt})
 	}
 	entries, _ := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
 	for _, entry := range entries {
@@ -71,7 +73,7 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		a.attachMigrationProgress(&job)
-		item := overviewJob{ID: "migration-" + job.ID, Title: title, Message: job.Message, Stage: job.Stage, Route: route}
+		item := overviewJob{ID: "migration-" + job.ID, Title: title, Message: job.Message, Stage: job.Stage, Route: route, StartedAt: job.CreatedAt}
 		if job.Stage == "transfer" && job.Progress != nil {
 			value := job.Progress.Percent
 			if value < 0 {
@@ -117,6 +119,38 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal(data, &status)
 		if status.State == "complete" {
 			items = append(items, overviewJob{ID: "snapshot-upload", Title: "System snapshot upload", Stage: "uploading", Message: cfg.UploadStatus, Route: "backups/system-snapshot"})
+		}
+	}
+	for _, source := range []struct{ file, unit, title, route string }{{filepath.Join(a.system.dataDir, "panel-update.json"), "litecp-panel-update.service", "Panel update", "settings/update"}, {filepath.Join(a.system.dataDir, "server-scan", "status.json"), "litecp-server-malware-scan.service", "Malware scan", "security"}} {
+		var job struct {
+			State, Message string
+			StartedAt      time.Time
+		}
+		b, e := os.ReadFile(source.file)
+		if e != nil || json.Unmarshal(b, &job) != nil || job.State != "running" {
+			continue
+		}
+		out, e := runCommand(r.Context(), 2*time.Second, "systemctl", "is-active", source.unit)
+		if e == nil && strings.TrimSpace(out) == "active" {
+			items = append(items, overviewJob{ID: source.unit, Title: source.title, Message: job.Message, Stage: job.State, Route: source.route, StartedAt: job.StartedAt})
+		}
+	}
+	operationsMu.Lock()
+	policy, readErr := a.readOperations()
+	operationsMu.Unlock()
+	if readErr == nil {
+		for id, v := range policy.Verification {
+			if v.Status == "running" && time.Since(v.CheckedAt) < 31*time.Minute {
+				items = append(items, overviewJob{ID: "verify-" + id, Title: "Backup verification", Message: "Read-only archive integrity check", Stage: "verifying", Route: "operations", StartedAt: v.CheckedAt})
+			}
+		}
+	}
+	for i := range items {
+		if !items[i].StartedAt.IsZero() {
+			items[i].ElapsedSeconds = int64(time.Since(items[i].StartedAt).Seconds())
+			if items[i].ElapsedSeconds < 0 {
+				items[i].ElapsedSeconds = 0
+			}
 		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })

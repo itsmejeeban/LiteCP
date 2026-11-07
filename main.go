@@ -30,14 +30,16 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "5.0.7"
+var version = "5.0.8"
 var buildRevision = ""
 
 //go:embed web/*
 var webAssets embed.FS
 
 type session struct {
-	Expires time.Time
+	Expires          time.Time
+	OperatorID       string
+	OperatorRevision string
 }
 
 type loginAttempt struct {
@@ -294,6 +296,7 @@ func main() {
 	app.startCloudflareFirewallUpdates()
 	app.startAutoMigrationRestores()
 	app.startIntegrityMonitor()
+	app.startOperationsMonitor()
 	if len(os.Args) == 2 && os.Args[1] == "broker" {
 		if err := runPrivilegeBroker(app); err != nil {
 			log.Fatal(err)
@@ -339,6 +342,8 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))
+	mux.HandleFunc("/api/operations", a.withAuth(a.operationsAPI))
+	mux.HandleFunc("/api/operators", a.withAuth(a.operatorsAPI))
 	mux.HandleFunc("/api/activity-policy", a.withAuth(a.activityPolicy))
 	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))
 	mux.HandleFunc("/api/php/extensions", a.withAuth(a.phpExtensions))
@@ -535,11 +540,12 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		// Set only by the external API dispatcher after credential, permission,
 		// expiry, IP and rate checks. It is bound to this exact route and method.
 		if validExternalAPIGrant(r) {
-			next(w, r)
+			a.auditOperation(w, r, next)
 			return
 		}
 		cookie, err := r.Cookie("litecp_session")
-		if (err != nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
+		operator, limited := a.operatorSession(r)
+		if limited && operator == nil || !limited && (err != nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
 			writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")
 			return
 		}
@@ -547,16 +553,23 @@ func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "Request origin was rejected.")
 			return
 		}
+		if limited && !operatorRouteAllowed(operator.Role, r.Method, r.URL.Path) {
+			writeError(w, 403, "Your limited administrator role does not permit this operation.")
+			return
+		}
 		// Serialize state-changing operations so file, service and config writes cannot race.
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/api/logout" && r.URL.Path != "/api/live-migrations/cancel" && r.URL.Path != "/api/terminal/session" && r.URL.Path != "/api/files/upload-url" {
 			a.mutationMu.Lock()
 			defer a.mutationMu.Unlock()
-			if (cookie == nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
+			if limited && !a.validSession(cookie.Value) || !limited && (cookie == nil || !a.validSession(cookie.Value)) && !a.trustedRequest(r) {
 				writeError(w, http.StatusUnauthorized, "Your session has expired. Please sign in again.")
 				return
 			}
 		}
-		next(w, r)
+		if limited {
+			r = r.WithContext(context.WithValue(r.Context(), operatorContextKey{}, operator))
+		}
+		a.auditOperation(w, r, next)
 	}
 }
 
@@ -586,17 +599,30 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "Too many sign-in attempts. Try again in 15 minutes.")
 		return
 	}
-	if !a.store.CheckPassword(input.Username, input.Password) {
+	var operator *PanelOperator
+	input.Username = strings.TrimSpace(input.Username)
+	owner := input.Username == a.store.Username()
+	credentialsOK := false
+	if owner {
+		credentialsOK = a.store.CheckPassword(input.Username, input.Password)
+	} else {
+		operator, credentialsOK = a.authenticateOperator(input.Username, input.Password, input.Code)
+	}
+	if !credentialsOK {
+		if operator != nil && strings.TrimSpace(input.Code) == "" {
+			writeJSON(w, 401, map[string]any{"error": "Enter this operator's authenticator code.", "twoFactorRequired": true})
+			return
+		}
 		a.authenticationEvent("failed", r)
 		time.Sleep(350 * time.Millisecond)
 		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
 		return
 	}
-	if a.store.twoFactor().Enabled && strings.TrimSpace(input.Code) == "" {
+	if owner && a.store.twoFactor().Enabled && strings.TrimSpace(input.Code) == "" {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "Enter your authenticator or recovery code to finish signing in.", "twoFactorRequired": true})
 		return
 	}
-	if a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
+	if owner && a.store.twoFactor().Enabled && a.verifySecondFactor(input.Code, true) != nil {
 		a.authenticationEvent("failed", r)
 		writeError(w, http.StatusUnauthorized, "The sign-in credentials or authentication code are incorrect.")
 		return
@@ -610,14 +636,24 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 	}
 	expires := time.Now().Add(12 * time.Hour)
 	a.rememberSession(token, expires)
+	if operator != nil {
+		a.mu.Lock()
+		a.sessions[token] = session{Expires: expires, OperatorID: operator.ID, OperatorRevision: operator.Revision}
+		a.mu.Unlock()
+	}
+	if operator != nil {
+		a.forgetBrowser(w, r)
+	}
 	secure := requestIsHTTPS(r)
 	http.SetCookie(w, &http.Cookie{Name: "litecp_session", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	http.SetCookie(w, &http.Cookie{
 		Name: "litecp_session", Value: token, Path: "/api/", Expires: expires,
 		HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode,
 	})
-	if _, trustErr := a.trustAuthenticatedBrowser(w, r); trustErr != nil {
-		_ = a.store.AddActivity("Browser trust unavailable", "Signed in normally, but browser trust could not be persisted. Save Developer mode settings to retry.", "warning")
+	if owner {
+		if _, trustErr := a.trustAuthenticatedBrowser(w, r); trustErr != nil {
+			_ = a.store.AddActivity("Browser trust unavailable", "Signed in normally, but browser trust could not be persisted. Save Developer mode settings to retry.", "warning")
+		}
 	}
 	_ = a.store.AddActivity("Signed in", "Administrator session started", "success")
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -643,11 +679,28 @@ func (a *App) validSession(token string) bool {
 	}
 	now := time.Now()
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	current, ok := a.sessions[token]
 	if !ok || now.After(current.Expires) {
 		delete(a.sessions, token)
+		a.mu.Unlock()
 		return false
+	}
+	a.mu.Unlock()
+	if current.OperatorID != "" {
+		a.store.mu.RLock()
+		valid := false
+		for _, op := range a.store.cfg.Operators {
+			if op.ID == current.OperatorID && op.Enabled && op.Revision == current.OperatorRevision {
+				valid = true
+			}
+		}
+		a.store.mu.RUnlock()
+		if !valid {
+			a.mu.Lock()
+			delete(a.sessions, token)
+			a.mu.Unlock()
+			return false
+		}
 	}
 	return true
 }
@@ -740,6 +793,9 @@ func (a *App) state(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	state.Version = version
+	if op := a.requestOperator(r); op != nil {
+		redactOperatorState(&state, *op)
+	}
 	writeJSON(w, http.StatusOK, state)
 }
 
@@ -1221,31 +1277,30 @@ func (a *App) updateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Could not save panel settings.")
 		return
 	}
-	if err := a.pruneExpiredBackups(); err != nil {
-		writeError(w, http.StatusInternalServerError, "Settings were saved, but expired backups could not be pruned: "+err.Error())
-		return
-	}
 	a.store.AddActivity("Settings saved", "Panel preferences were updated", "success")
 	writeJSON(w, http.StatusOK, settings)
 }
 
-func (a *App) pruneExpiredBackups() error {
-	retention := a.store.Settings().BackupRetention
-	if retention < 1 {
-		return nil
+func (a *App) operationsRetentionReview(policy operationsState) map[string]bool {
+	review := map[string]bool{}
+	if a.system.demo || !policy.Settings.RetentionEnabled {
+		return review
 	}
-	expired := a.store.ExpiredBackups(time.Now().UTC().Add(-time.Duration(retention) * 24 * time.Hour))
-	removed := map[string]bool{}
-	for _, backup := range expired {
-		if a.store.SiteByID(backup.SiteID) == nil {
+	var available []Backup
+	for _, backup := range a.store.PublicState().Backups {
+		verified := policy.Verification["history:"+backup.ID]
+		if verified.Status != "verified" || a.store.SiteByID(backup.SiteID) == nil || !availableHistoryLocal(backup) {
 			continue
 		}
-		if err := a.system.RemoveBackupFile(backup.Path); err != nil {
-			return err
+		info, err := os.Lstat(backup.Path)
+		if err == nil && info.Size() == verified.Size && info.ModTime().Equal(verified.ModifiedAt) {
+			available = append(available, backup)
 		}
-		removed[backup.ID] = true
 	}
-	return a.store.RemoveBackups(removed)
+	for _, backup := range retentionCandidates(available, policy, time.Now().UTC()) {
+		review["history:"+backup.ID] = true
+	}
+	return review
 }
 
 func (a *App) changePassword(w http.ResponseWriter, r *http.Request) {

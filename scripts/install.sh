@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="5.0.7"
+LITECP_VERSION="5.0.8"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -190,6 +190,7 @@ install -d -m 0700 /var/lib/litecp /var/backups/litecp
 install -d -m 0755 /usr/local/lib/litecp
 install -m 0700 "${SOURCE_DIR}/scripts/system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py
 install -m 0700 "${SOURCE_DIR}/scripts/configure-private-updates.sh" /usr/local/lib/litecp/configure-private-updates.sh
+install -m 0700 "${SOURCE_DIR}/scripts/panel-rollback.sh" /usr/local/lib/litecp/panel-rollback.sh
 bash "${SOURCE_DIR}/scripts/repair-php73-selinux.sh"
 install -d -m 0755 /var/www/litecp
 install -d -m 0755 /home/litecp

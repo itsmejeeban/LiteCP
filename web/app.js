@@ -363,6 +363,16 @@
 
   function renderAll() {
     if (!currentState) return;
+    const role = currentState.accessRole;
+    const navigation = document.querySelector(".nav");
+    if (navigation) {
+      navigation.querySelectorAll('a[href^="#"]').forEach(link => {
+        link.classList.toggle("operator-hidden", Boolean(role) && !operatorPageAllowed(role, link.hash.slice(1)));
+      });
+      navigation.querySelectorAll(".sidebar-feature-group").forEach(group => {
+        group.classList.toggle("operator-hidden", Boolean(role) && !group.querySelector('a[href^="#"]:not(.operator-hidden)'));
+      });
+    }
     const { system, username, settings, version } = currentState;
     const displayName = titleCase(username);
     $("#topOS").textContent = system.os;
@@ -606,7 +616,19 @@
     }
   }
 
+  function operatorPageAllowed(role, page) {
+    if (!role || ["dashboard", "documentation"].includes(page)) return true;
+    const pages = {
+      viewer: ["analytics"],
+      websites: ["websites", "website-cron", "website-ssl", "website-dns", "website-redis", "website-traffic", "php-settings"],
+      email: ["email", "email/domains", "email/add-domain", "email/mailboxes", "email/create-mailbox", "email/aliases", "email/create-alias", "email/forward", "email/delivery"],
+      backups: ["backups", "backups/create", "backups/history"]
+    };
+    return (pages[role] || []).includes(page);
+  }
+
   function navigate(page, updateHash = true) {
+    if (!operatorPageAllowed(currentState?.accessRole, page)) page = "dashboard";
     const databaseRoute = String(page).startsWith("databases/") ? String(page) : "";
     if (databaseRoute) page = "databases";
     if (page === "databases") { databaseSiteID = databaseRoute ? databaseRoute.slice(10) : ""; renderDatabases(); }
@@ -629,7 +651,7 @@
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
     const allowed = ["dashboard", "websites", "file-manager", "files", "databases", "email", "services", "backups", "firewall", "logs", "terminal", "settings", "migrations", "extensions", "security", "waf", "server-waf", "website-waf", "website-backups", "website-cron", "website-ftp", "website-ssl", "website-resource-limits", "website-traffic", "website-dns", "website-redis", "php-settings", "website-node", "website-python", "website-ruby", "security-dashboard", "self-hosted-captcha", "file-integrity", "brute-force", "two-factor", "analytics", "disk-usage", "live-process", "activities", "api-access", "documentation", "applications", "system-updates"];
-    if (!allowed.includes(page) && page !== 'ssh-port' && page !== 'panel-port') page = "dashboard";
+    if (!allowed.includes(page) && page !== 'ssh-port' && page !== 'panel-port' && page !== 'operations') page = "dashboard";
     $$("[data-page-view]").forEach(view => view.classList.toggle("active", view.dataset.pageView === page));
     $$("[data-page]").forEach(link => {
       const active = serverExplorer ? link.dataset.page === 'server-files' : link.dataset.page === page;

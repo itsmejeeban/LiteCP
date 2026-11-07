@@ -1444,6 +1444,18 @@
     "objectID": false
   },
   {
+    "name": "panel.operations.get", "group": "Operations", "description": "Read readiness, alerts, verification and audit", "method": "GET", "path": "/api/operations", "objectID": false
+  },
+  {
+    "name": "panel.operations.post", "group": "Operations", "description": "Configure alerts and verification; acknowledge alerts", "method": "POST", "path": "/api/operations", "objectID": false
+  },
+  {
+    "name": "panel.operators.get", "group": "Administration", "description": "List limited panel administrators", "method": "GET", "path": "/api/operators", "objectID": false
+  },
+  {
+    "name": "panel.operators.post", "group": "Administration", "description": "Create and disable limited administrators", "method": "POST", "path": "/api/operators", "objectID": false
+  },
+  {
     "name": "panel.security.captcha.put",
     "group": "Security",
     "description": "Self-hosted CAPTCHA — PUT /api/security/captcha",
