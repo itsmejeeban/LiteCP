@@ -390,7 +390,7 @@ func (a *App) websiteBackupRestore(w http.ResponseWriter, r *http.Request) {
 		}
 		content, _ := json.Marshal(map[string]string{"ID": input.StageID, "SiteID": target.ID, "Root": "public_html"})
 		clone.Body = io.NopCloser(bytes.NewReader(content))
-		a.migrationImport(w, clone)
+		a.migrationImportWithSpaceProbe(w, clone, a.system.manualBackupFreeBytes)
 		return
 	}
 	if input.Action == "home" {

@@ -384,6 +384,10 @@ func copyMigrationTree(ctx context.Context, sourceRoot string, site Site, uid, g
 }
 
 func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
+	a.migrationImportWithSpaceProbe(w, r, migrationFreeBytes)
+}
+
+func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Request, freeBytes func(context.Context, string) (int64, error)) {
 	var input struct{ ID, SiteID, Root, SQL, Password string }
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
@@ -423,7 +427,7 @@ func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, err.Error())
 		return
 	}
-	if available, err := migrationFreeBytes(r.Context(), filepath.Dir(site.Root)); err != nil || available < preview.Bytes+(1<<30) {
+	if available, err := freeBytes(r.Context(), filepath.Dir(site.Root)); err != nil || available < preview.Bytes+(1<<30) {
 		writeError(w, 409, "Not enough free disk space to stage this website safely; target files were not changed.")
 		return
 	}
