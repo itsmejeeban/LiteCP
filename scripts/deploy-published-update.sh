@@ -5,7 +5,9 @@ version="$1"
 revision="$2"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
-for tool in go systemctl install cp curl python3; do command -v "$tool" >/dev/null; done
+for tool in go systemctl install cp curl python3 flock; do command -v "$tool" >/dev/null; done
+exec 9>/run/lock/litecp-panel-update.lock
+flock -n 9 || { echo 'A panel update or rollback is already running.' >&2; exit 1; }
 work="$PWD"
 switched=0
 snapshot_helper_switched=0
@@ -32,6 +34,10 @@ echo '[Server 2/4] Building the published revision...'
 CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=$version -X main.buildRevision=$revision" -o "$work/next-litecp" .
 echo '[Server 3/4] Preserving current binary and restarting LiteCP...'
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
+install -d -m 0700 /usr/local/lib/litecp-updates
+recovery="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
+cp --reflink=auto --preserve=mode "$work/previous-litecp" "$recovery/previous-litecp"
+python3 "$work/scripts/write-panel-recovery-manifest.py" "$recovery"
 bash "$work/scripts/install-privilege-services.sh" --prepare-only
 systemctl stop litecp
 switched=1
@@ -63,4 +69,4 @@ if [[ $healthy != 1 ]]; then
   journalctl -u litecp -u litecp-broker -n 50 --no-pager || true
   false
 fi
-echo "LiteCP $version deployed successfully. Recovery binary: $work/previous-litecp"
+echo "LiteCP $version deployed successfully. Recovery ID: ${recovery##*/}"

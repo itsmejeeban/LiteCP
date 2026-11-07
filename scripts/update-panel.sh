@@ -96,22 +96,7 @@ PY
 CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.version=${tag#v} -X main.buildRevision=${BUILD_REVISION}" -o "$work/next-litecp" .
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then cp -p /usr/local/lib/litecp/system-snapshot.py "$work/previous-system-snapshot.py"; fi
-python3 - "$work" <<'PY'
-import hashlib,ipaddress,json,pathlib,urllib.request,datetime,sys
-root=pathlib.Path(sys.argv[1])
-bind='127.0.0.1:9090'
-env=pathlib.Path('/etc/litecp/frontend.env')
-if env.exists():
-    for line in env.read_text().splitlines():
-        if line.startswith('LITECP_BIND='): bind=line.split('=',1)[1].strip().strip('"\x27')
-host,port=bind.rsplit(':',1)
-if not ipaddress.ip_address(host.strip('[]')).is_loopback or not port.isdecimal() or not 1<=int(port)<=65535:
-    raise ValueError('Invalid panel health-check endpoint')
-current=json.load(urllib.request.urlopen('http://'+bind+'/api/version',timeout=3))
-current['healthBind']=bind
-current['sha256']=hashlib.sha256((root/'previous-litecp').read_bytes()).hexdigest();current['savedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat()
-(root/'recovery-manifest.json').write_text(json.dumps(current))
-PY
+python3 "$work/source/scripts/write-panel-recovery-manifest.py" "$work"
 status running "Restarting LiteCP and checking the new version."
 bash "$work/source/scripts/install-privilege-services.sh" --prepare-only
 systemctl stop litecp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """LiteCP portable managed-data snapshots. Run only as root via LiteCP."""
-import argparse, contextlib, datetime, hashlib, json, os, pathlib, platform, shutil, stat, subprocess, sys, tempfile, zipfile
+import argparse, contextlib, datetime, hashlib, json, os, pathlib, platform, re, shutil, stat, subprocess, sys, tempfile, zipfile
 BASE=pathlib.Path('/var/backups/litecp/system-snapshots')
 ROOTS={'panel':'/var/lib/litecp','websites':'/home/litecp','legacy-websites':'/var/www/litecp','mail':'/var/vmail','mail-config':'/etc/litecp/mail','panel-tls':'/etc/litecp/tls','certificates':'/etc/letsencrypt','backups':'/var/backups/litecp','webmail':'/var/lib/litecp-webmail','webmail-config':'/opt/litecp/webmail/config','waf':'/etc/litecp/waf'}
 GENERATED_CONFIGS=['/etc/nginx/conf.d/00-litecp-waf-policy.conf','/etc/nginx/conf.d/00-litecp-traffic.conf','/etc/nginx/conf.d/00-litecp-captcha-zones.conf']
@@ -8,6 +8,17 @@ SERVICE_CONFIGS=['/etc/postfix/main.cf','/etc/postfix/master.cf','/etc/dovecot/c
 EXCLUDE={'panel':{'application-hosting/command-logs','developer-trust.json','sessions.json','developer-mode.json','operations.json'},'backups':{'system-snapshots'},'webmail':{'temp','logs'}}
 def run(args, **kw):
     return subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kw).stdout
+
+def remap_dovecot_vmail_uid(config_text, uid):
+    if uid <= 0:
+        raise ValueError('Invalid destination vmail UID')
+    updated, count = re.subn(r'(?m)^[ \t]*first_valid_uid[ \t]*=[^\r\n]*',
+                             f'first_valid_uid = {uid}', config_text)
+    if count > 1:
+        raise ValueError('Ambiguous LiteCP Dovecot UID configuration')
+    if not count:
+        updated = config_text + f'\nfirst_valid_uid = {uid}\n'
+    return updated
 
 def digest(path):
     h=hashlib.sha256()
@@ -351,6 +362,9 @@ def restore(source,confirmation):
             if target.exists():
                 save=rollback/'configuration'/p.lstrip('/');save.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(target,save)
             shutil.copy2(stage/'configuration'/p.lstrip('/'),target);written.append(target)
+            if p == '/etc/dovecot/conf.d/99-litecp.conf':
+                # The destination package may have assigned vmail a lower UID.
+                target.write_text(remap_dovecot_vmail_uid(target.read_text(), int(run(['id','-u','vmail']))))
         # Restore file owners/modes; recreate only validated in-tree symlinks.
         # Read the central directory once: reopening it for every file makes
         # metadata restoration quadratic on large website snapshots.
@@ -392,7 +406,9 @@ def restore(source,confirmation):
         for generated in GENERATED_CONFIGS:
             if pathlib.Path(generated) not in written:written.append(pathlib.Path(generated))
         run(['systemd-run','--scope','--quiet','/usr/local/bin/litecp','snapshot-reconcile'])
-        if cfg.get('mailboxes') or cfg.get('mailDomains'):run(['/usr/local/bin/litecp','sync-mail'])
+        if cfg.get('mailboxes') or cfg.get('mailDomains'):
+            run(['/usr/local/bin/litecp','sync-mail'])
+            run(['doveconf','-n'])
         for unit in ['php83-php-fpm','php8.3-fpm']:
             subprocess.run(['systemctl','try-restart',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         if 'webmail' in ROOTS and (pathlib.Path(ROOTS['webmail'])/'roundcube.db').exists():

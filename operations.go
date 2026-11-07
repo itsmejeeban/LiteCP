@@ -526,15 +526,28 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 		operationsVerifyCancel()
 		operationsMu.Unlock()
 	case "test-email":
-		operationsMu.Lock()
-		s, e := a.readOperations()
-		operationsMu.Unlock()
-		if e != nil || !s.Settings.EmailEnabled {
-			writeError(w, 400, "Configure and enable email alerts first")
-			return
-		}
 		if a.system.demo {
 			writeError(w, 409, "Live mail delivery is unavailable in demo mode")
+			return
+		}
+		settings := operationsSettings{
+			RetentionDays: 14,
+			EmailEnabled:  true,
+			EmailTo:       input.Settings.EmailTo,
+			EmailFrom:     input.Settings.EmailFrom,
+		}
+		if settings.EmailTo == "" && settings.EmailFrom == "" {
+			operationsMu.Lock()
+			s, err := a.readOperations()
+			operationsMu.Unlock()
+			if err != nil {
+				writeError(w, 500, "Could not read email alert settings")
+				return
+			}
+			settings.EmailTo, settings.EmailFrom = s.Settings.EmailTo, s.Settings.EmailFrom
+		}
+		if err := validateOperationsSettings(settings); err != nil {
+			writeError(w, 400, err.Error())
 			return
 		}
 		if !a.apiRateAllowed("operations-test-email", 2) {
@@ -543,8 +556,8 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		if e = sendOperationsEmail(ctx, s.Settings, []operationsAlert{{Title: "Notification test", Detail: "This test confirms local mail submission only. Check recipient delivery.", Severity: "info", Route: "operations"}}); e != nil {
-			writeError(w, 502, e.Error())
+		if err := sendOperationsEmail(ctx, settings, []operationsAlert{{Title: "Notification test", Detail: "This test confirms local mail submission only. Check recipient delivery.", Severity: "info", Route: "operations"}}); err != nil {
+			writeError(w, 502, err.Error())
 			return
 		}
 	default:

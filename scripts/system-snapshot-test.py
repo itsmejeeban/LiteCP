@@ -1,6 +1,12 @@
 import types, importlib.util, pathlib, tempfile, unittest, zipfile, json, hashlib, os
 spec=importlib.util.spec_from_file_location('snapshot',pathlib.Path(__file__).with_name('system-snapshot.py'));s=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)
 class SnapshotTests(unittest.TestCase):
+ def test_restore_remaps_dovecot_uid_to_destination(self):
+  source='protocols = imap lmtp\nfirst_valid_uid = 991\n'
+  self.assertEqual(s.remap_dovecot_vmail_uid(source,990),'protocols = imap lmtp\nfirst_valid_uid = 990\n')
+  self.assertIn('first_valid_uid = 990',s.remap_dovecot_vmail_uid('protocols = imap lmtp',990))
+  with self.assertRaises(ValueError):s.remap_dovecot_vmail_uid(source,0)
+  with self.assertRaises(ValueError):s.remap_dovecot_vmail_uid(source+source,990)
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=pathlib.Path(self.tmp.name);s.BASE=self.root/'snapshots';s.BASE.mkdir();s.ROOTS={'panel':str(self.root/'panel'),'websites':str(self.root/'websites')};s.EXCLUDE={};s.osinfo=lambda:('testos','1')
   self.original_generated=s.GENERATED_CONFIGS;s.GENERATED_CONFIGS=[str(self.root/'generated'/pathlib.Path(p).name) for p in self.original_generated]
