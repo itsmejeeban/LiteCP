@@ -77,6 +77,11 @@ def cpanel_portable(archive, portable, source_home=""):
                 elif relative_account[1] == 'etc' and len(relative) == 2 and relative[1] in ('shadow', 'passwd', 'quota'):
                     destination = 'cpanel_account/etc/' + '/'.join(relative)
             elif len(relative_account) >= 2 and relative_account[:2] == ('homedir', 'public_html'):
+                # WordPress extracts plugin updates here. A stale upgrade
+                # workspace can contain conflicting entries and is not used
+                # by the installed site. It stays in the native archive.
+                if relative_account[2:4] == ('wp-content', 'upgrade'):
+                    continue
                 destination = '/'.join(relative_account[1:])
             elif len(relative_account) == 2 and relative_account[0] == 'mysql' and member.isfile() and member.name.lower().endswith('.sql') and relative_account[-1].lower() != 'mysql.sql':
                 destination = 'mysql/' + relative_account[-1]

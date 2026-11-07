@@ -151,6 +151,13 @@ class LiveSourceTests(unittest.TestCase):
                 for name in ['cpmove-user/homedir/public_html/index.php','cpmove-user/mysql/user_db.sql','cpmove-user/homedir/sitemap-app/src/Crawler.php','cpmove-user/homedir/config.php','cpmove-user/homedir/mail/new/1:2,S','cpmove-user/homedir/.ssh/id_rsa','cpmove-user/mysql.sql']:
                     info=tarfile.TarInfo(name);info.size=4;target.addfile(info,io.BytesIO(b'test'))
                 link=tarfile.TarInfo('cpmove-user/homedir/public_html/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/shadow';target.addfile(link)
+                conflict = 'cpmove-user/homedir/public_html/wp-content/upgrade/plugin/assets'
+                info = tarfile.TarInfo(conflict)
+                info.size = 4
+                target.addfile(info, io.BytesIO(b'test'))
+                info = tarfile.TarInfo(conflict)
+                info.type = tarfile.DIRTYPE
+                target.addfile(info)
             self.assertEqual(source.cpanel_portable(archive,portable),(1,2,1))
             with tarfile.open(portable) as result:
                 self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php','cpanel_account/mail/new/1%3A2,S','cpanel_account/format.json'])
