@@ -222,6 +222,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(e)
 			return
 		}
+		if e = a.system.labelSiteHome(ctx, *existing); e != nil {
+			fail(e)
+			return
+		}
 		if e = a.importCPanelServices(ctx, plan, *existing); e != nil {
 			fail(e)
 			return

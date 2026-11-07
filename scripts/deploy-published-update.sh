@@ -56,6 +56,7 @@ install -m 0700 "$work/scripts/panel-rollback.sh" /usr/local/lib/litecp/panel-ro
 bash "$work/scripts/repair-waf-labels.sh"
 python3 "$work/scripts/repair-dns-runtime.py"
 bash "$work/scripts/repair-php73-selinux.sh"
+bash "$work/scripts/repair-migration-runtime-labels.sh"
 systemctl start litecp
 bash "$work/scripts/repair-webmail-runtime.sh"
 echo '[Server 4/4] Checking service...'

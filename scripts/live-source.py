@@ -175,7 +175,10 @@ def export(request):
             raise RuntimeError('cPanel WHM API command is not installed on this source')
         response = json.loads(command([binary, '--output=json', 'listaccts']))
         if response.get('metadata', {}).get('result') != 1:
-            raise RuntimeError('cPanel account discovery was rejected')
+            reason = str(response.get('metadata', {}).get('reason', '')).lower()
+            if 'no space left' in reason or 'disk quota exceeded' in reason:
+                raise RuntimeError('cPanel account discovery failed: the source server is out of disk space or quota')
+            raise RuntimeError('cPanel account discovery was rejected by WHM; check listaccts on the source server before retrying')
         accounts = [{'id':x['user'], 'domain':x.get('domain','')} for x in response.get('data',{}).get('acct',[])]
     elif platform == 'plesk':
         binary = shutil.which('plesk')

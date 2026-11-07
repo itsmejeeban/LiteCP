@@ -112,6 +112,7 @@ install -m 0700 "$work/source/scripts/panel-rollback.sh" /usr/local/lib/litecp/p
 bash "$work/source/scripts/repair-waf-labels.sh"
 python3 "$work/source/scripts/repair-dns-runtime.py"
 bash "$work/source/scripts/repair-php73-selinux.sh"
+bash "$work/source/scripts/repair-migration-runtime-labels.sh"
 systemctl start litecp
 bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do

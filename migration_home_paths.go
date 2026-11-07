@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -94,13 +96,25 @@ func relocateMigrationHomePaths(roots []string, sourceHome, destinationHome, rec
 			if !info.Mode().IsRegular() {
 				return fmt.Errorf("special application configuration")
 			}
-			scanned += info.Size()
-			if info.Size() > 2<<20 || scanned > 64<<20 {
-				return fmt.Errorf("application path inspection limit reached")
-			}
 			relative, err := filepath.Rel(writeRoot, path)
 			if err != nil {
 				return err
+			}
+			// Most application code (including large encoded PHP files) needs no
+			// relocation. Search with bounded memory before decoding/re-writing it.
+			matches, err := migrationSourceContainsHome(writeRoot, relative, sourceHome)
+			if err != nil {
+				return err
+			}
+			if !matches && relative != "index.php" {
+				return nil
+			}
+			if !matches && info.Size() > 2<<20 {
+				return nil
+			}
+			scanned += info.Size()
+			if info.Size() > 2<<20 || scanned > 64<<20 {
+				return fmt.Errorf("application path repair requires review for %s: configuration rewrite size limit reached", relative)
 			}
 			data, info, err := readMigrationSource(writeRoot, relative)
 			if err != nil {
@@ -142,6 +156,43 @@ func relocateMigrationHomePaths(roots []string, sourceHome, destinationHome, rec
 		}
 	}
 	return nil
+}
+
+func migrationSourceContainsHome(root, relative, sourceHome string) (bool, error) {
+	file, err := secureOpenManaged(root, filepath.ToSlash(relative), os.O_RDONLY, 0)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("special application configuration")
+	}
+	needle := []byte(sourceHome + "/")
+	buffer := make([]byte, 64<<10+len(needle))
+	reader := io.LimitReader(file, info.Size()+1)
+	carry := 0
+	for {
+		n, readErr := reader.Read(buffer[carry:])
+		data := buffer[:carry+n]
+		if bytes.Contains(data, needle) {
+			return true, nil
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				return false, nil
+			}
+			return false, readErr
+		}
+		carry = len(needle) - 1
+		if carry > len(data) {
+			carry = len(data)
+		}
+		copy(buffer, data[len(data)-carry:])
+	}
 }
 
 func (a *App) repairCommittedMigrationPaths(job LiveMigrationJob, stagedRoot string, site Site, sourceHome string) error {

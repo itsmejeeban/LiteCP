@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="5.0.11"
+LITECP_VERSION="5.0.12"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -388,6 +388,7 @@ else
   for folder in public_html tmp; do
     semanage fcontext -a -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?" >/dev/null 2>&1 || semanage fcontext -m -t httpd_sys_rw_content_t "/home/litecp/[^/]+/$folder(/.*)?"
   done
+  bash "${SOURCE_DIR}/scripts/repair-migration-runtime-labels.sh"
   semanage fcontext -a -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t httpd_log_t '/home/litecp/[^/]+/logs(/.*)?'
   restorecon -R /home/litecp
   semanage fcontext -a -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1 || semanage fcontext -m -t cert_t '/etc/litecp/tls(/.*)?' >/dev/null 2>&1
