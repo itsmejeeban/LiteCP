@@ -172,7 +172,15 @@ func (a *App) cleanSuccessfulMigration(job *LiveMigrationJob) error {
 		return err
 	}
 	stageParent := filepath.Join(a.system.dataDir, "migrations")
-	targets := []string{filepath.Join(root, "native-backup"), filepath.Join(root, "portable-backup"), filepath.Join(stageParent, job.ID)}
+	type cleanupTarget struct {
+		path string
+		file bool
+	}
+	targets := []cleanupTarget{
+		{path: filepath.Join(root, "native-backup"), file: true},
+		{path: filepath.Join(root, "portable-backup"), file: true},
+		{path: filepath.Join(stageParent, job.ID)},
+	}
 	if job.Preview != nil && job.Preview.ID != job.ID {
 		id := job.Preview.ID
 		if id == "" || safeSiteID(id) != id {
@@ -194,16 +202,17 @@ func (a *App) cleanSuccessfulMigration(job *LiveMigrationJob) error {
 				return errors.New("shared migration stage preserved")
 			}
 		}
-		targets = append(targets, filepath.Join(stageParent, id))
+		targets = append(targets, cleanupTarget{path: filepath.Join(stageParent, id)})
 	}
 	// Check every component before removal, including parents, to reject symlink escapes.
 	for _, target := range targets {
-		rel, e := filepath.Rel(a.system.dataDir, target)
+		rel, e := filepath.Rel(a.system.dataDir, target.path)
 		if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			return errors.New("unsafe migration cleanup path")
 		}
 		current := a.system.dataDir
-		for _, part := range append([]string{"."}, strings.Split(rel, string(os.PathSeparator))...) {
+		parts := append([]string{"."}, strings.Split(rel, string(os.PathSeparator))...)
+		for i, part := range parts {
 			current = filepath.Join(current, part)
 			info, e := os.Lstat(current)
 			if errors.Is(e, os.ErrNotExist) {
@@ -212,13 +221,21 @@ func (a *App) cleanSuccessfulMigration(job *LiveMigrationJob) error {
 			if e != nil {
 				return e
 			}
-			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			if target.file && i == len(parts)-1 {
+				if !info.Mode().IsRegular() {
+					return errors.New("migration backup is not a regular file")
+				}
+			} else if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 				return errors.New("migration cleanup path is not a real directory")
 			}
 		}
 	}
 	for _, target := range targets {
-		if err := os.RemoveAll(target); err != nil {
+		remove := os.RemoveAll
+		if target.file {
+			remove = os.Remove
+		}
+		if err := remove(target.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}

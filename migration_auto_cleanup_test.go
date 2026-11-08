@@ -14,11 +14,17 @@ func TestSuccessfulMigrationAutoCleanup(t *testing.T) {
 			root, _ := app.liveJobRoot(job.ID)
 			archive := filepath.Join(root, "native-backup")
 			stage := filepath.Join(app.system.dataDir, "migrations", job.ID)
-			for _, dir := range []string{archive, stage} {
+			portable := filepath.Join(root, "portable-backup")
+			for _, dir := range []string{root, stage} {
 				if err := os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(filepath.Join(dir, "fixture"), []byte("data"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, path := range []string{archive, portable} {
+				if err := os.WriteFile(path, []byte("archive"), 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -29,13 +35,15 @@ func TestSuccessfulMigrationAutoCleanup(t *testing.T) {
 			if err := app.cleanSuccessfulMigration(&job); err != nil {
 				t.Fatal(err)
 			}
-			_, err := os.Stat(archive)
-			if status == "restored" {
-				if !os.IsNotExist(err) || !job.ArtifactsCleaned {
-					t.Fatal("successful artifacts not cleaned")
+			for _, path := range []string{archive, portable, stage} {
+				_, err := os.Stat(path)
+				if status == "restored" {
+					if !os.IsNotExist(err) || !job.ArtifactsCleaned {
+						t.Fatalf("successful artifact not cleaned: %s", path)
+					}
+				} else if err != nil || job.ArtifactsCleaned {
+					t.Fatalf("unfinished artifact removed: %s", path)
 				}
-			} else if err != nil || job.ArtifactsCleaned {
-				t.Fatal("unfinished artifacts removed")
 			}
 			if _, err := os.Stat(history); err != nil {
 				t.Fatal("history lost", err)
