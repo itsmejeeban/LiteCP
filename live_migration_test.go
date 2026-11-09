@@ -45,6 +45,33 @@ func TestLiveSourceValidationAndPinnedIdentity(t *testing.T) {
 	}
 }
 
+func TestQueuedMigrationWaveRespectsBatchThreads(t *testing.T) {
+	for _, threads := range []int{0, 1, 4, 6, 8} {
+		batch := LiveMigrationJob{MigrationBatch: "first", MigrationThreads: threads}
+		jobs := make([]LiveMigrationJob, 10)
+		for i := range jobs {
+			jobs[i] = batch
+		}
+		limit := migrationThreadLimit(threads)
+		if got := len(queuedMigrationWave(jobs, nil)); got != limit {
+			t.Fatalf("threads=%d: started %d jobs, want %d", threads, got, limit)
+		}
+		if got := len(queuedMigrationWave(jobs, []LiveMigrationJob{batch})); got != limit-1 {
+			t.Fatalf("threads=%d: started %d with an active job, want %d", threads, got, limit-1)
+		}
+		if got := len(queuedMigrationWave(jobs, []LiveMigrationJob{{MigrationBatch: "other"}})); got != 0 {
+			t.Fatalf("started %d jobs while a different batch was active", got)
+		}
+		jobs[1].MigrationBatch = "other"
+		if got := len(queuedMigrationWave(jobs, nil)); got != 1 {
+			t.Fatalf("batch boundary allowed %d jobs", got)
+		}
+	}
+	if migrationWorkerHasSpace(4<<30, 1<<30, 4) || !migrationWorkerHasSpace(4<<30, 1<<30, 1) {
+		t.Fatal("concurrent workers must share the available disk space")
+	}
+}
+
 func TestLiveSourceArchiveValidation(t *testing.T) {
 	id := "abcdefghijklmnop1234"
 	file := liveSourceFile{Path: "/root/litecp-export-" + id + "/cpmove-user.tar.gz", Size: 1024, SHA256: strings.Repeat("a", 64)}

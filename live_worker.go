@@ -21,11 +21,8 @@ func runLiveCaptureWorker(id string) error {
 		return fmt.Errorf("invalid capture worker request")
 	}
 	data := envOr("LITECP_DATA_DIR", "/var/lib/litecp")
-	store, err := OpenStore(data)
-	if err != nil {
-		return err
-	}
-	app := &App{store: store, system: NewSystem(data)}
+	// Capture workers write only job-local state. The panel owns the shared store.
+	app := &App{system: NewSystem(data)}
 	job, err := app.loadLiveJob(id)
 	if err != nil {
 		return err

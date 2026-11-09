@@ -72,6 +72,8 @@ type liveExportResult struct {
 	CPanelDatabaseInventoryEmpty bool `json:"cpanel_database_inventory_empty"`
 }
 type LiveMigrationJob struct {
+	MigrationBatch string `json:"migrationBatch,omitempty"`
+	MigrationThreads int `json:"migrationThreads,omitempty"`
 	CPanelWebsiteID      string                     `json:"cpanelWebsiteId,omitempty"`
 	ArtifactsCleaned     bool                       `json:"artifactsCleaned,omitempty"`
 	AutoRestore          bool                       `json:"autoRestore,omitempty"`
@@ -469,6 +471,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 		Confirm    bool       `json:"confirm"`
 
 		RecreateEmptyDatabases bool `json:"recreateEmptyDatabases"`
+		MigrationThreads int `json:"migrationThreads"`
 	}
 	if err := decodeJSONWithLimit(r, &input, 80<<10); err != nil {
 		writeError(w, 400, err.Error())
@@ -479,7 +482,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Action == "queue" {
-		a.queueLiveAccounts(w, r, input.ID, input.Accounts, input.Confirm)
+		a.queueLiveAccounts(w, r, input.ID, input.Accounts, input.Confirm, input.MigrationThreads)
 		return
 	}
 	if input.Action == "cleanup" {
@@ -708,6 +711,8 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		original.ID = id
+		original.MigrationBatch = ""
+		original.MigrationThreads = 0
 		original.RecreateEmptyDatabases = input.RecreateEmptyDatabases
 		original.CPanelDatabaseInventoryEmpty = false
 		original.CPanelWebsiteID = ""
@@ -846,7 +851,7 @@ func validateLiveFile(file *liveSourceFile, jobID string) error {
 	}
 	return nil
 }
-func (a *App) transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile) error {
+func (a *App) transferLiveFile(ctx context.Context, source LiveSource, root, destination string, file *liveSourceFile, threads int) error {
 	descriptor, _ := json.Marshal(migrationTransferProgress{File: filepath.Base(destination), Total: file.Size})
 	if err := writeAtomic(filepath.Join(root, "transfer.json"), descriptor, 0600); err != nil {
 		return err
@@ -855,8 +860,8 @@ func (a *App) transferLiveFile(ctx context.Context, source LiveSource, root, des
 	if err != nil {
 		return err
 	}
-	if available < file.Size*2+(1<<30) {
-		return errors.New("not enough local disk space to retain and inspect the source archive safely")
+	if !migrationWorkerHasSpace(available, file.Size*2, threads) {
+		return errors.New("not enough local disk space to retain and inspect the source archive at the selected migration concurrency; retry with fewer threads or more free space")
 	}
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
@@ -939,7 +944,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 	}
 	setLiveJobStage(&job, "transfer", "running", "Source backup finished. Transferring and verifying the native archive.")
 	_ = a.saveLiveJob(&job)
-	if err := a.transferLiveFile(ctx, job.Source, root, filepath.Join(root, "native-backup"), result.Native); err != nil {
+	if err := a.transferLiveFile(ctx, job.Source, root, filepath.Join(root, "native-backup"), result.Native, job.MigrationThreads); err != nil {
 		fail(err)
 		return
 	}
@@ -964,7 +969,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 			return
 		}
 		archive = filepath.Join(root, "portable-backup")
-		if err := a.transferLiveFile(ctx, job.Source, root, archive, result.Portable); err != nil {
+		if err := a.transferLiveFile(ctx, job.Source, root, archive, result.Portable, job.MigrationThreads); err != nil {
 			fail(err)
 			return
 		}
@@ -989,8 +994,8 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 		_ = a.saveLiveJob(&job)
 		return
 	}
-	if available, err := migrationFreeBytes(ctx, root); err != nil || available < required+(1<<30) {
-		setLiveJobStage(&job, "preflight", "captured", "Native backup verified. Insufficient disk space for this archive plus a 1 GiB safety reserve; no target data was changed.")
+	if available, err := migrationFreeBytes(ctx, root); err != nil || !migrationWorkerHasSpace(available, required, job.MigrationThreads) {
+		setLiveJobStage(&job, "preflight", "captured", "Native backup verified. Insufficient disk space for this archive at the selected migration concurrency. Retry with fewer threads or more free space; no target data was changed.")
 		_ = a.saveLiveJob(&job)
 		return
 	}

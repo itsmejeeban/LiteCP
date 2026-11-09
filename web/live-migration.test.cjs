@@ -23,7 +23,7 @@ function render(job, items=[job], hash='#migrations/pending') {
     esc: value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])),
     cp: { formatBytes: value => String(value) }
   });
-  vm.runInContext('let jobs=items; const expandedJobs=new Set(),accountSelections=new Map();\n' + renderer + '\nrenderJobs(); globalThis.retryAction=pendingRetryAction(input);', context);
+  vm.runInContext('let jobs=items; const expandedJobs=new Set(),accountSelections=new Map(),migrationThreads=new Map();\n' + renderer + '\nrenderJobs(); globalThis.retryAction=pendingRetryAction(input);', context);
   return { html: element('#liveJobs').innerHTML, retryAction: context.retryAction };
 }
 

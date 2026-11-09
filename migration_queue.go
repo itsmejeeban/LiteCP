@@ -34,7 +34,26 @@ func selectedMigrationAccounts(job LiveMigrationJob, ids []string) ([]string, er
 	}
 	return result, nil
 }
-func (a *App) queueLiveAccounts(w http.ResponseWriter, r *http.Request, id string, ids []string, confirm bool) {
+func migrationThreadLimit(threads int) int {
+	switch threads {
+	case 1, 4, 6, 8:
+		return threads
+	default:
+		return 1
+	}
+}
+
+func migrationWorkerHasSpace(available, required int64, threads int) bool {
+	const reserve = 1 << 30
+	return available >= reserve && required <= (available-reserve)/int64(migrationThreadLimit(threads))
+}
+
+func (a *App) queueLiveAccounts(w http.ResponseWriter, r *http.Request, id string, ids []string, confirm bool, threads int) {
+	if threads != 0 && threads != migrationThreadLimit(threads) {
+		writeError(w, 400, "Select 1, 4, 6, or 8 migration threads")
+		return
+	}
+	threads = migrationThreadLimit(threads)
 	source, err := a.loadLiveJob(id)
 	if err != nil {
 		writeError(w, 404, "Source connection not found")
@@ -63,6 +82,11 @@ func (a *App) queueLiveAccounts(w http.ResponseWriter, r *http.Request, id strin
 		}
 		credentials[name] = value
 	}
+	batch, err := randomToken(18)
+	if err != nil {
+		writeError(w, 500, "Could not allocate migration batch")
+		return
+	}
 	queued := []LiveMigrationJob{}
 	for _, account := range selected {
 		token, e := randomToken(18)
@@ -82,7 +106,7 @@ func (a *App) queueLiveAccounts(w http.ResponseWriter, r *http.Request, id strin
 				return
 			}
 		}
-		job := LiveMigrationJob{ID: jobID, Source: source.Source, Accounts: source.Accounts, Account: account, Stage: "queued", Status: "queued", Message: "Queued for migration. Accounts are processed one at a time.", CredentialsRetained: true, AutoRestore: true, CreatedAt: time.Now().UTC(), StageStartedAt: time.Now().UTC()}
+		job := LiveMigrationJob{ID: jobID, MigrationBatch: batch, MigrationThreads: threads, Source: source.Source, Accounts: source.Accounts, Account: account, Stage: "queued", Status: "queued", Message: "Queued for migration.", CredentialsRetained: true, AutoRestore: true, CreatedAt: time.Now().UTC(), StageStartedAt: time.Now().UTC()}
 		if e = a.saveLiveJob(&job); e != nil {
 			writeError(w, 500, "Cannot save migration queue; review existing jobs before retrying")
 			return
@@ -97,31 +121,54 @@ func (a *App) startNextQueuedMigration() {
 		return
 	}
 	queued := []LiveMigrationJob{}
+	active := []LiveMigrationJob{}
 	for _, entry := range entries {
 		job, e := a.loadLiveJob(entry.Name())
 		if e != nil {
 			continue
 		}
 		if liveCaptureActive(job.ID) {
-			return
+			active = append(active, job)
 		}
 		if job.Status == "queued" {
 			queued = append(queued, job)
 		}
 	}
-	if len(queued) == 0 {
-		return
-	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].CreatedAt.Before(queued[j].CreatedAt) })
-	job := queued[0]
+	for _, job := range queuedMigrationWave(queued, active) {
+		a.startQueuedMigration(job)
+	}
+}
+
+// Only the oldest batch can start workers. A running batch keeps its slots
+// until the workers exit, including workers still unwinding after cancellation.
+func queuedMigrationWave(queued, active []LiveMigrationJob) []LiveMigrationJob {
+	if len(queued) == 0 {
+		return nil
+	}
+	first := queued[0]
+	for _, job := range active {
+		if first.MigrationBatch == "" || job.MigrationBatch != first.MigrationBatch {
+			return nil
+		}
+	}
+	slots := migrationThreadLimit(first.MigrationThreads) - len(active)
+	count := 0
+	for count < slots && count < len(queued) && queued[count].MigrationBatch == first.MigrationBatch {
+		count++
+	}
+	return queued[:count]
+}
+
+func (a *App) startQueuedMigration(job LiveMigrationJob) {
 	setLiveJobStage(&job, "capture", "running", "Creating source native backup for selected account.")
-	if err = a.saveLiveJob(&job); err != nil {
+	if err := a.saveLiveJob(&job); err != nil {
 		return
 	}
 	if job.Status == "cancelled" || a.liveMigrationCancelled(job.ID) {
 		return
 	}
-	_, err = runCommand(context.Background(), 15*time.Second, "systemd-run", "--unit="+liveCaptureUnit(job.ID), "--collect", "--property=RuntimeMaxSec=7500", "--property=UMask=0077", "--setenv=LITECP_DATA_DIR="+a.system.dataDir, "/usr/local/bin/litecp", "capture-worker", job.ID)
+	_, err := runCommand(context.Background(), 15*time.Second, "systemd-run", "--unit="+liveCaptureUnit(job.ID), "--collect", "--property=RuntimeMaxSec=7500", "--property=UMask=0077", "--setenv=LITECP_DATA_DIR="+a.system.dataDir, "/usr/local/bin/litecp", "capture-worker", job.ID)
 	if err != nil {
 		job.Status = "failed"
 		job.Message = "Cannot start queued capture: " + err.Error()
