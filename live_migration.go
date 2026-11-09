@@ -376,9 +376,13 @@ func liveSSHArgs(source LiveSource, root string) []string {
 	}
 	return args
 }
-func (a *App) liveRemote(ctx context.Context, source LiveSource, root, mode, account, id string) (liveExportResult, error) {
+func (a *App) liveRemote(ctx context.Context, source LiveSource, root, mode, account, id string, recreateEmptyDatabases bool) (liveExportResult, error) {
 	var result liveExportResult
-	request, _ := json.Marshal(map[string]string{"platform": source.Platform, "mode": mode, "account": account, "job": id})
+	parameters := map[string]string{"platform": source.Platform, "mode": mode, "account": account, "job": id}
+	if mode == "capture" && source.Platform == "cpanel" && recreateEmptyDatabases {
+		parameters["recreate_empty_databases"] = "true"
+	}
+	request, _ := json.Marshal(parameters)
 	// The shell command contains only a base64 JSON token and fixed executable.
 	command := "LITECP_EXPORT_REQUEST=" + base64.StdEncoding.EncodeToString(request) + " python3 -"
 	args := append(liveSSHArgs(source, root), command)
