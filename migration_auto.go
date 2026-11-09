@@ -176,6 +176,26 @@ func migrationCommittedCPanelWebsite(job LiveMigrationJob, existing *Site) bool 
 	return job.Source.Platform == "cpanel" && existing != nil && job.CPanelWebsiteID != "" && job.CPanelWebsiteID == existing.ID
 }
 
+func migrationCanRecreateEmptyDatabases(job LiveMigrationJob, dumps []string) bool {
+	return job.Source.Platform == "cpanel" && job.RecreateEmptyDatabases &&
+		job.CPanelDatabaseInventoryEmpty && len(dumps) == 0 && !cpanelDatabaseCaptureIncomplete(job)
+}
+
+func planEmptyMigrationAppDatabase(content, database, filename string) (migrationConfigPlan, error) {
+	plan, err := inspectMigrationConfig(content, "php")
+	if err != nil {
+		return migrationConfigPlan{}, err
+	}
+	if plan.Database == "" || plan.Database != database {
+		return migrationConfigPlan{}, fmt.Errorf("application needs a supported literal local database configuration")
+	}
+	if err = validateEmptyMigrationDatabaseConfig(plan); err != nil {
+		return migrationConfigPlan{}, err
+	}
+	plan.Path = filename
+	return plan, nil
+}
+
 func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	fail := func(err error) {
 		if errors.Is(err, context.Canceled) || a.liveMigrationCancelled(job.ID) {
@@ -278,6 +298,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		fail(fmt.Errorf("multiple or missing website roots require manual mapping"))
 		return
 	}
+	recreateEmpty := migrationCanRecreateEmptyDatabases(*job, preview.Databases)
 	source := filepath.Join(root, "files", filepath.FromSlash(preview.Roots[0]))
 	app, configName := "regular", ""
 	if info, e := os.Lstat(filepath.Join(source, "wp-config.php")); e == nil && info.Mode().IsRegular() {
@@ -312,8 +333,17 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			}
 		}
 		if sqlPath == "" {
-			fail(fmt.Errorf("configuration %q has %w", configName, errMigrationDatabaseDumpMissing))
-			return
+			if !recreateEmpty {
+				fail(fmt.Errorf("configuration %q has %w", configName, errMigrationDatabaseDumpMissing))
+				return
+			}
+			plan, e := planEmptyMigrationAppDatabase(content, db, configName)
+			if e != nil {
+				fail(fmt.Errorf("configuration %q: %w", configName, e))
+				return
+			}
+			customConfigs = []migrationConfigPlan{plan}
+			customDatabases = map[string]string{db: ""}
 		}
 	} else if len(preview.Databases) > 0 && job.Source.Platform == "backup" && existing != nil {
 		nativeDatabases, err = a.nativeBackupDatabasePlan(*existing, preview.Databases)
@@ -322,8 +352,18 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	} else {
-		customConfigs, customDatabases, err = genericMigrationDatabasePlan(source, filepath.Join(root, "files", "private_home"), preview.Databases)
-		if err != nil {
+		private := filepath.Join(root, "files", "private_home")
+		if recreateEmpty {
+			customConfigs, customDatabases, err = planGenericMigrationDatabases(source, private, preview.Databases, true)
+		} else {
+			customConfigs, customDatabases, err = genericMigrationDatabasePlan(source, private, preview.Databases)
+		}
+		if recreateEmpty && errors.Is(err, errMigrationDatabaseConfigMissing) {
+			warning := "No supported local database configuration was found in this cPanel account. Website files will be restored with their original configuration and no database mapping."
+			if !containsString(job.Warnings, warning) {
+				job.Warnings = append(job.Warnings, warning)
+			}
+		} else if err != nil {
 			fail(err)
 			return
 		}
@@ -485,7 +525,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	}
-	// Each imported schema gets a fresh scoped account; original source
+	// Each migrated schema gets a fresh scoped account; original source
 	// credentials are never copied into the destination database server.
 	if len(customDatabases) > 0 {
 		credentialsByName := map[string]DBCredentials{}
@@ -510,9 +550,11 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 				fail(e)
 				return
 			}
-			if e = a.system.importScopedSQL(ctx, filepath.Join(root, "files", filepath.FromSlash(customDatabases[name])), value, credentials.Password); e != nil {
-				fail(e)
-				return
+			if dump := customDatabases[name]; dump != "" {
+				if e = a.system.importScopedSQL(ctx, filepath.Join(root, "files", filepath.FromSlash(dump)), value, credentials.Password); e != nil {
+					fail(e)
+					return
+				}
 			}
 			credentialsByName[name] = credentials
 			if len(customConfigs) > 0 && name == customConfigs[0].Database {
@@ -538,6 +580,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			if err = os.Chown(target, site.RuntimeUID, site.RuntimeGID); err != nil {
 				fail(err)
 				return
+			}
+		}
+		if recreateEmpty {
+			warning := fmt.Sprintf("Recreated %d local database(s) as empty with new credentials. The source cPanel database inventory was verified empty and contained no SQL to import.", len(customDatabases))
+			if !containsString(job.Warnings, warning) {
+				job.Warnings = append(job.Warnings, warning)
 			}
 		}
 	}

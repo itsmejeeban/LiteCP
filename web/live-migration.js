@@ -53,6 +53,7 @@
       const newer=latestBySource.get(sourceKey(job));
       if(!newer||Date.parse(newer.createdAt)<=Date.parse(job.createdAt))continue;
       if(['failed','interrupted'].includes(job.status)||
+         (newer.recreateEmptyDatabases&&job.status==='restore-review'&&cpanelMissingDatabaseDump(job))||
          (['restored','restored-review'].includes(newer.status)&&['captured','review','restore-review','restored-review'].includes(job.status)))replacements.set(job.id,newer);
     }
     return replacements;
@@ -65,11 +66,24 @@
   const cpanelMissingDatabaseDump = job => job.source.platform==='cpanel' &&
     (['review','captured','restore-review','awaiting-overwrite'].includes(job.status) && cpanelIncompleteDatabaseExport(job) ||
       job.status==='restore-review' && /matching database dump/i.test(job.message||''));
+  function canRetryWithEmptyDatabases(job) {
+    return job?.credentialsRetained && job.accounts?.some(account=>account.id===job.account&&account.domain) &&
+      !job.cpanelWebsiteId && !job.preview?.databases?.length &&
+      pendingMigration(job) && !cpanelIncompleteDatabaseExport(job) &&
+      (cpanelMissingDatabaseMap(job)||cpanelMissingDatabaseDump(job));
+  }
   function migrationJobNotice(job){
     const replacement=replacedAttempts.get(job.id);
     if(replacement)return `<p class="feature-note">Previous attempt. A newer migration is ${esc(replacement.status)}. <button type="button" class="button button-secondary" data-live-open-job="${esc(replacement.id)}">View latest attempt</button></p>`;
-    if(cpanelMissingDatabaseMap(job))return '<p class="feature-note">Repair the account’s database map on the source cPanel server before retrying capture.</p>';
-    if(cpanelMissingDatabaseDump(job))return '<p class="feature-note">Verify the required database exists and is assigned to the source cPanel account before capturing again.</p>';
+    if(cpanelMissingDatabaseMap(job)||cpanelMissingDatabaseDump(job)){
+      const guidance=cpanelMissingDatabaseMap(job)
+        ? 'Repair the account’s database map on the source cPanel server before retrying capture.'
+        : 'Verify the required database exists and is assigned to the source cPanel account before capturing again.';
+      const emptyRetry=canRetryWithEmptyDatabases(job)
+        ? ` <button type="button" class="button button-secondary" data-live-retry-empty="${esc(job.id)}" ${retryPendingBusy||retryingJobs.has(job.id)?'disabled':''}>Retry with empty databases</button>`
+        : '';
+      return `<p class="feature-note">${guidance}${emptyRetry}</p>`;
+    }
     if(job.status==='awaiting-overwrite')return `<div class="feature-actions"><p class="feature-note">Backup copied and verified. This website already exists; confirm overwrite to continue restoring.</p><button type="button" class="button button-danger" data-live-overwrite="${esc(job.id)}">Review overwrite</button></div>`;
     return '';
   }
@@ -103,7 +117,7 @@
     $('#liveJobsCancelAll').hidden=!allJobs.some(cancellable);
     const retryPending=$('#liveJobsRetryPending');
     retryPending.hidden=section!=='pending';
-    retryPending.disabled=retryPendingBusy||!allJobs.some(job=>pendingMigration(job)&&pendingRetryAction(job));
+    retryPending.disabled=retryPendingBusy||retryingJobs.size>0||!allJobs.some(job=>pendingMigration(job)&&pendingRetryAction(job));
     if(!visibleJobs.length&&section==='pending')$('#liveJobs p').textContent='No migrations need review or further action.';
     if(!visibleJobs.length&&section==='completed')$('#liveJobs p').textContent='No completed migration jobs yet.';
     if(!visibleJobs.length&&section==='jobs')$('#liveJobs p').textContent='No queued or running migration jobs.';
@@ -125,6 +139,29 @@
     cp.navigate(active(job)||job.status==='queued'?'migrations/jobs':pendingMigration(job)?'migrations/pending':'migrations/completed');
     await loadJobs();
   }
+  async function retryWithEmptyDatabases(id) {
+    const job=jobs.find(item=>item.id===id);
+    if(retryPendingBusy||retryingJobs.has(id)||!canRetryWithEmptyDatabases(job))return;
+    const domain=job.accounts.find(account=>account.id===job.account).domain;
+    const confirmed=await window.LiteCPDialogs.confirm(
+      `Retry migration for ${domain}? Continue only if you confirm that the missing databases contain no data. LiteCP will recheck the source and can create empty databases for supported local configurations. Applications may still need setup. Existing websites require separate overwrite confirmation.`,
+      {title:'Retry with empty databases',confirmText:'Confirm and retry',danger:true,dismissOnNavigation:true}
+    );
+    if(!confirmed||retryPendingBusy||retryingJobs.has(id)||!canRetryWithEmptyDatabases(jobs.find(item=>item.id===id)))return;
+    retryingJobs.add(id);
+    renderJobs();
+    try {
+      const replacement=await cp.api('/api/live-migrations',{method:'POST',body:{action:'retry',id,confirm:true,recreateEmptyDatabases:true}});
+      cp.showToast('Migration retry requested',replacement.status==='awaiting-overwrite'
+        ? 'This website already exists. Use Review overwrite to confirm replacement.'
+        : `${domain} is ready to track in Live Migration Jobs.`);
+    } catch(error) {
+      cp.handleError(error);
+    } finally {
+      retryingJobs.delete(id);
+      await loadJobs();
+    }
+  }
   function pickAccount(form,id){const job=jobs.find(item=>item.id===form.dataset.liveCapture),account=job?.accounts.find(item=>item.id===id);if(!account)return;const selected=accountSelections.get(form.dataset.liveCapture)||[];if(!selected.includes(id))selected.push(id);accountSelections.set(form.dataset.liveCapture,selected);form.elements.account.value=JSON.stringify(selected);const box=form.querySelector('[data-selected-website]');box.replaceChildren();for(const key of selected){const value=job.accounts.find(x=>x.id===key);const line=document.createElement('div');line.textContent=value?.domain||key;const remove=document.createElement('button');remove.type='button';remove.className='button button-secondary';remove.textContent='Remove';remove.onclick=()=>{const remaining=selected.filter(x=>x!==key);accountSelections.set(form.dataset.liveCapture,remaining);form.querySelector('[data-clear-account]').click();remaining.forEach(x=>pickAccount(form,x));};line.append(remove);box.append(line)}form.querySelector('[data-clear-account]').hidden=false;form.querySelectorAll('[data-account]').forEach(row=>{const chosen=selected.includes(row.dataset.account);row.classList.toggle('selected',chosen);row.querySelector('[data-pick-account]').disabled=chosen;});}
   $('#liveJobs').addEventListener('dragstart',event=>{const row=event.target.closest('[data-account]');if(!row)return;event.dataTransfer.setData('text/plain',JSON.stringify({job:row.closest('form').dataset.liveCapture,account:row.dataset.account}));event.dataTransfer.effectAllowed='copy';});
   $('#liveJobs').addEventListener('dragover',event=>{if(event.target.closest('[data-migration-drop]'))event.preventDefault();});
@@ -134,8 +171,9 @@
   $('#liveJobsRefresh').onclick=loadJobs;
   const retryPendingButton=document.createElement('button');retryPendingButton.id='liveJobsRetryPending';retryPendingButton.type='button';retryPendingButton.className='button button-primary';retryPendingButton.textContent='Retry pending';retryPendingButton.hidden=true;$('#liveJobsCancelAll').before(retryPendingButton);
   retryPendingButton.onclick=async()=>{
-    if(retryPendingBusy)return;
+    if(retryPendingBusy||retryingJobs.size)return;
     if(!await window.LiteCPDialogs.confirm('Retry pending migrations using retained files where available, or capture again when source credentials are available? Existing websites still require separate overwrite confirmation.'))return;
+    if(retryPendingBusy||retryingJobs.size)return;
     retryPendingBusy=true;retryPendingButton.disabled=true;
     let retried=0,skipped=0;const errors=[];
     try{
@@ -193,6 +231,7 @@
     const cancelJob=event.target.closest('[data-live-cancel]');if(cancelJob){if(!await window.LiteCPDialogs.confirm('Cancel this migration? Captured files and source credentials will be kept.'))return;cancelJob.disabled=true;try{await cp.api('/api/live-migrations/cancel',{method:'POST',body:{action:'cancel',id:cancelJob.dataset.liveCancel,confirm:true}});await loadJobs();cp.showToast('Migration cancelled','The migration stopped without deleting retained data.');}catch(error){cp.handleError(error);cancelJob.disabled=false;}return;}
     const automatic=event.target.closest('[data-live-auto],[data-live-overwrite]');if(automatic){const id=automatic.dataset.liveAuto||automatic.dataset.liveOverwrite,job=jobs.find(x=>x.id===id),domain=job?.accounts.find(x=>x.id===job.account)?.domain;const overwrite=!!automatic.dataset.liveOverwrite;let confirmed='';if(overwrite){confirmed=await window.LiteCPDialogs.prompt(`Overwrite ${domain}? A recovery backup will be created first. Existing files will be retained separately and existing databases will not be deleted. Type the domain to confirm.`, '', {title:'Overwrite existing website',label:'Domain',confirmText:'Back up and overwrite',danger:true});if(confirmed!==domain)return;}automatic.disabled=true;try{await cp.api('/api/live-migrations/auto-restore',{method:'POST',body:{id,overwrite,confirmDomain:confirmed}});await loadJobs();await cp.refresh();}catch(error){cp.handleError(error);automatic.disabled=false;}return;}
     const openJob=event.target.closest('[data-live-open-job]');if(openJob){const job=jobs.find(item=>item.id===openJob.dataset.liveOpenJob);if(job)await revealMigrationJob(job);return;}
+    const retryEmpty=event.target.closest('[data-live-retry-empty]');if(retryEmpty){await retryWithEmptyDatabases(retryEmpty.dataset.liveRetryEmpty);return;}
     const retry=event.target.closest('[data-live-retry]');if(retry){retry.disabled=true;try{const job=await cp.api('/api/live-migrations',{method:'POST',body:{action:'retry',id:retry.dataset.liveRetry,confirm:true}});await revealMigrationJob(job);if(job.status==='awaiting-overwrite')cp.showToast('Backup ready for restore','This website already exists. Use Review overwrite to confirm replacement.');}catch(error){cp.handleError(error);retry.disabled=false;}return;}
     const review=event.target.closest('[data-live-review]'),forget=event.target.closest('[data-live-forget]');
     if(review){document.dispatchEvent(new Event('migration-show-review'));selectedJob=jobs.find(job=>job.id===review.dataset.liveReview);if(!selectedJob?.preview)return;window.LiteCPFeatures.reviewMigration(selectedJob.preview);$('#liveSQL').innerHTML=selectedJob.preview.databases.map(value=>`<option>${esc(value)}</option>`).join('');$('#liveTargetDatabase').innerHTML=(cp.state().databases||[]).map(value=>`<option value="${esc(value.id)}">${esc(value.name)}</option>`).join('');$('#liveDatabaseForm').classList.toggle('hidden',!selectedJob.preview.databases.length);$('#liveDatabaseForm').reset();$('#migrationImportForm').scrollIntoView({behavior:'smooth',block:'start'});}

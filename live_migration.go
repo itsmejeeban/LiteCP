@@ -68,6 +68,8 @@ type liveExportResult struct {
 	SourceExport string          `json:"sourceExport"`
 	Warnings     []string        `json:"warnings"`
 	Error        string          `json:"error"`
+
+	CPanelDatabaseInventoryEmpty bool `json:"cpanel_database_inventory_empty"`
 }
 type LiveMigrationJob struct {
 	CPanelWebsiteID      string                     `json:"cpanelWebsiteId,omitempty"`
@@ -93,6 +95,9 @@ type LiveMigrationJob struct {
 	UpdatedAt            time.Time                  `json:"updatedAt"`
 	StageStartedAt       time.Time                  `json:"stageStartedAt,omitempty"`
 	CompletedAt          time.Time                  `json:"completedAt,omitempty"`
+
+	RecreateEmptyDatabases       bool `json:"recreateEmptyDatabases,omitempty"`
+	CPanelDatabaseInventoryEmpty bool `json:"cpanelDatabaseInventoryEmpty,omitempty"`
 }
 
 func setLiveJobStage(job *LiveMigrationJob, stage, status, message string) {
@@ -123,6 +128,13 @@ func cpanelDatabaseCaptureIncomplete(job LiveMigrationJob) bool {
 func liveCaptureRetryEligible(job LiveMigrationJob) bool {
 	return migrationCleanupEligible(job.Status) ||
 		(cpanelDatabaseCaptureIncomplete(job) && (job.Status == "review" || job.Status == "awaiting-overwrite"))
+}
+
+func canRetryWithEmptyDatabases(job LiveMigrationJob) bool {
+	return job.Source.Platform == "cpanel" &&
+		(job.Status == "failed" || job.Status == "restore-review" || job.Status == "captured") &&
+		job.CPanelWebsiteID == "" && !cpanelDatabaseCaptureIncomplete(job) &&
+		(job.Preview == nil || len(job.Preview.Databases) == 0)
 }
 
 func setLiveCaptureStaged(job *LiveMigrationJob, preview *MigrationPreview) {
@@ -451,9 +463,15 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 		Account    string     `json:"account"`
 		Accounts   []string   `json:"accounts"`
 		Confirm    bool       `json:"confirm"`
+
+		RecreateEmptyDatabases bool `json:"recreateEmptyDatabases"`
 	}
 	if err := decodeJSONWithLimit(r, &input, 80<<10); err != nil {
 		writeError(w, 400, err.Error())
+		return
+	}
+	if input.RecreateEmptyDatabases && input.Action != "retry" {
+		writeError(w, 400, "Empty database recreation is available only when retrying an eligible cPanel migration.")
 		return
 	}
 	if input.Action == "queue" {
@@ -594,7 +612,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == nil {
 			var result liveExportResult
-			result, err = a.liveRemote(ctx, input.Source, root, "discover", "", id)
+			result, err = a.liveRemote(ctx, input.Source, root, "discover", "", id, false)
 			if err == nil {
 				job.Accounts = result.Accounts
 			}
@@ -624,6 +642,10 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, "Retry requires retained credentials and a stopped, incomplete capture.")
 			return
 		}
+		if input.RecreateEmptyDatabases && !canRetryWithEmptyDatabases(original) {
+			writeError(w, 409, "Empty database recreation requires a stopped cPanel migration without a captured database or known database export failure.")
+			return
+		}
 		if _, err := selectedMigrationAccounts(original, []string{original.Account}); err != nil {
 			writeError(w, 409, "Reconnect and select the source website before retrying capture.")
 			return
@@ -647,6 +669,10 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if replacement != nil {
+			if input.RecreateEmptyDatabases && !replacement.RecreateEmptyDatabases {
+				writeError(w, 409, "A standard migration retry is already in progress or awaiting review for this website.")
+				return
+			}
 			writeJSON(w, 202, replacement)
 			return
 		}
@@ -678,6 +704,8 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		original.ID = id
+		original.RecreateEmptyDatabases = input.RecreateEmptyDatabases
+		original.CPanelDatabaseInventoryEmpty = false
 		original.CPanelWebsiteID = ""
 		original.ArtifactsCleaned = false
 		original.NativeReady = false
@@ -888,12 +916,13 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 		fail(context.Canceled)
 		return
 	}
-	result, err := a.liveRemote(ctx, job.Source, root, "capture", job.Account, job.ID)
+	result, err := a.liveRemote(ctx, job.Source, root, "capture", job.Account, job.ID, job.RecreateEmptyDatabases)
 	if err != nil {
 		fail(err)
 		return
 	}
 	job.SourceExport = result.SourceExport
+	job.CPanelDatabaseInventoryEmpty = job.RecreateEmptyDatabases && job.Source.Platform == "cpanel" && result.CPanelDatabaseInventoryEmpty
 	job.SourceExportRetained = result.SourceExport != ""
 	job.Warnings = result.Warnings
 	if cancelled() {
@@ -941,7 +970,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 		}
 	}
 	if job.Source.Platform == "cpanel" && !cpanelDatabaseCaptureIncomplete(job) {
-		if _, err := a.liveRemote(ctx, job.Source, root, "cleanup", job.Account, job.ID); err != nil {
+		if _, err := a.liveRemote(ctx, job.Source, root, "cleanup", job.Account, job.ID, false); err != nil {
 			fail(errors.New("source backup was copied and verified, but LiteCP could not remove the temporary cPanel archive: " + err.Error()))
 			return
 		}

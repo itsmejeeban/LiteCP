@@ -130,3 +130,76 @@ test('missing source database maps show repair guidance and keep recapture avail
   assert.match(result.html, /data-live-retry="old-job">Retry capture/);
   assert.equal(render({ ...job, message: 'Temporary SSH timeout.' }).retryAction, 'capture');
 });
+
+const missingMap = {
+  ...healthReview, status: 'failed', cpanelWebsiteId: '', nativeReady: false,
+  message: 'cPanel capture blocked: the account is missing from the source cPanel database map.'
+};
+const missingDump = {
+  ...missingMap, status: 'restore-review', nativeReady: true,
+  message: 'Automatic restore stopped: configuration .env has no matching database dump.'
+};
+
+test('empty-database retries appear only for eligible individual cPanel jobs', () => {
+  for (const job of [missingMap, missingDump]) {
+    const { html } = render(job);
+    assert.match(html, /data-live-retry-empty="old-job"[^>]*>Retry with empty databases/);
+    assert.ok(html.indexOf('data-live-retry-empty=') < html.indexOf('class="live-job-details"'));
+    assert.match(html, /data-live-retry="old-job">Retry capture/);
+  }
+  for (const change of [
+    { status: 'awaiting-overwrite' },
+    { credentialsRetained: false },
+    { cpanelWebsiteId: 'existing-site' },
+    { preview: { databases: ['mysql/source.sql'] } },
+    { warnings: ['Some account databases could not be exported.'] },
+    { source: { ...missingDump.source, platform: 'plesk' } }
+  ]) {
+    assert.doesNotMatch(render({ ...missingDump, ...change }).html, /data-live-retry-empty/);
+  }
+});
+
+test('a failed empty-database retry stays visible while its previous attempt remains in history', () => {
+  const previous = { ...missingDump, createdAt: '2026-11-03T23:26:00Z' };
+  const replacement = {
+    ...missingMap, id: 'new-job', recreateEmptyDatabases: true, createdAt: '2026-11-03T23:53:00Z',
+    message: 'The account contains databases that require export.'
+  };
+  const pending = render(previous, [previous, replacement]).html;
+  assert.doesNotMatch(pending, /data-job-id="old-job"/);
+  assert.match(pending, /data-job-id="new-job"/);
+  const history = render(previous, [previous, replacement], '#migrations/completed').html;
+  assert.match(history, /data-live-open-job="new-job"/);
+  assert.doesNotMatch(history, /data-live-retry-empty/);
+});
+
+test('explicit confirmation is required before retrying the selected account with empty databases', async () => {
+  const handler = source.slice(source.indexOf('  async function retryWithEmptyDatabases'), source.indexOf('  function pickAccount'));
+  const calls = [];
+  let consent = false;
+  const context = vm.createContext({
+    jobs: [missingMap],
+    retryingJobs: new Set(),
+    retryPendingBusy: false,
+    canRetryWithEmptyDatabases: job => job?.credentialsRetained,
+    renderJobs() {},
+    async loadJobs() {},
+    window: { LiteCPDialogs: { async confirm(message) {
+      assert.match(message, /example\.test.*contain no data/);
+      return consent;
+    } } },
+    cp: { async api(path, options) {
+      calls.push([path, options]);
+      return { status: 'queued' };
+    }, showToast() {}, handleError(error) { throw error; } }
+  });
+  vm.runInContext(handler, context);
+  await context.retryWithEmptyDatabases('old-job');
+  assert.equal(calls.length, 0);
+  consent = true;
+  await context.retryWithEmptyDatabases('old-job');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [['/api/live-migrations', {
+    method: 'POST',
+    body: { action: 'retry', id: 'old-job', confirm: true, recreateEmptyDatabases: true }
+  }]]);
+});

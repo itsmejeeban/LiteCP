@@ -244,16 +244,16 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
     try:
         response = json.loads(command(['/usr/local/cpanel/bin/uapi', '--user=' + account,
                                        '--output=json', 'Mysql', 'list_databases']))
-        result = response.get('result', {})
-        if result.get('status') != 1 or not isinstance(result.get('data'), list):
+        result = response.get('result') if isinstance(response, dict) else None
+        if not isinstance(result, dict) or result.get('status') != 1 or not isinstance(result.get('data'), list):
             raise ValueError('database inventory unavailable')
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
         warnings.append('Could not verify the cPanel database inventory. Only native database dumps were captured.')
-        return
+        return False
     missing = {row['database'] for row in result['data']
                if isinstance(row, dict) and isinstance(row.get('database'), str)} - included
     if not missing:
-        return
+        return not result['data'] and not included
     binary = shutil.which('mysqldump') or shutil.which('mariadb-dump')
     added = 0
     failures = set()
@@ -315,6 +315,7 @@ def supplement_cpanel_databases(target, included, account, root, log, warnings):
         warnings.append('Some account databases could not be exported. Check the source export log before restoring.')
         if failures:
             warnings.append('Source database export reported: ' + '; '.join(sorted(failures)) + '.')
+    return False
 
 def plesk_backup_subscription(binary, account):
     # Plesk native backups are subscription-scoped, not individual subdomains.
@@ -399,7 +400,9 @@ def export(request):
         # locally without requiring a fresh WHM inventory for every capture.
         source_home = cpanel_account_home(account)
         skip_mysql = cpanel_database_map_missing(account)
-        if skip_mysql and not (cpanel_blank_root_candidate(source_home) and cpanel_database_map_preview_empty(account)):
+        recreate_empty = request.get('recreate_empty_databases') == 'true'
+        if skip_mysql and not ((recreate_empty or cpanel_blank_root_candidate(source_home))
+                               and cpanel_database_map_preview_empty(account)):
             raise RuntimeError('cPanel capture blocked: the account is missing from the source cPanel database map; repair the map on the source before retrying. No archive was created.')
     elif platform == 'cpanel':
         binary = '/usr/local/cpanel/bin/whmapi1'
@@ -489,16 +492,25 @@ def export(request):
             raise RuntimeError('The cPanel native archive was not created at its expected location')
         result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS zones are imported for review and export; registrar delegation, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
-        supplement = None
         if skip_mysql:
             if not cpanel_database_map_preview_empty(account):
-                raise RuntimeError('Could not reconfirm the blank cPanel account database inventory after capture. Native export retained.')
-            result['warnings'].append('Blank cPanel account captured after its source database-map preview confirmed no databases to export.')
-        else:
-            supplement = lambda target, included: supplement_cpanel_databases(
+                raise RuntimeError('Could not reconfirm the empty cPanel account database inventory after capture. Native export retained.')
+            if not recreate_empty:
+                result['warnings'].append('Blank cPanel account captured after its source database-map preview confirmed no databases to export.')
+
+        def supplement(target, included):
+            inventory_empty = not included if skip_mysql else supplement_cpanel_databases(
                 target, included, account, root, log, result['warnings'])
+            if recreate_empty and inventory_empty:
+                if skip_mysql or cpanel_database_map_preview_empty(account):
+                    result['cpanel_database_inventory_empty'] = True
+                    result['warnings'].append('The cPanel source confirmed no account databases to export.')
+                else:
+                    result['warnings'].append('Empty database recreation requires a verified empty cPanel database inventory.')
+
         website_files, private_files, skipped, website_root_found = cpanel_portable(
-            archive, portable, source_home, supplement, blank_only=skip_mysql)
+            archive, portable, source_home, None if skip_mysql and not recreate_empty else supplement,
+            blank_only=skip_mysql and not recreate_empty)
         os.chmod(portable,0o600)
         if website_files or website_root_found:
             result['portable'] = describe(portable)

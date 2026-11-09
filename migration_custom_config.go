@@ -12,6 +12,7 @@ import (
 )
 
 var errMigrationDatabaseDumpMissing = errors.New("no matching database dump")
+var errMigrationDatabaseConfigMissing = errors.New("no supported literal database configuration found; use a DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_HOST .env connection or a literal PHP configuration")
 
 type migrationConfigPlan struct {
 	Path     string
@@ -25,6 +26,7 @@ type migrationConfigPlan struct {
 var migrationPHPStringsAndComments = regexp.MustCompile(`(?s)'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|/\*.*?\*/|//[^\r\n]*|#[^\r\n]*`)
 var migrationConfigField = regexp.MustCompile(`(?i)(?:\$([a-z_][a-z0-9_]*)\s*=\s*|['"]([a-z_][a-z0-9_]*)['"]\s*=>\s*|define\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]\s*,\s*|\$db\s*\[\s*['"]default['"]\s*\]\s*\[\s*['"]([a-z_][a-z0-9_]*)['"]\s*\]\s*=\s*)('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`)
 var migrationEnvField = regexp.MustCompile(`(?m)^[ \t]*(?:export[ \t]+)?(DB_DATABASE|DB_NAME|DB_USERNAME|DB_USER|DB_PASSWORD|DB_HOST|DB_PORT|DB_SOCKET)[ \t]*=[ \t]*("[^"\r\n]*"|'[^'\r\n]*'|[^\r\n#]*)(?:[ \t]*#[^\r\n]*)?\r?$`)
+var migrationEnvConnectionField = regexp.MustCompile(`(?m)^[ \t]*(?:export[ \t]+)?(DB_CONNECTION|DB_URL|DATABASE_URL)[ \t]*=[ \t]*("[^"\r\n]*"|'[^'\r\n]*'|[^\r\n#]*)(?:[ \t]*#[^\r\n]*)?\r?$`)
 
 func migrationConfigKey(key string) string {
 	switch strings.ToLower(key) {
@@ -207,6 +209,10 @@ func rewriteGenericMigrationConfig(plan migrationConfigPlan, credentials DBCrede
 
 // Only inspect configuration-shaped text files, never execute source PHP.
 func genericMigrationDatabasePlan(public, private string, dumps []string) ([]migrationConfigPlan, map[string]string, error) {
+	return planGenericMigrationDatabases(public, private, dumps, false)
+}
+
+func planGenericMigrationDatabases(public, private string, dumps []string, recreateEmpty bool) ([]migrationConfigPlan, map[string]string, error) {
 	databases := map[string]string{}
 	for _, dump := range dumps {
 		name := strings.TrimSuffix(filepath.Base(dump), ".sql")
@@ -247,7 +253,7 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			}
 			// Shipped example files are preserved, but must not override an
 			// accompanying active configuration with placeholder credentials.
-			if kind == "php" && migrationConfigExampleHasActiveSibling(path) {
+			if kind == "php" && (migrationConfigExampleHasActiveSibling(path) || (recreateEmpty && isMigrationConfigExample(name))) {
 				return nil
 			}
 			info, e := entry.Info()
@@ -264,7 +270,7 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			plan, e := inspectMigrationConfig(string(data), kind)
 			// Ignore unrelated config files without a connection. Never guess dynamic values.
 			if e != nil {
-				if plan.Fields["name"] != nil || plan.Fields["dsn"] != nil {
+				if plan.Fields["name"] != nil || plan.Fields["dsn"] != nil || (recreateEmpty && kind == "env") {
 					return fmt.Errorf("configuration %s: %w", entry.Name(), e)
 				}
 				return nil
@@ -277,12 +283,19 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 				return e
 			}
 			plan.Private = index == 1
-			if _, ok := databases[plan.Database]; !ok {
+			dump, found := databases[plan.Database]
+			if !found || (recreateEmpty && dump == "") {
 				location := filepath.ToSlash(plan.Path)
 				if plan.Private {
 					location = "private_home/" + location
 				}
-				return fmt.Errorf("configuration %q has %w", location, errMigrationDatabaseDumpMissing)
+				if !recreateEmpty {
+					return fmt.Errorf("configuration %q has %w", location, errMigrationDatabaseDumpMissing)
+				}
+				if e := validateEmptyMigrationDatabaseConfig(plan); e != nil {
+					return fmt.Errorf("configuration %q: %w", location, e)
+				}
+				databases[plan.Database] = ""
 			}
 			plans = append(plans, plan)
 			return nil
@@ -292,9 +305,44 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 		}
 	}
 	if len(plans) == 0 && !blankMigrationWebsite(public, private) && !migrationHasNoDatabaseReferences(public, private) {
-		return nil, nil, fmt.Errorf("no supported literal database configuration found; use a DB_DATABASE/DB_USERNAME/DB_PASSWORD/DB_HOST .env connection or a literal PHP configuration")
+		return nil, nil, errMigrationDatabaseConfigMissing
 	}
 	return plans, databases, nil
+}
+
+func isMigrationConfigExample(name string) bool {
+	return strings.HasSuffix(name, ".example.php") || strings.HasSuffix(name, ".sample.php")
+}
+
+// An alternate server can be reached through a non-default port or socket
+// even when a configuration says localhost.
+func validateEmptyMigrationDatabaseConfig(plan migrationConfigPlan) error {
+	if plan.Kind == "env" {
+		seenDriver := false
+		for _, field := range migrationEnvConnectionField.FindAllStringSubmatch(plan.Content, -1) {
+			value := strings.TrimSpace(field[2])
+			if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+				value = value[1 : len(value)-1]
+			}
+			if field[1] == "DB_CONNECTION" {
+				if seenDriver || (value != "mysql" && value != "mariadb") {
+					return fmt.Errorf("database driver needs a single literal MySQL or MariaDB connection")
+				}
+				seenDriver = true
+			} else if value != "" {
+				return fmt.Errorf("database URL needs explicit mapping before migration")
+			}
+		}
+	}
+	for _, field := range []string{"port", "socket"} {
+		if span := plan.Fields[field]; span != nil {
+			value := strings.Trim(strings.TrimSpace(plan.Content[span[0]:span[1]]), "\"'")
+			if value != "" && (field != "port" || value != "3306") {
+				return fmt.Errorf("non-default database %s requires explicit mapping", field)
+			}
+		}
+	}
+	return nil
 }
 
 func migrationConfigExampleHasActiveSibling(path string) bool {

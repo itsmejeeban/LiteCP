@@ -154,6 +154,71 @@ func TestCPanelIncompleteDatabaseCaptureCanRecaptureLegacyReview(t *testing.T) {
 	}
 }
 
+func TestLiveMigrationEmptyDatabaseRetryRequiresExplicitConsent(t *testing.T) {
+	app := &App{system: &System{dataDir: t.TempDir()}}
+	for _, scenario := range []struct {
+		name     string
+		platform string
+		optIn    bool
+		warning  string
+		dumps    []string
+		want     int
+	}{
+		{name: "cpanel explicit", platform: "cpanel", optIn: true, want: http.StatusAccepted},
+		{name: "cpanel default", platform: "cpanel", want: http.StatusAccepted},
+		{name: "wrong provider", platform: "plesk", optIn: true, want: http.StatusConflict},
+		{name: "export failure", platform: "cpanel", optIn: true, warning: incompleteCPanelDatabaseWarningFixture, want: http.StatusConflict},
+		{name: "captured dump", platform: "cpanel", optIn: true, dumps: []string{"mysql/source.sql"}, want: http.StatusConflict},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			id, err := randomToken(18)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id = safeSiteID(id)
+			account := strings.ReplaceAll(scenario.name, " ", "-")
+			job := LiveMigrationJob{
+				ID: id, Status: "failed", Source: LiveSource{Platform: scenario.platform},
+				Account: account, Accounts: []LiveAccount{{ID: account, Domain: "example.test"}}, CredentialsRetained: true,
+				Preview: &MigrationPreview{Databases: scenario.dumps}, Warnings: []string{scenario.warning},
+				RecreateEmptyDatabases: true, CPanelDatabaseInventoryEmpty: true,
+			}
+			root, _ := app.liveJobRoot(id)
+			if err := os.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"identity", "known_hosts"} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte("fixture"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := app.saveLiveJob(&job); err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(map[string]any{"id": id, "action": "retry", "confirm": true, "recreateEmptyDatabases": scenario.optIn})
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := httptest.NewRecorder()
+			app.liveMigrations(res, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(string(body))))
+			if res.Code != scenario.want {
+				t.Fatalf("retry returned %d, want %d: %s", res.Code, scenario.want, res.Body.String())
+			}
+			if res.Code != http.StatusAccepted {
+				return
+			}
+			var retry LiveMigrationJob
+			if err := json.Unmarshal(res.Body.Bytes(), &retry); err != nil {
+				t.Fatal(err)
+			}
+			retry, err = app.loadLiveJob(retry.ID)
+			if err != nil || retry.ID == id || retry.Status != "queued" || !retry.AutoRestore || retry.RecreateEmptyDatabases != scenario.optIn || retry.CPanelDatabaseInventoryEmpty {
+				t.Fatalf("invalid persisted retry: %+v, %v", retry, err)
+			}
+		})
+	}
+}
+
 func TestCPanelIncompleteDatabaseCaptureGuardsLegacyRestore(t *testing.T) {
 	a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{}}
 	id := "incomplete-database-fixture"

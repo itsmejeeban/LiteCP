@@ -353,6 +353,65 @@ class LiveSourceTests(unittest.TestCase):
             self.assertIsNone(portable.call_args.args[3])
             self.assertTrue(portable.call_args.kwargs['blank_only'])
             self.assertEqual(result['portable'], 'cpanel-website.tar.gz')
+            self.assertNotIn('cpanel_database_inventory_empty', result)
+
+    def test_cpanel_empty_recreation_requires_provider_proof_and_no_dumps(self):
+        request = {'platform': 'cpanel', 'mode': 'capture', 'account': 'example',
+                   'job': 'abcdefghijklmnop', 'recreate_empty_databases': 'true'}
+        for missing_map, preview_empty, inventory, native, expected in (
+            (True, True, [], set(), True),
+            (True, True, [], {'example_db'}, False),
+            (False, True, [], set(), True),
+            (False, False, [], set(), False),
+            (False, True, [{'database': 'example_db'}], set(), False),
+            (False, True, [{'database': 'example_db'}], {'example_db'}, False),
+            (False, True, None, set(), False),
+        ):
+            def run(args, log=None):
+                return json.dumps({'result': {'status': 1, 'data': inventory}}) if args[0].endswith('/uapi') else ''
+
+            def create_portable(archive, portable, source_home, supplement, blank_only):
+                self.assertFalse(blank_only)
+                supplement(None, native)
+                return 1, 1, 0, True
+
+            with self.subTest(missing_map=missing_map, preview=preview_empty, inventory=inventory, native=native), \
+                    patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                    patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                    patch.object(source, 'cpanel_database_map_missing', return_value=missing_map), \
+                    patch.object(source, 'cpanel_blank_root_candidate', return_value=False) as blank_root, \
+                    patch.object(source, 'cpanel_database_map_preview_empty', return_value=preview_empty) as preview, \
+                    patch.object(source.pathlib.Path, 'mkdir'), \
+                    patch.object(source.pathlib.Path, 'is_file', return_value=True), \
+                    patch.object(source.pathlib.Path, 'is_symlink', return_value=False), \
+                    patch('builtins.open', unittest.mock.mock_open()), \
+                    patch.object(source.os, 'chmod'), \
+                    patch.object(source, 'command', side_effect=run) as command, \
+                    patch.object(source.shutil, 'which', return_value=None), \
+                    patch.object(source, 'describe', side_effect=lambda path: path.name), \
+                    patch.object(source, 'cpanel_portable', side_effect=create_portable):
+                result = source.export(request)
+                blank_root.assert_not_called()
+                self.assertEqual(result.get('cpanel_database_inventory_empty', False), expected)
+                self.assertEqual(result['portable'], 'cpanel-website.tar.gz')
+                self.assertEqual('--skipmysql' in command.call_args_list[0].args[0], missing_map)
+                if missing_map:
+                    self.assertEqual(preview.call_count, 2)
+                if inventory and not native:
+                    self.assertTrue(any('Some account databases could not be exported.' in warning
+                                        for warning in result['warnings']))
+
+    def test_cpanel_empty_recreation_cannot_skip_missing_map_without_provider_proof(self):
+        request = {'platform': 'cpanel', 'mode': 'capture', 'account': 'example',
+                   'job': 'abcdefghijklmnop', 'recreate_empty_databases': 'true'}
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source, 'cpanel_database_map_missing', return_value=True), \
+                patch.object(source, 'cpanel_database_map_preview_empty', return_value=False), \
+                patch.object(source.pathlib.Path, 'mkdir') as mkdir:
+            with self.assertRaisesRegex(RuntimeError, 'missing from the source cPanel database map'):
+                source.export(request)
+            mkdir.assert_not_called()
 
     def test_cpanel_blank_fallback_rechecks_captured_web_and_private_files(self):
         with tempfile.TemporaryDirectory() as directory:
