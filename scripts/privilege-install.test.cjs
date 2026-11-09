@@ -9,7 +9,7 @@ test('network service is unprivileged and cannot inherit Linux capabilities',()=
  assert.doesNotMatch(unit,/^InaccessiblePaths=.*\/etc\/shadow/m);
 });
 test('updates runtime-check the namespace before stopping the current panel',()=>{
- for(const [path,marker] of [['scripts/deploy-published-update.sh',"echo '[Server 3/4]"],['scripts/update-panel.sh','status running "Restarting LiteCP']]){
+ for(const [path,marker] of [['scripts/deploy-published-update.sh',"echo '[Server 3/4]"],['scripts/update-panel.sh','python3 "$work/source/scripts/write-panel-recovery-manifest.py"']]){
   const script=read(path),body=script.slice(script.indexOf(marker));
   assert.ok(body.indexOf('--prepare-only')>=0&&body.indexOf('--prepare-only')<body.indexOf('systemctl stop litecp'),path);
  }

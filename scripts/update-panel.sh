@@ -11,29 +11,50 @@ with os.fdopen(fd,'w') as out: json.dump(dict(state=state,message=message,versio
 os.replace(tmp,path)
 PY
 }
-switched=0
+panel_stop_started=0
+binary_install_started=0
 work=''
+failure_message='Update failed. The previous panel binary has been retained. Review journalctl -u litecp-panel-update.'
 failed() {
   trap - ERR
-  if [[ "$switched" == 1 ]]; then
-    systemctl stop litecp || true
-    systemctl stop litecp-broker.service litecp-broker.socket || true
-    if [[ -d "$work/service-recovery" ]]; then bash "$work/source/scripts/install-privilege-services.sh" --restore "$work/service-recovery"; fi
-    cp --preserve=mode "$work/previous-litecp" /usr/local/bin/litecp
-    if [[ -f "$work/previous-system-snapshot.py" ]]; then install -m 0700 "$work/previous-system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py; fi
-    systemctl try-restart litecp-captcha.service || true
-    systemctl start litecp || true
+  # Still attempt to start the panel if a recovery command itself fails.
+  set +e
+  if [[ "$panel_stop_started" == 1 ]]; then
+    if [[ -d "$work/service-recovery" ]]; then
+      systemctl stop litecp litecp-broker.service litecp-broker.socket
+      bash "$work/source/scripts/install-privilege-services.sh" --restore "$work/service-recovery"
+    fi
+    if [[ "$binary_install_started" == 1 ]]; then
+      cp --preserve=mode "$work/previous-litecp" /usr/local/bin/litecp
+      if [[ -f "$work/previous-system-snapshot.py" ]]; then install -m 0700 "$work/previous-system-snapshot.py" /usr/local/lib/litecp/system-snapshot.py; fi
+      systemctl try-restart litecp-captcha.service
+    fi
+    systemctl start litecp
   fi
-  status failed "Update failed. The previous panel binary has been retained and restored if necessary. Review journalctl -u litecp-panel-update."
+  printf '%s\n' "$failure_message" >&2
+  status failed "$failure_message"
   exit 1
+}
+check_recovery_space() {
+  local destination="$1" available_kib data_kib reserve_kib=1048576
+  if ! data_kib=$(du -sk -- "$data_dir" | cut -f 1) ||
+     ! available_kib=$(df -Pk -- "$destination" | awk 'NR==2 {print $4}') ||
+     ! [[ "$data_kib" =~ ^[0-9]+$ && "$available_kib" =~ ^[0-9]+$ ]]; then
+    failure_message="Could not verify available disk space for the panel recovery copy. The running panel was not stopped."
+    return 1
+  fi
+  if (( available_kib < data_kib + reserve_kib )); then
+    failure_message="Insufficient disk space for the panel recovery copy. Need $((data_kib + reserve_kib)) KiB free, including a 1 GiB reserve; available: $available_kib KiB. The running panel was not stopped."
+    return 1
+  fi
 }
 trap failed ERR
 status running "Downloading the official LiteCP release."
 for tool in curl python3 go systemctl flock; do command -v "$tool" >/dev/null; done
 exec 9>/run/lock/litecp-panel-update.lock
 flock -n 9
-[[ $(df -Pk /usr/local | awk 'NR==2 {print $4}') -ge 1048576 ]] || { echo 'At least 1 GiB free storage is required for a safe update.' >&2; false; }
 install -d -m 0700 /usr/local/lib/litecp-updates
+check_recovery_space /usr/local/lib/litecp-updates
 work="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
 # Transient system services need not have HOME or GOPATH. Keep build caches
 # private to this update rather than relying on an interactive root login.
@@ -97,12 +118,15 @@ CGO_ENABLED=0 go build -p=1 -mod=readonly -trimpath -ldflags "-s -w -X main.vers
 cp --preserve=mode /usr/local/bin/litecp "$work/previous-litecp"
 if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then cp -p /usr/local/lib/litecp/system-snapshot.py "$work/previous-system-snapshot.py"; fi
 python3 "$work/source/scripts/write-panel-recovery-manifest.py" "$work"
-status running "Restarting LiteCP and checking the new version."
 bash "$work/source/scripts/install-privilege-services.sh" --prepare-only
+check_recovery_space "$work"
+status running "Saving the panel recovery copy. Existing websites remain online."
+panel_stop_started=1
 systemctl stop litecp
-switched=1
-LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
 cp -a "$data_dir" "$work/panel-data"
+status running "Restarting LiteCP and checking the new version."
+LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
+binary_install_started=1
 install -m 0755 "$work/next-litecp" /usr/local/bin/litecp
 systemctl try-restart litecp-captcha.service
 install -d -m 0755 /usr/local/lib/litecp

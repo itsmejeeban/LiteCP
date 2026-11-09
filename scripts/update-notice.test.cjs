@@ -41,6 +41,14 @@ test('transient updater defines its own private Go cache paths',()=>{
  assert.ok(worker.indexOf('export GOPATH=')<worker.indexOf('go build -p=1'));
 });
 
+test('panel updater checks backup capacity before downtime and copies recovery data before binary replacement',()=>{
+ const worker=fs.readFileSync('scripts/update-panel.sh','utf8');
+ assert.match(worker,/data_kib=\$\(du -sk -- "\$data_dir"/);
+ assert.match(worker,/available_kib < data_kib \+ reserve_kib/);
+ assert.match(worker,/check_recovery_space "\$work"[\s\S]*?\nsystemctl stop litecp\r?\ncp -a "\$data_dir" "\$work\/panel-data"[\s\S]*?\nbinary_install_started=1\r?\ninstall -m 0755/);
+ assert.match(worker,/if \[\[ "\$binary_install_started" == 1 \]\]; then\r?\n\s+cp --preserve=mode "\$work\/previous-litecp"/);
+});
+
 test('network fetch failures explain connection and certificate checks',async()=>{
  const message={textContent:''},notice={querySelector:()=>({}),classList:{toggle(){}}};
  const elements={'#updateNotice':notice,'#appView':{classList:{contains:()=>false}},'#panelUpdateMessage':message};

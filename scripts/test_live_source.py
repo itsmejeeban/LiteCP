@@ -4,6 +4,8 @@ import tarfile
 import tempfile
 import json
 import pathlib
+import stat
+import sys
 import unittest
 import types
 from unittest.mock import patch
@@ -248,6 +250,53 @@ class LiveSourceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'rejected'):
             source.export({'platform':'cpanel','mode':'discover'})
 
+    def test_cpanel_capture_checks_only_the_selected_local_account(self):
+        account = types.SimpleNamespace(pw_uid=1001, pw_dir='/home/example')
+        pwd = types.SimpleNamespace(getpwnam=unittest.mock.Mock(return_value=account))
+        with patch.dict(sys.modules, {'pwd': pwd}), \
+                patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source.pathlib.Path, 'is_file', return_value=True, autospec=True) as is_file, \
+                patch.object(source.pathlib.Path, 'is_symlink', return_value=False), \
+                patch.object(source.pathlib.Path, 'mkdir'), \
+                patch('builtins.open', unittest.mock.mock_open()), \
+                patch.object(source.os, 'chmod'), \
+                patch.object(source, 'command') as command, \
+                patch.object(source, 'describe', return_value={'path':'fixture'}), \
+                patch.object(source, 'cpanel_portable', return_value=(1, 0, 0)) as portable:
+            result = source.export({'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'})
+        pwd.getpwnam.assert_called_once_with('example')
+        self.assertEqual(is_file.call_args_list[0].args[0], pathlib.Path('/var/cpanel/users/example'))
+        self.assertEqual(command.call_count, 1)
+        self.assertEqual(command.call_args.args[0][:2], ['/usr/local/cpanel/scripts/pkgacct','example'])
+        self.assertEqual(portable.call_args.args[2], '/home/example')
+        self.assertIsNotNone(result['portable'])
+
+    def test_cpanel_cleanup_uses_only_the_root_owned_job_directory(self):
+        request = {'platform':'cpanel','mode':'cleanup','account':'example','job':'abcdefghijklmnop'}
+        owner = types.SimpleNamespace(st_mode=stat.S_IFDIR | 0o700, st_uid=0)
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source.pathlib.Path, 'lstat', return_value=owner), \
+                patch.object(source, 'command') as command, \
+                patch.object(source, 'cleanup_cpanel_export', return_value=[]) as cleanup:
+            source.export(request)
+            cleanup.assert_called_once_with(pathlib.Path('/root/litecp-export-abcdefghijklmnop'), 'example')
+            command.assert_not_called()
+            owner.st_uid = 1001
+            with self.assertRaisesRegex(RuntimeError, 'unsafe'):
+                source.export(request)
+            self.assertEqual(cleanup.call_count, 1)
+
+    def test_cpanel_capture_reports_pkgacct_storage_failure(self):
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source.pathlib.Path, 'mkdir'), \
+                patch('builtins.open', unittest.mock.mock_open()), \
+                patch.object(source.os, 'chmod'), \
+                patch.object(source, 'command', side_effect=RuntimeError('pkgacct failed')), \
+                patch.object(source.pathlib.Path, 'open', return_value=io.BytesIO(b'write: Disk quota exceeded')):
+            with self.assertRaisesRegex(RuntimeError, 'cPanel capture failed.*out of disk space or quota'):
+                source.export({'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'})
+
     @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.shutil,'which',return_value='/usr/sbin/plesk')
     @patch.object(source,'command',return_value='example.test\nsecond.test\nshop.example.test\nexample.test\n')
@@ -257,12 +306,19 @@ class LiveSourceTests(unittest.TestCase):
         self.assertEqual(command.call_args.args[0],['/usr/sbin/plesk','bin','site','--list'])
 
     @patch.object(source.os,'geteuid',return_value=0,create=True)
-    @patch.object(source.pathlib.Path,'is_file',return_value=True)
-    @patch.object(source,'command',return_value='{"metadata":{"result":1},"data":{"acct":[{"user":"example"}]}}')
     @patch.object(source.pathlib.Path,'mkdir')
-    def test_unknown_account_cannot_start_source_backup(self,mkdir,*unused):
-        with self.assertRaisesRegex(RuntimeError,'discovered'):
+    def test_unsafe_account_cannot_start_source_backup(self,mkdir,*unused):
+        with self.assertRaisesRegex(RuntimeError,'Invalid account identifier'):
             source.export({'platform':'cpanel','mode':'capture','account':'other;command','job':'abcdefghijklmnop'})
+        mkdir.assert_not_called()
+
+    @patch.object(source.os,'geteuid',return_value=0,create=True)
+    @patch.object(source.pathlib.Path,'is_file',return_value=False)
+    @patch.object(source.pathlib.Path,'mkdir')
+    def test_missing_cpanel_account_cannot_start_source_backup(self,mkdir,*unused):
+        with patch.dict(sys.modules, {'pwd': types.SimpleNamespace()}):
+            with self.assertRaisesRegex(RuntimeError,'no longer available'):
+                source.export({'platform':'cpanel','mode':'capture','account':'missing','job':'abcdefghijklmnop'})
         mkdir.assert_not_called()
 
     @patch.object(source.os,'geteuid',return_value=1000,create=True)

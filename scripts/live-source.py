@@ -9,6 +9,7 @@ import io
 import pathlib
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -50,6 +51,23 @@ def cleanup_cpanel_export(root, account):
             archive.unlink()
             removed.append(name)
     return removed
+
+def cpanel_account_home(account):
+    import pwd
+    record = pathlib.Path('/var/cpanel/users') / account
+    if not record.is_file() or record.is_symlink():
+        raise RuntimeError('Selected cPanel account is no longer available on this source')
+    try:
+        user = pwd.getpwnam(account)
+    except KeyError:
+        raise RuntimeError('Selected cPanel account has no local system user')
+    if user.pw_uid == 0 or not os.path.isabs(user.pw_dir):
+        raise RuntimeError('Selected cPanel account has an unsafe system user or home directory')
+    return user.pw_dir
+
+def cpanel_storage_exhausted(diagnostic):
+    diagnostic = diagnostic.lower()
+    return 'no space left' in diagnostic or 'disk quota exceeded' in diagnostic
 
 def cpanel_portable(archive, portable, source_home="", supplement=None):
     website_files, private_files, skipped = 0, 0, 0
@@ -257,14 +275,41 @@ def export(request):
     if os.geteuid() != 0:
         raise RuntimeError('Root SSH access is required')
     platform, mode = request['platform'], request['mode']
-    if platform == 'cpanel':
+    if mode != 'discover':
+        if mode not in ('capture', 'cleanup'):
+            raise RuntimeError('Unsupported source export operation')
+        account, job = request['account'], request['job']
+        if not re.fullmatch(r'[A-Za-z0-9_-]{16,64}',job):
+            raise RuntimeError('Invalid job identifier')
+        # LiteCP immutable IDs can start with a dash. Keep cPanel and Plesk
+        # account identifiers strictly separate from command options.
+        pattern = r'[A-Za-z0-9_-]{1,128}' if platform == 'litecp' else r'[A-Za-z0-9][A-Za-z0-9_.-]{0,252}'
+        if not re.fullmatch(pattern, account):
+            raise RuntimeError('Invalid account identifier')
+        root = pathlib.Path('/root') / ('litecp-export-' + job)
+        if mode == 'cleanup':
+            if platform != 'cpanel':
+                raise RuntimeError('Source archive cleanup is supported only for cPanel migrations')
+            try:
+                directory = root.lstat()
+            except FileNotFoundError:
+                raise RuntimeError('The cPanel migration export directory is missing')
+            if not stat.S_ISDIR(directory.st_mode) or directory.st_uid != 0 or directory.st_mode & 0o077:
+                raise RuntimeError('The cPanel migration export directory is unsafe')
+            removed = cleanup_cpanel_export(root, account)
+            return {'sourceExport':str(root), 'warnings':['Removed verified source archive(s): ' + ', '.join(removed)] if removed else []}
+    if platform == 'cpanel' and mode == 'capture':
+        # LiteCP already selected a discovered account. Recheck that account
+        # locally without requiring a fresh WHM inventory for every capture.
+        source_home = cpanel_account_home(account)
+    elif platform == 'cpanel':
         binary = '/usr/local/cpanel/bin/whmapi1'
         if not pathlib.Path(binary).is_file():
             raise RuntimeError('cPanel WHM API command is not installed on this source')
         response = json.loads(command([binary, '--output=json', 'listaccts']))
         if response.get('metadata', {}).get('result') != 1:
-            reason = str(response.get('metadata', {}).get('reason', '')).lower()
-            if 'no space left' in reason or 'disk quota exceeded' in reason:
+            reason = str(response.get('metadata', {}).get('reason', ''))
+            if cpanel_storage_exhausted(reason):
                 raise RuntimeError('cPanel account discovery failed: the source server is out of disk space or quota')
             raise RuntimeError('cPanel account discovery was rejected by WHM; check listaccts on the source server before retrying')
         accounts = [{'id':x['user'], 'domain':x.get('domain','')} for x in response.get('data',{}).get('acct',[])]
@@ -284,24 +329,8 @@ def export(request):
         raise RuntimeError('Unsupported source platform')
     if mode == 'discover':
         return {'accounts':accounts, 'platform':platform, 'python':sys.version.split()[0]}
-    if mode not in ('capture', 'cleanup') or request.get('account') not in [x['id'] for x in accounts]:
+    if platform != 'cpanel' and account not in [x['id'] for x in accounts]:
         raise RuntimeError('Select an account discovered on this source')
-    account, job = request['account'], request['job']
-    if not re.fullmatch(r'[A-Za-z0-9_-]{16,64}',job):
-        raise RuntimeError('Invalid job identifier')
-    # LiteCP immutable IDs are URL-safe random tokens, not command options.
-    # cPanel/Plesk account names still retain their stricter validation.
-    valid_account = re.fullmatch(r'[A-Za-z0-9_-]{1,128}', account) if platform == 'litecp' else re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,252}', account)
-    if not valid_account:
-        raise RuntimeError('Invalid account identifier')
-    root = pathlib.Path('/root') / ('litecp-export-' + job)
-    if mode == 'cleanup':
-        if platform != 'cpanel':
-            raise RuntimeError('Source archive cleanup is supported only for cPanel migrations')
-        if not root.is_dir() or root.is_symlink():
-            raise RuntimeError('The cPanel migration export directory is missing or unsafe')
-        removed = cleanup_cpanel_export(root, account)
-        return {'sourceExport':str(root), 'warnings':['Removed verified source archive(s): ' + ', '.join(removed)] if removed else []}
     root.mkdir(mode=0o700, exist_ok=False)
     log = open(root/'export.log','x')
     os.chmod(root/'export.log',0o600)
@@ -344,15 +373,25 @@ def export(request):
         os.chmod(archive, 0o600)
         return {'native':describe(archive), 'portable':describe(archive), 'sourceExport':str(root), 'warnings':['LiteCP website files and registered databases captured. Mail, DNS, SSL, cron and application credentials require separate configuration.', str(len(skipped)) + ' links or special entries omitted.']}
     if platform == 'cpanel':
-        command(['/usr/local/cpanel/scripts/pkgacct',account,str(root)],log)
+        try:
+            command(['/usr/local/cpanel/scripts/pkgacct',account,str(root)],log)
+        except RuntimeError:
+            try:
+                with (root / 'export.log').open('rb') as diagnostics:
+                    end = diagnostics.seek(0, os.SEEK_END)
+                    diagnostics.seek(max(0, end - 8192))
+                    if cpanel_storage_exhausted(diagnostics.read(8192).decode('utf-8', errors='replace')):
+                        raise RuntimeError('cPanel capture failed: the source server is out of disk space or quota; source export log retained')
+            except OSError:
+                pass
+            raise
         archive = root / ('cpmove-' + account + '.tar.gz')
         if not archive.is_file() or archive.is_symlink():
             raise RuntimeError('The cPanel native archive was not created at its expected location')
         result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS zones are imported for review and export; registrar delegation, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
-        import pwd
         website_files, private_files, skipped = cpanel_portable(
-            archive, portable, pwd.getpwnam(account).pw_dir,
+            archive, portable, source_home,
             lambda target, included: supplement_cpanel_databases(
                 target, included, account, root, log, result['warnings']))
         os.chmod(portable,0o600)
