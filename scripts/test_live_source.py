@@ -82,7 +82,7 @@ class LiveSourceTests(unittest.TestCase):
             with tarfile.open(archive,'w:gz') as target:
                 for name in names:
                     info=tarfile.TarInfo(name);info.size=4;target.addfile(info,io.BytesIO(b'test'))
-            self.assertEqual(source.cpanel_portable(archive,portable),(1,2,0))
+            self.assertEqual(source.cpanel_portable(archive,portable),(1,2,0,False))
             with tarfile.open(portable) as result:
                 self.assertEqual(result.getnames(),['public_html/index.php','private_home/app/public_html/index.php','private_home/app/mysql/schema.sql','mysql/user_db.sql','cpanel_account/format.json'])
 
@@ -196,7 +196,7 @@ class LiveSourceTests(unittest.TestCase):
                 info = tarfile.TarInfo(conflict)
                 info.type = tarfile.DIRTYPE
                 target.addfile(info)
-            self.assertEqual(source.cpanel_portable(archive,portable),(1,2,1))
+            self.assertEqual(source.cpanel_portable(archive,portable),(1,2,1,False))
             with tarfile.open(portable) as result:
                 self.assertEqual(result.getnames(),['public_html/index.php','mysql/user_db.sql','private_home/sitemap-app/src/Crawler.php','private_home/config.php','cpanel_account/mail/new/1%3A2,S','cpanel_account/format.json'])
 
@@ -270,7 +270,7 @@ class LiveSourceTests(unittest.TestCase):
                     stdout='{"result":{"status":1,"data":[]}}', stderr='')) as uapi, \
                 patch.object(source, 'command') as command, \
                 patch.object(source, 'describe', return_value={'path':'fixture'}), \
-                patch.object(source, 'cpanel_portable', return_value=(1, 0, 0)) as portable:
+                patch.object(source, 'cpanel_portable', return_value=(1, 0, 0, False)) as portable:
             result = source.export({'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'})
         pwd.getpwnam.assert_called_once_with('example')
         self.assertEqual(is_file.call_args_list[0].args[0], pathlib.Path('/var/cpanel/users/example'))
@@ -291,6 +291,8 @@ class LiveSourceTests(unittest.TestCase):
             with self.subTest(stdout=bool(stdout)), \
                     patch.object(source.os, 'geteuid', return_value=0, create=True), \
                     patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                    patch.object(source, 'cpanel_blank_root_candidate', return_value=True), \
+                    patch.object(source, 'cpanel_database_map_preview_empty', return_value=False), \
                     patch.object(source.pathlib.Path, 'mkdir') as mkdir, \
                     patch.object(source, 'command') as command, \
                     patch.object(source.subprocess, 'run', return_value=types.SimpleNamespace(stdout=stdout, stderr=stderr)):
@@ -311,7 +313,71 @@ class LiveSourceTests(unittest.TestCase):
         with patch.object(source.subprocess, 'run', side_effect=cases):
             for case in cases:
                 with self.subTest(case=case):
-                    source.check_cpanel_database_map('example')
+                    self.assertFalse(source.cpanel_database_map_missing('example'))
+
+    def test_cpanel_blank_fallback_requires_explicit_empty_database_map_preview(self):
+        banner = 'Operating in no-op mode; no changes will be made to your system.\n Done.\n---\n'
+        for output, errors, code, expected in (
+            (banner + 'MYSQL: {}\n', '', 0, True),
+            (banner + 'MYSQL: {}\nPGSQL: {}\n', '', 0, True),
+            (banner + 'MYSQL:\n  example_database: []\n', '', 0, False),
+            (banner + 'MYSQL: {}\nPGSQL:\n  example_database: []\n', '', 0, False),
+            (banner + 'MYSQL: {}\n', 'inventory incomplete', 0, False),
+            (banner + 'MYSQL: {}\n', '', 1, False),
+            ('MYSQL: {}\n', '', 0, False),
+        ):
+            with self.subTest(output=output, errors=errors, code=code), \
+                    patch.object(source.subprocess, 'run', return_value=types.SimpleNamespace(
+                        returncode=code, stdout=output, stderr=errors)) as preview:
+                self.assertEqual(source.cpanel_database_map_preview_empty('example'), expected)
+                self.assertEqual(preview.call_args.args[0], ['/usr/local/cpanel/scripts/rebuild_dbmap', 'example', '--noop'])
+
+    def test_cpanel_blank_capture_uses_narrow_fallback_and_offers_empty_root_for_restore(self):
+        request = {'platform': 'cpanel', 'mode': 'capture', 'account': 'example', 'job': 'abcdefghijklmnop'}
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source, 'cpanel_database_map_missing', return_value=True), \
+                patch.object(source, 'cpanel_blank_root_candidate', return_value=True), \
+                patch.object(source, 'cpanel_database_map_preview_empty', return_value=True) as preview, \
+                patch.object(source.pathlib.Path, 'mkdir'), \
+                patch.object(source.pathlib.Path, 'is_file', return_value=True), \
+                patch.object(source.pathlib.Path, 'is_symlink', return_value=False), \
+                patch('builtins.open', unittest.mock.mock_open()), \
+                patch.object(source.os, 'chmod'), \
+                patch.object(source, 'command') as command, \
+                patch.object(source, 'describe', side_effect=lambda path: path.name), \
+                patch.object(source, 'cpanel_portable', return_value=(0, 0, 0, True)) as portable:
+            result = source.export(request)
+            self.assertEqual(preview.call_count, 2)
+            self.assertEqual(command.call_args.args[0][:3], ['/usr/local/cpanel/scripts/pkgacct', '--skipmysql', 'example'])
+            self.assertIsNone(portable.call_args.args[3])
+            self.assertTrue(portable.call_args.kwargs['blank_only'])
+            self.assertEqual(result['portable'], 'cpanel-website.tar.gz')
+
+    def test_cpanel_blank_fallback_rechecks_captured_web_and_private_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            native = pathlib.Path(directory) / 'native.tar.gz'
+            portable = pathlib.Path(directory) / 'portable.tar.gz'
+            for extra in (None, 'public_html/nested/index.php', 'app/.env'):
+                with self.subTest(extra=extra):
+                    with tarfile.open(native, 'w:gz') as archive:
+                        for name in ('public_html', 'public_html/cgi-bin'):
+                            entry = tarfile.TarInfo('cpmove-example/homedir/' + name)
+                            entry.type = tarfile.DIRTYPE
+                            archive.addfile(entry)
+                        for name, target in (('www', 'public_html'), ('access-logs', '/var/log/cpanel')):
+                            entry = tarfile.TarInfo('cpmove-example/homedir/' + name)
+                            entry.type, entry.linkname = tarfile.SYMTYPE, target
+                            archive.addfile(entry)
+                        for name in filter(None, ('public_html/php.ini', extra)):
+                            entry = tarfile.TarInfo('cpmove-example/homedir/' + name)
+                            entry.size = 4
+                            archive.addfile(entry, io.BytesIO(b'test'))
+                    if extra:
+                        with self.assertRaisesRegex(RuntimeError, 'captured website is not blank'):
+                            source.cpanel_portable(native, portable, blank_only=True)
+                    else:
+                        self.assertEqual(source.cpanel_portable(native, portable, blank_only=True), (1, 0, 0, True))
 
     def test_cpanel_cleanup_uses_only_the_root_owned_job_directory(self):
         request = {'platform':'cpanel','mode':'cleanup','account':'example','job':'abcdefghijklmnop'}
@@ -334,7 +400,7 @@ class LiveSourceTests(unittest.TestCase):
         missing_map = 'the account is missing from the source cPanel database map; repair the map on the source before retrying'
         with patch.object(source.os, 'geteuid', return_value=0, create=True), \
                 patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
-                patch.object(source, 'check_cpanel_database_map'), \
+                patch.object(source, 'cpanel_database_map_missing', return_value=False), \
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \
@@ -362,7 +428,7 @@ class LiveSourceTests(unittest.TestCase):
         log_path = pathlib.Path('/root') / 'litecp-export-abcdefghijklmnop' / 'export.log'
         with patch.object(source.os, 'geteuid', return_value=0, create=True), \
                 patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
-                patch.object(source, 'check_cpanel_database_map'), \
+                patch.object(source, 'cpanel_database_map_missing', return_value=False), \
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \

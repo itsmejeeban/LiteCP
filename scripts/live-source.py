@@ -77,7 +77,7 @@ def cpanel_storage_exhausted(diagnostic):
 def cpanel_missing_database_map(diagnostic):
     return re.search(r'\bcpusernotinmap\b|\buser [^\r\n]{1,180}does not exist in (?:the )?database map\b', diagnostic, re.IGNORECASE) is not None
 
-def check_cpanel_database_map(account):
+def cpanel_database_map_missing(account):
     # Only a confirmed source map error should stop native capture. Older
     # versions and accounts with unavailable MySQL features still use pkgacct.
     try:
@@ -86,7 +86,7 @@ def check_cpanel_database_map(account):
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 universal_newlines=True, env={**os.environ, 'LC_ALL':'C'}, timeout=15)
     except (OSError, subprocess.TimeoutExpired):
-        return
+        return False
     try:
         response = json.loads(result.stdout)
     except ValueError:
@@ -95,8 +95,36 @@ def check_cpanel_database_map(account):
     reason = metadata.get('reason') if isinstance(metadata, dict) else None
     # WHM may emit the map error on stderr while reporting a successful
     # API result. Never scan the database names or other returned data.
-    if cpanel_missing_database_map(result.stderr) or (isinstance(reason, str) and cpanel_missing_database_map(reason)):
-        raise RuntimeError('cPanel capture blocked: the account is missing from the source cPanel database map; repair the map on the source before retrying. No archive was created.')
+    return cpanel_missing_database_map(result.stderr) or (isinstance(reason, str) and cpanel_missing_database_map(reason))
+
+def cpanel_database_map_preview_empty(account):
+    try:
+        result = subprocess.run(['/usr/local/cpanel/scripts/rebuild_dbmap', account, '--noop'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                universal_newlines=True, env={**os.environ, 'LC_ALL':'C'}, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    header, separator, proposed_map = result.stdout.partition('\n---\n')
+    # An absent map alone says nothing about whether databases exist. Only
+    # accept the provider's explicit, successfully generated empty preview.
+    return (result.returncode == 0 and not result.stderr.strip() and bool(separator)
+            and header.startswith('Operating in no-op mode;')
+            and any(line.strip() == 'Done.' for line in header.splitlines())
+            and proposed_map.strip().splitlines() in (['MYSQL: {}'], ['MYSQL: {}', 'PGSQL: {}']))
+
+cpanel_blank_settings = {'public_html/.htaccess', 'public_html/.user.ini', 'public_html/php.ini'}
+
+def cpanel_blank_root_candidate(source_home):
+    root = pathlib.Path(source_home) / 'public_html'
+    try:
+        if not stat.S_ISDIR(root.lstat().st_mode):
+            return False
+        with os.scandir(root) as entries:
+            return all(entry.is_dir(follow_symlinks=False) or
+                       ('public_html/' + entry.name in cpanel_blank_settings and entry.is_file(follow_symlinks=False))
+                       for entry in entries)
+    except OSError:
+        return False
 
 def cpanel_capture_diagnostic(log_path):
     # Provider logs can contain account details and credentials. Return only
@@ -124,8 +152,9 @@ def cpanel_capture_diagnostic(log_path):
         return 'pkgacct reported a source storage I/O error'
     return ''
 
-def cpanel_portable(archive, portable, source_home="", supplement=None):
+def cpanel_portable(archive, portable, source_home="", supplement=None, blank_only=False):
     website_files, private_files, skipped = 0, 0, 0
+    website_root_found = False
     database_dumps = set()
     # cPanel applications commonly keep private source/configuration beside
     # public_html. Preserve application-owned directories, but never copy
@@ -170,6 +199,12 @@ def cpanel_portable(archive, portable, source_home="", supplement=None):
                     destination = 'private_home/' + '/'.join(relative)
             if not destination:
                 continue
+            if blank_only and (destination == 'public_html' or destination.startswith(('public_html/', 'private_home/'))):
+                if member.issym() and destination in ('private_home/www', 'private_home/access-logs'):
+                    continue  # cPanel aliases are kept in the native archive only.
+                settings = member.isfile() and destination in cpanel_blank_settings
+                if not (member.isdir() or settings):
+                    raise RuntimeError('The source cPanel database map is missing and the captured website is not blank; repair the source map. Native export retained.')
             if not (member.isfile() or member.isdir()):
                 skipped += 1
                 continue
@@ -191,6 +226,8 @@ def cpanel_portable(archive, portable, source_home="", supplement=None):
                 target.addfile(info)
             if destination.startswith('public_html/') and member.isfile():
                 website_files += 1
+            elif destination == 'public_html' and member.isdir():
+                website_root_found = True
             elif destination.startswith('private_home/') and member.isfile():
                 private_files += 1
         if supplement is not None:
@@ -200,7 +237,7 @@ def cpanel_portable(archive, portable, source_home="", supplement=None):
         info.size = len(metadata)
         info.mode = 0o600
         target.addfile(info, io.BytesIO(metadata))
-    return website_files, private_files, skipped
+    return website_files, private_files, skipped, website_root_found
 
 
 def supplement_cpanel_databases(target, included, account, root, log, warnings):
@@ -361,7 +398,9 @@ def export(request):
         # LiteCP already selected a discovered account. Recheck that account
         # locally without requiring a fresh WHM inventory for every capture.
         source_home = cpanel_account_home(account)
-        check_cpanel_database_map(account)
+        skip_mysql = cpanel_database_map_missing(account)
+        if skip_mysql and not (cpanel_blank_root_candidate(source_home) and cpanel_database_map_preview_empty(account)):
+            raise RuntimeError('cPanel capture blocked: the account is missing from the source cPanel database map; repair the map on the source before retrying. No archive was created.')
     elif platform == 'cpanel':
         binary = '/usr/local/cpanel/bin/whmapi1'
         if not pathlib.Path(binary).is_file():
@@ -434,8 +473,11 @@ def export(request):
         return {'native':describe(archive), 'portable':describe(archive), 'sourceExport':str(root), 'warnings':['LiteCP website files and registered databases captured. Mail, DNS, SSL, cron and application credentials require separate configuration.', str(len(skipped)) + ' links or special entries omitted.']}
     if platform == 'cpanel':
         log_path = root / 'export.log'
+        args = ['/usr/local/cpanel/scripts/pkgacct']
+        if skip_mysql:
+            args.append('--skipmysql')
         try:
-            command(['/usr/local/cpanel/scripts/pkgacct',account,str(root)],log)
+            command(args + [account, str(root)], log)
         except SourceCommandError as error:
             reason = cpanel_capture_diagnostic(log_path)
             detail = f': {reason}' if reason else ''
@@ -447,12 +489,18 @@ def export(request):
             raise RuntimeError('The cPanel native archive was not created at its expected location')
         result = {'native':describe(archive), 'portable':None, 'sourceExport':str(root), 'warnings':['cPanel mailboxes, Maildir messages and compatible account cron jobs are imported with the website. DNS zones are imported for review and export; registrar delegation, SSL, forwarders and package settings require separate review.']}
         portable = root/'cpanel-website.tar.gz'
-        website_files, private_files, skipped = cpanel_portable(
-            archive, portable, source_home,
-            lambda target, included: supplement_cpanel_databases(
-                target, included, account, root, log, result['warnings']))
+        supplement = None
+        if skip_mysql:
+            if not cpanel_database_map_preview_empty(account):
+                raise RuntimeError('Could not reconfirm the blank cPanel account database inventory after capture. Native export retained.')
+            result['warnings'].append('Blank cPanel account captured after its source database-map preview confirmed no databases to export.')
+        else:
+            supplement = lambda target, included: supplement_cpanel_databases(
+                target, included, account, root, log, result['warnings'])
+        website_files, private_files, skipped, website_root_found = cpanel_portable(
+            archive, portable, source_home, supplement, blank_only=skip_mysql)
         os.chmod(portable,0o600)
-        if website_files:
+        if website_files or website_root_found:
             result['portable'] = describe(portable)
         else:
             result['warnings'].append('Primary public_html files were not found in a compatible native layout. The complete native archive is retained for manual review.')

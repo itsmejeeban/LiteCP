@@ -96,6 +96,14 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 			return fmt.Errorf("archive exceeds the %d GiB extraction limit", extractLimit>>30)
 		}
 		if directory {
+			// A blank cPanel site can contain only an explicit document-root
+			// entry in the portable or native homedir layout.
+			if platform == "cpanel" && path.Base(clean) == "public_html" {
+				parts := strings.Split(clean, "/")
+				if clean == "public_html" || clean == "homedir/public_html" || (len(parts) == 3 && parts[1] == "homedir" && parts[0] != "cpanel_account" && parts[0] != "private_home") {
+					roots[clean] = true
+				}
+			}
 			return secureEnsureManagedDirectory(root, clean, 0700, os.Getuid(), os.Getgid())
 		}
 		if err := secureEnsureManagedDirectory(root, path.Dir(clean), 0700, os.Getuid(), os.Getgid()); err != nil {
@@ -110,13 +118,13 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 		}
 		preview.Files++
 		preview.Bytes += written
-		// Mail folders and attachments must never be classified as web roots
-		// or database exports, even when named public_html or mysql.
-		if strings.HasPrefix(clean, "cpanel_account/") {
+		// Mail folders and private application files must never be classified
+		// as web roots, even when named public_html.
+		if strings.HasPrefix(clean, "cpanel_account/") || (platform == "cpanel" && strings.HasPrefix(clean, "private_home/")) {
 			return nil
 		}
 		parts := strings.Split(clean, "/")
-		for i, part := range parts {
+		for i, part := range parts[:len(parts)-1] {
 			if ((platform == "cpanel" || platform == "litecp") && part == "public_html") || (platform == "plesk" && part == "httpdocs") {
 				roots[strings.Join(parts[:i+1], "/")] = true
 				break
