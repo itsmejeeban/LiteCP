@@ -290,7 +290,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(e)
 			return
 		}
-		a.finishMigrationHealth(ctx, job, existing.Domain, existing.Root, filepath.Join(root, "files", "private_home"))
+		a.finishMigrationHealth(ctx, job, *existing, existing.Root, filepath.Join(root, "files", "private_home"))
 		a.finishSuccessfulMigrationCleanup(job)
 		return
 	}
@@ -759,27 +759,56 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	}
-	a.finishMigrationHealth(ctx, job, domain, source, privateSource)
+	a.finishMigrationHealth(ctx, job, site, source, privateSource)
 	a.finishSuccessfulMigrationCleanup(job)
 	a.store.AddActivity("Automatic website restore", domain+": "+job.Status, "info")
 }
 
-func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, domain string, roots ...string) {
-	code, e := retryMigrationHealth(ctx, 2*time.Second, func() (string, error) {
-		return runCommand(ctx, 30*time.Second, "curl", "--silent", "--output", "/dev/null", "--write-out", "%{http_code}", "--max-time", "20", "--header", "Host: "+domain, "http://127.0.0.1/")
-	})
-	setLiveJobStage(job, "result", "restored", "Website files and database restored. Local HTTP status: "+strings.TrimSpace(code)+". Review application pages, mail delivery, DNS delegation and SSL before cutover. Previous files are retained for recovery.")
-	if job.Source.Platform != "cpanel" && job.Source.Platform != "backup" {
-		job.Message += " Mail and source cron jobs require separate configuration."
+func migrationHealthCurl(site Site) (string, []string) {
+	scheme, port := "http", "80"
+	if site.SSL {
+		scheme, port = "https", "443"
 	}
+	// Pin the virtual host to loopback and let curl validate the TLS hostname
+	// and certificate chain. Ignore proxy settings and curl configuration.
+	return strings.ToUpper(scheme), []string{
+		"--disable", "--silent", "--noproxy", "*", "--output", "/dev/null",
+		"--write-out", "%{http_code}", "--max-time", "20",
+		"--resolve", site.Domain + ":" + port + ":127.0.0.1", scheme + "://" + site.Domain + "/",
+	}
+}
+
+func (a *App) finishMigrationHealth(ctx context.Context, job *LiveMigrationJob, site Site, roots ...string) {
+	protocol, args := migrationHealthCurl(site)
+	code, e := retryMigrationHealth(ctx, 2*time.Second, func() (string, error) {
+		return runCommand(ctx, 30*time.Second, "curl", args...)
+	})
+	recordMigrationHealth(job, protocol, code, e, roots...)
+}
+
+func recordMigrationHealth(job *LiveMigrationJob, protocol, code string, probeErr error, roots ...string) {
 	status, parseErr := strconv.Atoi(strings.TrimSpace(code))
 	// A truly blank root has no index; Nginx correctly refuses directory listing.
-	if e == nil && status == 403 && len(roots) > 0 && blankMigrationWebsite(roots...) {
+	if probeErr == nil && status == 403 && len(roots) > 0 && blankMigrationWebsite(roots...) {
 		setLiveJobStage(job, "result", "restored", "Blank website and included databases restored. HTTP 403 is expected because the website has no index file; directory listing remains disabled.")
 		return
 	}
-	if e != nil || parseErr != nil || status < 200 || status >= 400 {
-		setLiveJobStage(job, "result", "restored-review", "Website restored but its local HTTP health check failed (status "+strings.TrimSpace(code)+"). Review application logs before DNS cutover. Previous files are retained for recovery.")
+	if probeErr != nil || parseErr != nil || status < 200 || status >= 400 {
+		message := "Website files and database restored. The local " + protocol + " health check did not receive a valid response."
+		if probeErr == nil && status >= 400 && status <= 599 {
+			message = fmt.Sprintf("Website files and database restored. The local %s health check returned %d.", protocol, status)
+		}
+		if protocol == "HTTP" && probeErr == nil && status == 400 {
+			message += " If the application requires HTTPS, configure SSL for the restored website and retry the check."
+		} else if protocol == "HTTPS" && probeErr != nil {
+			message += " Check the destination TLS listener and certificate before retrying."
+		}
+		setLiveJobStage(job, "result", "restored-review", message+" Review application logs before DNS cutover. Previous files are retained for recovery.")
+		return
+	}
+	setLiveJobStage(job, "result", "restored", fmt.Sprintf("Website files and database restored. Local %s status: %d. Review application pages, mail delivery, DNS delegation and SSL before cutover. Previous files are retained for recovery.", protocol, status))
+	if job.Source.Platform != "cpanel" && job.Source.Platform != "backup" {
+		job.Message += " Mail and source cron jobs require separate configuration."
 	}
 }
 
