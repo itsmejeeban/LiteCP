@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,11 +28,16 @@ func TestBlankWebsiteMigrationWithDatabase(t *testing.T) {
 }
 
 func TestMigrationCannotOmitConfiguredDatabaseDump(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("DB_DATABASE=source_db\nDB_USERNAME=source_user\nDB_PASSWORD=example\nDB_HOST=localhost\n"), 0600); err != nil {
+	public, private := t.TempDir(), t.TempDir()
+	app := filepath.Join(private, "app")
+	if err := os.Mkdir(app, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := genericMigrationDatabasePlan(root, filepath.Join(root, "missing"), nil); err == nil {
-		t.Fatal("configured database with no SQL dump was accepted")
+	if err := os.WriteFile(filepath.Join(app, ".env"), []byte("DB_DATABASE=source_db\nDB_USERNAME=source_user\nDB_PASSWORD=example\nDB_HOST=localhost\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := genericMigrationDatabasePlan(public, private, nil)
+	if !errors.Is(err, errMigrationDatabaseDumpMissing) || err.Error() != `configuration "private_home/app/.env" has no matching database dump` {
+		t.Fatalf("missing dump did not identify the staged configuration: %v", err)
 	}
 }

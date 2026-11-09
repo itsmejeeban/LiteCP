@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"sort"
 	"strings"
 )
+
+var errMigrationDatabaseDumpMissing = errors.New("no matching database dump")
 
 type migrationConfigPlan struct {
 	Path     string
@@ -269,14 +272,18 @@ func genericMigrationDatabasePlan(public, private string, dumps []string) ([]mig
 			if plan.Database == "" {
 				return nil
 			}
-			if _, ok := databases[plan.Database]; !ok {
-				return fmt.Errorf("configuration %s has no matching database dump", entry.Name())
-			}
 			plan.Path, e = filepath.Rel(root, path)
 			if e != nil {
 				return e
 			}
 			plan.Private = index == 1
+			if _, ok := databases[plan.Database]; !ok {
+				location := filepath.ToSlash(plan.Path)
+				if plan.Private {
+					location = "private_home/" + location
+				}
+				return fmt.Errorf("configuration %q has %w", location, errMigrationDatabaseDumpMissing)
+			}
 			plans = append(plans, plan)
 			return nil
 		})

@@ -179,6 +179,8 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		message := "Automatic restore stopped: " + err.Error() + ". Retained backup and existing data were preserved."
 		if job.Source.Platform == "backup" {
 			message = "Restore stopped: " + err.Error() + ". Backup and recovery files were retained. Review the recovery backup before retrying if database restoration had started."
+		} else if job.Source.Platform == "cpanel" && errors.Is(err, errMigrationDatabaseDumpMissing) {
+			message += " Verify that the configured database exists on the source, is assigned to this cPanel account, and is included in its backup. Then retry capture."
 		}
 		setLiveJobStage(job, "restore", "restore-review", message)
 		_ = a.saveLiveJob(job)
@@ -297,7 +299,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			}
 		}
 		if sqlPath == "" {
-			fail(fmt.Errorf("matching database dump was not found"))
+			fail(fmt.Errorf("configuration %q has %w", configName, errMigrationDatabaseDumpMissing))
 			return
 		}
 	} else if len(preview.Databases) > 0 && job.Source.Platform == "backup" && existing != nil {

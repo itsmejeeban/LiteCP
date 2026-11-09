@@ -35,7 +35,7 @@ const healthReview = {
 };
 
 test('post-restore review offers a fresh capture when source credentials remain', () => {
-  const result = render(healthReview);
+  const result = render(healthReview, [healthReview], '#migrations/completed');
   assert.match(result.html, /data-live-retry="old-job">Retry capture<\/button>/);
   assert.equal(result.retryAction, 'restore', 'bulk retry must retain the existing health-check path');
 });
@@ -72,8 +72,10 @@ test('a different source server or a cancelled newer attempt does not hide an un
 });
 
 test('fresh capture remains available after artifacts are cleaned and disappears without credentials', () => {
-  assert.match(render({ ...healthReview, artifactsCleaned: true }).html, /data-live-retry="old-job"/);
-  const result = render({ ...healthReview, credentialsRetained: false });
+  const cleaned = { ...healthReview, artifactsCleaned: true };
+  assert.match(render(cleaned, [cleaned], '#migrations/completed').html, /data-live-retry="old-job"/);
+  const forgotten = { ...healthReview, credentialsRetained: false };
+  const result = render(forgotten, [forgotten], '#migrations/completed');
   assert.doesNotMatch(result.html, /data-live-retry="/);
 });
 
@@ -88,9 +90,21 @@ test('source pages show only jobs belonging to that panel',()=>{
 
 test('post-restore review does not widen the committed-site health retry guard', () => {
   for (const change of [{ cpanelWebsiteId: '' }, { source: { platform: 'plesk', host: 'source.example.test' } }, { artifactsCleaned: true }]) {
-    const result = render({ ...healthReview, ...change });
+    const job = { ...healthReview, ...change };
+    const result = render(job, [job], '#migrations/completed');
     assert.equal(result.retryAction, null);
     assert.doesNotMatch(result.html, /data-live-auto="/);
     assert.match(result.html, /data-live-retry="old-job"/);
   }
+});
+
+test('cPanel backups missing required SQL do not offer another restore of the same files', () => {
+  const job = { ...healthReview, status: 'restore-review', message: 'Automatic restore stopped: configuration .env has no matching database dump.' };
+  const result = render(job);
+  assert.equal(result.retryAction, null);
+  assert.doesNotMatch(result.html, /data-live-auto="/);
+  assert.match(result.html, /Verify the required database exists/);
+  assert.match(result.html, /data-live-retry="old-job">Retry capture/);
+  assert.equal(render({ ...job, warnings: ['Some account databases could not be exported.'] }).retryAction, 'capture');
+  assert.equal(render({ ...job, message: 'Restore needs compatibility review.' }).retryAction, 'restore');
 });

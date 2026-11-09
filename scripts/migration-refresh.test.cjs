@@ -65,7 +65,7 @@ test('pending retry recaptures incomplete cPanel database exports and hides supe
     nativeReady:true,message:'Automatic restore stopped: configuration .env has no matching database dump.',
     warnings:['Some account databases could not be exported. Check the source export log before restoring.']};
   assert.equal(context.retry(job),'capture');
-  assert.equal(context.retry({...job,credentialsRetained:false}),'restore');
+  assert.equal(context.retry({...job,credentialsRetained:false}),null);
   assert.equal(context.retry({...job,message:'Automatic restore stopped: local database server is unavailable.'}),'restore');
   const replacement={...job,id:'new',createdAt:'2026-11-08T00:00:00Z'};
   assert.equal(context.replacements([job,{...replacement,status:'queued'}]).size,0);

@@ -16,10 +16,15 @@ import tarfile
 import tempfile
 import time
 
+class SourceCommandError(RuntimeError):
+    def __init__(self, executable, returncode):
+        super().__init__('Source command failed: ' + executable + '; inspect the retained source export log')
+        self.returncode = returncode
+
 def command(args, log=None):
     result = subprocess.run(args, stdout=log or subprocess.PIPE, stderr=log or subprocess.PIPE, universal_newlines=log is None, env={**os.environ, 'LC_ALL':'C'}, timeout=5400)
     if result.returncode:
-        raise RuntimeError('Source command failed: ' + pathlib.Path(args[0]).name + '; inspect the retained source export log')
+        raise SourceCommandError(pathlib.Path(args[0]).name, result.returncode)
     return result.stdout if log is None else ''
 
 def litecp_dump_binary():
@@ -69,6 +74,32 @@ def cpanel_storage_exhausted(diagnostic):
     diagnostic = diagnostic.lower()
     return 'no space left' in diagnostic or 'disk quota exceeded' in diagnostic
 
+def cpanel_capture_diagnostic(log_path):
+    # Provider logs can contain account details and credentials. Return only
+    # fixed descriptions of recognized errors from a bounded portion.
+    try:
+        with log_path.open('rb') as source:
+            end = source.seek(0, os.SEEK_END)
+            source.seek(max(0, end - 65536))
+            diagnostic = source.read(65536).decode('utf-8', errors='replace').lower()
+    except OSError:
+        return ''
+    if re.search(r'\bcpusernotinmap\b|\buser [^\r\n]{1,180}does not exist in (?:the )?database map\b', diagnostic):
+        return 'the account is missing from the source cPanel database map; repair the map on the source before retrying'
+    if cpanel_storage_exhausted(diagnostic):
+        return 'the source server is out of disk space or quota'
+    if 'read-only file system' in diagnostic:
+        return 'the source reported a read-only filesystem'
+    if 'access denied for user' in diagnostic:
+        return 'the source database rejected authentication or access'
+    if re.search(r"(?:can't|cannot|could not) connect to (?:local |remote )?(?:mysql|mariadb)", diagnostic):
+        return 'pkgacct could not connect to the source database'
+    if 'permission denied' in diagnostic or 'operation not permitted' in diagnostic:
+        return 'pkgacct reported a source permission error'
+    if 'input/output error' in diagnostic or 'i/o error' in diagnostic:
+        return 'pkgacct reported a source storage I/O error'
+    return ''
+
 def cpanel_portable(archive, portable, source_home="", supplement=None):
     website_files, private_files, skipped = 0, 0, 0
     database_dumps = set()
@@ -104,7 +135,11 @@ def cpanel_portable(archive, portable, source_home="", supplement=None):
                     continue
                 destination = '/'.join(relative_account[1:])
             elif len(relative_account) == 2 and relative_account[0] == 'mysql' and member.isfile() and member.name.lower().endswith('.sql') and relative_account[-1].lower() != 'mysql.sql':
-                destination = 'mysql/' + relative_account[-1]
+                # A zero-byte native entry has no schema or data. Leave it out
+                # so the account-scoped database inventory can supply a dump.
+                if member.size == 0:
+                    continue
+                destination = 'mysql/' + relative_account[-1][:-4] + '.sql'
             elif relative_account and relative_account[0] == 'homedir':
                 relative = relative_account[1:]
                 if relative and relative[0] not in excluded_home_directories and (not relative[0].startswith('.') or relative[0] == '.env'):
@@ -373,18 +408,15 @@ def export(request):
         os.chmod(archive, 0o600)
         return {'native':describe(archive), 'portable':describe(archive), 'sourceExport':str(root), 'warnings':['LiteCP website files and registered databases captured. Mail, DNS, SSL, cron and application credentials require separate configuration.', str(len(skipped)) + ' links or special entries omitted.']}
     if platform == 'cpanel':
+        log_path = root / 'export.log'
         try:
             command(['/usr/local/cpanel/scripts/pkgacct',account,str(root)],log)
-        except RuntimeError:
-            try:
-                with (root / 'export.log').open('rb') as diagnostics:
-                    end = diagnostics.seek(0, os.SEEK_END)
-                    diagnostics.seek(max(0, end - 8192))
-                    if cpanel_storage_exhausted(diagnostics.read(8192).decode('utf-8', errors='replace')):
-                        raise RuntimeError('cPanel capture failed: the source server is out of disk space or quota; source export log retained')
-            except OSError:
-                pass
-            raise
+        except SourceCommandError as error:
+            reason = cpanel_capture_diagnostic(log_path)
+            detail = f': {reason}' if reason else ''
+            raise RuntimeError(f'cPanel capture failed (pkgacct exit {error.returncode}){detail}. Review the source export log at {log_path}.') from None
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f'cPanel capture timed out. Review the source export log at {log_path}.') from None
         archive = root / ('cpmove-' + account + '.tar.gz')
         if not archive.is_file() or archive.is_symlink():
             raise RuntimeError('The cPanel native archive was not created at its expected location')

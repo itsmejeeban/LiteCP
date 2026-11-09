@@ -31,19 +31,25 @@ class LiveSourceTests(unittest.TestCase):
             return types.SimpleNamespace(returncode=0)
 
         warnings = []
-        buffer = io.BytesIO()
-        with patch.object(source, 'command', return_value=json.dumps(inventory)), \
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(source, 'command', return_value=json.dumps(inventory)), \
                 patch.object(source.shutil, 'which', return_value='/usr/bin/mysqldump'), \
                 patch.object(source.subprocess, 'run', side_effect=dump) as run, \
                 patch.object(source.tempfile, 'TemporaryFile', side_effect=lambda **kwargs: io.BytesIO()):
-            with tarfile.open(fileobj=buffer, mode='w') as target:
-                source.supplement_cpanel_databases(target, {'already_exported'}, 'site', None, None, warnings)
-        self.assertEqual(run.call_count, 2)
-        buffer.seek(0)
-        with tarfile.open(fileobj=buffer) as archive:
-            self.assertEqual(archive.getnames(), ['mysql/site_wordpress.sql'])
-            self.assertEqual(archive.extractfile('mysql/site_wordpress.sql').read(),
-                             b'CREATE TABLE fixture(id INT);')
+            root = pathlib.Path(directory)
+            native, portable = root / 'native.tar.gz', root / 'portable.tar.gz'
+            with tarfile.open(native, 'w:gz') as archive:
+                for name, data in [('already_exported.SQL', b'SELECT 1;'), ('site_wordpress.sql', b'')]:
+                    entry = tarfile.TarInfo('cpmove-site/mysql/' + name)
+                    entry.size = len(data)
+                    archive.addfile(entry, io.BytesIO(data))
+            source.cpanel_portable(native, portable, supplement=lambda target, included:
+                source.supplement_cpanel_databases(target, included, 'site', root, None, warnings))
+            self.assertEqual(run.call_count, 2)
+            with tarfile.open(portable) as archive:
+                self.assertEqual(archive.getnames(), ['mysql/already_exported.sql', 'mysql/site_wordpress.sql', 'cpanel_account/format.json'])
+                self.assertEqual(archive.extractfile('mysql/already_exported.sql').read(), b'SELECT 1;')
+                self.assertEqual(archive.extractfile('mysql/site_wordpress.sql').read(), b'CREATE TABLE fixture(id INT);')
 
     def test_plesk_subdomain_capture_uses_subscription_and_selected_root(self):
         def query(args, log=None):
@@ -286,16 +292,46 @@ class LiveSourceTests(unittest.TestCase):
                 source.export(request)
             self.assertEqual(cleanup.call_count, 1)
 
-    def test_cpanel_capture_reports_pkgacct_storage_failure(self):
+    def test_cpanel_capture_reports_safe_pkgacct_diagnostics(self):
+        request = {'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'}
+        log_path = pathlib.Path('/root') / 'litecp-export-abcdefghijklmnop' / 'export.log'
+        missing_map = 'the account is missing from the source cPanel database map; repair the map on the source before retrying'
         with patch.object(source.os, 'geteuid', return_value=0, create=True), \
                 patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \
-                patch.object(source, 'command', side_effect=RuntimeError('pkgacct failed')), \
-                patch.object(source.pathlib.Path, 'open', return_value=io.BytesIO(b'write: Disk quota exceeded')):
-            with self.assertRaisesRegex(RuntimeError, 'cPanel capture failed.*out of disk space or quota'):
-                source.export({'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'})
+                patch.object(source, 'command', side_effect=source.SourceCommandError('pkgacct', 23)):
+            for output, reason in (
+                (b'Cpanel::Exception::Database::CpuserNotInMap/(XID test) private-account', missing_map),
+                (b'ERROR: The cPanel user "private-account" does not exist in the database map.', missing_map),
+                (b'write: Disk quota exceeded', 'the source server is out of disk space or quota'),
+                (b'write: Read-only file system', 'the source reported a read-only filesystem'),
+                (b"mysqldump: Access denied for user 'private-account'", 'the source database rejected authentication or access'),
+                (b"mysqldump: Can't connect to local MySQL server", 'pkgacct could not connect to the source database'),
+                (b'tar: Permission denied', 'pkgacct reported a source permission error'),
+                (b'tar: Input/output error', 'pkgacct reported a source storage I/O error'),
+                (b'provider-specific error with private text', ''),
+                (b'Disk quota exceeded\n' + b' ' * 65536, ''),
+            ):
+                with self.subTest(reason=reason), patch.object(source.pathlib.Path, 'open', return_value=io.BytesIO(output)):
+                    with self.assertRaises(RuntimeError) as failure:
+                        source.export(request)
+                    detail = f': {reason}' if reason else ''
+                    self.assertEqual(str(failure.exception), f'cPanel capture failed (pkgacct exit 23){detail}. Review the source export log at {log_path}.')
+
+    def test_cpanel_capture_reports_timeout_without_raw_command(self):
+        request = {'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'}
+        log_path = pathlib.Path('/root') / 'litecp-export-abcdefghijklmnop' / 'export.log'
+        with patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source.pathlib.Path, 'mkdir'), \
+                patch('builtins.open', unittest.mock.mock_open()), \
+                patch.object(source.os, 'chmod'), \
+                patch.object(source, 'command', side_effect=source.subprocess.TimeoutExpired(['pkgacct', 'private-account'], 5400)):
+            with self.assertRaises(RuntimeError) as failure:
+                source.export(request)
+            self.assertEqual(str(failure.exception), f'cPanel capture timed out. Review the source export log at {log_path}.')
 
     @patch.object(source.os,'geteuid',return_value=0,create=True)
     @patch.object(source.shutil,'which',return_value='/usr/sbin/plesk')
