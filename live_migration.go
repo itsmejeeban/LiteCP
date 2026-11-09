@@ -28,6 +28,8 @@ var liveSourceExporter string
 
 const liveNativeLimit = int64(8 << 30)
 
+const cpanelIncompleteDatabaseCaptureMessage = "The source cPanel account backup is missing one or more database dumps. Fix the source database export and capture the account again. Verified backup files were retained."
+
 var liveJobIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 var liveAccountPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,252}$`)
 
@@ -103,6 +105,33 @@ func setLiveJobStage(job *LiveMigrationJob, stage, status, message string) {
 	if (status == "restored" || status == "restored-review") || status == "failed" || status == "restore-review" || status == "interrupted" || status == "cancelled" {
 		job.CompletedAt = time.Now().UTC()
 	}
+}
+
+func cpanelDatabaseCaptureIncomplete(job LiveMigrationJob) bool {
+	if job.Source.Platform != "cpanel" {
+		return false
+	}
+	for _, warning := range job.Warnings {
+		// Old captures already recorded this exporter warning in their jobs.
+		if strings.HasPrefix(warning, "Some account databases could not be exported.") {
+			return true
+		}
+	}
+	return false
+}
+
+func liveCaptureRetryEligible(job LiveMigrationJob) bool {
+	return migrationCleanupEligible(job.Status) ||
+		(cpanelDatabaseCaptureIncomplete(job) && (job.Status == "review" || job.Status == "awaiting-overwrite"))
+}
+
+func setLiveCaptureStaged(job *LiveMigrationJob, preview *MigrationPreview) {
+	job.Preview = preview
+	if cpanelDatabaseCaptureIncomplete(*job) {
+		setLiveJobStage(job, "preflight", "restore-review", cpanelIncompleteDatabaseCaptureMessage)
+		return
+	}
+	setLiveJobStage(job, "preflight", "review", "Backup verified and staged. LiteCP will automatically restore it after compatibility checks.")
 }
 
 func liveJobCancellable(job LiveMigrationJob) bool {
@@ -591,7 +620,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 404, err.Error())
 			return
 		}
-		if !input.Confirm || !original.CredentialsRetained || !migrationCleanupEligible(original.Status) || liveCaptureActive(original.ID) {
+		if !input.Confirm || !original.CredentialsRetained || !liveCaptureRetryEligible(original) || liveCaptureActive(original.ID) {
 			writeError(w, 409, "Retry requires retained credentials and a stopped, incomplete capture.")
 			return
 		}
@@ -611,7 +640,7 @@ func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 			existing, err := a.loadLiveJob(entry.Name())
 			if err == nil && existing.ID != original.ID && existing.Source == original.Source && existing.Account == original.Account &&
 				(existing.Status == "queued" || existing.Status == "running" || existing.Status == "restoring" ||
-					(existing.Status == "awaiting-overwrite" && existing.CreatedAt.After(original.CreatedAt) && !existing.ArtifactsCleaned && existing.NativeReady && existing.Preview != nil)) {
+					(existing.Status == "awaiting-overwrite" && existing.CreatedAt.After(original.CreatedAt) && !existing.ArtifactsCleaned && existing.NativeReady && existing.Preview != nil && !cpanelDatabaseCaptureIncomplete(existing))) {
 				if replacement == nil || existing.CreatedAt.After(replacement.CreatedAt) {
 					replacement = &existing
 				}
@@ -911,7 +940,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 			return
 		}
 	}
-	if job.Source.Platform == "cpanel" {
+	if job.Source.Platform == "cpanel" && !cpanelDatabaseCaptureIncomplete(job) {
 		if _, err := a.liveRemote(ctx, job.Source, root, "cleanup", job.Account, job.ID); err != nil {
 			fail(errors.New("source backup was copied and verified, but LiteCP could not remove the temporary cPanel archive: " + err.Error()))
 			return
@@ -950,8 +979,7 @@ func (a *App) captureLiveMigration(job LiveMigrationJob) {
 		fail(err)
 		return
 	}
-	job.Preview = &preview
-	setLiveJobStage(&job, "preflight", "review", "Backup verified and staged. LiteCP will automatically restore it after compatibility checks.")
+	setLiveCaptureStaged(&job, &preview)
 	_ = a.saveLiveJob(&job)
 	// Worker status is stored separately; the HTTP process owns config/activity writes.
 }

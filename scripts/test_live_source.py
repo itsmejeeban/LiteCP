@@ -266,16 +266,52 @@ class LiveSourceTests(unittest.TestCase):
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \
+                patch.object(source.subprocess, 'run', return_value=types.SimpleNamespace(
+                    stdout='{"result":{"status":1,"data":[]}}', stderr='')) as uapi, \
                 patch.object(source, 'command') as command, \
                 patch.object(source, 'describe', return_value={'path':'fixture'}), \
                 patch.object(source, 'cpanel_portable', return_value=(1, 0, 0)) as portable:
             result = source.export({'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'})
         pwd.getpwnam.assert_called_once_with('example')
         self.assertEqual(is_file.call_args_list[0].args[0], pathlib.Path('/var/cpanel/users/example'))
+        self.assertEqual(uapi.call_args.args[0], ['/usr/local/cpanel/bin/whmapi1', '--output=json', 'list_mysql_databases_and_users', 'user=example'])
+        self.assertEqual(uapi.call_args.kwargs['timeout'], 15)
         self.assertEqual(command.call_count, 1)
         self.assertEqual(command.call_args.args[0][:2], ['/usr/local/cpanel/scripts/pkgacct','example'])
         self.assertEqual(portable.call_args.args[2], '/home/example')
         self.assertIsNotNone(result['portable'])
+
+    def test_cpanel_capture_stops_before_creating_archive_on_confirmed_missing_map(self):
+        request = {'platform':'cpanel','mode':'capture','account':'example','job':'abcdefghijklmnop'}
+        diagnostics = (
+            ('{"metadata":{"result":1,"reason":"OK"},"data":{}}', 'The cPanel user "example" does not exist in the database map.'),
+            (json.dumps({'metadata': {'result': 0, 'reason': 'Cpanel::Exception::Database::CpuserNotInMap/(XID private-token)'}}), ''),
+        )
+        for stdout, stderr in diagnostics:
+            with self.subTest(stdout=bool(stdout)), \
+                    patch.object(source.os, 'geteuid', return_value=0, create=True), \
+                    patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                    patch.object(source.pathlib.Path, 'mkdir') as mkdir, \
+                    patch.object(source, 'command') as command, \
+                    patch.object(source.subprocess, 'run', return_value=types.SimpleNamespace(stdout=stdout, stderr=stderr)):
+                with self.assertRaisesRegex(RuntimeError, 'missing from the source cPanel database map') as failure:
+                    source.export(request)
+                self.assertNotIn('private-token', str(failure.exception))
+                mkdir.assert_not_called()
+                command.assert_not_called()
+
+    def test_cpanel_database_map_check_defers_inconclusive_results_to_native_capture(self):
+        cases = (
+            types.SimpleNamespace(stdout='{"metadata":{"result":0}}', stderr='unsupported command'),
+            types.SimpleNamespace(stdout='not json', stderr='temporary database error'),
+            types.SimpleNamespace(stdout='{"metadata":{"result":1},"data":{"database":"CpuserNotInMap"}}', stderr=''),
+            FileNotFoundError(),
+            source.subprocess.TimeoutExpired('whmapi1', 15),
+        )
+        with patch.object(source.subprocess, 'run', side_effect=cases):
+            for case in cases:
+                with self.subTest(case=case):
+                    source.check_cpanel_database_map('example')
 
     def test_cpanel_cleanup_uses_only_the_root_owned_job_directory(self):
         request = {'platform':'cpanel','mode':'cleanup','account':'example','job':'abcdefghijklmnop'}
@@ -298,6 +334,7 @@ class LiveSourceTests(unittest.TestCase):
         missing_map = 'the account is missing from the source cPanel database map; repair the map on the source before retrying'
         with patch.object(source.os, 'geteuid', return_value=0, create=True), \
                 patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source, 'check_cpanel_database_map'), \
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \
@@ -325,6 +362,7 @@ class LiveSourceTests(unittest.TestCase):
         log_path = pathlib.Path('/root') / 'litecp-export-abcdefghijklmnop' / 'export.log'
         with patch.object(source.os, 'geteuid', return_value=0, create=True), \
                 patch.object(source, 'cpanel_account_home', return_value='/home/example'), \
+                patch.object(source, 'check_cpanel_database_map'), \
                 patch.object(source.pathlib.Path, 'mkdir'), \
                 patch('builtins.open', unittest.mock.mock_open()), \
                 patch.object(source.os, 'chmod'), \

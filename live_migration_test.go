@@ -119,6 +119,98 @@ func TestLiveJobStageLifecycle(t *testing.T) {
 	}
 }
 
+const incompleteCPanelDatabaseWarningFixture = "Some account databases could not be exported. Check the source export log before restoring."
+
+func TestCPanelIncompleteDatabaseCaptureDoesNotQueueAutoRestore(t *testing.T) {
+	preview := &MigrationPreview{}
+	for _, scenario := range []struct {
+		name, platform, warning, status string
+	}{
+		{"known omitted database", "cpanel", incompleteCPanelDatabaseWarningFixture, "restore-review"},
+		{"complete capture", "cpanel", "Missing account database dump(s) exported directly from source MySQL.", "review"},
+		{"inventory unavailable but no known omissions", "cpanel", "Could not verify the cPanel database inventory. Only native database dumps were captured.", "review"},
+		{"unrelated provider", "plesk", incompleteCPanelDatabaseWarningFixture, "review"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			job := LiveMigrationJob{Source: LiveSource{Platform: scenario.platform}, Warnings: []string{scenario.warning}}
+			setLiveCaptureStaged(&job, preview)
+			if job.Status != scenario.status || job.Stage != "preflight" || job.Preview != preview {
+				t.Fatalf("unexpected staging state: %+v", job)
+			}
+		})
+	}
+}
+
+func TestCPanelIncompleteDatabaseCaptureCanRecaptureLegacyReview(t *testing.T) {
+	for _, status := range []string{"review", "awaiting-overwrite"} {
+		job := LiveMigrationJob{Status: status, Source: LiveSource{Platform: "cpanel"}}
+		if liveCaptureRetryEligible(job) {
+			t.Fatalf("complete %s job should continue from its existing archive", status)
+		}
+		job.Warnings = []string{incompleteCPanelDatabaseWarningFixture}
+		if !liveCaptureRetryEligible(job) {
+			t.Fatalf("incomplete %s job must allow a fresh capture", status)
+		}
+	}
+}
+
+func TestCPanelIncompleteDatabaseCaptureGuardsLegacyRestore(t *testing.T) {
+	a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{}}
+	id := "incomplete-database-fixture"
+	root, _ := a.liveJobRoot(id)
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(root, "native-backup")
+	if err := os.WriteFile(archive, []byte("retained fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	job := LiveMigrationJob{ID: id, Source: LiveSource{Platform: "cpanel"}, Status: "review", Stage: "preflight", Account: "source",
+		Accounts: []LiveAccount{{ID: "source", Domain: "example.test"}}, NativeReady: true, Warnings: []string{incompleteCPanelDatabaseWarningFixture}}
+	if err := a.saveLiveJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	a.performAutoMigration(&job, false)
+	if job.Status != "restore-review" || job.Message != cpanelIncompleteDatabaseCaptureMessage {
+		t.Fatalf("legacy capture bypassed preflight: %+v", job)
+	}
+	if data, err := os.ReadFile(archive); err != nil || string(data) != "retained fixture" {
+		t.Fatal("the retained archive changed", err)
+	}
+}
+
+func TestCPanelIncompleteDatabaseCaptureGuardsRestoreRetry(t *testing.T) {
+	for _, scenario := range []struct {
+		name, status, websiteID, parameters string
+		want                                int
+	}{
+		{"before restaging", "captured", "", `,"background":true`, http.StatusConflict},
+		{"before queuing", "restore-review", "", `,"background":true`, http.StatusConflict},
+		{"explicit overwrite", "awaiting-overwrite", "", `,"overwrite":true,"confirmDomain":"example.test"`, http.StatusConflict},
+		{"committed health retry", "restored-review", "original-site", `,"background":true`, http.StatusAccepted},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			a := &App{system: &System{dataDir: t.TempDir()}, store: &Store{cfg: Config{Sites: []Site{{ID: "original-site", Domain: "example.test"}}}}}
+			id := "incomplete-database-fixture"
+			root, _ := a.liveJobRoot(id)
+			if err := os.MkdirAll(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			job := LiveMigrationJob{ID: id, Source: LiveSource{Platform: "cpanel"}, Status: scenario.status, Account: "source",
+				Accounts: []LiveAccount{{ID: "source", Domain: "example.test"}}, CPanelWebsiteID: scenario.websiteID, NativeReady: true,
+				Warnings: []string{incompleteCPanelDatabaseWarningFixture}}
+			if err := a.saveLiveJob(&job); err != nil {
+				t.Fatal(err)
+			}
+			res := httptest.NewRecorder()
+			a.autoMigrationAction(res, httptest.NewRequest("POST", "/", strings.NewReader(`{"id":"`+id+`"`+scenario.parameters+`}`)))
+			if res.Code != scenario.want || (scenario.want == http.StatusConflict && !strings.Contains(res.Body.String(), cpanelIncompleteDatabaseCaptureMessage)) {
+				t.Fatalf("unexpected restore retry result %d: %s", res.Code, res.Body.String())
+			}
+		})
+	}
+}
+
 func TestLiveMigrationListReconcilesOrphanedJob(t *testing.T) {
 	app := &App{system: &System{dataDir: t.TempDir()}, sessions: map[string]session{"test": {Expires: time.Now().Add(time.Hour)}}}
 	id := "abcdefghijklmnop1234"

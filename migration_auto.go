@@ -120,16 +120,19 @@ func (a *App) autoMigrationAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	domain := migrationJobDomain(job)
-	if job.Status == "captured" {
-		if err = a.stageRetainedCapture(&job); err != nil {
-			writeError(w, 409, err.Error())
+	if incomplete := cpanelDatabaseCaptureIncomplete(job); incomplete || job.Status == "restored-review" {
+		if !migrationCommittedCPanelWebsite(job, a.store.SiteByDomain(domain)) {
+			if incomplete {
+				writeError(w, 409, cpanelIncompleteDatabaseCaptureMessage)
+			} else {
+				writeError(w, 409, "Health retry requires the original committed migration website.")
+			}
 			return
 		}
 	}
-	if job.Status == "restored-review" {
-		existing := a.store.SiteByDomain(domain)
-		if job.Source.Platform != "cpanel" || existing == nil || job.CPanelWebsiteID == "" || job.CPanelWebsiteID != existing.ID {
-			writeError(w, 409, "Health retry requires the original committed migration website.")
+	if job.Status == "captured" {
+		if err = a.stageRetainedCapture(&job); err != nil {
+			writeError(w, 409, err.Error())
 			return
 		}
 	}
@@ -169,6 +172,10 @@ func migrationJobDomain(job LiveMigrationJob) string {
 	return ""
 }
 
+func migrationCommittedCPanelWebsite(job LiveMigrationJob, existing *Site) bool {
+	return job.Source.Platform == "cpanel" && existing != nil && job.CPanelWebsiteID != "" && job.CPanelWebsiteID == existing.ID
+}
+
 func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	fail := func(err error) {
 		if errors.Is(err, context.Canceled) || a.liveMigrationCancelled(job.ID) {
@@ -195,7 +202,13 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		return
 	}
 	existing := a.store.SiteByDomain(domain)
-	if existing != nil && !overwrite && !(job.Source.Platform == "cpanel" && job.CPanelWebsiteID == existing.ID) {
+	committed := migrationCommittedCPanelWebsite(*job, existing)
+	if cpanelDatabaseCaptureIncomplete(*job) && !committed {
+		setLiveJobStage(job, "preflight", "restore-review", cpanelIncompleteDatabaseCaptureMessage)
+		_ = a.saveLiveJob(job)
+		return
+	}
+	if existing != nil && !overwrite && !committed {
 		setLiveJobStage(job, "preflight", "awaiting-overwrite", "Domain already exists. Review the conflict and explicitly confirm overwrite before migration continues.")
 		_ = a.saveLiveJob(job)
 		return
@@ -218,7 +231,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	}
 	// Resume only the services phase of this exact website after a partial
 	// commit. Never re-import SQL or replace newly delivered mail on retry.
-	if job.Source.Platform == "cpanel" && existing != nil && job.CPanelWebsiteID == existing.ID {
+	if committed {
 		plan, e := planCPanelServices(filepath.Join(root, "files"), *job)
 		if e != nil {
 			fail(e)

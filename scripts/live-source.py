@@ -74,6 +74,30 @@ def cpanel_storage_exhausted(diagnostic):
     diagnostic = diagnostic.lower()
     return 'no space left' in diagnostic or 'disk quota exceeded' in diagnostic
 
+def cpanel_missing_database_map(diagnostic):
+    return re.search(r'\bcpusernotinmap\b|\buser [^\r\n]{1,180}does not exist in (?:the )?database map\b', diagnostic, re.IGNORECASE) is not None
+
+def check_cpanel_database_map(account):
+    # Only a confirmed source map error should stop native capture. Older
+    # versions and accounts with unavailable MySQL features still use pkgacct.
+    try:
+        result = subprocess.run(['/usr/local/cpanel/bin/whmapi1', '--output=json',
+                                 'list_mysql_databases_and_users', 'user=' + account],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                universal_newlines=True, env={**os.environ, 'LC_ALL':'C'}, timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    try:
+        response = json.loads(result.stdout)
+    except ValueError:
+        response = None
+    metadata = response.get('metadata') if isinstance(response, dict) else None
+    reason = metadata.get('reason') if isinstance(metadata, dict) else None
+    # WHM may emit the map error on stderr while reporting a successful
+    # API result. Never scan the database names or other returned data.
+    if cpanel_missing_database_map(result.stderr) or (isinstance(reason, str) and cpanel_missing_database_map(reason)):
+        raise RuntimeError('cPanel capture blocked: the account is missing from the source cPanel database map; repair the map on the source before retrying. No archive was created.')
+
 def cpanel_capture_diagnostic(log_path):
     # Provider logs can contain account details and credentials. Return only
     # fixed descriptions of recognized errors from a bounded portion.
@@ -84,7 +108,7 @@ def cpanel_capture_diagnostic(log_path):
             diagnostic = source.read(65536).decode('utf-8', errors='replace').lower()
     except OSError:
         return ''
-    if re.search(r'\bcpusernotinmap\b|\buser [^\r\n]{1,180}does not exist in (?:the )?database map\b', diagnostic):
+    if cpanel_missing_database_map(diagnostic):
         return 'the account is missing from the source cPanel database map; repair the map on the source before retrying'
     if cpanel_storage_exhausted(diagnostic):
         return 'the source server is out of disk space or quota'
@@ -337,6 +361,7 @@ def export(request):
         # LiteCP already selected a discovered account. Recheck that account
         # locally without requiring a fresh WHM inventory for every capture.
         source_home = cpanel_account_home(account)
+        check_cpanel_database_map(account)
     elif platform == 'cpanel':
         binary = '/usr/local/cpanel/bin/whmapi1'
         if not pathlib.Path(binary).is_file():

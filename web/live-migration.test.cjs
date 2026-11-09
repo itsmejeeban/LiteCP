@@ -108,3 +108,25 @@ test('cPanel backups missing required SQL do not offer another restore of the sa
   assert.equal(render({ ...job, warnings: ['Some account databases could not be exported.'] }).retryAction, 'capture');
   assert.equal(render({ ...job, message: 'Restore needs compatibility review.' }).retryAction, 'restore');
 });
+
+test('a confirmed incomplete cPanel export offers recapture even if the missing schema is outside app configuration', () => {
+  const job = { ...healthReview, status: 'restore-review', message: 'The source cPanel account backup is missing one or more database dumps.',
+    warnings: ['Some account databases could not be exported. Check the source export log before restoring.'] };
+  for (const status of ['review', 'captured', 'restore-review', 'awaiting-overwrite']) {
+    const result = render({ ...job, status });
+    assert.equal(result.retryAction, 'capture');
+    assert.match(result.html, /data-live-retry="old-job">Retry capture/);
+    assert.doesNotMatch(result.html, /data-live-(?:auto|overwrite)="/);
+  }
+  assert.equal(render({ ...job, credentialsRetained: false }).retryAction, null);
+});
+
+test('missing source database maps show repair guidance and keep recapture available', () => {
+  const job = { ...healthReview, status: 'failed', nativeReady: false,
+    message: 'cPanel capture blocked: the account is missing from the source cPanel database map; repair the map on the source before retrying. No archive was created.' };
+  const result = render(job);
+  assert.equal(result.retryAction, 'capture');
+  assert.match(result.html, /Repair the account’s database map/);
+  assert.match(result.html, /data-live-retry="old-job">Retry capture/);
+  assert.equal(render({ ...job, message: 'Temporary SSH timeout.' }).retryAction, 'capture');
+});

@@ -66,7 +66,7 @@ test('pending retry recaptures incomplete cPanel database exports and hides supe
     warnings:['Some account databases could not be exported. Check the source export log before restoring.']};
   assert.equal(context.retry(job),'capture');
   assert.equal(context.retry({...job,credentialsRetained:false}),null);
-  assert.equal(context.retry({...job,message:'Automatic restore stopped: local database server is unavailable.'}),'restore');
+  assert.equal(context.retry({...job,warnings:[],message:'Automatic restore stopped: local database server is unavailable.'}),'restore');
   const replacement={...job,id:'new',createdAt:'2026-11-08T00:00:00Z'};
   assert.equal(context.replacements([job,{...replacement,status:'queued'}]).size,0);
   assert.equal(context.replacements([job,{...replacement,status:'restored'}]).get(job.id).id,'new');
