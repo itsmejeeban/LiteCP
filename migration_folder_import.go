@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-const folderMigrationArchiveLimit = liveNativeLimit
+// Leave headroom for block rounding and disk-space reserves in int64 accounting.
+const folderMigrationExtractLimit = int64(1<<63 - 1 - 1<<34)
 const folderMigrationReserve = int64(1 << 30)
 
 var errFolderMigrationStageLimit = errors.New("three restore or migration stages are already retained. Review the existing stages before inspecting another backup")
@@ -28,8 +29,8 @@ func (a *App) stageFolderMigration(ctx context.Context, platform string, source 
 		return preview, errors.New("select a supported backup type")
 	}
 	info, err := source.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > folderMigrationArchiveLimit {
-		return preview, errors.New("select a nonempty regular backup file no larger than 8 GiB")
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
+		return preview, errors.New("select a nonempty regular backup file")
 	}
 	staged, err := a.retainedMigrationStages()
 	if err != nil {
@@ -64,7 +65,7 @@ func (a *App) stageFolderMigration(ctx context.Context, platform string, source 
 			return preview, err
 		}
 	} else {
-		required, err = migrationArchiveReaderBytes(ctx, input)
+		required, err = migrationArchiveReaderBytes(ctx, input, folderMigrationExtractLimit)
 		if err != nil {
 			return preview, err
 		}
@@ -93,18 +94,18 @@ func (a *App) stageFolderMigration(ctx context.Context, platform string, source 
 
 	switch {
 	case platform == "litecp" && isZIP:
-		preview, err = inspectManualBackupMembers(ctx, entries, stage, a.system.manualBackupFreeBytes)
+		preview, err = inspectManualBackupMembers(ctx, entries, stage, a.system.manualBackupFreeBytes, folderMigrationExtractLimit)
 		// The generic migration form publishes its selected root as web
 		// content. The private home archive must never be a selectable root.
 		preview.Roots = []string{"public_html"}
 	case platform == "litecp":
-		preview, err = a.stageFolderScheduledBackup(ctx, input, stage)
+		preview, err = a.stageFolderScheduledBackup(ctx, input, stage, required)
 	default:
 		files := filepath.Join(stage, "files")
 		if err := os.Mkdir(files, 0700); err != nil {
 			return preview, err
 		}
-		preview, err = extractMigrationReader(ctx, input, files, platform, liveMigrationExtractLimit)
+		preview, err = extractMigrationReader(ctx, input, files, platform, required, liveMigrationMemberLimit)
 		if err == nil && platform == "cpanel" {
 			preview.Roots = folderCPanelRoots(preview.Roots)
 			if len(preview.Roots) == 0 {
@@ -150,8 +151,8 @@ func migrationFolderZIPSpace(entries []*zip.File) (int64, error) {
 	}
 	var content, space int64
 	for _, entry := range entries {
-		if entry.UncompressedSize64 > uint64(liveMigrationExtractLimit-content) {
-			return 0, errors.New("backup exceeds the 64 GiB extraction limit")
+		if entry.UncompressedSize64 > uint64(folderMigrationExtractLimit-content) {
+			return 0, errors.New("backup exceeds supported size accounting")
 		}
 		size := int64(entry.UncompressedSize64)
 		content += size
@@ -174,13 +175,13 @@ func (a *App) checkFolderMigrationSpace(ctx context.Context, directory string, r
 	return nil
 }
 
-func (a *App) stageFolderScheduledBackup(ctx context.Context, source io.Reader, stage string) (MigrationPreview, error) {
+func (a *App) stageFolderScheduledBackup(ctx context.Context, source io.Reader, stage string, outerBudget int64) (MigrationPreview, error) {
 	preview := MigrationPreview{Platform: "LiteCP scheduled backup", Roots: []string{"public_html"}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	outer := filepath.Join(stage, "outer")
 	if err := os.Mkdir(outer, 0700); err != nil {
 		return preview, err
 	}
-	if _, _, err := unpackHistoryTarReader(ctx, source, outer); err != nil {
+	if _, _, err := unpackHistoryTarReader(ctx, source, outer, outerBudget); err != nil {
 		return preview, err
 	}
 	entries, err := os.ReadDir(outer)
@@ -199,7 +200,7 @@ func (a *App) stageFolderScheduledBackup(ctx context.Context, source io.Reader, 
 	if websiteArchive == "" {
 		return preview, errors.New("scheduled LiteCP backup is missing website.tar.gz")
 	}
-	required, err := migrationArchiveBytes(ctx, websiteArchive)
+	required, err := migrationArchiveBytesWithLimit(ctx, websiteArchive, folderMigrationExtractLimit)
 	if err != nil {
 		return preview, err
 	}
@@ -210,14 +211,19 @@ func (a *App) stageFolderScheduledBackup(ctx context.Context, source io.Reader, 
 	if err := os.MkdirAll(files, 0700); err != nil {
 		return preview, err
 	}
-	preview.Files, preview.Bytes, err = unpackHistoryTar(ctx, websiteArchive, files)
+	inner, err := os.Open(websiteArchive)
+	if err != nil {
+		return preview, err
+	}
+	defer inner.Close()
+	preview.Files, preview.Bytes, err = unpackHistoryTarReader(ctx, inner, files, required)
 	if err != nil {
 		return preview, err
 	}
 	sql := filepath.Join(outer, "database.sql")
 	if info, err := os.Stat(sql); err == nil {
-		if info.Size() > migrationExtractLimit-preview.Bytes {
-			return preview, errors.New("scheduled backup exceeds the combined 8 GiB extraction limit")
+		if info.Size() > folderMigrationExtractLimit-preview.Bytes {
+			return preview, errors.New("scheduled backup exceeds supported size accounting")
 		}
 		if err := os.Rename(sql, filepath.Join(stage, "files", "database.sql")); err != nil {
 			return preview, err

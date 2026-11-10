@@ -100,10 +100,10 @@ func unpackHistoryTar(ctx context.Context, archive, root string) (int, int64, er
 		return 0, 0, e
 	}
 	defer f.Close()
-	return unpackHistoryTarReader(ctx, f, root)
+	return unpackHistoryTarReader(ctx, f, root, migrationExtractLimit)
 }
 
-func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string) (int, int64, error) {
+func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string, extractLimit int64) (int, int64, error) {
 	gz, e := gzip.NewReader(migrationContextReader{ctx, input})
 	if e != nil {
 		return 0, 0, e
@@ -138,7 +138,7 @@ func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string) (
 		if h.Typeflag == tar.TypeDir {
 			e = secureEnsureManagedDirectory(root, name, 0700, os.Getuid(), os.Getgid())
 		} else if h.Typeflag == tar.TypeReg || h.Typeflag == tar.TypeRegA {
-			if h.Size < 0 || h.Size > migrationExtractLimit-total {
+			if h.Size < 0 || h.Size > extractLimit-total {
 				return count, total, errors.New("Backup exceeds extraction limit")
 			}
 			e = secureEnsureManagedDirectory(root, path.Dir(name), 0700, os.Getuid(), os.Getgid())

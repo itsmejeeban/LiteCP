@@ -22,11 +22,12 @@
         </label>
         <label class="field"><span>Backup folder location</span>
           <input name="folder" type="text" placeholder="/var/backups/migration" autocomplete="off" spellcheck="false" required>
-          <small>Enter an absolute server path without symbolic links. The scan checks ZIP and TAR archives directly in this folder. Choose an archive up to 8 GiB.</small>
+          <small>Enter an absolute server path without symbolic links. The scan checks ZIP and TAR archives directly in this folder. Large archives require enough free space to stage and restore.</small>
         </label>
         <button type="submit" class="button button-primary" data-folder-scan-button>Scan folder</button>
       </form>
       <p role="status" data-folder-status></p>
+      <div data-folder-progress hidden><progress aria-label="Inspecting backup archive" style="width:100%"></progress></div>
       <div data-folder-results hidden>
         <div class="table-scroll">
           <table class="data-table" aria-label="Backup files in the selected folder">
@@ -44,6 +45,7 @@
   const form = get("[data-folder-scan]");
   const scanButton = get("[data-folder-scan-button]");
   const status = get("[data-folder-status]");
+  const progress = get("[data-folder-progress]");
   const results = get("[data-folder-results]");
   const rows = get("[data-folder-files]");
   const inspectButton = get("[data-folder-inspect]");
@@ -153,6 +155,7 @@
     inspecting = true;
     updateControls();
     status.textContent = `Inspecting ${name}…`;
+    progress.hidden = false;
     try {
       const preview = await cp.api("/api/migrations/folder/restore", {method: "POST", body: {platform, folder, name, size, modifiedAt}});
       if (!preview?.id || !Array.isArray(preview.roots) || !Array.isArray(preview.databases)) {
@@ -172,6 +175,7 @@
       status.textContent = `Archive inspection failed. ${error.message}`;
     } finally {
       inspecting = false;
+      progress.hidden = true;
       updateControls();
     }
   });

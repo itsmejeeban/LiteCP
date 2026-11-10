@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -11,6 +12,15 @@ import (
 	"reflect"
 	"testing"
 )
+
+func TestFolderMigrationAcceptsLargeZIPMetadata(t *testing.T) {
+	const size = 100 << 30
+	entry := &zip.File{FileHeader: zip.FileHeader{UncompressedSize64: size}}
+	required, err := migrationFolderZIPSpace([]*zip.File{entry})
+	if err != nil || required < size {
+		t.Fatalf("large archive size was rejected or undercounted: %d, %v", required, err)
+	}
+}
 
 func folderMigrationTarFixture(t *testing.T, entries map[string][]byte) []byte {
 	t.Helper()

@@ -59,9 +59,10 @@ test('folder backup selection preserves scanned metadata and opens the existing 
   const requests = [];
   const items = [{name: '<unsafe>.tar.gz', size: 81, modifiedAt: '2026-11-10T01:02:03.456789Z'}];
   const preview = {id: 'stage', roots: ['public_html'], databases: ['account.sql']};
+  let finishInspection;
   const ui = folderFixture(async (url, options) => {
     requests.push([url, options.method, JSON.parse(JSON.stringify(options.body))]);
-    return url.endsWith('/scan') ? {items} : preview;
+    return url.endsWith('/scan') ? {items} : new Promise(resolve => { finishInspection = resolve; });
   });
   assert.equal(ui.panel.hidden, false);
   await ui.form.handlers.submit({preventDefault() {}});
@@ -72,7 +73,13 @@ test('folder backup selection preserves scanned metadata and opens the existing 
   ui.rows.selected = {value: '0'};
   ui.rows.handlers.change();
   assert.equal(inspect.disabled, false);
-  await inspect.handlers.click();
+  const inspection = inspect.handlers.click();
+  const progress = ui.panel.querySelector('[data-folder-progress]');
+  assert.equal(progress.hidden, false);
+  assert.equal(inspect.disabled, true);
+  finishInspection(preview);
+  await inspection;
+  assert.equal(progress.hidden, true);
   const scan = {platform: 'cpanel', folder: '/var/backups/migration'};
   assert.deepEqual(requests, [
     ['/api/migrations/folder/scan', 'POST', scan],

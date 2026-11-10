@@ -30,17 +30,17 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 		return preview, errors.New("select a valid LiteCP manual website ZIP backup")
 	}
 	defer outer.Close()
-	return inspectManualBackupMembers(ctx, outer.File, stage, freeBytes)
+	return inspectManualBackupMembers(ctx, outer.File, stage, freeBytes, migrationExtractLimit)
 }
 
-func inspectManualBackupMembers(ctx context.Context, entries []*zip.File, stage string, freeBytes func(context.Context, string) (int64, error)) (MigrationPreview, error) {
+func inspectManualBackupMembers(ctx context.Context, entries []*zip.File, stage string, freeBytes func(context.Context, string) (int64, error), extractLimit int64) (MigrationPreview, error) {
 	preview := MigrationPreview{Platform: "LiteCP manual ZIP", Roots: []string{"public_html"}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	if len(entries) != 2 && len(entries) != 3 {
 		return preview, errors.New("backup must contain public_html.zip, databases.zip and optionally home_directories.zip")
 	}
 	members := map[string]bool{}
 	for _, member := range entries {
-		if (member.Name != "public_html.zip" && member.Name != "databases.zip" && member.Name != "home_directories.zip") || members[member.Name] || !member.Mode().IsRegular() || member.UncompressedSize64 > uint64(migrationExtractLimit) {
+		if (member.Name != "public_html.zip" && member.Name != "databases.zip" && member.Name != "home_directories.zip") || members[member.Name] || !member.Mode().IsRegular() || member.UncompressedSize64 > uint64(extractLimit) {
 			return preview, errors.New("unexpected, duplicate, oversized or unsafe backup member")
 		}
 		members[member.Name] = true
@@ -93,9 +93,9 @@ func inspectManualBackupMembers(ctx context.Context, entries []*zip.File, stage 
 		}
 		required := int64(0)
 		for _, member := range inner.File {
-			if member.UncompressedSize64 > uint64(migrationExtractLimit-preview.Bytes-required) {
+			if member.UncompressedSize64 > uint64(extractLimit-preview.Bytes-required) {
 				inner.Close()
-				return preview, errors.New("backup exceeds the combined 8 GiB extraction limit")
+				return preview, errors.New("backup exceeds the combined extraction limit")
 			}
 			required += int64(member.UncompressedSize64)
 		}
@@ -150,9 +150,9 @@ func inspectManualBackupMembers(ctx context.Context, entries []*zip.File, stage 
 				return preview, errors.New("duplicate backup path")
 			}
 			seen[clean] = true
-			if member.UncompressedSize64 > uint64(migrationExtractLimit-preview.Bytes) {
+			if member.UncompressedSize64 > uint64(extractLimit-preview.Bytes) {
 				inner.Close()
-				return preview, errors.New("backup exceeds the combined 8 GiB extraction limit")
+				return preview, errors.New("backup exceeds the combined extraction limit")
 			}
 			if directory {
 				if err = secureEnsureManagedDirectory(filesRoot, clean, 0700, os.Getuid(), os.Getgid()); err != nil {

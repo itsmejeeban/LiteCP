@@ -13,15 +13,19 @@ import (
 // Inspect the same regular files/directories that extraction accepts. Stream
 // headers instead of retaining Python TarInfo objects for a large account.
 func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, error) {
+	return migrationArchiveBytesWithLimit(ctx, archivePath, liveMigrationExtractLimit)
+}
+
+func migrationArchiveBytesWithLimit(ctx context.Context, archivePath string, limit int64) (int64, error) {
 	input, err := os.Open(archivePath)
 	if err != nil {
 		return 0, fmt.Errorf("open website archive: %w", err)
 	}
 	defer input.Close()
-	return migrationArchiveReaderBytes(ctx, input)
+	return migrationArchiveReaderBytes(ctx, input, limit)
 }
 
-func migrationArchiveReaderBytes(ctx context.Context, input io.ReadSeeker) (int64, error) {
+func migrationArchiveReaderBytes(ctx context.Context, input io.ReadSeeker, limit int64) (int64, error) {
 	var stream io.Reader = input
 	var magic [2]byte
 	_, err := io.ReadFull(input, magic[:])
@@ -75,8 +79,8 @@ func migrationArchiveReaderBytes(ctx context.Context, input io.ReadSeeker) (int6
 			paths[parent] = true
 		}
 		paths[clean] = directory
-		if header.Size < 0 || header.Size > liveMigrationExtractLimit-bytes {
-			return 0, fmt.Errorf("uncompressed website data exceeds the 64 GiB extraction limit")
+		if header.Size < 0 || header.Size > limit-bytes {
+			return 0, fmt.Errorf("uncompressed website data exceeds the available extraction limit")
 		}
 		bytes += header.Size
 		// Round data to filesystem blocks and budget one metadata block per entry.

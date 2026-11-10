@@ -73,17 +73,17 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 	if err != nil {
 		return MigrationPreview{}, err
 	}
-	return extractMigrationReader(ctx, io.NewSectionReader(input, 0, info.Size()), root, platform, extractLimit)
-}
-
-func extractMigrationReader(ctx context.Context, input *io.SectionReader, root, platform string, extractLimit int64) (MigrationPreview, error) {
-	preview := MigrationPreview{Platform: platform, Roots: []string{}, Databases: []string{}, CreatedAt: time.Now().UTC()}
-	roots := map[string]bool{}
-	files := map[string]bool{}
 	memberLimit := maxArchiveMembers
 	if extractLimit == liveMigrationExtractLimit {
 		memberLimit = liveMigrationMemberLimit
 	}
+	return extractMigrationReader(ctx, io.NewSectionReader(input, 0, info.Size()), root, platform, extractLimit, memberLimit)
+}
+
+func extractMigrationReader(ctx context.Context, input *io.SectionReader, root, platform string, extractLimit int64, memberLimit int) (MigrationPreview, error) {
+	preview := MigrationPreview{Platform: platform, Roots: []string{}, Databases: []string{}, CreatedAt: time.Now().UTC()}
+	roots := map[string]bool{}
+	files := map[string]bool{}
 	add := func(name string, size int64, directory bool, source io.Reader) error {
 		if err := ctx.Err(); err != nil {
 			return err
