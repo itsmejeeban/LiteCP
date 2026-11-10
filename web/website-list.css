@@ -25,3 +25,6 @@
 #sitesTable .website-col-actions{width:auto}
 #sitesTable .websites-table th,#sitesTable .websites-table td{padding-left:10px;padding-right:10px}
 #sitesTable .domain-copy{min-width:0;overflow-wrap:anywhere}
+
+#sitesTable .website-suspended > td { background: #fee2e2; }
+:root[data-theme="dark"] #sitesTable .website-suspended > td { background: #492127; }
