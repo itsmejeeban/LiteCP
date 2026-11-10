@@ -56,8 +56,16 @@ probe=$(mktemp /var/lib/letsencrypt/.well-known/acme-challenge/litecp-panel-XXXX
 token=${probe##*/}
 printf '%s' "$token" > "$probe"
 chmod 0644 "$probe"
-challenge=$(curl --noproxy '*' --fail --silent --show-error --retry 3 --retry-all-errors --retry-delay 1 --max-time 5 --resolve "$host:80:127.0.0.1" "http://$host/.well-known/acme-challenge/$token")
-[[ $challenge == "$token" ]] || { echo 'The hostname HTTP challenge route conflicts with an existing website.' >&2; exit 1; }
+# Nginx reload returns before its new workers serve requests. Retry a wrong
+# response body as well as connection errors and non-200 responses.
+challenge=''
+for attempt in {1..10}; do
+  if challenge=$(curl --noproxy '*' --silent --max-time 2 --write-out ' %{http_code}' --resolve "$host:80:127.0.0.1" "http://$host/.well-known/acme-challenge/$token") && [[ $challenge == "$token 200" ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ $challenge == "$token 200" ]] || { echo "The ACME probe did not reach the hostname challenge route (HTTP ${challenge##* }). Check for an existing port 80 virtual host for $host or webroot access restrictions." >&2; exit 1; }
 mv "$probe" "$backup/http-probe"
 probe=''
 echo '[2/4] Requesting trusted certificate...'
