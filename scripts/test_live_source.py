@@ -86,6 +86,42 @@ class LiveSourceTests(unittest.TestCase):
             with tarfile.open(portable) as result:
                 self.assertEqual(result.getnames(),['public_html/index.php','private_home/app/public_html/index.php','private_home/app/mysql/schema.sql','mysql/user_db.sql','cpanel_account/format.json'])
 
+    def test_cpanel_preserves_explicit_nested_public_document_root(self):
+        for rule, expected_root in [
+            (b'RewriteEngine On\nRewriteCond %{REQUEST_URI} !^/public/\nRewriteRule ^(.*)$ public/$1 [L]\n', 'public_html'),
+            (b'RewriteEngine On\n# RewriteRule ^(.*)$ public/$1 [L]\n', 'public_html/public'),
+            (b'RewriteEngine Off\nRewriteRule ^(.*)$ public/$1 [L]\n', 'public_html/public'),
+        ]:
+            with self.subTest(rule=rule), tempfile.TemporaryDirectory() as directory:
+                native = pathlib.Path(directory) / 'native.tar.gz'
+                portable = pathlib.Path(directory) / 'portable.tar.gz'
+                index = b"<?php require dirname(__DIR__) . '/app/bootstrap.php';"
+                files = {
+                    '.htaccess': rule,
+                    'index.php': b'legacy entry point',
+                    'public/index.php': index,
+                    'public/assets/app.css': b'.auth-logo { width: 64px; }',
+                    'public/assets/app.js': b'void 0;',
+                    'app/bootstrap.php': b'<?php',
+                    'database/schema.sql': b'CREATE TABLE fixture(id INT);',
+                    '.env': b'DB_DATABASE=fixture',
+                }
+                with tarfile.open(native, 'w:gz') as target:
+                    for name, data in files.items():
+                        entry = tarfile.TarInfo('cpmove-user/homedir/public_html/' + name)
+                        entry.size = len(data)
+                        target.addfile(entry, io.BytesIO(data))
+                source.cpanel_portable(native, portable)
+                with tarfile.open(portable) as result:
+                    self.assertEqual(result.extractfile(expected_root + '/index.php').read(), index)
+                    self.assertEqual(result.extractfile(expected_root + '/assets/app.css').read(), files['public/assets/app.css'])
+                    self.assertEqual(result.extractfile(expected_root + '/assets/app.js').read(), files['public/assets/app.js'])
+                    if expected_root == 'public_html':
+                        for name in ('index.php', 'app/bootstrap.php', 'database/schema.sql', '.env', '.htaccess'):
+                            self.assertEqual(result.extractfile('private_home/' + name).read(), files[name])
+                        self.assertNotIn('public_html/app/bootstrap.php', result.getnames())
+                        self.assertNotIn('public_html/public/index.php', result.getnames())
+
     def test_litecp_urlsafe_identifier_reaches_capture(self):
         for account in ['-vYbtz2ZL38', '_leading_underscore']:
             config = {'sites': [{'id': account, 'domain': 'audit.example.test', 'root': '/home/litecp/audit/public_html'}]}

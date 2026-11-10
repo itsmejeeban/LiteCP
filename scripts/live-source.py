@@ -152,6 +152,30 @@ def cpanel_capture_diagnostic(log_path):
         return 'pkgacct reported a source storage I/O error'
     return ''
 
+def cpanel_nested_public_root(archive):
+    """Recognize a cPanel document root explicitly forwarded to public/."""
+    rewrites, entrypoints = set(), set()
+    with tarfile.open(archive, 'r:*') as native:
+        for member in native:
+            parts = pathlib.PurePosixPath(member.name).parts
+            prefix = () if parts and parts[0] == 'homedir' else parts[:1]
+            relative = parts[len(prefix):]
+            if not member.isfile():
+                continue
+            if relative == ('homedir', 'public_html', '.htaccess') and member.size <= 65536:
+                with native.extractfile(member) as rules:
+                    text = rules.read().decode('utf-8', errors='replace')
+                enabled = re.findall(r'(?mi)^[ \t]*RewriteEngine[ \t]+(On|Off)[ \t]*\r?$', text)
+                forwarding = re.search(r'(?mi)^[ \t]*RewriteRule[ \t]+\^\(\.\*\)\$[ \t]+/?public/\$1[ \t]+\[(?:L|END)\][ \t]*\r?$', text)
+                if enabled and enabled[-1].lower() == 'on' and forwarding:
+                    rewrites.add(prefix)
+            elif relative == ('homedir', 'public_html', 'public', 'index.php') and member.size > 0:
+                entrypoints.add(prefix)
+            if prefix in rewrites and prefix in entrypoints:
+                return prefix
+    return None
+
+
 def cpanel_portable(archive, portable, source_home="", supplement=None, blank_only=False):
     website_files, private_files, skipped = 0, 0, 0
     website_root_found = False
@@ -163,6 +187,7 @@ def cpanel_portable(archive, portable, source_home="", supplement=None, blank_on
         'public_html', 'public_ftp', 'mail', 'etc', 'logs', 'ssl', 'tmp',
         '.cpanel', '.cphorde', '.htpasswds', '.ssh', '.trash', '.softaculous',
     }
+    nested_root = None if blank_only else cpanel_nested_public_root(archive)
     with tarfile.open(archive,'r:*') as original, tarfile.open(portable,'w:gz') as target:
         for member in original:
             parts = pathlib.PurePosixPath(member.name).parts
@@ -186,7 +211,14 @@ def cpanel_portable(archive, portable, source_home="", supplement=None, blank_on
                 # by the installed site. It stays in the native archive.
                 if relative_account[2:4] == ('wp-content', 'upgrade'):
                     continue
-                destination = '/'.join(relative_account[1:])
+                outer = relative_account[2:]
+                if nested_root is not None and parts[:-len(relative_account)] == nested_root and outer:
+                    if outer[0] == 'public':
+                        destination = '/'.join(('public_html',) + outer[1:])
+                    else:
+                        destination = '/'.join(('private_home',) + outer)
+                else:
+                    destination = '/'.join(relative_account[1:])
             elif len(relative_account) == 2 and relative_account[0] == 'mysql' and member.isfile() and member.name.lower().endswith('.sql') and relative_account[-1].lower() != 'mysql.sql':
                 # A zero-byte native entry has no schema or data. Leave it out
                 # so the account-scoped database inventory can supply a dump.
