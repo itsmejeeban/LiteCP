@@ -1,13 +1,14 @@
 set -Eeuo pipefail
 tag="$1"
+completed_stages=0
 data_dir="$2"
 [[ "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
 status() {
-  python3 - "$data_dir/panel-update.json" "$1" "$2" "$tag" <<'PY'
+  python3 - "$data_dir/panel-update.json" "$1" "$2" "$tag" "$completed_stages" <<'PY'
 import json,os,sys,tempfile
-path,state,message,version=sys.argv[1:]
+path,state,message,version,completedStages=sys.argv[1:]
 fd,tmp=tempfile.mkstemp(dir=os.path.dirname(path),prefix='.panel-update-')
-with os.fdopen(fd,'w') as out: json.dump(dict(state=state,message=message,version=version),out)
+with os.fdopen(fd,'w') as out: json.dump(dict(state=state,message=message,version=version,completedStages=completedStages),out)
 os.replace(tmp,path)
 PY
 }
@@ -104,6 +105,7 @@ with tarfile.open(archive,'r:gz') as source:
                 import shutil
                 shutil.copyfileobj(src,out)
 PY
+completed_stages=1
 status running "Building LiteCP. Existing websites remain online."
 cd "$work/source"
 BUILD_REVISION="$(python3 - "$work/source.tar.gz" <<'PY'
@@ -120,10 +122,12 @@ if [[ -f /usr/local/lib/litecp/system-snapshot.py ]]; then cp -p /usr/local/lib/
 python3 "$work/source/scripts/write-panel-recovery-manifest.py" "$work"
 bash "$work/source/scripts/install-privilege-services.sh" --prepare-only
 check_recovery_space "$work"
+completed_stages=2
 status running "Saving the panel recovery copy. Existing websites remain online."
 panel_stop_started=1
 systemctl stop litecp
 cp -a "$data_dir" "$work/panel-data"
+completed_stages=3
 status running "Restarting LiteCP and checking the new version."
 LITECP_SERVICE_BACKUP_DIR="$work/service-recovery" bash "$work/source/scripts/install-privilege-services.sh"
 binary_install_started=1
@@ -141,6 +145,7 @@ systemctl start litecp
 bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do
   if bash "$work/source/scripts/check-privilege-services.sh" "${tag#v}"; then
+    completed_stages=4
     status success "LiteCP was updated successfully. Sign in again if your session ended."
     exit 0
   fi

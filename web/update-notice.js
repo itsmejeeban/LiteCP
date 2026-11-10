@@ -2,12 +2,21 @@
  "use strict";
  const $=s=>document.querySelector(s),notice=$('#updateNotice'),label=notice.querySelector('span'),app=$('#appView');
  const checkButton=$('#checkUpdatesButton'),install=$('#installPanelUpdate'),versions=$('#panelUpdateVersions'),message=$('#panelUpdateMessage');
+ const progress=$('#panelUpdateProgress'),bar=$('#panelUpdateBar'),percent=$('#panelUpdatePercent');
+ function showProgress(result){
+  progress.hidden=!['running','success','failed'].includes(result.state);
+  const steps=result.state==='success'?4:result.completedStages;
+  const count=steps==null?NaN:Number(steps);
+  if(Number.isInteger(count)&&count>=0&&count<=4){
+   const value=count*25;bar.value=value;percent.textContent=value+'%';
+  }else{bar.removeAttribute('value');percent.textContent='';}
+ }
  let checking=false,last=0,latest='',running=false,polling=false;
  function say(text){if(message)message.textContent=text;}
  async function status(){
   if(!install||app.classList.contains('hidden')||polling)return;
   polling=true;
-  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();running=result.state==='running';if(result.state!=='idle')say(result.message||'LiteCP update is running…');install.disabled=running||!latest;}
+  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();const wasRunning=running;running=result.state==='running';showProgress(result);if(wasRunning&&result.state==='success'){latest='';notice.classList.add('hidden');check(true);}if(result.state!=='idle')say(result.message||'LiteCP update is running…');install.disabled=running||!latest;}
   catch{if(running)say('LiteCP is restarting. Reconnect and sign in again shortly.');}finally{polling=false;}
  }
  async function check(force=false){
@@ -33,7 +42,7 @@
   const selected=latest;
   if(!await window.LiteCPDialogs.confirm(`Install LiteCP ${selected}? The panel will restart and you may need to sign in again. Hosted websites remain online. The previous binary and panel data will be retained.`,{title:'Update LiteCP',confirmText:'Update LiteCP'}))return;
   install.disabled=true;
-  try{await window.LiteCP.api('/api/updates/install',{method:'POST',body:{version:selected}});running=true;say('Starting the LiteCP update…');setTimeout(status,1500);}
+  try{await window.LiteCP.api('/api/updates/install',{method:'POST',body:{version:selected}});running=true;showProgress({state:'running',completedStages:0});say('Starting the LiteCP update…');setTimeout(status,1500);}
   catch(error){say(error.message);install.disabled=false;}
  });
  notice.addEventListener?.('click',event=>{event.preventDefault();window.LiteCP.navigate('settings/update');});
