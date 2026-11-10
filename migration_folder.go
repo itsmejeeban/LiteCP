@@ -40,8 +40,12 @@ func migrationFolderPath(folder string) (root, relative string, err error) {
 		return "", "", invalid
 	}
 	volume := filepath.VolumeName(folder)
+	root = volume + string(os.PathSeparator)
 	relative = strings.Trim(folder[len(volume):], "/")
-	if relative == "" || strings.ContainsAny(relative, `\:`) {
+	if relative == "" {
+		return root, ".", nil
+	}
+	if strings.ContainsAny(relative, `\:`) {
 		return "", "", invalid
 	}
 	parts := strings.Split(relative, "/")
@@ -54,7 +58,7 @@ func migrationFolderPath(folder string) (root, relative string, err error) {
 	case "proc", "sys", "dev", "run":
 		return "", "", errors.New("Choose a backup storage folder outside virtual system directories.")
 	}
-	return volume + string(os.PathSeparator), filepath.FromSlash(relative), nil
+	return root, filepath.FromSlash(relative), nil
 }
 
 func migrationFolderArchiveName(name string) bool {

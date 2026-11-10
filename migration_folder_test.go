@@ -82,9 +82,26 @@ func TestMigrationFolderScanAndStaleSelection(t *testing.T) {
 
 func TestMigrationFolderRejectsUnsafeFolderPaths(t *testing.T) {
 	volume := filepath.VolumeName(t.TempDir())
-	for _, path := range []string{"relative/backup", volume + "/", volume + "/root/../backup", volume + "/proc/123", volume + "/sys/backup", volume + "/dev/fd", volume + "/run/backup", "//server/share", volume + "/back\x00ups"} {
+	for _, path := range []string{"relative/backup", volume + "/root/../backup", volume + "/proc/123", volume + "/sys/backup", volume + "/dev/fd", volume + "/run/backup", "//server/share", volume + "/back\x00ups"} {
 		if _, _, err := migrationFolderPath(path); err == nil {
 			t.Errorf("accepted unsafe backup location %q", path)
 		}
 	}
+}
+
+func TestMigrationFolderAllowsFilesystemRoot(t *testing.T) {
+	volume := filepath.VolumeName(t.TempDir())
+	root, relative, err := migrationFolderPath(volume + "/")
+	if err != nil || root != volume+string(os.PathSeparator) || relative != "." {
+		t.Fatalf("root folder was not accepted: %q %q %v", root, relative, err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "account.tar.gz"), []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	file, _, err := openMigrationFolderArchive(dir, relative, "account.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
 }
