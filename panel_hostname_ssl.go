@@ -75,7 +75,9 @@ func (a *App) panelHostnameSSL(w http.ResponseWriter, r *http.Request) {
 	}
 	// The transient service finishes its verification or rollback even if the
 	// browser disconnects when Nginx switches certificates.
-	_, err = runCommand(context.Background(), 5*time.Minute, "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--unit=litecp-panel-hostname-ssl", "--property=RuntimeMaxSec=270", "--", "/bin/bash", "-c", configurePanelHostname, "litecp-panel-hostname", host, strconv.Itoa(port), email)
+	// Pass the script on stdin so systemd cannot expand Bash's $, ${...}, or % syntax.
+	emailArg := strings.NewReplacer("$", "$$", "%", "%%").Replace(email)
+	_, err = runCommandInput(context.Background(), 5*time.Minute, configurePanelHostname, "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--unit=litecp-panel-hostname-ssl", "--property=RuntimeMaxSec=270", "--", "/bin/bash", "-s", "--", host, strconv.Itoa(port), emailArg)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "Hostname SSL setup failed. "+err.Error())
 		return
