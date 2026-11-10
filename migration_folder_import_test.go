@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -138,6 +139,8 @@ func TestFolderMigrationChecksCapacityBeforeStaging(t *testing.T) {
 	app := folderMigrationFixtureApp(t, func(context.Context, string) (int64, error) { return folderMigrationReserve, nil })
 	if _, err := app.stageFolderMigration(context.Background(), "cpanel", input); !errors.Is(err, errFolderMigrationSpace) {
 		t.Fatalf("expected capacity rejection, got %v", err)
+	} else if !strings.Contains(err.Error(), "1 GiB safety reserve") || !strings.Contains(err.Error(), filepath.Join(app.system.dataDir, "migrations")) || !strings.Contains(err.Error(), "1.00 GiB is available") {
+		t.Fatalf("capacity error did not identify the staging filesystem and its free space: %v", err)
 	}
 	entries, err := os.ReadDir(filepath.Join(app.system.dataDir, "migrations"))
 	if err != nil || len(entries) != 0 {

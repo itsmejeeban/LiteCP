@@ -104,6 +104,23 @@ test('changing the folder invalidates an outstanding scan and its selections', a
   assert.equal(ui.panel.querySelector('[data-folder-scan-button]').disabled, false);
 });
 
+test('a staging-space rejection leaves an actionable error beside the inspect button', async () => {
+  const detail = 'The staging filesystem needs 8.00 GiB free, but only 3.00 GiB is available.';
+  const ui = folderFixture(async url => {
+    if (url.endsWith('/scan')) return {items: [{name: 'backup.tar.gz', size: 81, modifiedAt: '2026-11-10T01:02:03Z'}]};
+    throw new Error(detail);
+  });
+  await ui.form.handlers.submit({preventDefault() {}});
+  ui.rows.selected = {value: '0'};
+  ui.rows.handlers.change();
+  const inspect = ui.panel.querySelector('[data-folder-inspect]');
+  await inspect.handlers.click();
+  assert.equal(ui.panel.querySelector('[data-folder-status]').textContent, `Restore did not start. ${detail}`);
+  assert.equal(ui.panel.querySelector('[data-folder-progress]').hidden, true);
+  assert.equal(inspect.disabled, false);
+  assert.deepEqual(ui.reviews, []);
+});
+
 test('folder navigation hides an existing upload review without resetting it', () => {
   const script = source('migration-tabs.js');
   const code = script.slice(script.indexOf('  let lastRoute='), script.indexOf('  const previous='));

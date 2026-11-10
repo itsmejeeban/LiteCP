@@ -26,8 +26,7 @@
         </label>
         <button type="submit" class="button button-primary" data-folder-scan-button>Scan folder</button>
       </form>
-      <p role="status" data-folder-status></p>
-      <div data-folder-progress hidden><progress aria-label="Inspecting backup archive" style="width:100%"></progress></div>
+      <p role="status" data-folder-scan-status></p>
       <div data-folder-results hidden>
         <div class="table-scroll">
           <table class="data-table" aria-label="Backup files in the selected folder">
@@ -37,6 +36,8 @@
         </div>
         <p class="feature-note">Inspection verifies the archive format. The review below imports website files and an optional SQL dump into an empty target. The source backup is kept.</p>
         <button type="button" class="button button-primary" data-folder-inspect disabled>Inspect and restore</button>
+        <p role="status" data-folder-status></p>
+        <div data-folder-progress hidden><progress aria-label="Inspecting and staging backup archive" style="display:block;width:100%;accent-color:#0875f9"></progress></div>
       </div>
     </div>`;
   page.querySelector("#migrationUploadForm").before(panel);
@@ -44,6 +45,7 @@
   const get = selector => panel.querySelector(selector);
   const form = get("[data-folder-scan]");
   const scanButton = get("[data-folder-scan-button]");
+  const scanStatus = get("[data-folder-scan-status]");
   const status = get("[data-folder-status]");
   const progress = get("[data-folder-progress]");
   const results = get("[data-folder-results]");
@@ -89,6 +91,7 @@
     scanned = null;
     rows.replaceChildren();
     results.hidden = true;
+    status.textContent = "";
     clearReview();
   }
 
@@ -98,7 +101,7 @@
     clearResults();
     updateNote();
     updateControls();
-    status.textContent = "";
+    scanStatus.textContent = "";
   });
 
   form.addEventListener("submit", async event => {
@@ -107,14 +110,14 @@
     const platform = form.elements.platform.value;
     const folder = form.elements.folder.value.trim();
     if (!folder.startsWith("/")) {
-      status.textContent = "Enter an absolute folder path such as /var/backups/migration.";
+      scanStatus.textContent = "Enter an absolute folder path such as /var/backups/migration.";
       return;
     }
     const request = ++scanRequest;
     clearResults();
     scanning = true;
     updateControls();
-    status.textContent = "Scanning the folder…";
+    scanStatus.textContent = "Scanning the folder…";
     try {
       if (cp.demo) throw new Error("Folder restore requires an installed LiteCP server.");
       const response = await cp.api("/api/migrations/folder/scan", {method: "POST", body: {platform, folder}});
@@ -129,10 +132,10 @@
       scanned = {platform, folder, items};
       results.hidden = !items.length;
       const count = items.length === 1 ? "1 archive found." : `${items.length} archives found.`;
-      status.textContent = (items.length ? count : "No matching backup archives found.") +
+      scanStatus.textContent = (items.length ? count : "No matching backup archives found.") +
         (response.truncated ? " Scan limit reached. Use a smaller folder to see additional files." : "");
     } catch (error) {
-      if (request === scanRequest) status.textContent = `Folder scan failed. ${error.message}`;
+      if (request === scanRequest) scanStatus.textContent = `Folder scan failed. ${error.message}`;
     } finally {
       if (request === scanRequest) {
         scanning = false;
@@ -143,6 +146,7 @@
 
   rows.addEventListener("change", () => {
     clearReview();
+    status.textContent = "";
     updateControls();
   });
 
@@ -154,7 +158,7 @@
     clearReview();
     inspecting = true;
     updateControls();
-    status.textContent = `Inspecting ${name}…`;
+    status.textContent = `Inspecting and staging ${name} for review…`;
     progress.hidden = false;
     try {
       const preview = await cp.api("/api/migrations/folder/restore", {method: "POST", body: {platform, folder, name, size, modifiedAt}});
@@ -172,7 +176,7 @@
       document.dispatchEvent(new Event("migration-show-review"));
       importForm.scrollIntoView({block: "start"});
     } catch (error) {
-      status.textContent = `Archive inspection failed. ${error.message}`;
+      status.textContent = `Restore did not start. ${error.message}`;
     } finally {
       inspecting = false;
       progress.hidden = true;

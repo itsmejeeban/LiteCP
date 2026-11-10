@@ -170,7 +170,9 @@ func (a *App) checkFolderMigrationSpace(ctx context.Context, directory string, r
 		return fmt.Errorf("check available migration storage: %w", err)
 	}
 	if available < required+folderMigrationReserve {
-		return errFolderMigrationSpace
+		return fmt.Errorf("%w. The filesystem holding %s needs %.2f GiB free (including a 1 GiB safety reserve), but only %.2f GiB is available. Free or expand staging storage, then retry",
+			errFolderMigrationSpace, filepath.Join(a.system.dataDir, "migrations"),
+			float64(required+folderMigrationReserve)/(1<<30), float64(available)/(1<<30))
 	}
 	return nil
 }
