@@ -18,3 +18,18 @@ func TestBackupScheduleDue(t *testing.T) {
 		}
 	}
 }
+
+func TestBackupScheduleWeekdayTimes(t *testing.T) {
+	schedule := BackupSchedule{WeekdayTimes: map[string]string{"0": "02:30", "1": "09:15"}}
+	if err := schedule.validateTiming(); err != nil {
+		t.Fatal(err)
+	}
+	sunday := time.Date(2026, 11, 1, 2, 30, 0, 0, time.UTC)
+	if !schedule.due(sunday) || schedule.due(sunday.AddDate(0, 0, 1)) || !schedule.due(sunday.AddDate(0, 0, 1).Add(6*time.Hour+45*time.Minute)) || schedule.due(sunday.AddDate(0, 0, 2)) {
+		t.Fatal("weekly schedule did not honor each selected day's time")
+	}
+	schedule.WeekdayTimes["1"] = "25:00"
+	if schedule.validateTiming() == nil {
+		t.Fatal("invalid time was accepted")
+	}
+}

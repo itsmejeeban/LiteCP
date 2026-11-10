@@ -10,15 +10,16 @@ import (
 )
 
 type BackupSchedule struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	SiteID        string    `json:"siteId"`
-	DestinationID string    `json:"destinationId"`
-	Cron          string    `json:"cron"`
-	Keep          int       `json:"keep"`
-	Enabled       bool      `json:"enabled"`
-	LastRun       time.Time `json:"lastRun"`
-	Status        string    `json:"status"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	SiteID        string            `json:"siteId"`
+	DestinationID string            `json:"destinationId"`
+	Cron          string            `json:"cron"`
+	WeekdayTimes  map[string]string `json:"weekdayTimes,omitempty"`
+	Keep          int               `json:"keep"`
+	Enabled       bool              `json:"enabled"`
+	LastRun       time.Time         `json:"lastRun"`
+	Status        string            `json:"status"`
 }
 
 func (s *Store) backupSchedulesList() []BackupSchedule {
@@ -84,7 +85,7 @@ func (a *App) backupSchedules(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "Enter a name and retention count from 0 to 10000 (0 keeps all).")
 			return
 		}
-		if err := validateCronSchedule(input.Cron); err != nil {
+		if err := input.validateTiming(); err != nil {
 			writeError(w, 400, err.Error())
 			return
 		}
@@ -117,6 +118,32 @@ func (a *App) backupSchedules(w http.ResponseWriter, r *http.Request) {
 	a.store.AddActivity("Backup schedule updated", input.Name, "info")
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
+func (s BackupSchedule) validateTiming() error {
+	if len(s.WeekdayTimes) == 0 {
+		return validateCronSchedule(s.Cron)
+	}
+	if s.Cron != "" {
+		return fmt.Errorf("choose weekday times or a cron expression")
+	}
+	for day, clock := range s.WeekdayTimes {
+		if len(day) != 1 || day[0] < '0' || day[0] > '6' {
+			return fmt.Errorf("invalid weekday")
+		}
+		parsed, err := time.Parse("15:04", clock)
+		if err != nil || parsed.Format("15:04") != clock {
+			return fmt.Errorf("enter a valid time for every selected weekday")
+		}
+	}
+	return nil
+}
+
+func (s BackupSchedule) due(now time.Time) bool {
+	if len(s.WeekdayTimes) != 0 {
+		return s.WeekdayTimes[strconv.Itoa(int(now.Weekday()))] == now.Format("15:04")
+	}
+	return backupScheduleDue(s.Cron, now)
+}
+
 func cronFieldMatches(field string, value, min, max int) bool {
 	for _, part := range strings.Split(field, ",") {
 		segments := strings.Split(part, "/")
@@ -170,7 +197,7 @@ func (a *App) startBackupSchedules() {
 				now = now.In(location)
 			}
 			for _, schedule := range a.store.backupSchedulesList() {
-				if !schedule.Enabled || schedule.LastRun.Unix()/60 == now.Unix()/60 || !backupScheduleDue(schedule.Cron, now) {
+				if !schedule.Enabled || schedule.LastRun.Unix()/60 == now.Unix()/60 || !schedule.due(now) {
 					continue
 				}
 				schedule.LastRun = now
