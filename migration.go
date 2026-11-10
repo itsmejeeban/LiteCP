@@ -64,6 +64,19 @@ func extractMigration(ctx context.Context, archivePath, root, platform string) (
 }
 
 func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform string, extractLimit int64) (MigrationPreview, error) {
+	input, err := os.Open(archivePath)
+	if err != nil {
+		return MigrationPreview{}, err
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return MigrationPreview{}, err
+	}
+	return extractMigrationReader(ctx, io.NewSectionReader(input, 0, info.Size()), root, platform, extractLimit)
+}
+
+func extractMigrationReader(ctx context.Context, input *io.SectionReader, root, platform string, extractLimit int64) (MigrationPreview, error) {
 	preview := MigrationPreview{Platform: platform, Roots: []string{}, Databases: []string{}, CreatedAt: time.Now().UTC()}
 	roots := map[string]bool{}
 	files := map[string]bool{}
@@ -135,17 +148,11 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 		}
 		return nil
 	}
-	input, err := os.Open(archivePath)
-	if err != nil {
-		return preview, err
-	}
-	defer input.Close()
 	magic := make([]byte, 4)
 	n, _ := input.Read(magic)
 	_, _ = input.Seek(0, io.SeekStart)
 	if n >= 4 && bytes.Equal(magic, []byte{'P', 'K', 3, 4}) {
-		info, _ := input.Stat()
-		reader, err := zip.NewReader(input, info.Size())
+		reader, err := zip.NewReader(input, input.Size())
 		if err != nil {
 			return preview, err
 		}
@@ -164,7 +171,7 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 			if err != nil {
 				return preview, err
 			}
-			err = add(member.Name, int64(member.UncompressedSize64), member.FileInfo().IsDir(), source)
+			err = add(member.Name, int64(member.UncompressedSize64), member.FileInfo().IsDir(), migrationContextReader{ctx, source})
 			_ = source.Close()
 			if err != nil {
 				return preview, err
@@ -180,7 +187,7 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 			defer gz.Close()
 			stream = gz
 		}
-		reader := tar.NewReader(stream)
+		reader := tar.NewReader(migrationContextReader{ctx, stream})
 		entries := 0
 		for {
 			header, err := reader.Next()
@@ -209,7 +216,7 @@ func extractMigrationWithLimit(ctx context.Context, archivePath, root, platform 
 	sort.Strings(preview.Roots)
 	sort.Strings(preview.Databases)
 	if len(preview.Roots) == 0 {
-		return preview, errors.New("no website root found; upload a cPanel archive containing public_html or a Plesk website export containing httpdocs. Encrypted, incremental and nested Plesk server backups must be exported as a website archive first")
+		return preview, errors.New("no website root found; use a cPanel archive containing public_html or a Plesk website export containing httpdocs. Encrypted, incremental and nested Plesk server backups must be exported as a website archive first")
 	}
 	return preview, nil
 }

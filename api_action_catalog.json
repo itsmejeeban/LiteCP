@@ -256,6 +256,22 @@
     "objectID": false
   },
   {
+    "name": "panel.system.hostname.ssl.get",
+    "group": "Settings",
+    "description": "Check the certificate served for the panel hostname",
+    "method": "GET",
+    "path": "/api/system/hostname/ssl",
+    "objectID": false
+  },
+  {
+    "name": "panel.system.hostname.ssl.post",
+    "group": "Settings",
+    "description": "Install a trusted certificate for the saved panel hostname",
+    "method": "POST",
+    "path": "/api/system/hostname/ssl",
+    "objectID": false
+  },
+  {
     "name": "panel.system.hostname.put",
     "group": "Settings",
     "description": "system / hostname — PUT /api/system/hostname",
@@ -981,6 +997,22 @@
     "description": "migrations / database — POST /api/migrations/database",
     "method": "POST",
     "path": "/api/migrations/database",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.folder.scan.post",
+    "group": "Migration",
+    "description": "Scan a local folder for migration backup archives",
+    "method": "POST",
+    "path": "/api/migrations/folder/scan",
+    "objectID": false
+  },
+  {
+    "name": "panel.migrations.folder.restore.post",
+    "group": "Migration",
+    "description": "Inspect a selected local backup and stage it for restore",
+    "method": "POST",
+    "path": "/api/migrations/folder/restore",
     "objectID": false
   },
   {

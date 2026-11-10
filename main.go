@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.3"
+var version = "6.0.4"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,8 @@ type App struct {
 	mutationMu sync.Mutex
 	loginMu    sync.Mutex
 	traffic    *trafficService
+
+	migrationFolderMu sync.Mutex
 }
 
 func main() {
@@ -362,6 +364,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/sites/waf-logs", only(http.MethodGet, a.withAuth(a.wafLogs)))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
 	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))
+	mux.HandleFunc("/api/system/hostname/ssl", a.withAuth(a.panelHostnameSSL))
 	mux.HandleFunc("/api/system/resolvers", only(http.MethodPut, a.withAuth(a.systemResolvers)))
 	mux.HandleFunc("/api/system/reboot", only(http.MethodPost, a.withAuth(a.systemReboot)))
 	mux.HandleFunc("/api/services/action", only(http.MethodPost, a.withAuth(a.serviceAction)))
@@ -407,6 +410,8 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/files/search", only(http.MethodGet, a.withAuth(a.searchFiles)))
 	mux.HandleFunc("/api/files/trash", a.withAuth(a.trash))
 	mux.HandleFunc("/api/migrations", a.withAuth(a.migrations))
+	mux.HandleFunc("/api/migrations/folder/scan", only(http.MethodPost, a.withAuth(a.scanMigrationFolder)))
+	mux.HandleFunc("/api/migrations/folder/restore", only(http.MethodPost, a.withAuth(a.restoreMigrationFolderArchive)))
 	mux.HandleFunc("/api/phpmyadmin/", a.withAuth(a.phpMyAdmin))
 	mux.HandleFunc("/api/databases/phpmyadmin", only(http.MethodPost, a.withAuth(a.databaseAdminLaunch)))
 	mux.HandleFunc("/internal/phpmyadmin-ticket", only(http.MethodPost, a.consumePMATicket))

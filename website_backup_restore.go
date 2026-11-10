@@ -30,11 +30,16 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 		return preview, errors.New("select a valid LiteCP manual website ZIP backup")
 	}
 	defer outer.Close()
-	if len(outer.File) != 2 && len(outer.File) != 3 {
+	return inspectManualBackupMembers(ctx, outer.File, stage, freeBytes)
+}
+
+func inspectManualBackupMembers(ctx context.Context, entries []*zip.File, stage string, freeBytes func(context.Context, string) (int64, error)) (MigrationPreview, error) {
+	preview := MigrationPreview{Platform: "LiteCP manual ZIP", Roots: []string{"public_html"}, Databases: []string{}, CreatedAt: time.Now().UTC()}
+	if len(entries) != 2 && len(entries) != 3 {
 		return preview, errors.New("backup must contain public_html.zip, databases.zip and optionally home_directories.zip")
 	}
 	members := map[string]bool{}
-	for _, member := range outer.File {
+	for _, member := range entries {
 		if (member.Name != "public_html.zip" && member.Name != "databases.zip" && member.Name != "home_directories.zip") || members[member.Name] || !member.Mode().IsRegular() || member.UncompressedSize64 > uint64(migrationExtractLimit) {
 			return preview, errors.New("unexpected, duplicate, oversized or unsafe backup member")
 		}
@@ -48,7 +53,7 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 			input.Close()
 			return preview, err
 		}
-		written, copyErr := io.Copy(destination, io.LimitReader(input, migrationExtractLimit+1))
+		written, copyErr := io.Copy(destination, io.LimitReader(migrationContextReader{ctx, input}, int64(member.UncompressedSize64)+1))
 		input.Close()
 		closeErr := destination.Close()
 		if copyErr != nil {
@@ -65,10 +70,10 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 		return preview, errors.New("required backup components are missing")
 	}
 	filesRoot := filepath.Join(stage, "files")
-	if err = os.MkdirAll(filesRoot, 0700); err != nil {
+	if err := os.MkdirAll(filesRoot, 0700); err != nil {
 		return preview, err
 	}
-	if err = secureEnsureManagedDirectory(filesRoot, "public_html", 0700, os.Getuid(), os.Getgid()); err != nil {
+	if err := secureEnsureManagedDirectory(filesRoot, "public_html", 0700, os.Getuid(), os.Getgid()); err != nil {
 		return preview, err
 	}
 	seen := map[string]bool{}
@@ -77,7 +82,7 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 	if members["home_directories.zip"] {
 		names = append(names, "home_directories.zip")
 		preview.Roots = append(preview.Roots, "home")
-		if err = secureEnsureManagedDirectory(filesRoot, "home", 0700, os.Getuid(), os.Getgid()); err != nil {
+		if err := secureEnsureManagedDirectory(filesRoot, "home", 0700, os.Getuid(), os.Getgid()); err != nil {
 			return preview, err
 		}
 	}
@@ -165,7 +170,7 @@ func inspectManualBackup(ctx context.Context, archivePath, stage string, freeByt
 				inner.Close()
 				return preview, err
 			}
-			written, copyErr := secureWriteManagedNoReplace(filesRoot, clean, input, int64(member.UncompressedSize64), 0600, os.Getuid(), os.Getgid())
+			written, copyErr := secureWriteManagedNoReplace(filesRoot, clean, migrationContextReader{ctx, input}, int64(member.UncompressedSize64), 0600, os.Getuid(), os.Getgid())
 			input.Close()
 			if copyErr != nil {
 				inner.Close()

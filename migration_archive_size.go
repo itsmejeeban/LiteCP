@@ -18,9 +18,13 @@ func migrationArchiveBytes(ctx context.Context, archivePath string) (int64, erro
 		return 0, fmt.Errorf("open website archive: %w", err)
 	}
 	defer input.Close()
+	return migrationArchiveReaderBytes(ctx, input)
+}
+
+func migrationArchiveReaderBytes(ctx context.Context, input io.ReadSeeker) (int64, error) {
 	var stream io.Reader = input
 	var magic [2]byte
-	_, err = io.ReadFull(input, magic[:])
+	_, err := io.ReadFull(input, magic[:])
 	if err != nil {
 		return 0, fmt.Errorf("read archive header: %w", err)
 	}

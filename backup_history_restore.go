@@ -100,12 +100,16 @@ func unpackHistoryTar(ctx context.Context, archive, root string) (int, int64, er
 		return 0, 0, e
 	}
 	defer f.Close()
-	gz, e := gzip.NewReader(f)
+	return unpackHistoryTarReader(ctx, f, root)
+}
+
+func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string) (int, int64, error) {
+	gz, e := gzip.NewReader(migrationContextReader{ctx, input})
 	if e != nil {
 		return 0, 0, e
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(migrationContextReader{ctx, gz})
 	count := 0
 	var total int64
 	seen := map[string]bool{}

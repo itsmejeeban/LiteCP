@@ -51,6 +51,25 @@ test('saving a settings sub-tab preserves saved values from other sections',asyn
 test('main navigation retains settings sub-routes while activating the Settings page',()=>{
  const source=fs.readFileSync('web/app.js','utf8'),start=source.indexOf('  function navigate('),end=source.indexOf('  function syncWordPressSetup(',start),location={hash:'#dashboard'},active={},calls=[];
  const views=['dashboard','settings'].map(id=>({dataset:{pageView:id},classList:{toggle:(name,value)=>active[id]=value}}));
- const navigate=vm.runInNewContext(source.slice(start,end)+'\nnavigate',{location,history:{pushState(a,b,value){location.hash=value;}},$$:selector=>selector==='[data-page-view]'?views:[],closeSidebar(){},window:{scrollTo(){},LiteCPFeatures:{navigate:page=>calls.push(page)}},clearInterval(){},logTimer:0,logRequest:0,document:{querySelector:()=>({textContent:"",classList:{toggle(){}}})},loadLogs(){},loadFiles(){}});
+ const navigate=vm.runInNewContext(source.slice(start,end)+'\nnavigate',{location,history:{pushState(a,b,value){location.hash=value;}},currentState:null,operatorPageAllowed:()=>true,$$:selector=>selector==='[data-page-view]'?views:[],closeSidebar(){},window:{scrollTo(){},LiteCPFeatures:{navigate:page=>calls.push(page)}},clearInterval(){},logTimer:0,logRequest:0,document:{querySelector:()=>({textContent:"",classList:{toggle(){}}})},loadLogs(){},loadFiles(){}});
  navigate('settings/hostname');assert.equal(location.hash,'#settings/hostname');assert.equal(active.settings,true);assert.equal(active.dashboard,false);assert.deepEqual(calls,['settings']);
+});
+
+test('hostname SSL checks the saved hostname on navigation and requests installation after confirmation',async()=>{
+ const elements=new Map(),node=()=>({hidden:false,disabled:false,addEventListener(name,callback){this[name]=callback;}});
+ const card=node();card.querySelector=key=>{if(!elements.has(key))elements.set(key,node());return elements.get(key);};
+ const location={hash:'#dashboard'},hostname='panel.example.test',calls=[];
+ const certificate={hostname,validHostname:true,trusted:false,url:`https://${hostname}:4321/`};
+ let confirmed=false;
+ const window={LiteCP:{state:()=>({system:{hostname}}),formatDateTime:()=>"Nov 10",showToast(){},api:async(path,options)=>{
+  calls.push({path,options});if(options){certificate.trusted=true;return {url:certificate.url};}return certificate;
+ }},LiteCPFeatures:{render(){},navigate(){}},LiteCPDialogs:{confirm:async()=>confirmed},addEventListener(){}};
+ vm.runInNewContext(fs.readFileSync('web/panel-hostname-ssl.js','utf8'),{window,location,document:{querySelector:()=>({append(){}}),createElement:()=>card}});
+ assert.equal(calls.length,0);
+ location.hash='#settings/hostname';window.LiteCPFeatures.navigate('settings');await new Promise(setImmediate);
+ const install=elements.get('[data-hostname-ssl-install]');
+ assert.equal(install.disabled,false);await install.click();assert.equal(calls.length,1);
+ confirmed=true;await install.click();
+ assert.equal(calls[1].options.method,'POST');assert.equal(calls[1].options.body.hostname,hostname);
+ assert.equal(elements.get('[data-hostname-ssl-url]').href,certificate.url);
 });

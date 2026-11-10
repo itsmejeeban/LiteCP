@@ -652,7 +652,7 @@
     const backupRoute=["create","restore","add-destination","settings","destinations","history","system-snapshot"].includes(backupPart)?`backups/${backupPart}`:"";
     if(backupRoute)page="backups";
     const migrationPart=String(page).startsWith("migrations/")?String(page).slice(11):"";
-    const migrationRoute=["cpanel","plesk","litecp","upload","jobs","pending","completed"].includes(migrationPart)?`migrations/${migrationPart}`:"";
+    const migrationRoute=["cpanel","plesk","litecp","upload","folder","jobs","pending","completed"].includes(migrationPart)?`migrations/${migrationPart}`:"";
     if(migrationRoute)page="migrations";
     if(emailRoute)page="email";
     if(settingsRoute)page="settings";
