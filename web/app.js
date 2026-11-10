@@ -260,7 +260,7 @@
     $$('[data-quick-backup]').forEach(button => button.addEventListener("click", runBackup));
     $("#backupRunForm").addEventListener("submit", runBackup);
     $("#backupDestinationForm").addEventListener("submit", createBackupDestination);
-    const destinationForm=$("#backupDestinationForm"),cancelDestination=document.createElement("button");cancelDestination.type="button";cancelDestination.className="button button-secondary field-span hidden";cancelDestination.id="cancelDestinationEdit";cancelDestination.textContent="Cancel edit";destinationForm.querySelector(".settings-body").append(cancelDestination);
+    const destinationForm=$("#backupDestinationForm"),cancelDestination=document.createElement("button");cancelDestination.type="button";cancelDestination.className="button button-secondary hidden";cancelDestination.id="cancelDestinationEdit";cancelDestination.textContent="Cancel edit";destinationForm.querySelector("[data-destination-actions]").append(cancelDestination);
     cancelDestination.onclick=()=>{destinationForm.reset();delete destinationForm.dataset.editID;destinationForm.elements.password.required=true;destinationForm.elements.password.placeholder="";destinationForm.querySelector("h2").textContent="Add remote destination";cancelDestination.classList.add("hidden");configureBackupProtocol();};
     for(const name of ["host","port"])destinationForm.elements[name].addEventListener("input",()=>{destinationForm.elements.hostKeySha256.value="";});
 
@@ -999,6 +999,7 @@
       } });
       form.reset(); $("#cancelDestinationEdit").classList.add("hidden"); delete form.dataset.editID;form.elements.password.required=true;form.elements.password.placeholder="";form.querySelector("h2").textContent="Add remote destination"; configureBackupProtocol();
       currentState = await api("/api/state"); renderAll();
+      navigate("backups/destinations");
       showToast("Destination saved", "The remote credential was encrypted and stored.");
     } catch (error) { handleError(error); }
     finally { submit.disabled = false; }
