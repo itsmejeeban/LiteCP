@@ -440,6 +440,22 @@
     "objectID": false
   },
   {
+    "name": "panel.sites.resource_limits.bulk.post",
+    "group": "Website Tools",
+    "description": "Create resource limit drafts for websites without saved settings",
+    "method": "POST",
+    "path": "/api/sites/resource-limits/bulk",
+    "objectID": false
+  },
+  {
+    "name": "panel.sites.resource_limits.history.get",
+    "group": "Website Tools",
+    "description": "Read website resource usage history",
+    "method": "GET",
+    "path": "/api/sites/resource-limits/history",
+    "objectID": false
+  },
+  {
     "name": "panel.sites.domain.put",
     "group": "Website Tools",
     "description": "sites / domain — PUT /api/sites/domain",

@@ -241,6 +241,32 @@ func readResourceCounters(dir string, at time.Time) (resourceSample, error) {
 	return s, nil
 }
 
+func (a *App) createResourceLimitsForAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "Use POST")
+		return
+	}
+	var policy WebsiteResourceLimits
+	if err := decodeJSONWithLimit(r, &policy, 4096); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid resource settings")
+		return
+	}
+	if policy.Enabled {
+		writeError(w, http.StatusBadRequest, "Create resource limit drafts in bulk, then enable enforcement individually.")
+		return
+	}
+	if err := policy.validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	created, skipped, err := a.store.CreateResourceLimitDrafts(policy)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Could not save resource limits for all websites")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"created": created, "skipped": skipped})
+}
+
 func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete && r.Method != http.MethodPost {
 		writeError(w, 405, "Use GET, PUT, POST or DELETE")

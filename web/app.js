@@ -394,6 +394,8 @@
     $("#modalServerIP").textContent = system.ipAddress;
     $("#siteNavCount").textContent = currentState.sites.length;
     $("#totalWebsitesValue").textContent = currentState.sites.length;
+    const suspendedSites = currentState.sites.filter(site => site.suspended).length;
+    $("#websiteStatusCounts").textContent = `Active ${currentState.sites.length - suspendedSites} · Suspended ${suspendedSites}`;
     $("#totalEmailAccountsValue").textContent = (currentState.mailboxes || []).length;
     renderMetrics();
     renderServices();

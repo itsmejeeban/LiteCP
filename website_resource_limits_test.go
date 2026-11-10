@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -154,5 +156,89 @@ func TestResourceActivationFailsWithoutMutatingSite(t *testing.T) {
 	app.websiteResourceLimits(missing, httptest.NewRequest("GET", "/api/sites/resource-limits?siteId=missing", nil))
 	if missing.Code != 404 {
 		t.Fatal(missing.Code)
+	}
+}
+
+func TestResourceBulkCreatesIndependentDrafts(t *testing.T) {
+	app := apiTestApp(t)
+	policy := validResourcePolicy()
+	policy.Enabled = false
+	existing := validResourcePolicy()
+	existing.CPUPercent = 75
+	app.store.cfg.Sites = []Site{
+		{ID: "first", Domain: "first.test"},
+		{ID: "second", Domain: "second.test", Suspended: true},
+		{ID: "existing", Domain: "existing.test", ResourceLimits: &existing},
+	}
+	submit := func(p WebsiteResourceLimits, authenticated bool) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "https://panel.example/api/sites/resource-limits/bulk", strings.NewReader(string(body)))
+		req.Header.Set("Origin", "https://panel.example")
+		if authenticated {
+			req.AddCookie(&http.Cookie{Name: "litecp_session", Value: "test-session"})
+		}
+		result := httptest.NewRecorder()
+		app.routes().ServeHTTP(result, req)
+		return result
+	}
+	if result := submit(policy, false); result.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated request returned %d", result.Code)
+	}
+	if result := submit(existing, true); result.Code != http.StatusBadRequest {
+		t.Fatalf("bulk enforcement returned %d", result.Code)
+	}
+	if result := submit(WebsiteResourceLimits{}, true); result.Code != http.StatusBadRequest {
+		t.Fatalf("invalid limits returned %d", result.Code)
+	}
+	for attempt, expected := range []string{`{"created":2,"skipped":1}`, `{"created":0,"skipped":3}`} {
+		result := submit(policy, true)
+		if result.Code != http.StatusOK || strings.TrimSpace(result.Body.String()) != expected {
+			t.Fatalf("attempt %d: %d %s", attempt+1, result.Code, result.Body.String())
+		}
+	}
+	sites := app.store.Sites()
+	if sites[0].ResourceLimits == sites[1].ResourceLimits {
+		t.Fatal("websites share a mutable policy")
+	}
+	changed := policy
+	changed.CPUPercent = 125
+	if err := app.store.UpdateSite("first", func(site *Site) { site.ResourceLimits = &changed }); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := OpenStore(filepath.Dir(app.store.path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sites = persisted.Sites()
+	if *sites[0].ResourceLimits != changed || *sites[1].ResourceLimits != policy || !sites[1].Suspended || *sites[2].ResourceLimits != existing {
+		t.Fatal("saved policies or suspension were changed unexpectedly")
+	}
+	if _, total := persisted.Activities(1, 10); total != 1 {
+		t.Fatalf("expected one bulk activity, got %d", total)
+	}
+}
+
+func TestResourceBulkDraftsRollBackOnSaveFailure(t *testing.T) {
+	policy := validResourcePolicy()
+	policy.Enabled = false
+	store := &Store{path: filepath.Join(t.TempDir(), "missing", "config.json")}
+	if created, skipped, err := store.CreateResourceLimitDrafts(policy); created != 0 || skipped != 0 || err != nil {
+		t.Fatalf("empty store should succeed without a save: %d %d %v", created, skipped, err)
+	}
+	store.cfg.Sites = []Site{{ID: "first", Domain: "first.test"}, {ID: "second", Domain: "second.test"}}
+	if _, _, err := store.CreateResourceLimitDrafts(policy); err == nil {
+		t.Fatal("expected save failure")
+	}
+	for _, site := range store.Sites() {
+		if site.ResourceLimits != nil {
+			t.Fatalf("settings for %s survived a failed save", site.Domain)
+		}
+	}
+	if _, total := store.Activities(1, 10); total != 0 {
+		t.Fatal("failed bulk save created an activity")
 	}
 }

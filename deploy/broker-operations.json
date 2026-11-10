@@ -98,6 +98,8 @@
   "/api/sites/php",
   "/api/sites/php-settings",
   "/api/sites/resource-limits",
+  "/api/sites/resource-limits/bulk",
+  "/api/sites/resource-limits/history",
   "/api/sites/sizes",
   "/api/sites/ssl",
   "/api/sites/suspension",

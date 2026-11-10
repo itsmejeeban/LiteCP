@@ -492,6 +492,37 @@ func (s *Store) UpdateSite(id string, update func(*Site)) error {
 	return errors.New("website not found")
 }
 
+func (s *Store) CreateResourceLimitDrafts(policy WebsiteResourceLimits) (created, skipped int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var sites []Site
+	for i, site := range s.cfg.Sites {
+		if site.ResourceLimits != nil {
+			skipped++
+			continue
+		}
+		if sites == nil {
+			sites = append([]Site(nil), s.cfg.Sites...)
+		}
+		draft := policy
+		sites[i].ResourceLimits = &draft
+		created++
+	}
+	if created == 0 {
+		return 0, skipped, nil
+	}
+
+	originalSites, originalActivities := s.cfg.Sites, s.cfg.Activities
+	s.cfg.Sites = sites
+	s.appendActivityLocked("Resource limit drafts created", fmt.Sprintf("%d websites configured, %d existing settings kept", created, skipped), "info")
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Sites, s.cfg.Activities = originalSites, originalActivities
+		return 0, 0, err
+	}
+	return created, skipped, nil
+}
+
 func (s *Store) UpdateSiteDomain(id, domain string, roots ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -619,10 +650,19 @@ func (s *Store) Settings() Settings {
 }
 
 func (s *Store) AddActivity(title, detail, kind string) error {
-	id, _ := randomToken(8)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	original := append([]Activity{}, s.cfg.Activities...)
+	original := s.cfg.Activities
+	s.appendActivityLocked(title, detail, kind)
+	if err := s.saveLocked(); err != nil {
+		s.cfg.Activities = original
+		return err
+	}
+	return nil
+}
+
+func (s *Store) appendActivityLocked(title, detail, kind string) {
+	id, _ := randomToken(8)
 	activity := Activity{ID: id, Title: title, Detail: detail, Kind: kind, CreatedAt: time.Now().UTC()}
 	s.cfg.Activities = append([]Activity{activity}, s.cfg.Activities...)
 	if days := s.cfg.Settings.ActivityRetentionDays; days > 0 {
@@ -635,11 +675,6 @@ func (s *Store) AddActivity(title, detail, kind string) error {
 		}
 		s.cfg.Activities = kept
 	}
-	if err := s.saveLocked(); err != nil {
-		s.cfg.Activities = original
-		return err
-	}
-	return nil
 }
 
 func (s *Store) SetSettings(settings Settings) error {
@@ -720,9 +755,6 @@ func (s *Store) saveLocked() error {
 		return err
 	}
 	if err := os.Rename(temporaryPath, s.path); err != nil {
-		return err
-	}
-	if err := os.Chmod(s.path, 0600); err != nil {
 		return err
 	}
 	directory, err := os.Open(filepath.Dir(s.path))

@@ -142,7 +142,7 @@
             <article class="metric-card"><div class="metric-top"><span class="metric-icon memory"><svg viewBox="0 0 24 24"><path d="M6 5h12v14H6zM9 2v3M15 2v3M9 19v3M15 19v3M3 9h3M3 15h3M18 9h3M18 15h3"/></svg></span><span class="metric-trend" id="memoryTrend">Available</span></div><small>MEMORY</small><div class="metric-value"><strong id="memoryValue">-</strong><span>%</span></div><div class="progress"><span id="memoryBar"></span></div><p id="memoryDetail">- of - used</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon disk"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 14h16M16 17h1M8 9h8"/></svg></span><span class="metric-trend good">Healthy</span></div><small>DISK STORAGE</small><div class="metric-value"><strong id="diskValue">-</strong><span>%</span></div><div class="progress"><span id="diskBar"></span></div><p id="diskDetail">- of - used</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon uptime"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2M8 2h8"/></svg></span><span class="metric-trend good"><span class="pulse-dot"></span>Online</span></div><small>UPTIME</small><div class="metric-value uptime-value"><strong id="uptimeValue">-</strong></div><div class="uptime-rule"></div><p id="uptimeDetail">Time since the last server restart</p></article>
-            <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span></div><small>TOTAL WEBSITES</small><div class="metric-value"><strong id="totalWebsitesValue">0</strong></div></article>
+            <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14 0 18M12 3c-3 3.5-3 14 0 18"/></svg></span></div><small>TOTAL WEBSITES</small><div class="metric-value"><strong id="totalWebsitesValue">0</strong></div><p id="websiteStatusCounts">Active 0 · Suspended 0</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span></div><small>TOTAL EMAIL ACCOUNTS</small><div class="metric-value"><strong id="totalEmailAccountsValue">0</strong></div></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL LOCAL BACKUPS</small><div class="metric-value"><strong id="totalLocalBackupsValue">-</strong></div><p>Available local archives</p><p id="lastLocalBackupCreated">No backups yet</p></article>
             <article class="metric-card"><div class="metric-top"><span class="metric-icon" aria-hidden="true"></span></div><small>TOTAL REMOTE BACKUPS</small><div class="metric-value"><strong id="totalRemoteBackupsValue">-</strong></div><p>Recorded successful uploads</p><p id="lastRemoteBackupCreated">No backups yet</p></article>
@@ -262,7 +262,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=4.0.65" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=suspended-row-1" defer></script>
+  <script src="app.js?v=website-status-counts-1" defer></script>
   <script src="website-bulk.js?v=4.0.4" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
   <script src="dns-export.js?v=3.3.19" defer></script>
@@ -301,7 +301,7 @@
   <script src="panel-port.js?v=2.0.14" defer></script>
   <script src="website-runtime-selectors.js?v=2.0.24" defer></script>
   <link rel="stylesheet" href="website-resource-limits.css">
-  <script src="website-resource-limits.js?v=resource-history-2" defer></script>
+  <script src="website-resource-limits.js?v=resource-bulk-1" defer></script>
   <script src="website-traffic.js?v=4.0.87" defer></script>
   <script src="website-redis.js?v=4.0.138" defer></script>
   <script src="website-dns.js?v=4.0.88" defer></script>
