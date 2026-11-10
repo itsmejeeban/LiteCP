@@ -5,7 +5,7 @@
     ['create','Create Backup','#backupRunForm','backups'],
     ['restore','Restore','#backupRestoreInventory','backups'],
     ['add-destination','Add Remote Destination','#backupDestinationForm','add-mail-domain'],
-    ['settings','Backup Settings','#backupSettingsForm','settings'],
+    ['settings','Backup Schedule','#backupSettingsForm','settings'],
     ['destinations','Remote Destinations','#backupDestinationsTable','services-control'],
     ['history','Backup History','#backupsTable','activities'],
     ['system-snapshot','System Snapshot','#systemSnapshotPanel','backup-vault']
