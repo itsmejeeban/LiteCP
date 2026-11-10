@@ -14,6 +14,7 @@ PY
 }
 panel_stop_started=0
 binary_install_started=0
+update_root=/usr/local/lib/litecp-updates
 work=''
 failure_message='Update failed. The previous panel binary has been retained. Review journalctl -u litecp-panel-update.'
 failed() {
@@ -54,9 +55,9 @@ status running "Downloading the official LiteCP release."
 for tool in curl python3 go systemctl flock; do command -v "$tool" >/dev/null; done
 exec 9>/run/lock/litecp-panel-update.lock
 flock -n 9
-install -d -m 0700 /usr/local/lib/litecp-updates
-check_recovery_space /usr/local/lib/litecp-updates
-work="$(mktemp -d /usr/local/lib/litecp-updates/update-XXXXXXXX)"
+install -d -m 0700 "$update_root"
+check_recovery_space "$update_root"
+work="$(mktemp -d "$update_root/update-XXXXXXXX")"
 # Transient system services need not have HOME or GOPATH. Keep build caches
 # private to this update rather than relying on an interactive root login.
 export GOPATH="$work/go" GOMODCACHE="$work/go/pkg/mod" GOCACHE="$work/go-build"
@@ -146,7 +147,15 @@ bash "$work/source/scripts/repair-webmail-runtime.sh"
 for attempt in $(seq 1 45); do
   if bash "$work/source/scripts/check-privilege-services.sh" "${tag#v}"; then
     completed_stages=4
-    status success "LiteCP was updated successfully. Sign in again if your session ended."
+    status running "Applying restore point retention."
+    # The update is committed. Cleanup failures must never trigger rollback.
+    trap - ERR
+    cd /
+    if python3 -I "$work/source/scripts/panel-restore-points.py" finish "${work##*/}"; then
+      status success "LiteCP was updated successfully. Sign in again if your session ended."
+    else
+      status success "LiteCP was updated successfully. Restore point retention could not be applied. Review journalctl -u litecp-panel-update."
+    fi
     exit 0
   fi
   sleep 1

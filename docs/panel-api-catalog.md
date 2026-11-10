@@ -178,6 +178,9 @@ Each row is an explicit permission. Existing credentials gain none automatically
 | `panel.settings.put` | Settings | PUT | `/api/settings` | Supported |
 | `panel.password.put` | Settings | PUT | `/api/password` | Supported |
 | `panel.updates.install.post` | Updates | POST | `/api/updates/install` | Supported |
+| `panel.updates.restore_points.get` | Updates | GET | `/api/updates/restore-points` | Supported |
+| `panel.updates.restore_points.put` | Updates | PUT | `/api/updates/restore-points` | Supported |
+| `panel.updates.restore_points.delete` | Updates | DELETE | `/api/updates/restore-points/{id}` | Supported |
 | `panel.developer_mode.get` | Server | GET | `/api/developer-mode` | Supported |
 | `panel.developer_mode.put` | Server | PUT | `/api/developer-mode` | Supported |
 | `panel.updates.status.get` | Updates | GET | `/api/updates/status` | Supported |

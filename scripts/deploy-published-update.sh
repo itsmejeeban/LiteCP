@@ -70,4 +70,10 @@ if [[ $healthy != 1 ]]; then
   journalctl -u litecp -u litecp-broker -n 50 --no-pager || true
   false
 fi
-echo "LiteCP $version deployed successfully. Recovery ID: ${recovery##*/}"
+# Retention is housekeeping after deployment. A cleanup error must not
+# roll back the successfully verified panel.
+trap - ERR
+if ! python3 -I "$work/scripts/panel-restore-points.py" finish "${recovery##*/}"; then
+  echo "Warning: restore point retention could not finish for ${recovery##*/}." >&2
+fi
+echo "LiteCP $version deployed successfully."

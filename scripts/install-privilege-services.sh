@@ -34,6 +34,14 @@ fi
 if [[ ! -d /etc/litecp/dns ]]; then
   install -d -m 0755 -o root -g root /etc/litecp/dns
 fi
+update_storage=/usr/local/lib/litecp-updates
+if [[ -L $update_storage || ( -e $update_storage && ! -d $update_storage ) ]]; then
+  echo 'LiteCP update recovery storage must be a real directory.' >&2
+  exit 1
+fi
+if [[ ! -d $update_storage ]]; then
+  install -d -m 0700 -o root -g root "$update_storage"
+fi
 if ! id litecp-captcha >/dev/null 2>&1; then
   useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin litecp-captcha
 fi

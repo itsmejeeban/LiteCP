@@ -49,6 +49,13 @@ test('panel updater checks backup capacity before downtime and copies recovery d
  assert.match(worker,/if \[\[ "\$binary_install_started" == 1 \]\]; then\r?\n\s+cp --preserve=mode "\$work\/previous-litecp"/);
 });
 
+test('panel updater applies restore point retention only after recording verified success',()=>{
+ const worker=fs.readFileSync('scripts/update-panel.sh','utf8');
+ const success=worker.slice(worker.indexOf('for attempt in $(seq 1 45)'));
+ assert.match(success,/check-privilege-services\.sh[\s\S]*?status running "Applying restore point retention\."[\s\S]*?trap - ERR[\s\S]*?panel-restore-points\.py" finish "\$\{work##\*\/\}"[\s\S]*?status success/);
+ assert.equal((worker.match(/panel-restore-points\.py/g)||[]).length,1);
+});
+
 test('network fetch failures explain connection and certificate checks',async()=>{
  const message={textContent:''},notice={querySelector:()=>({}),classList:{toggle(){}}};
  const elements={'#updateNotice':notice,'#appView':{classList:{contains:()=>false}},'#panelUpdateMessage':message};

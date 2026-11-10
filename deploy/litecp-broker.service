@@ -47,6 +47,7 @@ ReadWritePaths=/home/litecp
 ReadWritePaths=-/var/lib/litecp-captcha
 ReadWritePaths=-/var/lib/litecp-resources
 ReadWritePaths=-/etc/letsencrypt -/var/lib/letsencrypt -/var/log/letsencrypt
+ReadWritePaths=/usr/local/lib/litecp-updates /run/lock
 
 [Install]
 WantedBy=multi-user.target

@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.15"
+var version = "6.0.16"
 var buildRevision = ""
 
 //go:embed web/*
@@ -480,6 +480,8 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/settings", only(http.MethodPut, a.withAuth(a.updateSettings)))
 	mux.HandleFunc("/api/password", only(http.MethodPut, a.withAuth(a.changePassword)))
 	mux.HandleFunc("/api/updates/install", only(http.MethodPost, a.withAuth(a.startPanelUpdate)))
+	mux.HandleFunc("/api/updates/restore-points", a.withAuth(a.panelRestorePoints))
+	mux.HandleFunc("/api/updates/restore-points/", only(http.MethodDelete, a.withAuth(a.deletePanelRestorePoint)))
 	mux.HandleFunc("/api/developer-mode", a.withAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPut {
 			writeError(w, 405, "Use GET or PUT")

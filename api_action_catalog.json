@@ -1444,6 +1444,30 @@
     "objectID": false
   },
   {
+    "name": "panel.updates.restore_points.get",
+    "group": "Updates",
+    "description": "List panel update restore points — GET /api/updates/restore-points",
+    "method": "GET",
+    "path": "/api/updates/restore-points",
+    "objectID": false
+  },
+  {
+    "name": "panel.updates.restore_points.put",
+    "group": "Updates",
+    "description": "Save restore point retention — PUT /api/updates/restore-points",
+    "method": "PUT",
+    "path": "/api/updates/restore-points",
+    "objectID": false
+  },
+  {
+    "name": "panel.updates.restore_points.delete",
+    "group": "Updates",
+    "description": "Delete one panel update restore point — DELETE /api/updates/restore-points/{id}",
+    "method": "DELETE",
+    "path": "/api/updates/restore-points/",
+    "objectID": true
+  },
+  {
     "name": "panel.developer_mode.get",
     "group": "Server",
     "description": "Developer access configuration — GET /api/developer-mode",

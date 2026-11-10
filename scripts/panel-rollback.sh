@@ -36,6 +36,8 @@ try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
 except BlockingIOError:raise SystemExit('A panel update or rollback is already running')
 if subprocess.run(['systemctl','is-active','--quiet','litecp-panel-update.service']).returncode==0:
     raise SystemExit('Wait for the panel update to finish')
+# The restore point may have been deleted while confirmation was open.
+root,_=candidate(sys.argv[1])
 recovery=pathlib.Path(tempfile.mkdtemp(prefix='rollback-',dir=base))
 shutil.copy2('/usr/local/bin/litecp',recovery/'current-litecp')
 config=pathlib.Path('/var/lib/litecp/config.json')

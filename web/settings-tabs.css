@@ -13,9 +13,14 @@
 .settings-tab-panel {display:grid;grid-template-columns:minmax(0,780px);gap:16px;align-items:start;}
 [data-page-view="settings"]>.page-heading p {display:none;}
 .settings-details dt,.settings-details dd {font-size:12px;line-height:1.5;overflow-wrap:anywhere;}
-.settings-tab-panel[data-settings-panel="backups"],.settings-tab-panel[data-settings-panel="hostname"] {grid-template-columns:repeat(2,minmax(0,1fr));}
+.settings-tab-panel:is([data-settings-panel="backups"],[data-settings-panel="hostname"],[data-settings-panel="update"]) {grid-template-columns:repeat(2,minmax(0,1fr));}
 .settings-tab-panel>.settings-backup-destinations {grid-column:1/-1;overflow-x:auto;}
 .settings-tab-panel .settings-card {margin:0;}
 .backup-management-grid.backup-run-layout {grid-template-columns:minmax(0,780px);}
-@media(max-width:900px){.settings-tab-panel[data-settings-panel="backups"],.settings-tab-panel[data-settings-panel="hostname"]{grid-template-columns:minmax(0,1fr);}}
+#updateRestorePointsPanel .data-table {min-width:420px;}
+#updateRestorePointsPanel .data-table :is(th,td) {padding-inline:10px;}
+#updateRestorePointsPanel td small {display:block;margin-top:3px;color:var(--muted);overflow-wrap:anywhere;}
+#updateRestorePointsPanel input[type="number"] {max-width:150px;}
+@media(max-width:1120px){.settings-tab-panel[data-settings-panel="update"]{grid-template-columns:minmax(0,1fr);}}
+@media(max-width:900px){.settings-tab-panel:is([data-settings-panel="backups"],[data-settings-panel="hostname"]){grid-template-columns:minmax(0,1fr);}}
 @media(prefers-reduced-motion:reduce){.settings-nav-toggle svg{transition:none;}}

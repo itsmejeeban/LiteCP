@@ -16,7 +16,7 @@
  async function status(){
   if(!install||app.classList.contains('hidden')||polling)return;
   polling=true;
-  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();const wasRunning=running;running=result.state==='running';showProgress(result);if(wasRunning&&result.state==='success'){latest='';notice.classList.add('hidden');check(true);}if(result.state!=='idle')say(result.message||'LiteCP update is running…');install.disabled=running||!latest;}
+  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();const wasRunning=running;running=result.state==='running';showProgress(result);if(wasRunning&&!running)window.dispatchEvent(new Event("litecp:update-settled"));if(wasRunning&&result.state==='success'){latest='';notice.classList.add('hidden');check(true);}if(result.state!=='idle')say(result.message||'LiteCP update is running…');install.disabled=running||!latest;}
   catch{if(running)say('LiteCP is restarting. Reconnect and sign in again shortly.');}finally{polling=false;}
  }
  async function check(force=false){
@@ -40,7 +40,7 @@
  install?.addEventListener('click',async()=>{
   if(!latest||running)return;
   const selected=latest;
-  if(!await window.LiteCPDialogs.confirm(`Install LiteCP ${selected}? The panel will restart and you may need to sign in again. Hosted websites remain online. The previous binary and panel data will be retained.`,{title:'Update LiteCP',confirmText:'Update LiteCP'}))return;
+  if(!await window.LiteCPDialogs.confirm(`Install LiteCP ${selected}? The panel will restart and you may need to sign in again. Hosted websites remain online. Recovery copies from verified updates follow the retention limit in Restore Points.`,{title:'Update LiteCP',confirmText:'Update LiteCP'}))return;
   install.disabled=true;
   try{await window.LiteCP.api('/api/updates/install',{method:'POST',body:{version:selected}});running=true;showProgress({state:'running',completedStages:0});say('Starting the LiteCP update…');setTimeout(status,1500);}
   catch(error){say(error.message);install.disabled=false;}

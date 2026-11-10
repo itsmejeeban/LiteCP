@@ -123,6 +123,8 @@
   "/api/system/resolvers",
   "/api/updates",
   "/api/updates/install",
+  "/api/updates/restore-points",
+  "/api/updates/restore-points/",
   "/api/updates/status",
   "/api/version",
   "/api/website-backups",

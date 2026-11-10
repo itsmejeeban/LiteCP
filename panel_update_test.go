@@ -37,3 +37,21 @@ func TestPanelUpdateRejectsUnadvertisedRelease(t *testing.T) {
 		t.Fatalf("unadvertised release accepted: %d", response.Code)
 	}
 }
+
+func TestPanelRestorePointsRejectInvalidMutation(t *testing.T) {
+	app := &App{system: &System{demo: true}}
+	for _, body := range []string{`{}`, `{"limit":null}`, `{"limit":-1}`, `{"limit":11}`, `{"limit":1.5}`} {
+		response := httptest.NewRecorder()
+		app.panelRestorePoints(response, httptest.NewRequest("PUT", "/api/updates/restore-points", strings.NewReader(body)))
+		if response.Code != 400 {
+			t.Fatalf("invalid retention %s returned %d", body, response.Code)
+		}
+	}
+	for _, id := range []string{"../update-aBcD1234", "update-aBcD1234/source", "rollback-aBcD1234"} {
+		response := httptest.NewRecorder()
+		app.deletePanelRestorePoint(response, httptest.NewRequest("DELETE", "/api/updates/restore-points/"+id, nil))
+		if response.Code != 400 {
+			t.Fatalf("invalid restore point %q returned %d", id, response.Code)
+		}
+	}
+}
