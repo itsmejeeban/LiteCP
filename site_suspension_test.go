@@ -58,6 +58,11 @@ func TestSuspensionNginxParser(t *testing.T) {
 		t.Skip("Nginx is not installed")
 	}
 	dir := t.TempDir()
+	for _, name := range []string{"logs", "temp"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	config := filepath.Join(dir, "nginx.conf")
 	original := "server {\n listen 127.0.0.1:18080;\n location ^~ /.well-known/acme-challenge/ { auth_basic off; allow all; try_files $uri =404; }\n}\n"
 	content := "pid nginx.pid;\nerror_log stderr;\nevents {}\nhttp {\n access_log off;\n" + suspensionConfig(original, true) + "}\n"
