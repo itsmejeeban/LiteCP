@@ -1,0 +1,41 @@
+.backup-schedule-dialog [data-weekdays]:not([hidden]) {
+  display: grid;
+  gap: 4px;
+  margin-block: 8px 12px;
+}
+
+.backup-schedule-dialog .backup-weekday {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 8.5rem);
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.backup-schedule-dialog .backup-weekday label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.backup-schedule-dialog .backup-weekday input[type="checkbox"] {
+  appearance: auto;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--teal);
+}
+
+.backup-schedule-dialog .backup-weekday input[type="time"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
