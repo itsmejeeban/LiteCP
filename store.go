@@ -24,6 +24,7 @@ type Site struct {
 	Domain         string                 `json:"domain"`
 	Root           string                 `json:"root"`
 	AppType        string                 `json:"appType"`
+	ApacheAuthRoutes []string             `json:"apacheAuthRoutes,omitempty"`
 	AppVersion     string                 `json:"appVersion,omitempty"`
 	PHPVersion     string                 `json:"phpVersion"`
 	RuntimeUID     int                    `json:"runtimeUid,omitempty"`

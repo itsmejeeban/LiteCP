@@ -1016,6 +1016,7 @@ func (s *System) nginxConfig(site Site) (content string) {
     location ~* ^/wp-content/uploads/.*\.php$ { deny all; }`
 	} else if site.AppType == "regular" {
 		applicationRules = `    location ~* ^/(?:\.env|composer\.(?:json|lock)|package(?:-lock)?\.json|yarn\.lock)$ { deny all; }`
+		applicationRules += migrationAuthRouteBlock(site.ApacheAuthRoutes)
 	}
 	return fmt.Sprintf(`# Managed by LiteCP - By Hostingtom
 server {

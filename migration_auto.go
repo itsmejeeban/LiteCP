@@ -290,6 +290,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(e)
 			return
 		}
+		if err := a.system.applyMigrationAuthRoutes(ctx, *existing); err != nil {
+			fail(fmt.Errorf("restore application sign-in routing: %w", err))
+			return
+		}
 		a.finishMigrationHealth(ctx, job, *existing, existing.Root, filepath.Join(root, "files", "private_home"))
 		a.finishSuccessfulMigrationCleanup(job)
 		return
@@ -625,6 +629,9 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		fail(err)
 		return
 	}
+	if job.Source.Platform == "cpanel" && app == "regular" {
+		site.ApacheAuthRoutes = migrationAuthRoutes(stage)
+	}
 	if err = ctx.Err(); err != nil || a.liveMigrationCancelled(job.ID) {
 		fail(context.Canceled)
 		return
@@ -724,6 +731,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			value.DBUser = database.Username
 		}
 		value.AppType = app
+		value.ApacheAuthRoutes = site.ApacheAuthRoutes
 	}); err != nil {
 		fail(err)
 		return
@@ -733,6 +741,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		job.CPanelWebsiteID = site.ID
 		if err = a.saveLiveJob(job); err != nil {
 			fail(err)
+			return
+		}
+		if err = a.system.applyMigrationAuthRoutes(ctx, site); err != nil {
+			fail(fmt.Errorf("restore application sign-in routing: %w", err))
 			return
 		}
 	}
