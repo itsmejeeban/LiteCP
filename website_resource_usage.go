@@ -153,6 +153,12 @@ func refreshWebsiteDiskSamples(data string, sites []Site) {
 }
 
 func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
+	rows, now, note := a.collectWebsiteResourceUsage(r.Context())
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"items": rows, "updatedAt": now, "note": note, "coverage": "Observed website-UID processes only. Shared Nginx/MySQL/mail and container processes with remapped UIDs are excluded. Memory is summed RSS. CPU needs two samples; disk refreshes every 60 seconds. Enabled rows use verified kernel counters; disabled rows are observations only."})
+}
+
+func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteResourceRow, time.Time, string) {
 	sites := []Site{}
 	for _, site := range a.store.Sites() {
 		if site.ResourceLimits != nil {
@@ -170,7 +176,7 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 	note := ""
 	var counters map[int]websiteProcessCounter
 	if len(observedSites) > 0 && runtime.GOOS == "linux" && !a.system.demo {
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 		defer cancel()
 		if output, err := exec.CommandContext(ctx, "ps", "-eo", "uid=,pid=,etimes=,cputimes=,rss=").Output(); err == nil {
 			counters = parseWebsiteProcesses(string(output))
@@ -225,6 +231,5 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 		websiteUsageSamples.Counters = counters
 	}
 	websiteUsageSamples.Unlock()
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"items": rows, "updatedAt": now, "note": note, "coverage": "Observed website-UID processes only. Shared Nginx/MySQL/mail and container processes with remapped UIDs are excluded. Memory is summed RSS. CPU needs two samples; disk refreshes every 60 seconds. Enabled rows use verified kernel counters; disabled rows are observations only."})
+	return rows, now, note
 }

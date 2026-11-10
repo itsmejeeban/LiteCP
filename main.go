@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "5.0.37"
+var version = "5.0.38"
 var buildRevision = ""
 
 //go:embed web/*
@@ -290,6 +290,7 @@ func main() {
 	}
 	reconcileCancel()
 	app.startUsageMonitor()
+	app.startWebsiteResourceHistory()
 	app.startWebsiteTraffic()
 	app.startBackupSchedules()
 	app.startSnapshotAutomation()
@@ -376,6 +377,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/sites/redis", a.withAuth(a.websiteRedis))
 	mux.HandleFunc("/api/sites/dns", a.withAuth(a.websiteDNS))
 	mux.HandleFunc("/api/sites/resource-limits", a.withAuth(a.websiteResourceLimits))
+	mux.HandleFunc("/api/sites/resource-limits/history", a.withAuth(a.websiteResourceHistory))
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/overview/jobs", only(http.MethodGet, a.withAuth(a.overviewJobs)))
