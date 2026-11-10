@@ -1,7 +1,7 @@
 (() => {
  'use strict';
  const cp=window.LiteCP,esc=cp.escapeHTML;
- const nav=document.createElement('a');nav.className='nav-item';nav.href='#operations';nav.dataset.page='operations';nav.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4h16v16zM7 15l3-4 3 2 4-6" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Operations</span>';
+ const nav=document.createElement('a');nav.className='nav-item';nav.href='#operations';nav.dataset.page='operations';nav.innerHTML='<img src="assets/sidebar/operations.svg" width="22" height="22" alt=""><span>Operations</span>';
  const activityLink=document.querySelector('.nav [data-page="activities"]');
  if(activityLink) activityLink.after(nav);
  else document.querySelector('.nav')?.append(nav);
