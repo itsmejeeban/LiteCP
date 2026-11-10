@@ -262,9 +262,12 @@
     $("#backupDestinationForm").addEventListener("submit", createBackupDestination);
     const destinationForm=$("#backupDestinationForm"),cancelDestination=document.createElement("button");cancelDestination.type="button";cancelDestination.className="button button-secondary field-span hidden";cancelDestination.id="cancelDestinationEdit";cancelDestination.textContent="Cancel edit";destinationForm.querySelector(".settings-body").append(cancelDestination);
     cancelDestination.onclick=()=>{destinationForm.reset();delete destinationForm.dataset.editID;destinationForm.elements.password.required=true;destinationForm.elements.password.placeholder="";destinationForm.querySelector("h2").textContent="Add remote destination";cancelDestination.classList.add("hidden");configureBackupProtocol();};
-    for(const name of ["host","port"])destinationForm.elements[name].addEventListener("input",()=>{if(destinationForm.dataset.editID)destinationForm.elements.hostKeySha256.value="";});
+    for(const name of ["host","port"])destinationForm.elements[name].addEventListener("input",()=>{destinationForm.elements.hostKeySha256.value="";});
 
-    $("#backupProtocol").addEventListener("change", configureBackupProtocol);
+    $("#backupProtocol").addEventListener("change", () => {
+      destinationForm.elements.hostKeySha256.value = "";
+      configureBackupProtocol();
+    });
     $("#backupDestinationsTable").addEventListener("click", handleBackupDestinationAction);
     $("#fileSiteSelect").addEventListener("change", () => { currentFilePath = ""; loadFiles(); });
     $("#refreshFilesButton").addEventListener("click", loadFiles);
@@ -532,7 +535,7 @@
     const destinations = currentState.backupDestinations || [];
     $("#backupDestination").innerHTML = '<option value="">Local storage only</option>' + destinations.map(destination => `<option value="${escapeHTML(destination.id)}">${escapeHTML(destination.name)} · ${escapeHTML(destination.protocol.toUpperCase())}</option>`).join("");
     if (destinations.some(item => item.id === destinationValue)) $("#backupDestination").value = destinationValue;
-    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th>STORAGE</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td data-remote-storage="${escapeHTML(destination.id)}">Checking storage…</td><td><span class="row-actions"><button type="button" class="button button-secondary" data-backup-destination-action="test" data-id="${escapeHTML(destination.id)}">Test connection</button><button type="button" data-backup-destination-action="edit" data-id="${escapeHTML(destination.id)}" title="Edit destination" aria-label="Edit remote destination ${escapeHTML(destination.name)}">${icons.edit}</button><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
+    $("#backupDestinationsTable").innerHTML = destinations.length ? `<table class="data-table"><thead><tr><th>NAME</th><th>PROTOCOL</th><th>SERVER</th><th>REMOTE PATH</th><th>STORAGE</th><th></th></tr></thead><tbody>${destinations.map(destination => `<tr><td><strong>${escapeHTML(destination.name)}</strong></td><td><span class="badge">${escapeHTML(destination.protocol.toUpperCase())}${destination.protocol === "ftp" ? " · Unencrypted" : ""}</span></td><td>${escapeHTML(destination.username)}@${escapeHTML(destination.host)}:${destination.port}</td><td><code>${escapeHTML(destination.remotePath)}</code></td><td data-remote-storage="${escapeHTML(destination.id)}">Checking storage…</td><td><span class="row-actions"><button type="button" class="button button-secondary" data-backup-destination-action="test" data-id="${escapeHTML(destination.id)}">Test connection</button><button type="button" data-backup-destination-action="edit" data-id="${escapeHTML(destination.id)}" title="Edit destination" aria-label="Edit remote destination ${escapeHTML(destination.name)}">${icons.edit}</button><button type="button" class="button button-secondary" data-backup-destination-action="copy" data-id="${escapeHTML(destination.id)}" aria-label="Copy remote destination ${escapeHTML(destination.name)}">Copy</button><button class="danger" data-backup-destination-action="delete" data-id="${escapeHTML(destination.id)}" title="Remove destination" aria-label="Remove backup destination ${escapeHTML(destination.name)}">${icons.trash}</button></span></td></tr>`).join("")}</tbody></table>` : '<div class="empty-state"><p>No remote backup destinations configured.</p></div>';
     window.LiteCPRemoteStorage?.refresh();
     const backups = currentState.backups || [];
     scheduleBackupHistoryRefresh(backups);
@@ -1012,13 +1015,22 @@
       finally {button.disabled=false;button.textContent="Test connection";}
       return;
     }
-    if(button.dataset.backupDestinationAction==="edit"){
+    const copying = button.dataset.backupDestinationAction === "copy";
+    if(copying || button.dataset.backupDestinationAction === "edit"){
       const destination=currentState.backupDestinations.find(item=>item.id===button.dataset.id);if(!destination)return;
-      const form=$("#backupDestinationForm");form.dataset.editID=destination.id;$("#cancelDestinationEdit").classList.remove("hidden");
+      const form=$("#backupDestinationForm"), cancel=$("#cancelDestinationEdit");
+      if(copying) delete form.dataset.editID; else form.dataset.editID=destination.id;
+      cancel.textContent=copying?"Cancel copy":"Cancel edit";
+      cancel.classList.remove("hidden");
       for(const name of ["name","protocol","host","port","username","remotePath","hostKeySha256"])form.elements[name].value=destination[name]??"";
-      form.elements.password.value="";form.elements.password.required=false;form.elements.password.placeholder="Leave blank to keep saved password";form.querySelector("h2").textContent="Edit remote destination";
+      if(copying) form.elements.name.value=destination.name.slice(0,57)+" (copy)";
+      form.elements.password.value="";
+      form.elements.password.required=copying;
+      form.elements.password.placeholder=copying?"Enter the destination password":"Leave blank to keep saved password";
+      form.querySelector("h2").textContent=copying?"Copy remote destination":"Edit remote destination";
       $("#hostKeyField").classList.toggle("hidden",destination.protocol!=="sftp");navigate("backups/add-destination");return;
     }
+    if(button.dataset.backupDestinationAction!=="delete")return;
     if(!await window.LiteCPDialogs.confirm("Remove this remote destination? Existing backups will not be deleted."))return;
     try {
       await api(`/api/backup-destinations/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
