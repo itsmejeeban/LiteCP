@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "5.0.39"
+var version = "5.0.40"
 var buildRevision = ""
 
 //go:embed web/*
@@ -482,7 +482,10 @@ func (a *App) routeMux() *http.ServeMux {
 		a.developerMode(w, r)
 	}))
 	mux.HandleFunc("/api/updates/status", only(http.MethodGet, a.withAuth(a.panelUpdateStatus)))
-	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, checkRelease(version)) })))
+	mux.HandleFunc("/api/updates", only(http.MethodGet, a.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, lookupRelease(version, r.URL.Query().Get("refresh") == "1"))
+	})))
 	mux.HandleFunc("/api/version", only(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": version, "build": buildRevision})
 	}))

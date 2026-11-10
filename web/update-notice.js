@@ -23,7 +23,7 @@
   if(app.classList.contains('hidden')||checking||(!force&&Date.now()-last<300000))return;
   checking=true;if(checkButton)checkButton.disabled=true;
   try {
-   const response=await fetch('/api/updates',{credentials:'same-origin',cache:'no-store'});
+   const response=await fetch(force?'/api/updates?refresh=1':'/api/updates',{credentials:'same-origin',cache:'no-store'});
    if(!response.ok)throw new Error('Could not check for updates. Try again shortly.');
    const result=await response.json();last=Date.now();
    const available=result.checked&&result.available&&/^v?\d+\.\d+\.\d+$/.test(result.latest);

@@ -73,18 +73,26 @@ func newerRelease(latest, current string) bool {
 }
 
 func checkRelease(current string) releaseStatus {
+	return lookupRelease(current, false)
+}
+
+func lookupRelease(current string, refresh bool) releaseStatus {
 	token, err := readPrivateUpdateToken(privateUpdateTokenPath)
 	if err != nil {
 		return releaseStatus{Current: current, Build: buildRevision, Message: err.Error()}
 	}
-	return checkReleaseWithToken(current, token)
+	return lookupReleaseWithToken(current, token, refresh)
 }
 
 func checkReleaseWithToken(current, token string) releaseStatus {
+	return lookupReleaseWithToken(current, token, false)
+}
+
+func lookupReleaseWithToken(current, token string, refresh bool) releaseStatus {
 	releaseCache.Lock()
 	defer releaseCache.Unlock()
 	credential := sha256.Sum256([]byte(token))
-	if credential != releaseCache.credential || time.Now().After(releaseCache.until) {
+	if refresh || credential != releaseCache.credential || time.Now().After(releaseCache.until) {
 		releaseCache.credential = credential
 		releaseCache.checked = false
 		releaseCache.tag = ""
@@ -94,6 +102,9 @@ func checkReleaseWithToken(current, token string) releaseStatus {
 		req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/itsmejeeban/LiteCP/releases/latest", nil)
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "LiteCP-update-check")
+		if refresh {
+			req.Header.Set("Cache-Control", "no-cache")
+		}
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}

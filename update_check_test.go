@@ -13,6 +13,31 @@ import (
 
 type releaseTestTransport func(*http.Request) (*http.Response, error)
 
+func TestManualReleaseCheckRefreshesCachedVersion(t *testing.T) {
+	previous := http.DefaultTransport
+	defer func() { http.DefaultTransport = previous; releaseCache.until = time.Time{} }()
+	releaseCache.until = time.Time{}
+	tag := "v5.0.37"
+	calls := 0
+	http.DefaultTransport = releaseTestTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 2 && r.Header.Get("Cache-Control") != "no-cache" {
+			t.Error("manual check must request upstream revalidation")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"tag_name":"` + tag + `"}`))}, nil
+	})
+	if got := checkReleaseWithToken("5.0.36", "").Latest; got != tag {
+		t.Fatalf("initial release: %s", got)
+	}
+	tag = "v5.0.39"
+	if got := checkReleaseWithToken("5.0.36", "").Latest; got != "v5.0.37" || calls != 1 {
+		t.Fatalf("automatic check did not reuse the cached release: %s, calls=%d", got, calls)
+	}
+	if got := lookupReleaseWithToken("5.0.36", "", true).Latest; got != tag || calls != 2 {
+		t.Fatalf("manual check did not fetch the new release: %s, calls=%d", got, calls)
+	}
+}
+
 func (f releaseTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestInaccessibleReleaseIsNotSuccessfulCheck(t *testing.T) {
