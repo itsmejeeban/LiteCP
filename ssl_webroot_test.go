@@ -34,3 +34,22 @@ func TestWebrootSSLConfigRejectsAmbiguousConfiguration(t *testing.T) {
 		t.Fatal("ambiguous configuration accepted")
 	}
 }
+
+func TestWebrootSSLConfigResourceProxyAndSuspension(t *testing.T) {
+	site := Site{Domain: "example.test", Root: "/home/litecp/example.test/public_html", Suspended: true}
+	original := resourceFrontendConfig("server {\n listen 80;\n location / { proxy_pass http://127.0.0.1:21000; }\n}\n", "", site)
+	challenge, err := webrootSSLConfig(original, site, false)
+	if err != nil || challenge != original {
+		t.Fatalf("challenge preparation changed existing routing: %v", err)
+	}
+	active, err := webrootSSLConfig(challenge, site, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(active, suspensionTLSMarker) ||
+		!strings.Contains(active, "return 503") ||
+		!strings.Contains(active, "proxy_pass http://127.0.0.1:21000") ||
+		strings.Count(active, "location ^~ /.well-known/acme-challenge/") != 1 {
+		t.Fatal("TLS activation did not preserve proxy, suspension and challenge routing")
+	}
+}

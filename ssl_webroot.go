@@ -14,6 +14,11 @@ import (
 var sslServerStart = regexp.MustCompile(`(?m)^\s*server\s*\{`)
 
 func webrootSSLConfig(content string, site Site, activate bool) (string, error) {
+	guard := ""
+	if index := strings.Index(content, suspensionTLSMarker); index >= 0 {
+		guard = content[index:]
+		content = content[:index]
+	}
 	starts := sslServerStart.FindAllStringIndex(content, -1)
 	if len(starts) == 0 || (len(starts) != 1 && !strings.Contains(content, "ssl_certificate ")) {
 		return "", errors.New("SSL setup requires one managed server block; review existing Nginx configuration before retrying")
@@ -23,7 +28,7 @@ func webrootSSLConfig(content string, site Site, activate bool) (string, error) 
 		content = content[:at] + "\n    location ^~ /.well-known/acme-challenge/ { auth_basic off; allow all; try_files $uri =404; }\n" + content[at:]
 	}
 	if !activate {
-		return content, nil
+		return content + guard, nil
 	}
 	cert := filepath.ToSlash(filepath.Join("/etc/letsencrypt/live", site.Domain, "fullchain.pem"))
 	key := filepath.ToSlash(filepath.Join("/etc/letsencrypt/live", site.Domain, "privkey.pem"))
@@ -35,7 +40,7 @@ func webrootSSLConfig(content string, site Site, activate bool) (string, error) 
 		return content, nil
 	}
 	at := sslServerStart.FindStringIndex(content)[1]
-	tls := fmt.Sprintf("\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    if ($scheme = http) { return 301 https://$host$request_uri; }\n", cert, key)
+	tls := fmt.Sprintf("\n    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n    set $litecp_ssl_route \"$scheme:$uri\";\n    if ($litecp_ssl_route ~ ^http:(?!/[.]well-known/acme-challenge/)) { return 301 https://$host$request_uri; }\n", cert, key)
 	return content[:at] + tls + content[at:], nil
 }
 
@@ -44,6 +49,18 @@ func (s *System) enableWebrootSSL(ctx context.Context, site Site, email string, 
 	original, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
+	}
+	var savedPath, savedTLS string
+	if resourceEnabled(site) {
+		savedPath = filepath.Join(resourceDirectory(site.ID), "previous-nginx.conf")
+		saved, readErr := os.ReadFile(savedPath)
+		if readErr != nil {
+			return fmt.Errorf("read resource recovery routing: %w", readErr)
+		}
+		savedTLS, err = webrootSSLConfig(string(saved), site, true)
+		if err != nil {
+			return err
+		}
 	}
 	challenge, err := webrootSSLConfig(string(original), site, false)
 	if err != nil {
@@ -89,6 +106,11 @@ func (s *System) enableWebrootSSL(ctx context.Context, site Site, email string, 
 	}
 	if err := apply(active); err != nil {
 		return rollback(err)
+	}
+	if savedPath != "" {
+		if err := writeAtomic(savedPath, []byte(savedTLS), 0600); err != nil {
+			return rollback(fmt.Errorf("save TLS in resource recovery routing: %w", err))
+		}
 	}
 	return nil
 }

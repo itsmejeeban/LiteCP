@@ -532,9 +532,6 @@ func demoCredentials(domain string) DBCredentials {
 }
 
 func (s *System) EnableSSL(ctx context.Context, site Site, email string, renew ...bool) error {
-	if resourceEnabled(site) {
-		return errors.New("disable resource enforcement before changing SSL, then re-enable it; existing certificates remain active")
-	}
 	if site.Application != nil && site.Application.Enabled {
 		return errors.New("disable the application runtime, enable SSL, then start the runtime again to preserve certificate routing")
 	}
