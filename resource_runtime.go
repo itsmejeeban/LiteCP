@@ -359,19 +359,39 @@ func resourceHealth(id, domain string) error {
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	deadline := time.Now().Add(12 * time.Second)
-	for time.Now().Before(deadline) {
-		r, err := client.Get("http://" + domain + "/")
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	return resourceWaitWorkerHealth(ctx, client, "http://"+domain+"/")
+}
+
+func resourceWaitWorkerHealth(ctx context.Context, client *http.Client, endpoint string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	retry := time.NewTicker(100 * time.Millisecond)
+	defer retry.Stop()
+	lastError := fmt.Errorf("isolated website worker did not become healthy")
+	for ctx.Err() == nil {
+		r, err := client.Do(req)
 		if err == nil {
 			r.Body.Close()
 			if r.StatusCode < 500 {
 				return nil
 			}
-			return fmt.Errorf("website health returned HTTP %d", r.StatusCode)
+			lastError = fmt.Errorf("website health returned HTTP %d", r.StatusCode)
+			// Nginx can accept connections before its FastCGI upstream is ready.
+			if r.StatusCode != http.StatusBadGateway && r.StatusCode != http.StatusServiceUnavailable && r.StatusCode != http.StatusGatewayTimeout {
+				return lastError
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return lastError
+		case <-retry.C:
+		}
 	}
-	return fmt.Errorf("isolated website worker did not become healthy")
+	return lastError
 }
 
 func resourceSecureSockets(s *System, id string) error {

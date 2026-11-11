@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -51,6 +52,38 @@ func TestResourceResetFailedWorkers(t *testing.T) {
 				t.Fatalf("reset %q, error %v; want reset %q, error %v", got, err, tc.resetUnit, tc.resetError)
 			}
 		})
+	}
+}
+
+func TestResourceWorkerHealthRetriesBadGateway(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL); err != nil {
+		t.Fatal(err)
+	}
+	if requests.Load() != 2 {
+		t.Fatalf("got %d health probes, want 2", requests.Load())
+	}
+}
+
+func TestResourceWorkerHealthRejectsPersistentBadGateway(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL); err == nil || !strings.Contains(err.Error(), "HTTP 502") {
+		t.Fatalf("got %v, want persistent HTTP 502", err)
 	}
 }
 
