@@ -3,10 +3,13 @@ const script=fs.readFileSync(path.join(__dirname,'../web/website-resource-limits
 const formDefaults=Object.fromEntries(Array.from(script.matchAll(/<input name="(\w+)" type="number"[^>]* value="([\d.]+)"/g),([,name,value])=>[name,value]));
 function panel(hash='',options={} ){
  class Element{
-  constructor(){this.children=new Map();this.dataset={};this.value='qa';this.hidden=false;this.disabled=false;this.classes=new Set();this.classList={add:(name)=>this.classes.add(name)};this.options=[{value:'qa'}];this.elements=Object.fromEntries(['cpuPercent','memoryMiB','diskMiB','tasks','concurrentRequests','readMiBPerSecond','writeMiBPerSecond'].map(k=>[k,{value:'64'}]));this.elements.enabled={checked:false,disabled:false};}
+  constructor(){this.children=new Map();this.attributes=new Map();this.dataset={};this.value='qa';this.hidden=false;this.disabled=false;this.classes=new Set();this.classList={add:(name)=>this.classes.add(name)};this.options=[{value:'qa'}];this.elements=Object.fromEntries(['cpuPercent','memoryMiB','diskMiB','tasks','concurrentRequests','readMiBPerSecond','writeMiBPerSecond'].map(k=>[k,{value:'64'}]));this.elements.enabled={checked:false,disabled:false};}
   querySelector(k){if(!this.children.has(k))this.children.set(k,new Element());return this.children.get(k)}
   querySelectorAll(){return [...this.children.values()].flatMap(x=>[x,...x.children.values()])}
   addEventListener(type, listener){this["on"+type]=listener;}
+  setAttribute(name,value){this.attributes.set(name,String(value));}
+  removeAttribute(name){this.attributes.delete(name);}
+  getAttribute(name){return this.attributes.get(name)??null;}
   append(){}insertAdjacentHTML(){}reset(){for(const [name,value] of Object.entries(formDefaults))this.elements[name].value=value;}
  }
  const page=new Element(),root=new Element();let rows=options.rows||[],mutations=[];
@@ -131,4 +134,88 @@ test('bulk enable distinguishes blocked enforcement from a stale runtime that ne
  await ui.page.querySelector('[data-editor]').onsubmit({preventDefault(){}});
  assert.deepEqual(ui.mutations.map(x=>[x.url.split('=').at(-1),x.method]),[['stale','POST']]);
  assert.match(ui.page.querySelector('[data-status]').textContent,/Failed: 0.*Already enforced but blocked: 1.*Recovery requested: 1/);
+});
+
+
+function resourceRow(domain,usage={},settings={},state='Active'){
+ return {id:domain,domain:domain+'.example.test',state,enforced:true,
+  settings:{enabled:true,cpuPercent:100,memoryMiB:512,diskMiB:10240,tasks:64,concurrentRequests:8,...settings},
+  usage:{available:true,cpuPercent:0,memoryBytes:0,diskBytes:0,processes:0,...usage}};
+}
+function displayedResourceDomains(ui){
+ return Array.from(ui.page.querySelector('[data-resources]').innerHTML.matchAll(/<tr><td>([^<]+)<br>/g),match=>match[1].replace('.example.test',''));
+}
+function clickResourceSort(ui,key){ui.page.querySelector('[data-sort-key="'+key+'"]').onclick();}
+
+for(const [key,usageKey] of [['cpuPercent','cpuPercent'],['memoryMiB','memoryBytes'],['diskMiB','diskBytes'],['tasks','processes']]){
+ test(key+' sorts current usage high/low instead of the configured allowance',async()=>{
+  const rows=[
+   resourceRow('low',{[usageKey]:5},{[key]:9000}),
+   resourceRow('high',{[usageKey]:80},{[key]:10}),
+   resourceRow('middle',{[usageKey]:25},{[key]:500})
+  ];
+  const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+  clickResourceSort(ui,key);
+  assert.deepEqual(displayedResourceDomains(ui),['high','middle','low']);
+  assert.equal(ui.page.querySelector('[data-sort-column="'+key+'"]').getAttribute('aria-sort'),'descending');
+  clickResourceSort(ui,key);
+  assert.deepEqual(displayedResourceDomains(ui),['low','middle','high']);
+  assert.equal(ui.page.querySelector('[data-sort-column="'+key+'"]').getAttribute('aria-sort'),'ascending');
+ });
+}
+
+for(const [key,usageKey] of [['cpuPercent','cpuPercent'],['memoryMiB','memoryBytes'],['tasks','processes']]){
+ test(key+' keeps unavailable samples last and sorts a real zero as measured usage',async()=>{
+  const rows=[
+   resourceRow('missing',{[usageKey]:null}),
+   resourceRow('unavailable',{available:false,[usageKey]:10000}),
+   resourceRow('zero',{[usageKey]:0}),
+   resourceRow('positive',{[usageKey]:20}),
+   resourceRow('invalid',{[usageKey]:Number.NaN})
+  ];
+  const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+  clickResourceSort(ui,key);
+  assert.deepEqual(displayedResourceDomains(ui),['positive','zero','invalid','missing','unavailable']);
+  clickResourceSort(ui,key);
+  assert.deepEqual(displayedResourceDomains(ui),['zero','positive','invalid','missing','unavailable']);
+ });
+}
+
+test('disk sorting uses cached byte usage even when process measurements are unavailable',async()=>{
+ const rows=[resourceRow('missing',{diskBytes:null}),resourceRow('cached-high',{available:false,diskBytes:900}),resourceRow('zero',{diskBytes:0}),resourceRow('low',{diskBytes:50})];
+ const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+ clickResourceSort(ui,'diskMiB');assert.deepEqual(displayedResourceDomains(ui),['cached-high','low','zero','missing']);
+ clickResourceSort(ui,'diskMiB');assert.deepEqual(displayedResourceDomains(ui),['zero','low','cached-high','missing']);
+});
+
+test('usage sorting orders the complete list before pagination and keeps alphabetical ties',async()=>{
+ const rows=Array.from({length:15},(_,index)=>resourceRow('site-'+String(index+1).padStart(2,'0'),{cpuPercent:index+1}));
+ rows.push(resourceRow('aaa-tie',{cpuPercent:15}));
+ const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+ clickResourceSort(ui,'cpuPercent');
+ assert.deepEqual(displayedResourceDomains(ui),['aaa-tie','site-15','site-14','site-13','site-12','site-11','site-10','site-09','site-08','site-07']);
+ ui.page.querySelector('[data-next]').onclick();
+ assert.deepEqual(displayedResourceDomains(ui),['site-06','site-05','site-04','site-03','site-02','site-01']);
+ clickResourceSort(ui,'cpuPercent');
+ assert.deepEqual(displayedResourceDomains(ui),['site-01','site-02','site-03','site-04','site-05','site-06','site-07','site-08','site-09','site-10']);
+ assert.equal(ui.page.querySelector('[data-count]').textContent,'Page 1 of 2 \u00b7 16 websites');
+});
+
+test('usage refresh reorders rows while retaining the chosen metric and direction',async()=>{
+ const rows=[resourceRow('alpha',{memoryBytes:10}),resourceRow('beta',{memoryBytes:30})];
+ const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+ clickResourceSort(ui,'memoryMiB');assert.deepEqual(displayedResourceDomains(ui),['beta','alpha']);
+ rows[0].usage.memoryBytes=50;
+ await ui.page.querySelector('[data-refresh]').onclick();
+ assert.deepEqual(displayedResourceDomains(ui),['alpha','beta']);
+ assert.equal(ui.page.querySelector('[data-sort-column="memoryMiB"]').getAttribute('aria-sort'),'descending');
+ clickResourceSort(ui,'cpuPercent');
+ assert.equal(ui.page.querySelector('[data-sort-column="memoryMiB"]').getAttribute('aria-sort'),null);
+});
+
+test('status sorting retains alphabetical status order and domain tie ordering',async()=>{
+ const rows=[resourceRow('blocked',{},{} ,'Resource blocked'),resourceRow('z-active'),resourceRow('disabled',{},{} ,'Disabled'),resourceRow('a-active')];
+ const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+ clickResourceSort(ui,'status');assert.deepEqual(displayedResourceDomains(ui),['a-active','z-active','disabled','blocked']);
+ clickResourceSort(ui,'status');assert.deepEqual(displayedResourceDomains(ui),['blocked','disabled','a-active','z-active']);
 });
