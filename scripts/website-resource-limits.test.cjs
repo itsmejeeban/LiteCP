@@ -19,14 +19,15 @@ function panel(hash='',options={} ){
    const id=new URL(url,'https://panel.example.test').searchParams.get('siteId');
    if(id===options.failSite&&request.method==='PUT')throw new Error('Runtime unavailable');
    if(options.manageRows){
-    rows=rows.filter(row=>row.id!==id);
+    if(request.method!=='POST')rows=rows.filter(row=>row.id!==id);
     if(request.method==='PUT')rows.push({...state.sites.find(site=>site.id===id),settings:request.body,usage:{}});
    }else rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];
    return {state:options.resultState||'Active',enforced:options.resultEnforced??true};
   }
   if(url.includes('?')){
    const id=new URL(url,'https://panel.example.test').searchParams.get('siteId');
-   return {settings:options.manageRows?rows.find(row=>row.id===id)?.settings:options.newSite?null:settings,state:options.enabled?'Active':'Disabled',capabilities:{ready:true,prerequisites:[]}};
+   const row=options.manageRows?rows.find(row=>row.id===id):null;
+   return {settings:options.manageRows?row?.settings:options.newSite?null:settings,state:row?.state||(options.enabled?'Active':'Disabled'),enforced:row?.enforced,capabilities:{ready:true,prerequisites:[]}};
   }
   return {items:rows,updatedAt:new Date().toISOString()};
  };
@@ -118,4 +119,16 @@ test('bulk removal confirms, disables active policies first, and preserves faile
  assert.equal(ui.mutations[0].body.enabled,false);
  assert.match(ui.page.querySelector('[data-status]').textContent,/Removed: 2.*Failed: 1.*second.example.test/);
  assert.match(ui.page.querySelector('[data-resources]').innerHTML,/second.example.test/);
+});
+
+test('bulk enable distinguishes blocked enforcement from a stale runtime that needs recovery',async()=>{
+ const sites=[{id:'blocked',domain:'blocked.example.test'},{id:'stale',domain:'stale.example.test'}];
+ const ui=panel('',{sites,manageRows:true,rows:[
+  {...sites[0],settings:{enabled:true},state:'Resource blocked',enforced:true},
+  {...sites[1],settings:{enabled:true},state:'Error',enforced:false},
+ ]});
+ ui.page.querySelector('[data-create-all]').onclick();
+ await ui.page.querySelector('[data-editor]').onsubmit({preventDefault(){}});
+ assert.deepEqual(ui.mutations.map(x=>[x.url.split('=').at(-1),x.method]),[['stale','POST']]);
+ assert.match(ui.page.querySelector('[data-status]').textContent,/Failed: 0.*Already enforced but blocked: 1.*Recovery requested: 1/);
 });

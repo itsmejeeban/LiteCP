@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"path"
@@ -55,6 +56,8 @@ func resourceSliceUnit(id string, p WebsiteResourceLimits, device string) (strin
 
 // verifyResourceSlice checks the kernel rather than trusting a successful
 // systemctl exit status. A missing controller or unenforced value is an error.
+var errResourceOOMGroup = errors.New("kernel memory.oom.group does not match the website policy")
+
 func verifyResourceSlice(p WebsiteResourceLimits, read func(string) ([]byte, error)) error {
 	if err := p.validate(); err != nil {
 		return err
@@ -79,7 +82,7 @@ func verifyResourceSlice(p WebsiteResourceLimits, read func(string) ([]byte, err
 	if e1 != nil || e2 != nil || math.IsNaN(quota) || math.IsInf(quota, 0) || math.IsNaN(period) || math.IsInf(period, 0) || quota <= 0 || period <= 0 || math.Abs(quota/period*100-p.CPUPercent) > 0.11 {
 		return fmt.Errorf("kernel CPU allowance does not match the website policy")
 	}
-	for name, wanted := range map[string]int64{"memory.max": p.MemoryMiB * 1048576, "memory.swap.max": 0, "memory.oom.group": 1, "pids.max": int64(p.Tasks)} {
+	for name, wanted := range map[string]int64{"memory.max": p.MemoryMiB * 1048576, "memory.swap.max": 0, "pids.max": int64(p.Tasks)} {
 		value, err := readText(name)
 		if err != nil {
 			return err
@@ -88,6 +91,13 @@ func verifyResourceSlice(p WebsiteResourceLimits, read func(string) ([]byte, err
 		if err != nil || n != wanted {
 			return fmt.Errorf("kernel %s does not match the website policy", name)
 		}
+	}
+	value, err := readText("memory.oom.group")
+	if err != nil {
+		return err
+	}
+	if value != "1" {
+		return errResourceOOMGroup
 	}
 	return nil
 }

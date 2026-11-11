@@ -149,6 +149,28 @@ func TestResourceNativeBoundaryUsesPrivateWorkers(t *testing.T) {
 		t.Fatal("HTTP request temporary files bypass website-home disk quota")
 	}
 }
+func TestResourceFrontendPreservesSuspensionAndCertificate(t *testing.T) {
+	p := nativeResourcePlan()
+	p.Site.Suspended = true
+	_, _, front := resourceNativeConfigs(&System{}, p)
+	httpOnly := "server {\n listen 80;\n server_name " + p.Site.Domain + ";\n}\n"
+	rejected := suspensionSiteConfig(httpOnly, p.Site, true)
+	got := resourceFrontendConfig(front, rejected, p.Site)
+	if strings.Count(got, "listen 443 ssl;") != 1 || !strings.Contains(got, "ssl_reject_handshake on;") || strings.Contains(got, "ssl_certificate ") {
+		t.Fatal("HTTP-only website must keep its TLS rejection guard without an extra HTTPS listener")
+	}
+	cert := "/etc/letsencrypt/live/audit.example.test/fullchain.pem"
+	key := "/etc/letsencrypt/live/audit.example.test/privkey.pem"
+	https := strings.Replace(httpOnly, " listen 80;", " listen 443 ssl;\n ssl_certificate "+cert+";\n ssl_certificate_key "+key+";", 1)
+	got = resourceFrontendConfig(front, suspensionSiteConfig(https, p.Site, true), p.Site)
+	if strings.Count(got, "listen 443 ssl;") != 1 || strings.Contains(got, "ssl_reject_handshake") || !strings.Contains(got, "ssl_certificate "+cert+";") || !strings.Contains(got, "ssl_certificate_key "+key+";") {
+		t.Fatal("HTTPS website must keep one certificate-bearing listener")
+	}
+	if !strings.Contains(got, "return 503") || strings.Count(got, "location ^~ /.well-known/acme-challenge/") != 1 {
+		t.Fatal("manual suspension or ACME routing was lost")
+	}
+}
+
 func TestResourceNativeRejectsUncoveredExecutionPaths(t *testing.T) {
 	base := nativeResourcePlan()
 	if err := resourceRuntimeValidate(base); err != nil {

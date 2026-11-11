@@ -125,7 +125,20 @@ func resourceVerifyKernel(id string, p WebsiteResourceLimits) error {
 	if _, err = os.Stat(filepath.Join(dir, "cgroup.kill")); err != nil {
 		return fmt.Errorf("kernel cgroup-wide termination is unavailable: %w", err)
 	}
-	return verifyResourceSlice(p, func(name string) ([]byte, error) { return os.ReadFile(filepath.Join(dir, name)) })
+	// systemd can rewrite the kernel-only OOM flag while applying other
+	// websites' units. Reapply it and verify the same cgroup directory.
+	for attempt := 0; ; attempt++ {
+		if err := os.WriteFile(filepath.Join(dir, "memory.oom.group"), []byte("1\n"), 0644); err != nil {
+			return err
+		}
+		err := verifyResourceSlice(p, func(name string) ([]byte, error) {
+			return os.ReadFile(filepath.Join(dir, name))
+		})
+		if err != errResourceOOMGroup || attempt == 3 {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 func resourceLiveSample(id string, disk int64) (resourceSample, int64, int, error) {
 	dir, err := resourceCgroup(id)

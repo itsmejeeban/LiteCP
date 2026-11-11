@@ -169,10 +169,29 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	web = fmt.Sprintf("daemon off;\nmaster_process on;\nuser %s;\nworker_processes 1;\npid %s/nginx.pid;\nerror_log stderr;\nevents { worker_connections %d; }\nhttp { include /etc/nginx/mime.types; include /etc/nginx/fastcgi_params; access_log off; limit_conn_zone $server_name zone=website:1m; client_body_temp_path %s/body; fastcgi_temp_path %s/fastcgi; proxy_temp_path %s/proxy;\n%s\n}\n", s.webUser(), dir, p.Policy.ConcurrentRequests+32, temporary, temporary, temporary, inner)
 	// Public routing never serves static files or executes PHP itself.
 	front = fmt.Sprintf("# LiteCP enforced website resource boundary\nserver {\n listen 80;\n listen [::]:80;\n server_name %s;\n%s\n%s\n if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n location / { proxy_pass http://unix:%s:; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_read_timeout 120s; proxy_intercept_errors on; error_page 502 503 =503 @resource_unavailable; }\n location @resource_unavailable { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n}\n", site.Domain, wafBlock(site, site.WAFMode), siteLogDirectives(site), dir, filepath.Join(dir, "http.sock"))
-	front = suspensionSiteConfig(front, site, site.Suspended)
-	front = injectCaptchaConfig(front, site)
 	front = strings.Replace(front, "server {", "server {\n add_header X-LiteCP-Resource-Boundary "+fmt.Sprintf("%x", []byte(site.ID))+" always;", 1)
 	return
+}
+
+func resourceFrontendConfig(front, original string, site Site) string {
+	// A suspended HTTP-only site can have a synthetic TLS rejection block.
+	// Only a real certificate/key pair should enable HTTPS on the proxy.
+	cert, key := "", ""
+	if guard := strings.Index(original, suspensionTLSMarker); guard >= 0 {
+		original = original[:guard]
+	}
+	for _, match := range applicationCertificatePattern.FindAllStringSubmatch(original, -1) {
+		if match[1] == "ssl_certificate" {
+			cert = match[2]
+		} else {
+			key = match[2]
+		}
+	}
+	if cert != "" && key != "" {
+		front = strings.Replace(front, " listen 80;", " listen 443 ssl;\n listen [::]:443 ssl;\n ssl_certificate "+cert+";\n ssl_certificate_key "+key+";\n listen 80;", 1)
+	}
+	front = strings.Replace(front, " location / {", " location ^~ /.well-known/acme-challenge/ { root "+site.Root+"; auth_basic off; try_files $uri =404; }\n location / {", 1)
+	return injectCaptchaConfig(suspensionSiteConfig(front, site, site.Suspended), site)
 }
 func resourceServiceUnit(p resourceRuntimePlan, kind, command string) string {
 	return fmt.Sprintf("[Unit]\nDescription=LiteCP website %s boundary\nRequires=%s\nAfter=%s\n[Service]\nType=simple\nSlice=%s\nExecStart=%s\nKillMode=control-group\nOOMPolicy=kill\nRestart=no\nTimeoutStopSec=10\nNoNewPrivileges=yes\nCapabilityBoundingSet=~CAP_SYS_RESOURCE\nPrivateTmp=yes\nBindPaths=%s/tmp:/tmp %s/tmp:/var/tmp\nUMask=0007\n", kind, resourceSliceName(p.Site.ID), resourceSliceName(p.Site.ID), resourceSliceName(p.Site.ID), command, resourceProtectedStorage(p.Site), resourceProtectedStorage(p.Site))
@@ -195,7 +214,14 @@ func resourceHostAction(ctx context.Context, s *System, site Site, p WebsiteReso
 		return err
 	}
 	b, _ := json.Marshal(plan)
-	_, err := s.applicationHostCommand(ctx, 3*time.Minute, "/usr/local/bin/litecp", "resource-runtime", action, base64.RawURLEncoding.EncodeToString(b))
+	output, err := s.applicationHostCommand(ctx, 3*time.Minute, "/usr/local/bin/litecp", "resource-runtime", action, base64.RawURLEncoding.EncodeToString(b))
+	if detail := strings.TrimSpace(output); err != nil && detail != "" {
+		const maxDetail = 2000
+		if len(detail) > maxDetail {
+			detail = detail[len(detail)-maxDetail:]
+		}
+		return fmt.Errorf("%w: %s", err, detail)
+	}
 	return err
 }
 func resourceRuntimeCommand(args []string) error {
@@ -430,6 +456,16 @@ func resourceSecureSockets(s *System, id string) error {
 	return nil
 }
 
+func resourceVerifyWorkers(s *System, p resourceRuntimePlan) error {
+	if err := resourceSecureSockets(s, p.Site.ID); err != nil {
+		return err
+	}
+	if err := resourceHealth(p.Site.ID, p.Site.Domain); err != nil {
+		return err
+	}
+	return resourceVerifyKernel(p.Site.ID, p.Policy)
+}
+
 func resourceWaitFrontend(site Site, limited bool) error {
 	return resourceWaitFrontendAt(site, limited, "http://127.0.0.1/")
 }
@@ -539,15 +575,7 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 	}
 	quotaChanged = true
 	php, web, front := resourceNativeConfigs(s, p)
-	// Certbot's already-issued certificate remains on the public edge.
-	for _, m := range applicationCertificatePattern.FindAllStringSubmatch(string(original), -1) {
-		if m[1] == "ssl_certificate" || m[1] == "ssl_certificate_key" {
-			front = strings.Replace(front, " server_name ", " "+m[1]+" "+m[2]+";\n server_name ", 1)
-		}
-	}
-	if strings.Contains(string(original), "listen 443") {
-		front = strings.Replace(front, " listen 80;", " listen 443 ssl;\n listen [::]:443 ssl;\n listen 80;", 1)
-	}
+	front = resourceFrontendConfig(front, string(original), p.Site)
 	for name, content := range map[string]string{"php.conf": php, "nginx.conf": web} {
 		if err = writeAtomic(filepath.Join(dir, name), []byte(content), 0644); err != nil {
 			return err
@@ -663,13 +691,7 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 	if err = resourceRuntimeStart(p); err != nil {
 		return err
 	}
-	if err = resourceVerifyKernel(p.Site.ID, p.Policy); err != nil {
-		return err
-	}
-	if err = resourceHealth(p.Site.ID, p.Site.Domain); err != nil {
-		return err
-	}
-	if err = resourceSecureSockets(s, p.Site.ID); err != nil {
+	if err = resourceVerifyWorkers(s, p); err != nil {
 		return err
 	}
 	if err = writeAtomic(filepath.Join(dir, "frontend.conf"), []byte(front), 0644); err != nil {
@@ -836,10 +858,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 		if err := resourceRuntimeStart(p); err != nil {
 			return err
 		}
-		if err := resourceHealth(p.Site.ID, p.Site.Domain); err != nil {
-			return err
-		}
-		if err := resourceSecureSockets(s, p.Site.ID); err != nil {
+		if err := resourceVerifyWorkers(s, p); err != nil {
 			return err
 		}
 		if err := resourceRuntimeGate(p.Site.ID, false); err != nil {
@@ -874,10 +893,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 				if err = resourceRuntimeStart(p); err != nil {
 					return err
 				}
-				if err = resourceHealth(site.ID, site.Domain); err != nil {
-					return err
-				}
-				if err = resourceSecureSockets(s, site.ID); err != nil {
+				if err = resourceVerifyWorkers(s, p); err != nil {
 					return err
 				}
 				if err = resourceRuntimeGate(site.ID, false); err != nil {
@@ -911,10 +927,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			_ = resourceRuntimeSave(site.ID, st)
 			err := resourceRuntimeStart(p)
 			if err == nil {
-				err = resourceHealth(site.ID, site.Domain)
-			}
-			if err == nil {
-				err = resourceSecureSockets(s, site.ID)
+				err = resourceVerifyWorkers(s, p)
 			}
 			if err != nil {
 				_ = resourceRuntimeStop(p)
@@ -936,12 +949,6 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			}
 			before = resourceSample{}
 			continue
-		}
-		// systemd can reset this kernel-only slice attribute on daemon-reload
-		// or when a new child unit joins. Restore the required grouping before
-		// verifying all other kernel allowances; never relax their checks.
-		if err = resourceSetOOMGroup(site.ID); err != nil {
-			return err
 		}
 		if err = resourceVerifyKernel(site.ID, p.Policy); err != nil {
 			return err

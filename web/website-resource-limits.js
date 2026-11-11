@@ -62,15 +62,25 @@
  async function applyToAll(defaults){
   const sites=[...(cp.state()?.sites||[])];
   const removing=defaults===null,verb=removing?'Removing':'Enabling';
-  let changed=0,skipped=0,remaining=0;
+  let changed=0,skipped=0,remaining=0,blocked=0,recoveries=0;
   const failures=[];
   for(const [index,site] of sites.entries()){
    status.textContent=`${verb} limits for ${index+1} of ${sites.length} · ${site.domain}`;
    const url=limitsURL+'?siteId='+encodeURIComponent(site.id);
    try{
     const current=await cp.api(url);
-    if(removing&&!current.settings||!removing&&current.settings?.enabled&&current.enforced&&current.state==='Active'){
+    if(removing&&!current.settings){
      skipped++;
+     continue;
+    }
+    if(!removing&&current.settings?.enabled){
+     if(current.enforced){
+      skipped++;
+      if(current.state==='Resource blocked')blocked++;
+     }else{
+      await cp.api(url,{method:'POST',body:{}});
+      recoveries++;
+     }
      continue;
     }
     if(removing){
@@ -87,6 +97,8 @@
    }
   }
   status.textContent=`${removing?'Removed':'Enabled'}: ${changed} · Skipped: ${skipped} · Failed: ${failures.length}`
+   +(blocked?` · Already enforced but blocked: ${blocked}`:'')
+   +(recoveries?` · Recovery requested: ${recoveries}`:'')
    +(remaining?` · Unattempted: ${remaining}`:'')+(failures.length?' · '+failures.join(' | '):'');
   listPage=1;
  }
