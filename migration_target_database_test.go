@@ -119,3 +119,28 @@ func TestMigrationDatabaseValidationPrecedesFileStaging(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrationLaravelCore(t *testing.T) {
+	home := t.TempDir()
+	public := filepath.Join(home, "public_html")
+	core := filepath.Join(home, "email-marketing-app")
+	for _, dir := range []string{public, filepath.Join(core, "vendor"), filepath.Join(core, "bootstrap")} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(public, "index.php"), []byte("<?php is_file(__DIR__.'/../email-marketing-app/vendor/autoload.php'); require 'bootstrap/app.php';"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrationLaravelCore("cpanel", public); err == nil {
+		t.Fatal("missing Laravel core was accepted")
+	}
+	for _, name := range []string{"vendor/autoload.php", "bootstrap/app.php"} {
+		if err := os.WriteFile(filepath.Join(core, filepath.FromSlash(name)), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := migrationLaravelCore("cpanel", public); err != nil || got != core {
+		t.Fatalf("got %q, %v", got, err)
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -426,6 +427,39 @@ func migrationTargetDatabase(databases []ManagedDatabase, siteID, databaseID str
 	return selected, nil
 }
 
+// A split Laravel deployment keeps its application beside public_html.
+var migrationLaravelSibling = regexp.MustCompile(`\.\./([A-Za-z0-9][A-Za-z0-9_-]*)/vendor/autoload\.php`)
+
+func migrationLaravelCore(platform, source string) (string, error) {
+	if platform != "cpanel" {
+		return "", nil
+	}
+	entry, err := os.Open(filepath.Join(source, "index.php"))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	defer entry.Close()
+	content, err := io.ReadAll(io.LimitReader(entry, 128<<10))
+	if err != nil {
+		return "", err
+	}
+	match := migrationLaravelSibling.FindSubmatch(content)
+	if len(match) == 0 || !bytes.Contains(content, []byte("bootstrap/app.php")) {
+		return "", nil
+	}
+	core := filepath.Join(filepath.Dir(source), string(match[1]))
+	for _, file := range []string{"vendor/autoload.php", "bootstrap/app.php"} {
+		info, err := os.Lstat(filepath.Join(core, filepath.FromSlash(file)))
+		if err != nil || !info.Mode().IsRegular() {
+			return "", fmt.Errorf("Laravel application %s is missing %s in the inspected archive", match[1], file)
+		}
+	}
+	return core, nil
+}
+
 func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 	a.migrationImportWithSpaceProbe(w, r, migrationFreeBytes)
 }
@@ -478,6 +512,20 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		writeError(w, 409, "Destination website must be empty unless you confirm replacement of its current files.")
 		return
 	}
+	source := filepath.Join(root, "files", filepath.FromSlash(input.Root))
+	core, err := migrationLaravelCore(preview.Platform, source)
+	if err != nil {
+		writeError(w, 409, err.Error())
+		return
+	}
+	var coreTarget string
+	if core != "" {
+		coreTarget = filepath.Join(filepath.Dir(site.Root), filepath.Base(core))
+		if _, err := os.Lstat(coreTarget); !errors.Is(err, os.ErrNotExist) {
+			writeError(w, 409, "The destination Laravel application directory already exists or cannot be checked.")
+			return
+		}
+	}
 	uid, gid, err := a.system.siteFileOwnership(*site)
 	if err != nil {
 		writeError(w, 500, err.Error())
@@ -512,6 +560,26 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		writeError(w, 502, "Migration staging failed; the live website was not changed: "+err.Error())
 		return
 	}
+	var coreStage string
+	if core != "" {
+		coreStage, err = os.MkdirTemp(filepath.Dir(site.Root), ".litecp-private-restore-")
+		if err != nil {
+			writeError(w, 500, err.Error())
+			return
+		}
+		privateSite := *site
+		privateSite.Root = coreStage
+		if err = os.Chown(coreStage, uid, gid); err == nil {
+			err = copyMigrationTree(r.Context(), core, privateSite, uid, gid)
+		}
+		if err == nil {
+			err = os.Chmod(coreStage, 0750)
+		}
+		if err != nil {
+			writeError(w, 502, "Laravel application staging failed: "+err.Error())
+			return
+		}
+	}
 	databaseImported := false
 	if input.SQL != "" {
 		if err := a.system.importTemporaryDatabaseSQL(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.SQL)), *database, false); err != nil {
@@ -534,9 +602,21 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		writeError(w, 502, rollbackDatabase(fmt.Errorf("prepare atomic website switch: %w", err)).Error())
 		return
 	}
+	if coreStage != "" {
+		if err := os.Rename(coreStage, coreTarget); err != nil {
+			restoreErr := os.Rename(previousRoot, site.Root)
+			writeError(w, 502, rollbackDatabase(fmt.Errorf("activate Laravel application: %w (website rollback: %v)", err, restoreErr)).Error())
+			return
+		}
+	}
 	if err := os.Rename(staging, site.Root); err != nil {
 		restoreErr := os.Rename(previousRoot, site.Root)
 		cause := fmt.Errorf("activate staged website: %w", err)
+		if coreStage != "" {
+			if coreErr := os.Rename(coreTarget, coreStage); coreErr != nil {
+				cause = fmt.Errorf("%v; Laravel application rollback failed: %v", cause, coreErr)
+			}
+		}
 		if restoreErr != nil {
 			keepStaging = true
 			cause = fmt.Errorf("%v; original website restore failed: %v; staged files remain at %s", cause, restoreErr, staging)
