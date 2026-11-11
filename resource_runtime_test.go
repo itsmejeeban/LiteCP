@@ -63,11 +63,12 @@ func TestResourceWorkerHealthRetriesBadGateway(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(resourceProbeReply))
 	}))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL); err != nil {
+	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL, resourceProbeReply); err != nil {
 		t.Fatal(err)
 	}
 	if requests.Load() != 2 {
@@ -82,7 +83,7 @@ func TestResourceWorkerHealthRejectsPersistentBadGateway(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL); err == nil || !strings.Contains(err.Error(), "HTTP 502") {
+	if err := resourceWaitWorkerHealth(ctx, server.Client(), server.URL, resourceProbeReply); err == nil || !strings.Contains(err.Error(), "HTTP 502") {
 		t.Fatalf("got %v, want persistent HTTP 502", err)
 	}
 }
@@ -152,7 +153,12 @@ func TestResourceNativeBoundaryUsesPrivateWorkers(t *testing.T) {
 func TestResourceFrontendPreservesSuspensionAndCertificate(t *testing.T) {
 	p := nativeResourcePlan()
 	p.Site.Suspended = true
-	_, _, front := resourceNativeConfigs(&System{}, p)
+	php, worker, front := resourceNativeConfigs(&System{}, p)
+	if !strings.Contains(php, "ping.path = "+resourceProbePath) ||
+		!strings.Contains(worker, "location = "+resourceProbePath) ||
+		!strings.Contains(worker, "fastcgi_pass unix:"+resourceSocket(p.Site.ID, "php")) {
+		t.Fatal("worker health must reach the dedicated PHP-FPM socket")
+	}
 	httpOnly := "server {\n listen 80;\n server_name " + p.Site.Domain + ";\n}\n"
 	rejected := suspensionSiteConfig(httpOnly, p.Site, true)
 	got := resourceFrontendConfig(front, rejected, p.Site)
@@ -168,6 +174,9 @@ func TestResourceFrontendPreservesSuspensionAndCertificate(t *testing.T) {
 	}
 	if !strings.Contains(got, "return 503") || strings.Count(got, "location ^~ /.well-known/acme-challenge/") != 1 {
 		t.Fatal("manual suspension or ACME routing was lost")
+	}
+	if !strings.Contains(got, "location = "+resourceProbePath+" { return 404; }") {
+		t.Fatal("private PHP-FPM probe must not be exposed on the public listener")
 	}
 }
 

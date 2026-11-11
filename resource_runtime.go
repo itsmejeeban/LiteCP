@@ -25,6 +25,8 @@ import (
 )
 
 const resourceRuntimeBase = "/var/lib/litecp-resources"
+const resourceProbePath = "/.litecp-fpm-health"
+const resourceProbeReply = "litecp-fpm-ready"
 
 type resourceRuntimePlan struct {
 	Site    Site                  `json:"site"`
@@ -132,6 +134,7 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	site := p.Site
 	temporary := resourceWebTemporary(site, dir)
 	pool := strings.ReplaceAll(s.phpPoolConfig(site), s.sitePHPSocket(site), filepath.Join(dir, "php.sock"))
+	pool += "\nping.path = " + resourceProbePath + "\nping.response = " + resourceProbeReply + "\n"
 	pool = strings.ReplaceAll(pool, "pm.max_children = 5", fmt.Sprintf("pm.max_children = %d", p.Policy.ConcurrentRequests))
 	logPath := filepath.Join(dir, "php-error.log")
 	if siteHome(site) != "" {
@@ -166,6 +169,8 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	inner = strings.Join(clean, "\n")
 	inner = strings.Replace(inner, "server {", fmt.Sprintf("server {\n limit_conn website %d;", p.Policy.ConcurrentRequests), 1)
 	inner = strings.Replace(inner, "server {", "server {\n set_real_ip_from unix:;\n real_ip_header X-Real-IP;", 1)
+	probe := fmt.Sprintf("\n location = %s { include /etc/nginx/fastcgi_params; fastcgi_param SCRIPT_FILENAME %s; fastcgi_pass unix:%s; }", resourceProbePath, resourceProbePath, filepath.Join(dir, "php.sock"))
+	inner = strings.Replace(inner, "server {", "server {"+probe, 1)
 	web = fmt.Sprintf("daemon off;\nmaster_process on;\nuser %s;\nworker_processes 1;\npid %s/nginx.pid;\nerror_log stderr;\nevents { worker_connections %d; }\nhttp { include /etc/nginx/mime.types; include /etc/nginx/fastcgi_params; access_log off; limit_conn_zone $server_name zone=website:1m; client_body_temp_path %s/body; fastcgi_temp_path %s/fastcgi; proxy_temp_path %s/proxy;\n%s\n}\n", s.webUser(), dir, p.Policy.ConcurrentRequests+32, temporary, temporary, temporary, inner)
 	// Public routing never serves static files or executes PHP itself.
 	front = fmt.Sprintf("# LiteCP enforced website resource boundary\nserver {\n listen 80;\n listen [::]:80;\n server_name %s;\n%s\n%s\n if (-f %s/blocked) { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n location / { proxy_pass http://unix:%s:; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; proxy_read_timeout 120s; proxy_intercept_errors on; error_page 502 503 =503 @resource_unavailable; }\n location @resource_unavailable { return 503 'This website is temporarily unavailable due to resource limits. Please try again later.'; }\n}\n", site.Domain, wafBlock(site, site.WAFMode), siteLogDirectives(site), dir, filepath.Join(dir, "http.sock"))
@@ -191,6 +196,7 @@ func resourceFrontendConfig(front, original string, site Site) string {
 		front = strings.Replace(front, " listen 80;", " listen 443 ssl;\n listen [::]:443 ssl;\n ssl_certificate "+cert+";\n ssl_certificate_key "+key+";\n listen 80;", 1)
 	}
 	front = strings.Replace(front, " location / {", " location ^~ /.well-known/acme-challenge/ { root "+site.Root+"; auth_basic off; try_files $uri =404; }\n location / {", 1)
+	front = strings.Replace(front, " location / {", " location = "+resourceProbePath+" { return 404; }\n location / {", 1)
 	return injectCaptchaConfig(suspensionSiteConfig(front, site, site.Suspended), site)
 }
 func resourceServiceUnit(p resourceRuntimePlan, kind, command string) string {
@@ -387,10 +393,31 @@ func resourceHealth(id, domain string) error {
 	client := &http.Client{Transport: transport, Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
-	return resourceWaitWorkerHealth(ctx, client, "http://"+domain+"/")
+	config, err := os.ReadFile(filepath.Join(resourceDirectory(id), "nginx.conf"))
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(string(config), "location = "+resourceProbePath+" {") {
+		// Existing policies keep their previous worker configuration.
+		return resourceWaitWorkerHealth(ctx, client, "http://"+domain+"/", "")
+	}
+	err = resourceWaitWorkerHealth(ctx, client, "http://"+domain+resourceProbePath, resourceProbeReply)
+	if err == nil {
+		return nil
+	}
+	log, _ := runCommand(context.Background(), 3*time.Second, "journalctl", "-u", resourceUnit(id, "web"), "--since=-30s", "-n", "30", "--no-pager", "-o", "cat")
+	lines := strings.Split(log, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], "GET "+resourceProbePath+" ") {
+			if diagnostic, _, ok := strings.Cut(lines[i], ", client:"); ok {
+				return fmt.Errorf("private PHP-FPM probe: %w: %.400s", err, diagnostic)
+			}
+		}
+	}
+	return fmt.Errorf("private PHP-FPM probe: %w", err)
 }
 
-func resourceWaitWorkerHealth(ctx context.Context, client *http.Client, endpoint string) error {
+func resourceWaitWorkerHealth(ctx context.Context, client *http.Client, endpoint, expectedBody string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
@@ -401,10 +428,19 @@ func resourceWaitWorkerHealth(ctx context.Context, client *http.Client, endpoint
 	for ctx.Err() == nil {
 		r, err := client.Do(req)
 		if err == nil {
-			r.Body.Close()
 			if r.StatusCode < 500 {
-				return nil
+				if expectedBody == "" {
+					r.Body.Close()
+					return nil
+				}
+				body, readErr := io.ReadAll(io.LimitReader(r.Body, int64(len(expectedBody)+1)))
+				r.Body.Close()
+				if r.StatusCode == http.StatusOK && readErr == nil && string(body) == expectedBody {
+					return nil
+				}
+				return fmt.Errorf("unexpected worker health response (HTTP %d)", r.StatusCode)
 			}
+			r.Body.Close()
 			lastError = fmt.Errorf("website health returned HTTP %d", r.StatusCode)
 			// Nginx can accept connections before its FastCGI upstream is ready.
 			if r.StatusCode != http.StatusBadGateway && r.StatusCode != http.StatusServiceUnavailable && r.StatusCode != http.StatusGatewayTimeout {
@@ -429,6 +465,7 @@ func resourceSecureSockets(s *System, id string) error {
 	if err != nil {
 		return err
 	}
+	mode, modeErr := runCommand(context.Background(), 3*time.Second, "getenforce")
 	for _, kind := range []string{"http", "php"} {
 		path := resourceSocket(id, kind)
 		var info os.FileInfo
@@ -451,6 +488,11 @@ func resourceSecureSockets(s *System, id string) error {
 		}
 		if err = os.Chmod(path, 0660); err != nil {
 			return err
+		}
+		if modeErr == nil && strings.TrimSpace(mode) == "Enforcing" {
+			if err = resourceRun("restorecon", "-F", path); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -606,6 +648,9 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 		}
 	}
 	if output, e := runCommand(context.Background(), 5*time.Second, "getenforce"); e == nil && strings.TrimSpace(output) == "Enforcing" {
+		if e = resourceRun("chcon", "-t", "httpd_var_run_t", resourceRuntimeBase); e != nil {
+			return e
+		}
 		for _, path := range []string{filepath.Dir(resourceProtectedStorage(p.Site)), resourceProtectedStorage(p.Site), filepath.Join(resourceProtectedStorage(p.Site), "tmp")} {
 			if e = resourceRun("chcon", "-t", "httpd_sys_rw_content_t", path); e != nil {
 				return e
