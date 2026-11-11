@@ -156,15 +156,16 @@ func resourceNativeConfigsAt(s *System, p resourceRuntimePlan, dir string) (php,
 	inner = strings.ReplaceAll(inner, "    listen [::]:80;", "")
 	inner = strings.ReplaceAll(inner, s.sitePHPSocket(site), filepath.Join(dir, "php.sock"))
 	inner = strings.ReplaceAll(inner, wafBlock(private, private.WAFMode), "")
-	// WAF and access collection stay on the public edge, not the inner worker.
-	if logs := siteLogDirectives(private); logs != "" {
-		inner = strings.ReplaceAll(inner, logs, "access_log off;")
-	}
+	// Remove operational logging per directive: traffic injection can reorder
+	// these lines, so matching the original multiline block is unreliable.
+	// Errors inherit stderr and remain available to the readiness diagnostic.
 	var clean []string
 	for _, line := range strings.Split(inner, "\n") {
-		if !strings.Contains(line, "litecp_traffic") {
-			clean = append(clean, line)
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "access_log ") || strings.HasPrefix(trimmed, "error_log ") || strings.Contains(line, "litecp_traffic") {
+			continue
 		}
+		clean = append(clean, line)
 	}
 	inner = strings.Join(clean, "\n")
 	inner = strings.Replace(inner, "server {", fmt.Sprintf("server {\n limit_conn website %d;", p.Policy.ConcurrentRequests), 1)
@@ -640,10 +641,27 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 		if e != nil {
 			return e
 		}
+		for _, temporary := range []string{resourceWebTemporary(p.Site, dir), path} {
+			info, e := os.Lstat(temporary)
+			if e != nil {
+				return e
+			}
+			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("website request temporary path is not a real directory")
+			}
+		}
 		if err = os.Chown(path, u, g); err != nil {
 			return err
 		}
+		if err = os.Chmod(path, 0750); err != nil {
+			return err
+		}
 		if err = os.Chown(resourceWebTemporary(p.Site, dir), 0, g); err != nil {
+			return err
+		}
+		// MkdirAll is masked by the host executor's private umask (0077).
+		// Nginx needs traversal and buffering access after dropping privileges.
+		if err = os.Chmod(resourceWebTemporary(p.Site, dir), 0750); err != nil {
 			return err
 		}
 	}
@@ -715,7 +733,7 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 	if err = writeAtomic(filepath.Join(dir, "plan.json"), encoded, 0600); err != nil {
 		return err
 	}
-	watch := fmt.Sprintf("[Unit]\nDescription=LiteCP website resource monitor\nAfter=local-fs.target\nRequiresMountsFor=%s\nBefore=nginx.service\n[Service]\nExecStart=%s resource-runtime watch %s\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n", siteHome(p.Site), resourceRuntimeExecutable(), base64.RawURLEncoding.EncodeToString(encoded))
+	watch := fmt.Sprintf("[Unit]\nDescription=LiteCP website resource monitor\nAfter=local-fs.target\nRequiresMountsFor=%s\nBefore=nginx.service\n[Service]\nType=notify\nNotifyAccess=main\nTimeoutStartSec=60\nExecStart=%s resource-runtime watch %s\nRestart=always\nRestartSec=5\n[Install]\nWantedBy=multi-user.target\n", siteHome(p.Site), resourceRuntimeExecutable(), base64.RawURLEncoding.EncodeToString(encoded))
 	units[resourceUnit(p.Site.ID, "watch")] = watch
 	for name, content := range units {
 		if err = writeAtomic(filepath.Join("/etc/systemd/system", name), []byte(content), 0644); err != nil {
@@ -785,7 +803,9 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 	if err = resourceRun("systemctl", "enable", "--now", resourceUnit(p.Site.ID, "watch")); err != nil {
 		return err
 	}
-	return resourceRuntimeGate(p.Site.ID, false)
+	// The notify-ready monitor owns the access gate after initial validation.
+	// Clearing it here races the monitor's fail-closed startup checks.
+	return nil
 }
 
 func resourceRuntimeDisable(s *System, p resourceRuntimePlan) (result error) {
@@ -866,6 +886,23 @@ func resourceRuntimeDisable(s *System, p resourceRuntimePlan) (result error) {
 	return resourceRuntimeSave(site.ID, resourceRuntimeStatus{resourcePolicyState: resourcePolicyState{State: "Disabled"}})
 }
 
+// Signal systemd only after the monitor has validated workers and established
+// the correct access gate. An absent socket supports existing simple units.
+func resourceNotifyMonitorReady(socket string) error {
+	if socket == "" {
+		return nil
+	}
+	connection, err := net.Dial("unixgram", socket)
+	if err != nil {
+		return fmt.Errorf("notify resource monitor readiness: %w", err)
+	}
+	defer connection.Close()
+	if _, err := connection.Write([]byte("READY=1")); err != nil {
+		return fmt.Errorf("notify resource monitor readiness: %w", err)
+	}
+	return nil
+}
+
 func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 	defer func() {
 		if result != nil {
@@ -909,6 +946,9 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 		if err := resourceRuntimeGate(p.Site.ID, false); err != nil {
 			return err
 		}
+	}
+	if err := resourceNotifyMonitorReady(os.Getenv("NOTIFY_SOCKET")); err != nil {
+		return err
 	}
 	st.CPUExhaustedFor = 0
 	var before resourceSample

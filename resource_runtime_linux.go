@@ -24,30 +24,65 @@ type resourceDqblk struct {
 	Pad                                                   uint32
 }
 
-func resourcePrepareStorage(site Site) error {
-	base := filepath.Join(siteStorageBase, ".litecp-resource-runtime")
-	dir := resourceProtectedStorage(site)
-	for _, path := range []string{siteStorageBase, base, dir} {
-		info, err := os.Lstat(path)
-		if os.IsNotExist(err) && path != siteStorageBase {
-			if err = os.Mkdir(path, 0755); err != nil {
-				return err
-			}
-			info, err = os.Lstat(path)
+// resourceEnsureRuntimeDirectories repairs only the two root-owned traversal
+// directories. The host executor uses umask 0077; Mkdir's requested mode alone
+// cannot make the private worker sockets reachable by Nginx's unprivileged user.
+// Contents such as plan.json and recovery directories keep their private modes.
+func resourceEnsureRuntimeDirectories(base, dir string) error {
+	base, dir = filepath.Clean(base), filepath.Clean(dir)
+	if !filepath.IsAbs(base) || !filepath.IsAbs(dir) || filepath.Dir(dir) != base || dir == base {
+		return fmt.Errorf("resource runtime directory must be a direct child of its absolute base")
+	}
+	for _, path := range []string{base, dir} {
+		if err := os.Mkdir(path, 0755); err != nil && !os.IsExist(err) {
+			return err
 		}
+		// Do not follow a symlink when validating or changing permissions.
+		f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW, 0)
 		if err != nil {
+			return fmt.Errorf("open root-owned resource runtime directory %s: %w", path, err)
+		}
+		info, err := f.Stat()
+		if err != nil {
+			f.Close()
 			return err
 		}
 		st, ok := info.Sys().(*syscall.Stat_t)
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0022 != 0 || !ok || st.Uid != 0 {
-			return fmt.Errorf("protected quota runtime parent must be a root-owned real directory: %s", path)
+		if !info.IsDir() || info.Mode().Perm()&0022 != 0 || !ok || st.Uid != 0 {
+			f.Close()
+			return fmt.Errorf("resource runtime parent must be a root-owned real directory without group/world write access: %s", path)
 		}
+		err = f.Chmod(0755)
+		closeErr := f.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
+}
+
+func resourcePrepareStorage(site Site) error {
+	base := filepath.Join(siteStorageBase, ".litecp-resource-runtime")
+	dir := resourceProtectedStorage(site)
+	info, err := os.Lstat(siteStorageBase)
+	if err != nil {
+		return err
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0022 != 0 || !ok || st.Uid != 0 {
+		return fmt.Errorf("protected quota runtime parent must be a root-owned real directory: %s", siteStorageBase)
+	}
+	if err := resourceEnsureRuntimeDirectories(base, dir); err != nil {
+		return err
 	}
 	tmp := filepath.Join(dir, "tmp")
 	if err := os.Mkdir(tmp, 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
-	info, err := os.Lstat(tmp)
+	info, err = os.Lstat(tmp)
 	if err != nil {
 		return err
 	}
@@ -65,7 +100,7 @@ func resourcePrepareStorage(site Site) error {
 
 func resourceRuntimeLock(id string, watch bool) (func(), error) {
 	dir := resourceDirectory(id)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := resourceEnsureRuntimeDirectories(resourceRuntimeBase, dir); err != nil {
 		return nil, err
 	}
 	name := "transition.lock"

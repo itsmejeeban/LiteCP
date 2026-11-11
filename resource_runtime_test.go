@@ -129,6 +129,9 @@ func TestResourceNativeBoundaryUsesPrivateWorkers(t *testing.T) {
 	if strings.Contains(web, "listen 80;") || strings.Contains(web, "listen [::]:80;") || strings.Contains(web, "litecp_traffic") {
 		t.Fatal("private worker depends on public listeners or shared log formats")
 	}
+	if strings.Count(web, "error_log stderr;") != 1 || strings.Contains(web, filepath.ToSlash(filepath.Join(siteHome(p.Site), "logs"))) {
+		t.Fatal("private worker errors must reach stderr instead of website-owned logs")
+	}
 	if !strings.Contains(web, "listen unix:"+resourceSocket(p.Site.ID, "http")) || !strings.Contains(web, "limit_conn website 8") {
 		t.Fatal("private HTTP boundary or concurrency allowance missing")
 	}
