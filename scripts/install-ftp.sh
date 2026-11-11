@@ -47,4 +47,7 @@ elif command -v ufw >/dev/null; then
 fi
 touch "$ROOT/installed"
 chmod 600 "$ROOT/installed"
-echo 'FTPS ready. Allow TCP 21 and 50000-50049 in any cloud firewall. Replace the inherited panel certificate with a trusted FTP hostname certificate before production use.'
+if ! python3 -I "$(dirname -- "${BASH_SOURCE[0]}")/sync-ftps-tls.py"; then
+ echo 'Warning: FTPS certificate synchronization failed.' >&2
+fi
+echo 'FTPS ready. Allow TCP 21 and 50000-50049 in any cloud firewall. Configure trusted hostname SSL before connecting with production FTPS clients.'

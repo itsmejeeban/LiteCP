@@ -59,17 +59,30 @@ test('hostname SSL checks the saved hostname on navigation and requests installa
  const elements=new Map(),node=()=>({hidden:false,disabled:false,addEventListener(name,callback){this[name]=callback;}});
  const card=node();card.querySelector=key=>{if(!elements.has(key))elements.set(key,node());return elements.get(key);};
  const location={hash:'#dashboard'},hostname='panel.example.test',calls=[];
- const certificate={hostname,validHostname:true,trusted:false,url:`https://${hostname}:4321/`};
+ const certificate={hostname,validHostname:true,trusted:false,url:`https://${hostname}:4321/`,
+  services:[{name:"FTPS",endpoint:`${hostname}:21`,status:"untrusted",detail:"Untrusted <issuer>"}]};
  let confirmed=false;
- const window={LiteCP:{state:()=>({system:{hostname}}),formatDateTime:()=>"Nov 10",showToast(){},api:async(path,options)=>{
-  calls.push({path,options});if(options){certificate.trusted=true;return {url:certificate.url};}return certificate;
+ const window={LiteCP:{state:()=>({system:{hostname}}),formatDateTime:()=>"Nov 10",escapeHTML:value=>value.replaceAll("<","&lt;").replaceAll(">","&gt;"),showToast(){},api:async(path,options)=>{
+  calls.push({path,options});if(options){
+   certificate.trusted=true;
+   if(options.body.allServices)certificate.services[0]={...certificate.services[0],status:"trusted",expiresAt:"2027-02-08",detail:""};
+   return {url:certificate.url};
+  }return certificate;
  }},LiteCPFeatures:{render(){},navigate(){}},LiteCPDialogs:{confirm:async()=>confirmed},addEventListener(){}};
  vm.runInNewContext(fs.readFileSync('web/panel-hostname-ssl.js','utf8'),{window,location,document:{querySelector:()=>({append(){}}),createElement:()=>card}});
  assert.equal(calls.length,0);
  location.hash='#settings/hostname';window.LiteCPFeatures.navigate('settings');await new Promise(setImmediate);
  const install=elements.get('[data-hostname-ssl-install]');
+ const installAll=elements.get('[data-hostname-ssl-install-all]');
+ const services=elements.get('[data-hostname-ssl-service-rows]');
+ assert.match(services.innerHTML,/FTPS.*Needs a trusted certificate.*Untrusted &lt;issuer&gt;/);
  assert.equal(install.disabled,false);await install.click();assert.equal(calls.length,1);
+ assert.equal(installAll.disabled,false);await installAll.click();assert.equal(calls.length,1);
  confirmed=true;await install.click();
  assert.equal(calls[1].options.method,'POST');assert.equal(calls[1].options.body.hostname,hostname);
  assert.equal(elements.get('[data-hostname-ssl-url]').href,certificate.url);
+ await installAll.click();
+ assert.equal(calls[3].options.method,'POST');assert.equal(calls[3].options.body.allServices,true);
+ assert.equal(calls[3].options.body.hostname,hostname);
+ assert.match(services.innerHTML,/FTPS.*badge success.*Trusted.*Nov 10/);
 });

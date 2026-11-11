@@ -74,4 +74,11 @@ systemctl daemon-reload
 [[ $(systemctl show litecp.service -p User --value) == litecp-web ]] || { echo 'A service override prevents unprivileged operation. Previous units are retained for recovery.' >&2; exit 1; }
 systemctl enable litecp-captcha.service
 bash "$source_dir/scripts/install-application-boot-order.sh"
+install -d -m 0755 /usr/local/lib/litecp /etc/letsencrypt/renewal-hooks/deploy
+install -m 0700 "$source_dir/scripts/sync-ftps-tls.py" /usr/local/lib/litecp/sync-ftps-tls.py
+install -m 0700 "$source_dir/scripts/sync-mail-tls.py" /usr/local/lib/litecp/sync-mail-tls.py
+install -m 0755 "$source_dir/scripts/renew-ftps-tls.sh" /etc/letsencrypt/renewal-hooks/deploy/litecp-ftps
+if ! python3 -I /usr/local/lib/litecp/sync-ftps-tls.py; then
+  echo 'Warning: FTPS certificate synchronization failed. Review the FTPS service before retrying.' >&2
+fi
 echo "Privilege-separated service units installed. Previous units retained in $recovery"

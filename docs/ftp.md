@@ -4,7 +4,9 @@ Use the FTP accounts button beside a website to create a login, edit its passwor
 
 Run `bash scripts/install-ftp.sh` as root on an existing LiteCP installation. It installs Pure-FTPd and a dedicated `litecp-ftps` service with virtual-user authentication only. It requires explicit FTPS on port 21, encrypted data channels, and passive ports 50000–50049. Allow those TCP ports in the provider firewall as well as the server firewall. Plain FTP and anonymous login are disabled.
 
-The installer initially inherits the panel TLS certificate. Before production, provision a trusted certificate matching your FTP hostname and update `/var/lib/litecp/ftp/tls.pem` (private key plus certificate chain, root-only), then restart `litecp-ftps`. Do not disable certificate validation in FTP clients.
+The installer initially inherits the panel bootstrap certificate. Once trusted hostname SSL is installed in Settings → Server hostname, LiteCP synchronizes the hostname certificate and its full chain to the managed FTPS listener. Renewal also refreshes the FTPS bundle. Connect using that DNS hostname on port 21. For a separate FTP hostname, configure its own trusted private key and full chain in the root-only `/var/lib/litecp/ftp/tls.pem` file and restart `litecp-ftps`. LiteCP preserves custom bundles.
+
+The **Install All Services SSL** action checks panel HTTPS, explicit FTPS, SMTP, and encrypted mail listeners locally without logging in. It installs the matching panel certificate for supported LiteCP-managed services that need it. A separately configured public mail hostname needs a certificate that covers that name.
 
 Account metadata and password hashes are stored under `/var/lib/litecp/ftp` with root-only permissions. Plaintext passwords are not stored. Root-only transaction snapshots are retained for recovery; their removal is administrator-managed. Removing an account removes authentication and metadata, preserving all website files. Already authenticated connections may remain active until they disconnect.
 

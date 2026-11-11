@@ -99,3 +99,6 @@ EOF
 chmod 0755 "$hook"
 trap - EXIT TERM INT
 echo "Trusted panel URL: https://$host:$port/; previous configuration: $backup"
+if [[ -f /usr/local/lib/litecp/sync-ftps-tls.py ]] && ! python3 -I /usr/local/lib/litecp/sync-ftps-tls.py; then
+  echo 'Warning: Hostname HTTPS is active, but the FTPS certificate could not be synchronized.' >&2
+fi

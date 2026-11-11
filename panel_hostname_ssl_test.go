@@ -1,11 +1,54 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestHostnameTLSProtocolUpgrade(t *testing.T) {
+	for _, fixture := range []struct {
+		protocol string
+		commands []string
+		replies  []string
+	}{
+		{"ftp", []string{"AUTH TLS"}, []string{"234 Ready"}},
+		{"smtp", []string{"EHLO localhost", "STARTTLS"}, []string{"250-localhost\r\n250 STARTTLS", "220 Ready"}},
+	} {
+		t.Run(fixture.protocol, func(t *testing.T) {
+			client, server := net.Pipe()
+			defer client.Close()
+			_ = client.SetDeadline(time.Now().Add(2 * time.Second))
+			_ = server.SetDeadline(time.Now().Add(2 * time.Second))
+			result := make(chan error, 1)
+			go func() {
+				defer server.Close()
+				reader := bufio.NewReader(server)
+				_, _ = fmt.Fprint(server, "220-test\r\n220 Ready\r\n")
+				for index, command := range fixture.commands {
+					line, err := reader.ReadString('\n')
+					if err != nil || strings.TrimSpace(line) != command {
+						result <- fmt.Errorf("expected %q, got %q: %v", command, line, err)
+						return
+					}
+					_, _ = fmt.Fprint(server, fixture.replies[index]+"\r\n")
+				}
+				result <- nil
+			}()
+			if err := startHostnameTLS(client, fixture.protocol); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-result; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
 
 func TestPanelHostnameSSLValidation(t *testing.T) {
 	for _, name := range []string{"panel.example.org", "my-panel.example.org"} {
