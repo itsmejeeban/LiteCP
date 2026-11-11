@@ -27,12 +27,15 @@
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: clamp(4px, 2vw, 10px);
+  max-width: 338px;
+  margin-inline: auto;
   pointer-events: none;
 }
 .login-factor-digits > span {
   display: grid;
   place-items: center;
-  height: 48px;
+  box-sizing: border-box;
+  aspect-ratio: 1;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);

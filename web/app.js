@@ -533,7 +533,9 @@
 
   function renderSites() {
     const query = $("#siteSearch").value.trim().toLowerCase();
-    const sites = currentState.sites.filter(site => site.domain.toLowerCase().includes(query));
+    const sites = currentState.sites
+      .filter(site => site.domain.toLowerCase().includes(query))
+      .sort((a, b) => a.domain.localeCompare(b.domain));
     renderSitePagination(sites.length);
     if (!sites.length) {
       const copy = currentState.sites.length ? "No domains match your search." : "Provision WHMCS, WordPress or a regular PHP/HTML website with an isolated runtime in one short step.";
