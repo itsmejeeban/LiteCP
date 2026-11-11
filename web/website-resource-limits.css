@@ -13,3 +13,30 @@
   padding: 0;
   margin: 0;
 }
+
+[data-sort-column] button[data-sort-key] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+[data-sort-column] button[data-sort-key]:hover,
+[data-sort-column][aria-sort] button[data-sort-key] {
+  border-color: var(--line);
+  background: var(--paper);
+}
+[data-sort-column] button[data-sort-key] span {
+  color: var(--muted);
+  font-size: 14px;
+}
+[data-sort-column][aria-sort] button[data-sort-key] span {
+  color: var(--ink);
+}
