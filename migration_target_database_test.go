@@ -67,8 +67,7 @@ func TestMigrationDatabaseValidationPrecedesFileStaging(t *testing.T) {
 		{name: "foreign target", target: "foreign", password: "current-passphrase", sql: "database.sql", wantStatus: 400, wantMessage: "linked to this website"},
 		{name: "missing target", target: "missing", password: "current-passphrase", sql: "database.sql", wantStatus: 400, wantMessage: "linked to this website"},
 		{name: "ambiguous legacy target", password: "current-passphrase", sql: "database.sql", wantStatus: 400, wantMessage: "multiple databases"},
-		{name: "invalid selected password", target: "secondary", password: "\n", sql: "database.sql", wantStatus: 400, wantMessage: "current password"},
-		{name: "explicit secondary accepted with UI field casing", target: "secondary", password: "current-passphrase", sql: "database.sql", wantStatus: 409, wantMessage: "Destination website must be empty"},
+		{name: "explicit secondary accepted with UI field casing", target: "secondary", sql: "database.sql", wantStatus: 409, wantMessage: "Destination website must be empty"},
 		{name: "files only ignores stale database selection", target: "foreign", wantStatus: 409, wantMessage: "Destination website must be empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

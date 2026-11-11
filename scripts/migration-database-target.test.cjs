@@ -22,7 +22,7 @@ function fixture(databases, options = {}) {
   const form = node('#migrationImportForm');
   form.elements = {
     siteId: node('#migrationSite'), sql: node('#migrationSQL'),
-    databaseID: node('#migrationTargetDatabase'), password: node('#password'),
+    databaseID: node('#migrationTargetDatabase'),
     root: node('#migrationRoot')
   };
   form.elements.siteId.value = 'site-one';
@@ -66,7 +66,6 @@ test('target choices include every database linked to the selected website only'
   assert.equal(target.value, '');
   assert.equal(target.disabled, false);
   assert.equal(target.required, true);
-  assert.equal(ui.form.elements.password.required, true);
 });
 
 test('database IDs and names are safely escaped in options', () => {
@@ -77,57 +76,36 @@ test('database IDs and names are safely escaped in options', () => {
   assert.doesNotMatch(html, /<img/);
 });
 
-test('changing websites clears the previous database selection and password', () => {
+test('changing websites clears the previous database selection', () => {
   const ui = fixture(databases());
   ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'old-target-password';
   ui.form.elements.siteId.value = 'site-two';
   ui.form.elements.siteId.handlers.change();
   assert.equal(ui.form.elements.databaseID.value, '');
-  assert.equal(ui.form.elements.password.value, '');
   assert.match(ui.form.elements.databaseID.innerHTML, /foreign_db/);
   assert.doesNotMatch(ui.form.elements.databaseID.innerHTML, /secondary_db/);
 });
 
-test('refresh preserves a valid selection but clears removed targets and their password', () => {
+test('refresh preserves a valid selection but clears removed targets', () => {
   const ui = fixture(databases());
   ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'selected-password';
   ui.sync();
   assert.equal(ui.form.elements.databaseID.value, 'secondary');
-  assert.equal(ui.form.elements.password.value, 'selected-password');
   ui.state.databases = ui.state.databases.filter(database => database.id !== 'secondary');
   ui.sync();
   assert.equal(ui.form.elements.databaseID.value, '');
-  assert.equal(ui.form.elements.password.value, '');
-});
-
-test('source or target database changes clear the previously entered password', () => {
-  const ui = fixture(databases());
-  ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'old-password';
-  ui.form.elements.sql.handlers.change();
-  assert.equal(ui.form.elements.databaseID.value, '');
-  assert.equal(ui.form.elements.password.value, '');
-  ui.form.elements.databaseID.value = 'primary';
-  ui.form.elements.password.value = 'another-password';
-  ui.form.elements.databaseID.handlers.change();
-  assert.equal(ui.form.elements.password.value, '');
 });
 
 test('files-only mode disables SQL credentials and submits no database target', async () => {
   const ui = fixture(databases());
   ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'unused-password';
   ui.form.elements.sql.value = '';
   ui.form.elements.sql.handlers.change();
   assert.equal(ui.form.elements.databaseID.disabled, true);
   assert.equal(ui.form.elements.databaseID.required, false);
-  assert.equal(ui.form.elements.password.disabled, true);
-  assert.equal(ui.form.elements.password.required, false);
   await ui.submit();
   assert.equal(ui.requests[0].body.databaseID, '');
-  assert.equal(ui.requests[0].body.password, '');
+  assert.equal(Object.hasOwn(ui.requests[0].body, 'password'), false);
   assert.equal(ui.requests[0].body.sql, '');
 });
 
@@ -145,31 +123,26 @@ test('SQL import requires a selected database linked to this website', async () 
 test('a website without linked databases explains the prerequisite and blocks SQL import', async () => {
   const ui = fixture([]);
   assert.equal(ui.form.elements.databaseID.disabled, true);
-  assert.equal(ui.form.elements.password.disabled, true);
   assert.match(ui.node('#migrationDatabaseHint').textContent, /No databases are linked/);
   await ui.submit();
   assert.equal(ui.requests.length, 0);
 });
 
-test('import submits the explicitly selected secondary database and its password', async () => {
+test('import submits the explicitly selected secondary database without credentials', async () => {
   const ui = fixture(databases());
   ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'secondary-password';
   await ui.submit();
   assert.deepEqual(ui.requests, [{url: '/api/migrations/import', method: 'POST', body: {
     id: 'stage-one', siteId: 'site-one', root: 'account/homedir/public_html',
-    sql: 'mysql/source.sql', databaseID: 'secondary', password: 'secondary-password'
+    sql: 'mysql/source.sql', databaseID: 'secondary'
   }}]);
   assert.match(ui.confirmations[0], /secondary_db/);
-  assert.equal(ui.form.elements.password.value, '');
   assert.equal(ui.refreshes(), 1);
 });
 
-test('cancelling confirmation leaves data and selected credentials untouched', async () => {
+test('cancelling confirmation leaves data and database selection untouched', async () => {
   const ui = fixture(databases(), {confirm: false});
   ui.form.elements.databaseID.value = 'secondary';
-  ui.form.elements.password.value = 'secondary-password';
   await ui.submit();
   assert.equal(ui.requests.length, 0);
-  assert.equal(ui.form.elements.password.value, 'secondary-password');
 });

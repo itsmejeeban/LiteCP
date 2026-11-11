@@ -38,7 +38,14 @@ func (a *App) nativeBackupDatabasePlan(site Site, dumps []string) (map[string]Ma
 	}
 	return plan, nil
 }
-func (s *System) restoreNativeBackupSQL(ctx context.Context, sqlPath string, database ManagedDatabase) (resultErr error) {
+func (s *System) restoreNativeBackupSQL(ctx context.Context, sqlPath string, database ManagedDatabase) error {
+	return s.importTemporaryDatabaseSQL(ctx, sqlPath, database, true)
+}
+
+func (s *System) importTemporaryDatabaseSQL(ctx context.Context, sqlPath string, database ManagedDatabase, replace bool) (resultErr error) {
+	if s.demo {
+		return fmt.Errorf("database migration is unavailable in demo mode")
+	}
 	token, err := randomToken(10)
 	if err != nil {
 		return err
@@ -52,9 +59,22 @@ func (s *System) restoreNativeBackupSQL(ctx context.Context, sqlPath string, dat
 		return err
 	}
 	// An ephemeral scoped account keeps the original application user/password intact.
-	query := fmt.Sprintf("CREATE USER '%s'@'localhost' IDENTIFIED BY '%s'; GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", user, password, database.Name, user)
-	if _, err = runCommandInput(ctx, time.Minute, query, firstAvailableCommand("mysql", "mariadb"), "--protocol=socket", "--user=root"); err != nil {
-		return fmt.Errorf("cannot authorize scoped database restore")
+	client := firstAvailableCommand("mysql", "mariadb")
+	mode, err := runCommandInput(ctx, 5*time.Second, "SHOW VARIABLES LIKE 'partial_revokes';", client, "--protocol=socket", "--user=root", "--batch", "--skip-column-names")
+	if err != nil {
+		return fmt.Errorf("cannot verify database grant mode")
+	}
+	pattern := database.Name
+	switch strings.TrimSpace(mode) {
+	case "", "partial_revokes\tOFF", "partial_revokes\t0":
+		pattern = strings.ReplaceAll(pattern, "_", `\_`)
+	case "partial_revokes\tON", "partial_revokes\t1":
+	default:
+		return fmt.Errorf("unknown database grant mode")
+	}
+	query := fmt.Sprintf("CREATE USER '%s'@'localhost' IDENTIFIED BY '%s';", user, password)
+	if _, err = runCommandInput(ctx, time.Minute, query, client, "--protocol=socket", "--user=root"); err != nil {
+		return fmt.Errorf("cannot create temporary database import account")
 	}
 	defer func() {
 		_, cleanupErr := runCommandInput(context.Background(), time.Minute, fmt.Sprintf("DROP USER IF EXISTS '%s'@'localhost';", user), firstAvailableCommand("mysql", "mariadb"), "--protocol=socket", "--user=root")
@@ -62,6 +82,10 @@ func (s *System) restoreNativeBackupSQL(ctx context.Context, sqlPath string, dat
 			resultErr = fmt.Errorf("database restore result: %v; temporary restore account cleanup requires administrator review", resultErr)
 		}
 	}()
+	grant := fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", pattern, user)
+	if _, err = runCommandInput(ctx, time.Minute, grant, client, "--protocol=socket", "--user=root"); err != nil {
+		return fmt.Errorf("cannot authorize scoped database restore")
+	}
 	database.Username = user
-	return s.importScopedSQLMode(ctx, sqlPath, database, password, true)
+	return s.importScopedSQLMode(ctx, sqlPath, database, password, replace)
 }

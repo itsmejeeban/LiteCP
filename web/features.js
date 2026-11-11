@@ -40,8 +40,8 @@
     <button class="button button-primary" type="submit">Upload and inspect</button><button class="button button-ghost" type="button" id="migrationStagesRefresh">Show staged archives</button><div id="migrationStages"></div></div></form>
     <form id="migrationImportForm" class="panel compact-form-card"><div class="panel-head"><div><h2>2. Review and import</h2><p id="migrationSummary">Upload an archive first.</p></div></div><div class="settings-body">
     ${field("Target website", '<select name="siteId" id="migrationSite" required></select>')}${field("Website root in archive", '<select name="root" id="migrationRoot" required></select>')}
-    ${field("SQL dump (optional)", '<select name="sql" id="migrationSQL"><option value="">Files only</option></select>')}${field("Target database", '<select name="databaseID" id="migrationTargetDatabase" aria-describedby="migrationDatabaseHint" disabled><option value="">Select target database</option></select><small id="migrationDatabaseHint" role="status">Choose a SQL dump to import a database.</small>')}${field("Target database password", '<input name="password" type="password" autocomplete="current-password"><small>Required only for SQL import. The dump must omit CREATE DATABASE / USE statements for the old database.</small>')}
-    <p class="feature-note">Create the target website first and move its placeholder to Trash. Files are staged before an atomic document-root switch. SQL imports use the target's restricted database user; a failed import resets the previously empty managed database.</p>
+    ${field("SQL dump (optional)", '<select name="sql" id="migrationSQL"><option value="">Files only</option></select>')}${field("Target database", '<select name="databaseID" id="migrationTargetDatabase" aria-describedby="migrationDatabaseHint" disabled><option value="">Select target database</option></select><small id="migrationDatabaseHint" role="status">Choose a SQL dump to import a database.</small>')}
+    <p class="feature-note">Create the target website first and move its placeholder to Trash. Files are staged before an atomic document-root switch. SQL imports use a temporary account restricted to the selected database; a failed import resets the previously empty managed database.</p>
     <div data-migration-import-progress hidden><progress aria-label="Importing website backup" style="width:100%"></progress></div><button class="button button-primary" type="submit" id="migrationImportButton" disabled>Import selected website</button><button class="button button-ghost" type="button" id="migrationDiscardButton" disabled>Delete staged archive</button></div></form></div>
     <div class="info-callout"><div><strong>Website files and a selected database only</strong><p>Update application credentials and paths after import. Mail accounts, DNS, SSL, server settings, addon sites and arbitrary cron jobs are not imported. Verify the website before changing DNS.</p></div></div>${resultBox("migrationOutput")}`));
 
@@ -301,7 +301,7 @@
   $("#scanForm").addEventListener("submit",event=>{event.preventDefault();busy(event.currentTarget,async()=>{if(cp.demo)throw new Error("ClamAV scans require the installed server.");output("scanOutput","Scanning... This may take several minutes. Do not submit another scan.");const data=new FormData(event.currentTarget);const result=await cp.api("/api/security/scan",{method:"POST",body:{siteId:data.get("siteId"),path:data.get("path")}});const report=$("#scanOutput");report.style.whiteSpace="normal";window.LiteCPScanReport.render(report,result.output||"",result.status);});});
   function syncMigrationTargetDatabases(state = cp.state(), reset = false) {
     const siteId = $("#migrationSite").value;
-    const target = $("#migrationTargetDatabase"), password = $("#migrationImportForm").elements.password;
+    const target = $("#migrationTargetDatabase");
     const previous = target.value, siteChanged = target.dataset.siteId !== siteId;
     const databases = (state?.databases || []).filter(database => database.siteId === siteId);
     const hasSQL = !!$("#migrationSQL").value;
@@ -311,9 +311,6 @@
     target.dataset.siteId = siteId;
     target.disabled = !hasSQL || !databases.length;
     target.required = hasSQL;
-    password.disabled = !hasSQL || !databases.length;
-    password.required = hasSQL && databases.length > 0;
-    if (reset || siteChanged || previous && !keep || !hasSQL) password.value = "";
     $("#migrationDatabaseHint").textContent = !hasSQL
       ? "Choose a SQL dump to import a database. Files only leaves databases unchanged."
       : !databases.length ? "No databases are linked to this website. Create one in Website Tools > Databases before importing SQL."
@@ -321,7 +318,6 @@
   }
   $("#migrationSite").addEventListener("change", () => syncMigrationTargetDatabases(cp.state(), true));
   $("#migrationSQL").addEventListener("change", () => syncMigrationTargetDatabases(cp.state(), true));
-  $("#migrationTargetDatabase").addEventListener("change", () => { $("#migrationImportForm").elements.password.value = ""; });
   $("#migrationUploadForm").addEventListener("submit",event=>{event.preventDefault();const form=event.currentTarget;busy(form,async()=>{if(cp.demo)throw new Error("Archive migration requires the installed server.");output("migrationOutput","Uploading and inspecting archive... No live website data is being changed.");const uploaded=await cp.api("/api/migrations",{method:"POST",body:new FormData(form)});if(!uploaded?.id||!Array.isArray(uploaded.roots)||!Array.isArray(uploaded.databases))throw new Error("Invalid archive inspection response. The previous selection was kept; refresh staged archives to retry.");preview=uploaded;$("#migrationSummary").textContent=`${preview.files} files | ${cp.formatBytes(preview.bytes)} | ${preview.skipped} links/special entries skipped`;
     $("#migrationRoot").innerHTML=preview.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+preview.databases.map(file=>`<option>${esc(file)}</option>`).join("");syncMigrationTargetDatabases(cp.state(), true);$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Archive staged. Review the source root and target website. Staging ID: ${preview.id}`);});});
   $("#migrationImportForm").addEventListener("submit",async event=>{
@@ -336,8 +332,8 @@
     if(!await window.LiteCPDialogs.confirm(confirmation))return;
     await busy(form,async()=>{
       output("migrationOutput","Staging and validating the import... Keep this page open.");
-      const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId,root:data.get("root"),sql,databaseID,password:sql?String(data.get("password")||""):""}});
-      form.elements.password.value="";output("migrationOutput",result.note);await cp.refresh();
+      const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId,root:data.get("root"),sql,databaseID}});
+      output("migrationOutput",result.note);await cp.refresh();
     });
   });
   $("#migrationDiscardButton").addEventListener("click",async()=>{const selected=preview;if(!selected||!await window.LiteCPDialogs.confirm("Delete the staged migration archive? Imported website files will be kept."))return;try{await cp.api(`/api/migrations/${encodeURIComponent(selected.id)}`,{method:"DELETE"});if(preview?.id!==selected.id){output("migrationOutput","Previously selected staged archive deleted. Current selection was kept.");return;}preview=null;$("#migrationImportButton").disabled=true;$("#migrationDiscardButton").disabled=true;$("#migrationRoot").innerHTML="";$("#migrationSQL").innerHTML='<option value="">Files only</option>';syncMigrationTargetDatabases(cp.state(), true);$("#migrationSummary").textContent="Upload an archive first.";output("migrationOutput","Staged archive deleted.");}catch(error){notifyError(error);}});

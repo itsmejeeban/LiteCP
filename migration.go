@@ -432,8 +432,9 @@ func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Request, freeBytes func(context.Context, string) (int64, error)) {
 	var input struct {
-		ID, SiteID, Root, SQL, Password string
-		DatabaseID                      string `json:"databaseId"`
+		ID, SiteID, Root, SQL string
+		Password              string // Accepted for compatibility with older API clients.
+		DatabaseID            string `json:"databaseId"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
@@ -464,10 +465,7 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 			writeError(w, 400, err.Error())
 			return
 		}
-		if validateDatabasePassword(input.Password) != nil {
-			writeError(w, 400, "Enter the selected target database's current password.")
-			return
-		}
+
 	}
 	// Only import into an empty, explicitly chosen site. Existing installations
 	// must be backed up and cleared by the administrator, never overwritten here.
@@ -516,8 +514,8 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 	}
 	databaseImported := false
 	if input.SQL != "" {
-		if err := a.system.importScopedSQL(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.SQL)), *database, input.Password); err != nil {
-			writeError(w, 502, "Database import failed and the empty target database was restored: "+err.Error())
+		if err := a.system.importTemporaryDatabaseSQL(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.SQL)), *database, false); err != nil {
+			writeError(w, 502, "Database import failed: "+err.Error())
 			return
 		}
 		databaseImported = true
@@ -551,7 +549,7 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		writeError(w, 500, "Migration was activated, but the previous empty document root could not be removed: "+err.Error())
 		return
 	}
-	a.store.AddActivity("Website migration imported", preview.Platform+" → "+site.Domain, "success")
+	a.store.AddActivity("Website migration imported", preview.Platform+" â†’ "+site.Domain, "success")
 	writeJSON(w, 200, map[string]any{"ok": true, "note": "Website files were activated atomically. Update application database credentials and paths using the file manager. SSL, DNS, email accounts, server settings and arbitrary source cron jobs are not imported. Test the site before changing DNS. Delete the staged archive when verified."})
 }
 

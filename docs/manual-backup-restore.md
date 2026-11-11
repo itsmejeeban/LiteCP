@@ -16,7 +16,7 @@ Validation: nested ZIP fixtures, hidden files, SQL discovery, traversal/symlink/
 
 ## Restore via Folder database selection
 
-In Migration > Restore via Folder, inspect an archive and choose the target website. For database restoration, select the source SQL dump, then select a **Target database** linked to that website and enter that database's current password. Every linked database is available, including secondary databases. Changing the website or SQL dump clears the previous database choice and password.
+In Migration > Restore via Folder, inspect an archive and choose the target website. For database restoration, select the source SQL dump, then select a **Target database** linked to that website. Every linked database is available, including secondary databases. Changing the website or SQL dump clears the previous database choice. LiteCP uses a temporary database account for the import.
 
 The target website and selected database must be empty. Files only does not import or modify a database. Create and link a managed database first if the target has none. After import, update the restored application's database name, username and password as needed.
 
