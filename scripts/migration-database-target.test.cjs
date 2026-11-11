@@ -18,7 +18,7 @@ function fixture(databases, options = {}) {
     });
     return nodes.get(key);
   };
-  const state = {databases};
+  const state = {databases, sites:[{id:'site-one',domain:'one.example.test'},{id:'site-two',domain:'two.example.test'}]};
   const form = node('#migrationImportForm');
   form.elements = {
     siteId: node('#migrationSite'), sql: node('#migrationSQL'),
@@ -134,7 +134,7 @@ test('import submits the explicitly selected secondary database without credenti
   await ui.submit();
   assert.deepEqual(ui.requests, [{url: '/api/migrations/import', method: 'POST', body: {
     id: 'stage-one', siteId: 'site-one', root: 'account/homedir/public_html',
-    sql: 'mysql/source.sql', databaseID: 'secondary'
+    sql: 'mysql/source.sql', databaseID: 'secondary', confirmDomain: 'one.example.test'
   }}]);
   assert.match(ui.confirmations[0], /secondary_db/);
   assert.equal(ui.refreshes(), 1);

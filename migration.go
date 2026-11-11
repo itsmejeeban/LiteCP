@@ -432,9 +432,9 @@ func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Request, freeBytes func(context.Context, string) (int64, error)) {
 	var input struct {
-		ID, SiteID, Root, SQL string
-		Password              string // Accepted for compatibility with older API clients.
-		DatabaseID            string `json:"databaseId"`
+		ID, SiteID, Root, SQL, ConfirmDomain string
+		Password                             string // Accepted for compatibility with older API clients.
+		DatabaseID                           string `json:"databaseId"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
@@ -467,15 +467,15 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		}
 
 	}
-	// Only import into an empty, explicitly chosen site. Existing installations
-	// must be backed up and cleared by the administrator, never overwritten here.
+	// Older clients may still import into empty websites. Replacing existing
+	// content requires confirmation tied to the selected domain.
 	entries, err := os.ReadDir(site.Root)
 	if err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
-	if len(entries) != 0 {
-		writeError(w, 409, "Destination website must be empty. Move its placeholder or existing files to Trash first.")
+	if len(entries) != 0 && input.ConfirmDomain != site.Domain {
+		writeError(w, 409, "Destination website must be empty unless you confirm replacement of its current files.")
 		return
 	}
 	uid, gid, err := a.system.siteFileOwnership(*site)
@@ -545,12 +545,17 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	keepStaging = true
-	if err := os.RemoveAll(previousRoot); err != nil {
-		writeError(w, 500, "Migration was activated, but the previous empty document root could not be removed: "+err.Error())
-		return
+	recoveryNote := ""
+	if len(entries) == 0 {
+		// Remove only the empty directory. Preserve files added during staging.
+		if err := os.Remove(previousRoot); err != nil {
+			recoveryNote = " Previous website files were retained at " + previousRoot + "."
+		}
+	} else {
+		recoveryNote = " Previous website files were retained at " + previousRoot + "."
 	}
 	a.store.AddActivity("Website migration imported", preview.Platform+" â†’ "+site.Domain, "success")
-	writeJSON(w, 200, map[string]any{"ok": true, "note": "Website files were activated atomically. Update application database credentials and paths using the file manager. SSL, DNS, email accounts, server settings and arbitrary source cron jobs are not imported. Test the site before changing DNS. Delete the staged archive when verified."})
+	writeJSON(w, 200, map[string]any{"ok": true, "note": "Website files were activated atomically. Update application database credentials and paths using the file manager. SSL, DNS, email accounts, server settings and arbitrary source cron jobs are not imported. Test the site before changing DNS. Delete the staged archive when verified." + recoveryNote})
 }
 
 func (a *App) migrationDelete(w http.ResponseWriter, r *http.Request) {

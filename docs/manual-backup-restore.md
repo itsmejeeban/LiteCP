@@ -18,6 +18,6 @@ Validation: nested ZIP fixtures, hidden files, SQL discovery, traversal/symlink/
 
 In Migration > Restore via Folder, inspect an archive and choose the target website. For database restoration, select the source SQL dump, then select a **Target database** linked to that website. Every linked database is available, including secondary databases. Changing the website or SQL dump clears the previous database choice. LiteCP uses a temporary database account for the import.
 
-The target website and selected database must be empty. Files only does not import or modify a database. Create and link a managed database first if the target has none. After import, update the restored application's database name, username and password as needed.
+After confirmation, the restore replaces the target website files and retains the previous document root for recovery. The selected database must be empty. Files only does not import or modify a database. Create and link a managed database first if the target has none. After import, update the restored application's database name, username and password as needed.
 
 API clients can send `databaseID` in `POST /api/migrations/import`. The server rejects unknown or foreign database IDs before staging files. For older clients that omit the ID, a single linked database remains supported; a website with multiple linked databases requires an explicit ID. Existing empty-target and restricted SQL-user safeguards still apply.

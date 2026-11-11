@@ -41,7 +41,7 @@
     <form id="migrationImportForm" class="panel compact-form-card"><div class="panel-head"><div><h2>2. Review and import</h2><p id="migrationSummary">Upload an archive first.</p></div></div><div class="settings-body">
     ${field("Target website", '<select name="siteId" id="migrationSite" required></select>')}${field("Website root in archive", '<select name="root" id="migrationRoot" required></select>')}
     ${field("SQL dump (optional)", '<select name="sql" id="migrationSQL"><option value="">Files only</option></select>')}${field("Target database", '<select name="databaseID" id="migrationTargetDatabase" aria-describedby="migrationDatabaseHint" disabled><option value="">Select target database</option></select><small id="migrationDatabaseHint" role="status">Choose a SQL dump to import a database.</small>')}
-    <p class="feature-note">Create the target website first and move its placeholder to Trash. Files are staged before an atomic document-root switch. SQL imports use a temporary account restricted to the selected database; a failed import resets the previously empty managed database.</p>
+    <p class="feature-note">Create the target website first. The import replaces its website files and keeps the previous files for recovery. SQL imports use a temporary account restricted to the selected database; a failed import resets the previously empty managed database.</p>
     <div data-migration-import-progress hidden><progress aria-label="Importing website backup" style="width:100%"></progress></div><button class="button button-primary" type="submit" id="migrationImportButton" disabled>Import selected website</button><button class="button button-ghost" type="button" id="migrationDiscardButton" disabled>Delete staged archive</button></div></form></div>
     <div class="info-callout"><div><strong>Website files and a selected database only</strong><p>Update application credentials and paths after import. Mail accounts, DNS, SSL, server settings, addon sites and arbitrary cron jobs are not imported. Verify the website before changing DNS.</p></div></div>${resultBox("migrationOutput")}`));
 
@@ -328,11 +328,14 @@
     const databaseID=sql?String(data.get("databaseID")||""):"";
     const database=sql?(cp.state()?.databases||[]).find(item=>item.id===databaseID&&item.siteId===siteId):null;
     if(sql&&!database){output("migrationOutput","Select a target database belonging to the selected website.");$("#migrationTargetDatabase").focus();return;}
-    const confirmation=sql?`Import website files and the selected SQL dump into the empty database "${database.name}"? Confirm that the target website and database are empty and unused.`:"Import website files into this empty target? Confirm that the target website is empty and unused.";
+    const site=(cp.state()?.sites||[]).find(item=>item.id===siteId);
+    if(!site){output("migrationOutput","Select a target website.");return;}
+    const databaseNote=sql?` The selected SQL dump will be imported into the empty database "${database.name}".`:"";
+    const confirmation=`Replace the website files for ${site.domain}? Previous files will be kept for recovery.${databaseNote}`;
     if(!await window.LiteCPDialogs.confirm(confirmation))return;
     await busy(form,async()=>{
       output("migrationOutput","Staging and validating the import... Keep this page open.");
-      const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId,root:data.get("root"),sql,databaseID}});
+      const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId,root:data.get("root"),sql,databaseID,confirmDomain:site.domain}});
       output("migrationOutput",result.note);await cp.refresh();
     });
   });

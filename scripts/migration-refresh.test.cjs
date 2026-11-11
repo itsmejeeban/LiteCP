@@ -99,7 +99,7 @@ test('import confirmation stays bound to the archive and target reviewed by the 
   const handler=featureSource.slice(start,featureSource.indexOf('  $("#migrationDiscardButton").addEventListener',start));
   let submit,confirm,captured;
   const form={target:'original-site',elements:{password:{value:'secret'}}};
-  const context=vm.createContext({$:()=>({addEventListener(type,fn){submit=fn;}}),preview:{id:'original-archive'},FormData:class{constructor(form){this.target=form.target;}get(key){return key==='siteId'?this.target:'';}},window:{LiteCPDialogs:{confirm:()=>new Promise(resolve=>{confirm=resolve;})}},output(){},cp:{api:async(url,options)=>{captured=options.body;return{note:'done'};},refresh:async()=>{}}});
+  const context=vm.createContext({$:()=>({addEventListener(type,fn){submit=fn;}}),preview:{id:'original-archive'},FormData:class{constructor(form){this.target=form.target;}get(key){return key==='siteId'?this.target:'';}},window:{LiteCPDialogs:{confirm:()=>new Promise(resolve=>{confirm=resolve;})}},output(){},cp:{state:()=>({sites:[{id:'original-site',domain:'original.example.test'}]}),api:async(url,options)=>{captured=options.body;return{note:'done'};},refresh:async()=>{}}});
   context.busy=async(form,action)=>action();vm.runInContext(handler,context);
   const pending=submit({preventDefault(){},currentTarget:form});
   context.preview={id:'other-archive'};form.target='other-site';confirm(true);await pending;await new Promise(resolve=>setImmediate(resolve));
