@@ -288,6 +288,24 @@ func resourceRuntimeGate(id string, blocked bool) error {
 	}
 	return nil
 }
+func resourceResetFailedWorkers(id string, run func(...string) (string, error)) error {
+	for _, kind := range []string{"php", "web"} {
+		unit := resourceUnit(id, kind)
+		// A newly installed unit may not be loaded yet. Only reset units
+		// that actually failed, so first activation can start clean workers.
+		state, err := run("show", unit, "--property=ActiveState", "--value")
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(state) == "failed" {
+			if _, err = run("reset-failed", unit); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func resourceRuntimeStart(p resourceRuntimePlan) error {
 	for _, kind := range []string{"php", "http"} {
 		path := resourceSocket(p.Site.ID, kind)
@@ -308,7 +326,9 @@ func resourceRuntimeStart(p resourceRuntimePlan) error {
 			return err
 		}
 	}
-	if err := resourceRun("systemctl", "reset-failed", resourceUnit(p.Site.ID, "php"), resourceUnit(p.Site.ID, "web")); err != nil {
+	if err := resourceResetFailedWorkers(p.Site.ID, func(args ...string) (string, error) {
+		return runCommand(context.Background(), 45*time.Second, "systemctl", args...)
+	}); err != nil {
 		return err
 	}
 	if err := resourceRun("systemctl", "start", resourceSliceName(p.Site.ID)); err != nil {

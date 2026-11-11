@@ -15,6 +15,45 @@ import (
 func nativeResourcePlan() resourceRuntimePlan {
 	return resourceRuntimePlan{Site: Site{ID: "audit-site", Domain: "audit.example.test", Root: "/home/litecp/audit.example.test/public_html", RuntimeUID: siteRuntimeID("audit-site"), RuntimeGID: siteRuntimeID("audit-site"), PHPVersion: "8.4", AppType: "regular"}, DataDir: "/var/lib/litecp", Policy: validResourcePolicy()}
 }
+
+func TestResourceResetFailedWorkers(t *testing.T) {
+	id := nativeResourcePlan().Site.ID
+	phpUnit, webUnit := resourceUnit(id, "php"), resourceUnit(id, "web")
+	resetError := fmt.Errorf("could not reset worker failure")
+	for _, tc := range []struct {
+		name       string
+		phpState   string
+		webState   string
+		resetUnit  string
+		resetError error
+	}{
+		{name: "first activation", phpState: "inactive\n", webState: "inactive\n"},
+		{name: "recovery", phpState: "active\n", webState: "failed\n", resetUnit: webUnit},
+		{name: "reset fails", phpState: "active\n", webState: "failed\n", resetUnit: webUnit, resetError: resetError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var resets []string
+			err := resourceResetFailedWorkers(id, func(args ...string) (string, error) {
+				switch strings.Join(args, " ") {
+				case "show " + phpUnit + " --property=ActiveState --value":
+					return tc.phpState, nil
+				case "show " + webUnit + " --property=ActiveState --value":
+					return tc.webState, nil
+				case "reset-failed " + webUnit:
+					resets = append(resets, webUnit)
+					return "", tc.resetError
+				default:
+					t.Fatalf("unexpected systemctl command %q", args)
+					return "", nil
+				}
+			})
+			if got := strings.Join(resets, " "); got != tc.resetUnit || err != tc.resetError {
+				t.Fatalf("reset %q, error %v; want reset %q, error %v", got, err, tc.resetUnit, tc.resetError)
+			}
+		})
+	}
+}
+
 func TestResourceFrontendWaitsForReloadedWorker(t *testing.T) {
 	site := nativeResourcePlan().Site
 	var requests atomic.Int32
