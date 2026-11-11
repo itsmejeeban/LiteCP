@@ -13,10 +13,11 @@
  }
  let checking=false,last=0,latest='',running=false,polling=false;
  function say(text){if(message)message.textContent=text;}
+ function syncInstall(){if(install){install.hidden=!latest;install.disabled=running||!latest;}}
  async function status(){
   if(!install||app.classList.contains('hidden')||polling)return;
   polling=true;
-  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();const wasRunning=running;running=result.state==='running';showProgress(result);if(wasRunning&&!running)window.dispatchEvent(new Event("litecp:update-settled"));if(wasRunning&&result.state==='success'){latest='';notice.classList.add('hidden');check(true);}if(result.state!=='idle')say(result.message||'LiteCP update is running…');install.disabled=running||!latest;}
+  try{const response=await fetch('/api/updates/status',{credentials:'same-origin',cache:'no-store'});if(!response.ok)return;const result=await response.json();const wasRunning=running;running=result.state==='running';showProgress(result);if(wasRunning&&!running)window.dispatchEvent(new Event("litecp:update-settled"));if(wasRunning&&result.state==='success'){latest='';notice.classList.add('hidden');check(true);}if(result.state!=='idle')say(result.message||'LiteCP update is running…');syncInstall();}
   catch{if(running)say('LiteCP is restarting. Reconnect and sign in again shortly.');}finally{polling=false;}
  }
  async function check(force=false){
@@ -32,8 +33,8 @@
    if(available){label.textContent=`LiteCP ${result.latest.replace(/^v/,'')} version available for update`;notice.href='#settings/update';}
    if(versions)versions.textContent=`Installed: ${result.current}${/^[a-f0-9]{7,40}$/i.test(result.build||'')?' (build '+result.build.slice(0,12)+')':''}${result.latest?' · Latest stable release: '+result.latest:''}`;
    if(!running)say(!result.checked?(result.message||'The release service is unavailable. Try again later.'):available?'A new LiteCP version is ready to install.':'No newer stable LiteCP release is available.');
-   if(install)install.disabled=running||!available;
-  }catch(error){say(error instanceof TypeError?'Could not reach the panel. Check your connection and the panel HTTPS certificate, then try again.':error.message);}
+   syncInstall();
+  }catch(error){latest='';notice.classList.toggle('hidden',true);syncInstall();say(error instanceof TypeError?'Could not reach the panel. Check your connection and the panel HTTPS certificate, then try again.':error.message);}
   finally{checking=false;if(checkButton)checkButton.disabled=false;}
  }
  checkButton?.addEventListener('click',()=>check(true));
@@ -41,6 +42,7 @@
   if(!latest||running)return;
   const selected=latest;
   if(!await window.LiteCPDialogs.confirm(`Install LiteCP ${selected}? The panel will restart and you may need to sign in again. Hosted websites remain online. Recovery copies from verified updates follow the retention limit in Restore Points.`,{title:'Update LiteCP',confirmText:'Update LiteCP'}))return;
+  if(selected!==latest||running)return;
   install.disabled=true;
   try{await window.LiteCP.api('/api/updates/install',{method:'POST',body:{version:selected}});running=true;showProgress({state:'running',completedStages:0});say('Starting the LiteCP update…');setTimeout(status,1500);}
   catch(error){say(error.message);install.disabled=false;}

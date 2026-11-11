@@ -19,6 +19,11 @@ type migrationCleanupResult struct {
 // Called only after explicit cleanup confirmation, under withAuth's mutation
 // lock. Keep job history, credentials, restored websites and recovery backups.
 func (a *App) cleanMigrationTemporaryFiles() (migrationCleanupResult, error) {
+	return a.migrationTemporaryFiles(false)
+}
+
+// A preview uses the cleanup eligibility rules without modifying files or jobs.
+func (a *App) migrationTemporaryFiles(preview bool) (migrationCleanupResult, error) {
 	result := migrationCleanupResult{Issues: []string{}}
 	liveParent := filepath.Join(a.system.dataDir, "live-migrations")
 	stageParent := filepath.Join(a.system.dataDir, "migrations")
@@ -56,6 +61,10 @@ func (a *App) cleanMigrationTemporaryFiles() (migrationCleanupResult, error) {
 		if err != nil || info.Mode()&os.ModeSymlink != 0 {
 			result.Issues = append(result.Issues, target+": cannot safely inspect temporary files")
 			return false
+		}
+		if preview {
+			result.RemovedPaths++
+			return true
 		}
 		if err = os.RemoveAll(target); err != nil {
 			result.Issues = append(result.Issues, target+": "+err.Error())
@@ -116,7 +125,7 @@ func (a *App) cleanMigrationTemporaryFiles() (migrationCleanupResult, error) {
 				ok = false
 			}
 		}
-		if !ok {
+		if !ok || preview {
 			continue
 		}
 		job.NativeReady, job.NativeBytes, job.Preview, job.Progress = false, 0, nil, nil

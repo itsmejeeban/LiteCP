@@ -203,12 +203,23 @@
   };
   $('#liveJobsCancelAll').onclick=async event=>{const button=event.currentTarget;if(!await window.LiteCPDialogs.confirm('Cancel all queued, running and pending-review migrations? Captured files and source credentials will be kept.'))return;button.disabled=true;try{const result=await cp.api('/api/live-migrations/cancel',{method:'POST',body:{action:'cancel-all',confirm:true}});await loadJobs();if(result.errors?.length)throw new Error(`${result.cancelled} cancelled. Some jobs could not be cancelled: ${result.errors.join('; ')}`);cp.showToast('Migrations cancelled',`${result.cancelled} migration job(s) cancelled. Running workers are stopping.`);}catch(error){cp.handleError(error);}finally{button.disabled=false;}};
   const cleanupButton=document.createElement('button');cleanupButton.type='button';cleanupButton.className='button button-danger';cleanupButton.textContent='Clean migration temporary files';$('#liveJobsRefresh').before(cleanupButton);
+  let cleanupCountRequest=0;
+  async function refreshCleanupCount(){
+    const request=++cleanupCountRequest;
+    try{
+      const result=await cp.api('/api/live-migrations?cleanupPreview=1');
+      if(request===cleanupCountRequest&&Number.isSafeInteger(result.paths)&&result.paths>=0)cleanupButton.textContent=`Clean migration temporary files (${result.paths} paths)`;
+    }catch{if(request===cleanupCountRequest)cleanupButton.textContent='Clean migration temporary files (count unavailable)';}
+  }
+  $('#liveJobsRefresh').addEventListener('click',refreshCleanupCount);
+  document.addEventListener('migration-section-change',refreshCleanupCount);
   cleanupButton.onclick=async()=>{
     if(!await window.LiteCPDialogs.confirm('Delete temporary capture archives, extracted folders for stopped migrations, and unused uploaded migration stages? Restored websites, databases, backups, history, credentials and active migrations are kept.'))return;
     cleanupButton.disabled=true;
     try{
       const result=await cp.api('/api/live-migrations',{method:'POST',body:{action:'cleanup',confirm:true}});
       await loadJobs();
+      await refreshCleanupCount();
       const summary=result.removedPaths+' temporary paths removed; '+result.cleaned+' stopped jobs cleaned; '+result.stages+' additional staging folders cleaned. '+result.skipped+' protected or unrecognized entries kept.';
       cp.showToast(result.issues?.length?'Migration cleanup needs attention':'Migration cleanup complete',summary+(result.issues?.length?' '+result.issues.join(' | '):' Refresh Disk Usages to rescan storage.'),result.issues?.length?'error':'success');
     }catch(error){cp.handleError(error);}finally{cleanupButton.disabled=false;}

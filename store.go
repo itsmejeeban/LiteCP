@@ -13,28 +13,28 @@ import (
 )
 
 type Site struct {
-	Captcha        *CaptchaPolicy         `json:"captcha,omitempty"`
-	Redis          *WebsiteRedis          `json:"redis,omitempty"`
-	DNSZone        *WebsiteDNSZone        `json:"dnsZone,omitempty"`
-	ResourceLimits *WebsiteResourceLimits `json:"resourceLimits,omitempty"`
-	PHPSettings    map[string]string      `json:"phpSettings,omitempty"`
-	Suspended      bool                   `json:"suspended,omitempty"`
-	Application    *ApplicationHosting    `json:"application,omitempty"`
-	ID             string                 `json:"id"`
-	Domain         string                 `json:"domain"`
-	Root           string                 `json:"root"`
-	AppType        string                 `json:"appType"`
-	ApacheAuthRoutes []string             `json:"apacheAuthRoutes,omitempty"`
-	AppVersion     string                 `json:"appVersion,omitempty"`
-	PHPVersion     string                 `json:"phpVersion"`
-	RuntimeUID     int                    `json:"runtimeUid,omitempty"`
-	RuntimeGID     int                    `json:"runtimeGid,omitempty"`
-	SSL            bool                   `json:"ssl"`
-	Cron           bool                   `json:"cron"`
-	WAFMode        string                 `json:"wafMode,omitempty"`
-	Database       string                 `json:"database,omitempty"`
-	DBUser         string                 `json:"dbUser,omitempty"`
-	CreatedAt      time.Time              `json:"createdAt"`
+	Captcha          *CaptchaPolicy         `json:"captcha,omitempty"`
+	Redis            *WebsiteRedis          `json:"redis,omitempty"`
+	DNSZone          *WebsiteDNSZone        `json:"dnsZone,omitempty"`
+	ResourceLimits   *WebsiteResourceLimits `json:"resourceLimits,omitempty"`
+	PHPSettings      map[string]string      `json:"phpSettings,omitempty"`
+	Suspended        bool                   `json:"suspended,omitempty"`
+	Application      *ApplicationHosting    `json:"application,omitempty"`
+	ID               string                 `json:"id"`
+	Domain           string                 `json:"domain"`
+	Root             string                 `json:"root"`
+	AppType          string                 `json:"appType"`
+	ApacheAuthRoutes []string               `json:"apacheAuthRoutes,omitempty"`
+	AppVersion       string                 `json:"appVersion,omitempty"`
+	PHPVersion       string                 `json:"phpVersion"`
+	RuntimeUID       int                    `json:"runtimeUid,omitempty"`
+	RuntimeGID       int                    `json:"runtimeGid,omitempty"`
+	SSL              bool                   `json:"ssl"`
+	Cron             bool                   `json:"cron"`
+	WAFMode          string                 `json:"wafMode,omitempty"`
+	Database         string                 `json:"database,omitempty"`
+	DBUser           string                 `json:"dbUser,omitempty"`
+	CreatedAt        time.Time              `json:"createdAt"`
 
 	// Provisioning markers are request-scoped and never persisted. They allow
 	// the API to remove only files it created if durable state saving fails.
@@ -160,7 +160,7 @@ type Config struct {
 }
 
 type PublicState struct {
-	FTPAccountCount *int `json:"ftpAccountCount"`
+	FTPAccountCount    *int                `json:"ftpAccountCount"`
 	AccessRole         string              `json:"accessRole,omitempty"`
 	Version            string              `json:"version"`
 	Username           string              `json:"username"`

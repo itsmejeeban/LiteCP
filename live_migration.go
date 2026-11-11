@@ -412,6 +412,15 @@ func (a *App) liveRemote(ctx context.Context, source LiveSource, root, mode, acc
 
 func (a *App) liveMigrations(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
+		if r.URL.Query().Get("cleanupPreview") == "1" {
+			result, err := a.migrationTemporaryFiles(true)
+			if err != nil {
+				writeError(w, 500, "Could not count migration temporary paths.")
+				return
+			}
+			writeJSON(w, 200, map[string]int{"paths": result.RemovedPaths})
+			return
+		}
 		if id := r.URL.Query().Get("id"); id != "" {
 			job, err := a.loadLiveJob(id)
 			if err != nil {

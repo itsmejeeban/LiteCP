@@ -93,6 +93,10 @@ func TestMigrationCleanupRemovesOnlyStoppedTemporaryData(t *testing.T) {
 	write(filepath.Join(stages, uploadID, "files", "index.php"), "upload")
 	write(filepath.Join(stages, "unrecognized", "important.txt"), "keep")
 	write(filepath.Join(app.system.dataDir, "website", "index.php"), "live website")
+	preview, err := app.migrationTemporaryFiles(true)
+	if err != nil || preview.RemovedPaths != 6 {
+		t.Fatalf("unexpected cleanup preview: %+v (%v)", preview, err)
+	}
 	result, err := app.cleanMigrationTemporaryFiles()
 	if err != nil {
 		t.Fatal(err)

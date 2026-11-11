@@ -347,10 +347,7 @@ svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .option-card { padding: 13px; margin: 9px 0; border: 1px solid var(--line); border-radius: 9px; background: #fcfdfd; }
 .option-card:has(input:checked) { border-color: #bfe3db; background: #f6fcfa; }
 .option-card label { display: flex; gap: 11px; cursor: pointer; }
-.option-card input { position: absolute; opacity: 0; pointer-events: none; }
-.custom-check { width: 21px; height: 21px; flex: 0 0 auto; border: 1px solid #cbd8d6; border-radius: 6px; display: grid; place-items: center; color: transparent; background: white; }
-.custom-check svg { width: 14px; }
-.option-card input:checked + .custom-check { background: var(--teal); color: white; border-color: var(--teal); }
+.option-card input[type="checkbox"] { width: 18px; height: 18px; flex: 0 0 auto; margin: 0; cursor: pointer; }
 .option-card label > span:last-child { display: flex; flex-direction: column; }
 .option-card strong { font-size: 10px; }
 .option-card small { color: var(--muted); font-size: 8px; margin-top: 4px; line-height: 1.5; }
