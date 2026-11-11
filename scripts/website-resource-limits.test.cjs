@@ -16,18 +16,21 @@ function panel(hash='',options={} ){
  const api=async(url,request)=>{
   if(request){
    mutations.push({...request,url});
-   if(url.endsWith('/bulk')){
-    const missing=state.sites.filter(site=>!rows.some(row=>row.id===site.id));
-    rows=[...rows,...missing.map(site=>({...site,settings:{...request.body},usage:{}}))];
-    return {created:missing.length,skipped:state.sites.length-missing.length};
-   }
-   rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];
+   const id=new URL(url,'https://panel.example.test').searchParams.get('siteId');
+   if(id===options.failSite&&request.method==='PUT')throw new Error('Runtime unavailable');
+   if(options.manageRows){
+    rows=rows.filter(row=>row.id!==id);
+    if(request.method==='PUT')rows.push({...state.sites.find(site=>site.id===id),settings:request.body,usage:{}});
+   }else rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];
    return {state:options.resultState||'Active',enforced:options.resultEnforced??true};
   }
-  if(url.includes('?'))return {settings:options.newSite?null:settings,state:options.enabled?'Active':'Disabled',capabilities:{ready:true,prerequisites:[]}};
+  if(url.includes('?')){
+   const id=new URL(url,'https://panel.example.test').searchParams.get('siteId');
+   return {settings:options.manageRows?rows.find(row=>row.id===id)?.settings:options.newSite?null:settings,state:options.enabled?'Active':'Disabled',capabilities:{ready:true,prerequisites:[]}};
+  }
   return {items:rows,updatedAt:new Date().toISOString()};
  };
- vm.runInNewContext(script,{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},window:{LiteCP:{escapeHTML:String,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
+ vm.runInNewContext(script,{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},URL,window:{LiteCPDialogs:{confirm:async()=>options.confirm??true},LiteCP:{escapeHTML:String,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
  return {page,mutations,open:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate)},save:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate);await page.querySelector('[data-editor]').onsubmit({preventDefault(){}})}};
 }
 test('saving a one-page resource draft preserves disabled pagination',async()=>{
@@ -90,21 +93,29 @@ test('single and bulk creation prefill the same editable resource defaults',asyn
  assert.equal(ui.page.querySelector('[data-bulk-details]').hidden,false);
 });
 
-test('bulk creation submits an editable draft once and refreshes the independent website rows',async()=>{
+test('bulk creation enables existing drafts and new websites using their respective values',async()=>{
  const sites=[{id:'qa',domain:'qa.example.test'},{id:'second',domain:'second.example.test'}];
- const ui=panel('',{sites,rows:[{...sites[0],settings:{cpuPercent:25},usage:{}}]});
+ const ui=panel('',{sites,manageRows:true,rows:[{...sites[0],settings:{enabled:false,cpuPercent:25},usage:{}}]});
  const editor=ui.page.querySelector('[data-editor]');
  ui.page.querySelector('[data-create-all]').onclick();
  editor.elements.memoryMiB.value='768';
- editor.elements.enabled.checked=true;
  await editor.onsubmit({preventDefault(){}});
- assert.equal(ui.mutations.length,1);
- assert.equal(ui.mutations[0].url,'/api/sites/resource-limits/bulk');
- assert.equal(ui.mutations[0].method,'POST');
+ assert.deepEqual(ui.mutations.map(x=>[x.url,x.method,x.body.enabled]),sites.map(x=>['/api/sites/resource-limits?siteId='+x.id,'PUT',true]));
+ assert.equal(ui.mutations[0].body.cpuPercent,25);
+ assert.equal(ui.mutations[1].body.memoryMiB,768);
+ assert.match(ui.page.querySelector('[data-status]').textContent,/Enabled: 2 · Skipped: 0 · Failed: 0/);
+});
+
+test('bulk removal confirms, disables active policies first, and preserves failed policies',async()=>{
+ const sites=[{id:'qa',domain:'qa.example.test'},{id:'second',domain:'second.example.test'},{id:'draft',domain:'draft.example.test'}];
+ const rows=sites.map(site=>({...site,settings:{enabled:site.id!=='draft',cpuPercent:25},usage:{}}));
+ const cancelled=panel('',{sites,rows,manageRows:true,confirm:false});
+ await cancelled.page.querySelector('[data-remove-all]').onclick();
+ assert.equal(cancelled.mutations.length,0);
+ const ui=panel('',{sites,rows,manageRows:true,failSite:'second'});
+ await ui.page.querySelector('[data-remove-all]').onclick();
+ assert.deepEqual(ui.mutations.map(x=>[x.url.split('=').at(-1),x.method]),[['qa','PUT'],['qa','DELETE'],['second','PUT'],['draft','DELETE']]);
  assert.equal(ui.mutations[0].body.enabled,false);
- assert.equal(ui.mutations[0].body.memoryMiB,768);
- assert.match(ui.page.querySelector('[data-status]').textContent,/Created 1 resource limit\. Skipped 1 website/);
- const rows=ui.page.querySelector('[data-resources]').innerHTML;
- assert.match(rows,/qa\.example\.test.*25%/);
- assert.match(rows,/second\.example\.test.*data-edit-resource="second"/);
+ assert.match(ui.page.querySelector('[data-status]').textContent,/Removed: 2.*Failed: 1.*second.example.test/);
+ assert.match(ui.page.querySelector('[data-resources]').innerHTML,/second.example.test/);
 });

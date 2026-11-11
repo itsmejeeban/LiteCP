@@ -3,7 +3,7 @@
  const cp=window.LiteCP,esc=cp.escapeHTML,page=document.createElement('section');
  page.className='page';page.dataset.pageView='website-resource-limits';
  if(location.hash==='#website-resource-limits')page.classList.add('active');
- page.innerHTML=`<div class="page-heading"><h1>Resource Limit</h1></div><article class="panel"><form class="settings-body website-tool-picker" data-picker><label class="field"><span>Website</span><select required aria-label="Website for resource limits"></select></label><button class="button button-primary" data-create-one>Create resource limit</button><button type="button" class="button button-secondary" data-create-all>Create resource limits for all websites</button></form><form class="settings-body" data-editor hidden><h2 data-editor-title></h2><p data-bulk-details hidden>These values are copied to every website without saved limits. Each website gets its own editable draft with enforcement disabled.</p><div data-site-details><p data-capabilities role="status"></p><label class="resource-enforcement-toggle"><input name="enabled" type="checkbox"><span>Enable resource enforcement</span></label><p>Enabled native PHP/static websites use a dedicated runtime. CPU exhaustion for 10 seconds, memory OOM or disk exhaustion blocks only this website. Recovery retries every five minutes. Unsupported runtimes remain unavailable.</p><p data-runtime-status role="status"></p><details><summary>Violation history</summary><ul data-history></ul></details></div><div class="form-grid"><label class="field">CPU (% of one core)<input name="cpuPercent" type="number" min="1" max="102400" step="0.1" value="100" required></label><label class="field">Memory (MiB)<input name="memoryMiB" type="number" min="32" max="1073741824" value="512" required></label><label class="field">Disk (MiB)<input name="diskMiB" type="number" min="1" max="1099511627776" value="10240" required></label></div><details><summary>Advanced settings</summary><div class="form-grid"><label class="field">Process limit<input name="tasks" type="number" min="8" max="1048576" value="64" required></label><label class="field">Concurrent requests<input name="concurrentRequests" type="number" min="1" max="65535" value="8" required></label><label class="field">Read limit (MiB/s; 0 = unrestricted)<input name="readMiBPerSecond" type="number" min="0" value="0" required></label><label class="field">Write limit (MiB/s; 0 = unrestricted)<input name="writeMiBPerSecond" type="number" min="0" value="0" required></label></div></details><p>Disk allowance includes all website-home folders, local backups, Trash and protected runtime temporary files. Shared MySQL, mail and FTP processing are outside CPU and memory isolation. Existing application-container safety caps remain in place. Disable enforcement before editing allowance values, then enable it again.</p><div class="form-actions"><button class="button button-primary" data-save>Create resource limit</button><button type="button" class="button button-secondary" data-disable hidden>Disable limits</button><button type="button" class="button button-secondary" data-cancel>Cancel</button></div></form><p class="settings-body" data-status role="status"></p></article>`;
+ page.innerHTML=`<div class="page-heading"><h1>Resource Limit</h1></div><article class="panel"><form class="settings-body website-tool-picker" data-picker><label class="field"><span>Website</span><select required aria-label="Website for resource limits"></select></label><button class="button button-primary" data-create-one>Create resource limit</button><button type="button" class="button button-secondary" data-create-all>Create resource limits for all websites</button><button type="button" class="button button-danger" data-remove-all>Remove resource limits from all websites</button></form><form class="settings-body" data-editor hidden><h2 data-editor-title></h2><p data-bulk-details hidden>These values apply to websites without saved limits. Websites with saved limits use their existing values. LiteCP attempts to enable enforcement for each website.</p><div data-site-details><p data-capabilities role="status"></p><label class="resource-enforcement-toggle"><input name="enabled" type="checkbox"><span>Enable resource enforcement</span></label><p>Enabled native PHP/static websites use a dedicated runtime. CPU exhaustion for 10 seconds, memory OOM or disk exhaustion blocks only this website. Recovery retries every five minutes. Unsupported runtimes remain unavailable.</p><p data-runtime-status role="status"></p><details><summary>Violation history</summary><ul data-history></ul></details></div><div class="form-grid"><label class="field">CPU (% of one core)<input name="cpuPercent" type="number" min="1" max="102400" step="0.1" value="100" required></label><label class="field">Memory (MiB)<input name="memoryMiB" type="number" min="32" max="1073741824" value="512" required></label><label class="field">Disk (MiB)<input name="diskMiB" type="number" min="1" max="1099511627776" value="10240" required></label></div><details><summary>Advanced settings</summary><div class="form-grid"><label class="field">Process limit<input name="tasks" type="number" min="8" max="1048576" value="64" required></label><label class="field">Concurrent requests<input name="concurrentRequests" type="number" min="1" max="65535" value="8" required></label><label class="field">Read limit (MiB/s; 0 = unrestricted)<input name="readMiBPerSecond" type="number" min="0" value="0" required></label><label class="field">Write limit (MiB/s; 0 = unrestricted)<input name="writeMiBPerSecond" type="number" min="0" value="0" required></label></div></details><p>Disk allowance includes all website-home folders, local backups, Trash and protected runtime temporary files. Shared MySQL, mail and FTP processing are outside CPU and memory isolation. Existing application-container safety caps remain in place. Disable enforcement before editing allowance values, then enable it again.</p><div class="form-actions"><button class="button button-primary" data-save>Create resource limit</button><button type="button" class="button button-secondary" data-disable hidden>Disable limits</button><button type="button" class="button button-secondary" data-cancel>Cancel</button></div></form><p class="settings-body" data-status role="status"></p></article>`;
  page.insertAdjacentHTML('beforeend',`<article class="panel"><div class="panel-head"><h2>Website resource limits</h2><button type="button" class="button button-secondary" data-refresh>Refresh</button></div><div class="settings-body"><p data-live-status role="status"></p><button type="button" class="button button-primary" data-sign-in-again hidden>Sign in again</button><p>Observed website-owned processes only; shared services and remapped container users are excluded. CPU and memory refresh every 3 seconds; disk every 60 seconds. Enabled rows use aggregate cgroup counters and project-quota usage. Disabled drafts show observed website-owned processes only.</p><div class="table-scroll"><table class="data-table"><thead><tr><th>Website</th><th scope="col" data-sort-column="status"><button type="button" data-sort-key="status">Status <span aria-hidden="true">&#8597;</span></button></th><th scope="col" data-sort-column="cpuPercent"><button type="button" data-sort-key="cpuPercent">CPU / limit <span aria-hidden="true">&#8597;</span></button></th><th scope="col" data-sort-column="memoryMiB"><button type="button" data-sort-key="memoryMiB">Memory / limit <span aria-hidden="true">&#8597;</span></button></th><th scope="col" data-sort-column="diskMiB"><button type="button" data-sort-key="diskMiB">Disk / limit <span aria-hidden="true">&#8597;</span></button></th><th scope="col" data-sort-column="tasks"><button type="button" data-sort-key="tasks">Processes / limit <span aria-hidden="true">&#8597;</span></button></th><th>Action</th></tr></thead><tbody data-resources></tbody></table></div><div class="button-row"><label>Per page <select data-page-size><option>10</option><option>25</option><option>50</option><option>100</option></select></label><button type="button" class="button button-secondary" data-previous>Previous</button><span data-count></span><button type="button" class="button button-secondary" data-next>Next</button></div></div></article>`);
  page.insertAdjacentHTML('beforeend',`<article class="panel" data-usage-panel hidden><div class="panel-head"><h2 data-usage-title></h2><button type="button" class="button button-secondary" data-usage-close>Close</button></div><div class="settings-body"><label class="field">History range<select data-usage-range><option value="minute">Minute-wise · Last hour</option><option value="hour">Hour-wise · Last 24 hours</option><option value="day">Day view · Last 24 hours by minute</option><option value="week">Week view · Daily peaks</option><option value="month">Month view · Daily peaks</option></select></label><p data-usage-status role="status"></p><div class="form-grid" data-usage-charts></div></div></article>`);
  document.querySelector('.main-content').append(page);
@@ -16,7 +16,7 @@
   const old=select.value,sites=cp.state()?.sites||[];
   select.innerHTML=sites.map(site=>`<option value="${esc(site.id)}">${esc(site.domain)}</option>`).join('');
   if(sites.some(site=>site.id===old))select.value=old;
-  for(const name of ['[data-create-one]','[data-create-all]'])page.querySelector(name).disabled=busy||!sites.length;
+  for(const name of ['[data-create-one]','[data-create-all]','[data-remove-all]'])page.querySelector(name).disabled=busy||!sites.length;
   if(active&&!sites.some(site=>site.id===active))closeEditor();
  }
  function closeEditor(){generation++;active='';bulk=false;editor.hidden=true;}
@@ -31,7 +31,7 @@
   $('[data-site-details]').hidden=isBulk;
   $('[data-bulk-details]').hidden=!isBulk;
   $('[data-disable]').hidden=!settings?.enabled;
-  $('[data-save]').textContent=isBulk?'Create limits for all websites':settings?'Save changes':'Create resource limit';
+  $('[data-save]').textContent=isBulk?'Create and enable limits':settings?'Save changes':'Create resource limit';
   editor.hidden=false;
   status.textContent='';
  }
@@ -59,6 +59,50 @@
   closeEditor();
   showEditor('Create resource limits for all websites',true);
  };
+ async function applyToAll(defaults){
+  const sites=[...(cp.state()?.sites||[])];
+  const removing=defaults===null,verb=removing?'Removing':'Enabling';
+  let changed=0,skipped=0,remaining=0;
+  const failures=[];
+  for(const [index,site] of sites.entries()){
+   status.textContent=`${verb} limits for ${index+1} of ${sites.length} · ${site.domain}`;
+   const url=limitsURL+'?siteId='+encodeURIComponent(site.id);
+   try{
+    const current=await cp.api(url);
+    if(removing&&!current.settings||!removing&&current.settings?.enabled&&current.enforced&&current.state==='Active'){
+     skipped++;
+     continue;
+    }
+    if(removing){
+     if(current.settings.enabled)await cp.api(url,{method:'PUT',body:{...current.settings,enabled:false}});
+     await cp.api(url,{method:'DELETE',body:{confirm:true}});
+    }else{
+     const result=await cp.api(url,{method:'PUT',body:{...(current.settings||defaults),enabled:true}});
+     if(!result.enforced||result.state!=='Active')throw new Error(runtimeStatus(result));
+    }
+    changed++;
+   }catch(error){
+    failures.push(site.domain+' — '+error.message);
+    if(error.status===401){remaining=sites.length-index-1;handleExpiredSession();break;}
+   }
+  }
+  status.textContent=`${removing?'Removed':'Enabled'}: ${changed} · Skipped: ${skipped} · Failed: ${failures.length}`
+   +(remaining?` · Unattempted: ${remaining}`:'')+(failures.length?' · '+failures.join(' | '):'');
+  listPage=1;
+ }
+ page.querySelector('[data-remove-all]').onclick=async()=>{
+  if(busy||!cp.state()?.sites?.length)return;
+  busy=true;
+  render();
+  try{
+   if(!await window.LiteCPDialogs.confirm('Disable enforcement and remove saved resource limits for every website?',{title:'Remove all resource limits',confirmText:'Remove all resource limits',danger:true}))return;
+   closeEditor();
+   await applyToAll(null);
+   if(listRequest)await listRequest;
+   await loadList();
+  }catch(error){status.textContent=error.message;}
+  finally{busy=false;render();renderList();}
+ };
  page.querySelector('[data-disable]').onclick=()=>{editor.elements.enabled.checked=false;editor.onsubmit({preventDefault(){}})};
  page.querySelector('[data-cancel]').onclick=closeEditor;
  editor.onsubmit=async e=>{
@@ -72,9 +116,7 @@
   for(const key of fields)body[key]=Number(editor.elements[key].value);
   try{
    if(bulk){
-    const {created,skipped}=await cp.api(limitsURL+'/bulk',{method:'POST',body});
-    status.textContent=`Created ${created} resource ${created===1?'limit':'limits'}. Skipped ${skipped} ${skipped===1?'website':'websites'} with existing settings.`;
-    listPage=1;
+    await applyToAll(body);
    }else{
     const result=await cp.api(limitsURL+'?siteId='+encodeURIComponent(active),{method:'PUT',body});
     if(!body.enabled)status.textContent='Resource settings saved. Enforcement is disabled.';
