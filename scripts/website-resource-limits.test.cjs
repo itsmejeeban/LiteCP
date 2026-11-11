@@ -6,9 +6,11 @@ function panel(hash='',options={} ){
   constructor(){this.children=new Map();this.dataset={};this.value='qa';this.hidden=false;this.disabled=false;this.classes=new Set();this.classList={add:(name)=>this.classes.add(name)};this.options=[{value:'qa'}];this.elements=Object.fromEntries(['cpuPercent','memoryMiB','diskMiB','tasks','concurrentRequests','readMiBPerSecond','writeMiBPerSecond'].map(k=>[k,{value:'64'}]));this.elements.enabled={checked:false,disabled:false};}
   querySelector(k){if(!this.children.has(k))this.children.set(k,new Element());return this.children.get(k)}
   querySelectorAll(){return [...this.children.values()].flatMap(x=>[x,...x.children.values()])}
+  addEventListener(type, listener){this["on"+type]=listener;}
   append(){}insertAdjacentHTML(){}reset(){for(const [name,value] of Object.entries(formDefaults))this.elements[name].value=value;}
  }
  const page=new Element(),root=new Element();let rows=options.rows||[],mutations=[];
+ for(const [selector,value] of [['[data-sort]',''],['[data-direction]','1'],['[data-page-size]','10']]) page.querySelector(selector).value=value;
  const settings={enabled:!!options.enabled,cpuPercent:25,memoryMiB:256,diskMiB:1024,tasks:64,concurrentRequests:8};
  const state={sites:options.sites||[{id:'qa',domain:'qa.example.test'}]};
  const api=async(url,request)=>{
