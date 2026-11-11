@@ -85,7 +85,7 @@ test('another archive can be inspected without deleting the retained selection',
   const handler=featureSource.slice(start,featureSource.indexOf('  $("#migrationImportForm").addEventListener',start));
   const nodes=new Map(),node=key=>{if(!nodes.has(key))nodes.set(key,{addEventListener(type,fn){this.submit=fn;}});return nodes.get(key);};
   let response={id:'new-stage',roots:['public_html'],databases:[],files:1,bytes:4,skipped:0};const calls=[],errors=[];
-  const context=vm.createContext({$:node,preview:{id:'retained'},FormData:class{},esc:String,output(){},notifyError:err=>errors.push(err.message),cp:{demo:false,formatBytes:String,api:async(url,options)=>{calls.push([url,options.method]);return response;}}});
+  const context=vm.createContext({$:node,preview:{id:'retained'},FormData:class{},esc:String,output(){},syncMigrationTargetDatabases(){},notifyError:err=>errors.push(err.message),cp:{demo:false,state:()=>({databases:[]}),formatBytes:String,api:async(url,options)=>{calls.push([url,options.method]);return response;}}});
   context.busy=async(form,action)=>{try{await action();}catch(err){errors.push(err.message);}};
   vm.runInContext(handler,context);await node('#migrationUploadForm').submit({preventDefault(){},currentTarget:{}});await new Promise(resolve=>setImmediate(resolve));
   assert.equal(context.preview.id,'new-stage');assert.deepEqual(calls,[['/api/migrations','POST']]);

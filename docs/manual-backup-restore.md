@@ -13,3 +13,11 @@ Uploaded and server-saved archives are retained independently of inspection stag
 Files and SQL are restored independently. A successful file restore does not prove that all databases or application dependencies were restored. Verify the application, permissions, configuration, database contents and backups before production use. The existing website and SQL import safeguards are reused; no production restoration is executed merely by uploading or inspecting.
 
 Validation: nested ZIP fixtures, hidden files, SQL discovery, traversal/symlink/layout rejection, unauthenticated endpoints, an empty temporary website restore, and rejection of a subsequent restore into that now-nonempty fixture. Live production SQL restoration is not exercised during deployment.
+
+## Restore via Folder database selection
+
+In Migration > Restore via Folder, inspect an archive and choose the target website. For database restoration, select the source SQL dump, then select a **Target database** linked to that website and enter that database's current password. Every linked database is available, including secondary databases. Changing the website or SQL dump clears the previous database choice and password.
+
+The target website and selected database must be empty. Files only does not import or modify a database. Create and link a managed database first if the target has none. After import, update the restored application's database name, username and password as needed.
+
+API clients can send `databaseID` in `POST /api/migrations/import`. The server rejects unknown or foreign database IDs before staging files. For older clients that omit the ID, a single linked database remains supported; a website with multiple linked databases requires an explicit ID. Existing empty-target and restricted SQL-user safeguards still apply.

@@ -398,12 +398,43 @@ func copyMigrationTree(ctx context.Context, sourceRoot string, site Site, uid, g
 	})
 }
 
+// Resolve only a database explicitly linked to the selected website. Older
+// callers without a database ID remain compatible when there is exactly one
+// linked target; multiple targets require an explicit choice.
+func migrationTargetDatabase(databases []ManagedDatabase, siteID, databaseID string) (*ManagedDatabase, error) {
+	var selected *ManagedDatabase
+	for _, database := range databases {
+		if database.SiteID != siteID {
+			continue
+		}
+		if databaseID != "" {
+			if database.ID == databaseID {
+				copy := database
+				return &copy, nil
+			}
+			continue
+		}
+		if selected != nil {
+			return nil, errors.New("This website has multiple databases. Select the target database for SQL import.")
+		}
+		copy := database
+		selected = &copy
+	}
+	if selected == nil {
+		return nil, errors.New("Select a managed target database linked to this website.")
+	}
+	return selected, nil
+}
+
 func (a *App) migrationImport(w http.ResponseWriter, r *http.Request) {
 	a.migrationImportWithSpaceProbe(w, r, migrationFreeBytes)
 }
 
 func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Request, freeBytes func(context.Context, string) (int64, error)) {
-	var input struct{ ID, SiteID, Root, SQL, Password string }
+	var input struct {
+		ID, SiteID, Root, SQL, Password string
+		DatabaseID                      string `json:"databaseId"`
+	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
 		return
@@ -425,6 +456,18 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 	if input.SQL != "" && !containsString(preview.Databases, input.SQL) {
 		writeError(w, 400, "Select an inspected SQL dump.")
 		return
+	}
+	var database *ManagedDatabase
+	if input.SQL != "" {
+		database, err = migrationTargetDatabase(a.store.PublicState().Databases, site.ID, input.DatabaseID)
+		if err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		if validateDatabasePassword(input.Password) != nil {
+			writeError(w, 400, "Enter the selected target database's current password.")
+			return
+		}
 	}
 	// Only import into an empty, explicitly chosen site. Existing installations
 	// must be backed up and cleared by the administrator, never overwritten here.
@@ -471,13 +514,8 @@ func (a *App) migrationImportWithSpaceProbe(w http.ResponseWriter, r *http.Reque
 		writeError(w, 502, "Migration staging failed; the live website was not changed: "+err.Error())
 		return
 	}
-	database := a.store.DatabaseBySiteID(site.ID)
 	databaseImported := false
 	if input.SQL != "" {
-		if database == nil || validateDatabasePassword(input.Password) != nil {
-			writeError(w, 400, "The target site needs a managed database and its current password.")
-			return
-		}
 		if err := a.system.importScopedSQL(r.Context(), filepath.Join(root, "files", filepath.FromSlash(input.SQL)), *database, input.Password); err != nil {
 			writeError(w, 502, "Database import failed and the empty target database was restored: "+err.Error())
 			return

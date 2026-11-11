@@ -40,7 +40,7 @@
     <button class="button button-primary" type="submit">Upload and inspect</button><button class="button button-ghost" type="button" id="migrationStagesRefresh">Show staged archives</button><div id="migrationStages"></div></div></form>
     <form id="migrationImportForm" class="panel compact-form-card"><div class="panel-head"><div><h2>2. Review and import</h2><p id="migrationSummary">Upload an archive first.</p></div></div><div class="settings-body">
     ${field("Target website", '<select name="siteId" id="migrationSite" required></select>')}${field("Website root in archive", '<select name="root" id="migrationRoot" required></select>')}
-    ${field("SQL dump (optional)", '<select name="sql" id="migrationSQL"><option value="">Files only</option></select>')}${field("Target database password", '<input name="password" type="password" autocomplete="current-password"><small>Required only for SQL import. The dump must omit CREATE DATABASE / USE statements for the old database.</small>')}
+    ${field("SQL dump (optional)", '<select name="sql" id="migrationSQL"><option value="">Files only</option></select>')}${field("Target database", '<select name="databaseID" id="migrationTargetDatabase" aria-describedby="migrationDatabaseHint" disabled><option value="">Select target database</option></select><small id="migrationDatabaseHint" role="status">Choose a SQL dump to import a database.</small>')}${field("Target database password", '<input name="password" type="password" autocomplete="current-password"><small>Required only for SQL import. The dump must omit CREATE DATABASE / USE statements for the old database.</small>')}
     <p class="feature-note">Create the target website first and move its placeholder to Trash. Files are staged before an atomic document-root switch. SQL imports use the target's restricted database user; a failed import resets the previously empty managed database.</p>
     <div data-migration-import-progress hidden><progress aria-label="Importing website backup" style="width:100%"></progress></div><button class="button button-primary" type="submit" id="migrationImportButton" disabled>Import selected website</button><button class="button button-ghost" type="button" id="migrationDiscardButton" disabled>Delete staged archive</button></div></form></div>
     <div class="info-callout"><div><strong>Website files and a selected database only</strong><p>Update application credentials and paths after import. Mail accounts, DNS, SSL, server settings, addon sites and arbitrary cron jobs are not imported. Verify the website before changing DNS.</p></div></div>${resultBox("migrationOutput")}`));
@@ -299,10 +299,48 @@
   });
   $("#wafTable").addEventListener("change",async event=>{const select=event.target.closest("[data-waf]");if(!select)return;if(select.value==="block"&&!await window.LiteCPDialogs.confirm("Enable blocking? Test legitimate WHMCS/WordPress requests in Detect mode first to identify false positives.")){render(cp.state());return;}select.disabled=true;try{await cp.api("/api/sites/waf",{method:"PUT",body:{id:select.dataset.waf,mode:select.value}});await cp.refresh();}catch(error){notifyError(error);render(cp.state());}});
   $("#scanForm").addEventListener("submit",event=>{event.preventDefault();busy(event.currentTarget,async()=>{if(cp.demo)throw new Error("ClamAV scans require the installed server.");output("scanOutput","Scanning... This may take several minutes. Do not submit another scan.");const data=new FormData(event.currentTarget);const result=await cp.api("/api/security/scan",{method:"POST",body:{siteId:data.get("siteId"),path:data.get("path")}});const report=$("#scanOutput");report.style.whiteSpace="normal";window.LiteCPScanReport.render(report,result.output||"",result.status);});});
+  function syncMigrationTargetDatabases(state = cp.state(), reset = false) {
+    const siteId = $("#migrationSite").value;
+    const target = $("#migrationTargetDatabase"), password = $("#migrationImportForm").elements.password;
+    const previous = target.value, siteChanged = target.dataset.siteId !== siteId;
+    const databases = (state?.databases || []).filter(database => database.siteId === siteId);
+    const hasSQL = !!$("#migrationSQL").value;
+    target.innerHTML = '<option value="">Select target database</option>' + databases.map(database => `<option value="${esc(database.id)}">${esc(database.name)}</option>`).join("");
+    const keep = !reset && !siteChanged && databases.some(database => database.id === previous);
+    target.value = keep ? previous : "";
+    target.dataset.siteId = siteId;
+    target.disabled = !hasSQL || !databases.length;
+    target.required = hasSQL;
+    password.disabled = !hasSQL || !databases.length;
+    password.required = hasSQL && databases.length > 0;
+    if (reset || siteChanged || previous && !keep || !hasSQL) password.value = "";
+    $("#migrationDatabaseHint").textContent = !hasSQL
+      ? "Choose a SQL dump to import a database. Files only leaves databases unchanged."
+      : !databases.length ? "No databases are linked to this website. Create one in Website Tools > Databases before importing SQL."
+      : "Select an empty database belonging to this website.";
+  }
+  $("#migrationSite").addEventListener("change", () => syncMigrationTargetDatabases(cp.state(), true));
+  $("#migrationSQL").addEventListener("change", () => syncMigrationTargetDatabases(cp.state(), true));
+  $("#migrationTargetDatabase").addEventListener("change", () => { $("#migrationImportForm").elements.password.value = ""; });
   $("#migrationUploadForm").addEventListener("submit",event=>{event.preventDefault();const form=event.currentTarget;busy(form,async()=>{if(cp.demo)throw new Error("Archive migration requires the installed server.");output("migrationOutput","Uploading and inspecting archive... No live website data is being changed.");const uploaded=await cp.api("/api/migrations",{method:"POST",body:new FormData(form)});if(!uploaded?.id||!Array.isArray(uploaded.roots)||!Array.isArray(uploaded.databases))throw new Error("Invalid archive inspection response. The previous selection was kept; refresh staged archives to retry.");preview=uploaded;$("#migrationSummary").textContent=`${preview.files} files | ${cp.formatBytes(preview.bytes)} | ${preview.skipped} links/special entries skipped`;
-    $("#migrationRoot").innerHTML=preview.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+preview.databases.map(file=>`<option>${esc(file)}</option>`).join("");$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Archive staged. Review the source root and target website. Staging ID: ${preview.id}`);});});
-  $("#migrationImportForm").addEventListener("submit",async event=>{event.preventDefault();if(!preview)return;const form=event.currentTarget,selected=preview,data=new FormData(form);if(!await window.LiteCPDialogs.confirm("Import files and the selected database into this empty target? Confirm that the target website and database are empty and unused."))return;busy(form,async()=>{output("migrationOutput","Staging and validating the import... Keep this page open.");const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId:data.get("siteId"),root:data.get("root"),sql:data.get("sql"),password:data.get("password")}});form.elements.password.value="";output("migrationOutput",result.note);await cp.refresh();});});
-  $("#migrationDiscardButton").addEventListener("click",async()=>{const selected=preview;if(!selected||!await window.LiteCPDialogs.confirm("Delete the staged migration archive? Imported website files will be kept."))return;try{await cp.api(`/api/migrations/${encodeURIComponent(selected.id)}`,{method:"DELETE"});if(preview?.id!==selected.id){output("migrationOutput","Previously selected staged archive deleted. Current selection was kept.");return;}preview=null;$("#migrationImportButton").disabled=true;$("#migrationDiscardButton").disabled=true;$("#migrationRoot").innerHTML="";$("#migrationSQL").innerHTML='<option value="">Files only</option>';$("#migrationSummary").textContent="Upload an archive first.";output("migrationOutput","Staged archive deleted.");}catch(error){notifyError(error);}});
+    $("#migrationRoot").innerHTML=preview.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+preview.databases.map(file=>`<option>${esc(file)}</option>`).join("");syncMigrationTargetDatabases(cp.state(), true);$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Archive staged. Review the source root and target website. Staging ID: ${preview.id}`);});});
+  $("#migrationImportForm").addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(!preview)return;
+    const form=event.currentTarget,selected=preview,data=new FormData(form);
+    const siteId=String(data.get("siteId")||""),sql=String(data.get("sql")||"");
+    const databaseID=sql?String(data.get("databaseID")||""):"";
+    const database=sql?(cp.state()?.databases||[]).find(item=>item.id===databaseID&&item.siteId===siteId):null;
+    if(sql&&!database){output("migrationOutput","Select a target database belonging to the selected website.");$("#migrationTargetDatabase").focus();return;}
+    const confirmation=sql?`Import website files and the selected SQL dump into the empty database "${database.name}"? Confirm that the target website and database are empty and unused.`:"Import website files into this empty target? Confirm that the target website is empty and unused.";
+    if(!await window.LiteCPDialogs.confirm(confirmation))return;
+    await busy(form,async()=>{
+      output("migrationOutput","Staging and validating the import... Keep this page open.");
+      const result=await cp.api("/api/migrations/import",{method:"POST",body:{id:selected.id,siteId,root:data.get("root"),sql,databaseID,password:sql?String(data.get("password")||""):""}});
+      form.elements.password.value="";output("migrationOutput",result.note);await cp.refresh();
+    });
+  });
+  $("#migrationDiscardButton").addEventListener("click",async()=>{const selected=preview;if(!selected||!await window.LiteCPDialogs.confirm("Delete the staged migration archive? Imported website files will be kept."))return;try{await cp.api(`/api/migrations/${encodeURIComponent(selected.id)}`,{method:"DELETE"});if(preview?.id!==selected.id){output("migrationOutput","Previously selected staged archive deleted. Current selection was kept.");return;}preview=null;$("#migrationImportButton").disabled=true;$("#migrationDiscardButton").disabled=true;$("#migrationRoot").innerHTML="";$("#migrationSQL").innerHTML='<option value="">Files only</option>';syncMigrationTargetDatabases(cp.state(), true);$("#migrationSummary").textContent="Upload an archive first.";output("migrationOutput","Staged archive deleted.");}catch(error){notifyError(error);}});
   $("#migrationStagesRefresh").addEventListener("click",async()=>{
     const button=$("#migrationStagesRefresh"),container=$("#migrationStages");
     if(button.disabled)return;
@@ -312,7 +350,7 @@
       container.replaceChildren();
       if(!result.items.length)container.textContent="No staged archives.";
       result.items.forEach(item=>{const button=document.createElement("button");button.type="button";button.className="button button-ghost";button.textContent=`${item.platform} | ${cp.formatDateTime(item.createdAt)} | ${cp.formatBytes(item.bytes)}`;
-        button.addEventListener("click",()=>{preview=item;$("#migrationRoot").innerHTML=item.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+item.databases.map(file=>`<option>${esc(file)}</option>`).join("");$("#migrationSummary").textContent=`${item.files} files | ${cp.formatBytes(item.bytes)} | ${item.skipped} skipped`;$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Staged archive selected: ${item.id}`);});container.append(button);});
+        button.addEventListener("click",()=>{preview=item;$("#migrationRoot").innerHTML=item.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+item.databases.map(file=>`<option>${esc(file)}</option>`).join("");syncMigrationTargetDatabases(cp.state(), true);$("#migrationSummary").textContent=`${item.files} files | ${cp.formatBytes(item.bytes)} | ${item.skipped} skipped`;$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput",`Staged archive selected: ${item.id}`);});container.append(button);});
     } catch(error){container.textContent=error.message;notifyError(error);}
     finally{button.disabled=false;}
   });
@@ -337,7 +375,7 @@
     const available=state.system.webmailAvailable && state.settings.emailHostingEnabled!==false;$("#webmailLink").classList.toggle("hidden",!available);$("#webmailLink").href=state.system.webmailUrl||`https://${location.hostname}:8444/`;
     $$('[data-mail-action="domain-delete"]').forEach(button=>{const domain=state.mailDomains.find(d=>d.id===button.dataset.id);if(domain)button.insertAdjacentHTML("beforebegin",`<button class="text-action" data-mail-enhancement data-dns-domain="${esc(domain.domain)}">DNS records</button>`);});
     $$('[data-service="mail"]').forEach(button=>{const service=state.system.services?.find(service=>service.key==='mail');button.disabled=state.settings.emailHostingEnabled===false||service?.state==='not installed'||(button.dataset.action==='start'&&service?.state==='running')||(button.dataset.action==='stop'&&service?.state==='stopped');});
-    ["scanSite","migrationSite"].forEach(id=>fillSiteSelect(id,state));
+    ["scanSite","migrationSite"].forEach(id=>fillSiteSelect(id,state));syncMigrationTargetDatabases(state);
     $("#scannerAvailability").textContent=state.system.antivirusAvailable?"ClamAV is available. Scans do not modify website files.":"ClamAV is not installed. Install antivirus support on the server before running a scan.";
     $('#scanForm button[type="submit"]').disabled=!state.system.antivirusAvailable;
     const wafAvailable=Boolean(state.system.wafEngine&&state.system.wafEngine!=="not installed");
@@ -348,7 +386,7 @@
     if(document.activeElement!==$("#resolversInput"))$("#resolversInput").value=(state.settings.resolvers||[]).join(", ");
   }
   window.LiteCPFeatures={render,activity,saveFirewall,firewallAction,askPassword,openEditor,editorValue:()=>editor?editor.getValue():$("#editorContent").value,
-    reviewMigration:value=>{preview=value;$("#migrationSummary").textContent=`${value.files} files | ${cp.formatBytes(value.bytes)} | ${value.skipped} skipped links/special entries`;$("#migrationRoot").innerHTML=value.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+value.databases.map(file=>`<option>${esc(file)}</option>`).join("");$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput","Live capture staged for website review. Native backup remains retained. Importing this website does not activate email, DNS, SSL or arbitrary source cron jobs.");},
+    reviewMigration:value=>{preview=value;$("#migrationSummary").textContent=`${value.files} files | ${cp.formatBytes(value.bytes)} | ${value.skipped} skipped links/special entries`;$("#migrationRoot").innerHTML=value.roots.map(root=>`<option>${esc(root)}</option>`).join("");$("#migrationSQL").innerHTML='<option value="">Files only</option>'+value.databases.map(file=>`<option>${esc(file)}</option>`).join("");syncMigrationTargetDatabases(cp.state(), true);$("#migrationImportButton").disabled=false;$("#migrationDiscardButton").disabled=false;output("migrationOutput","Live capture staged for website review. Native backup remains retained. Importing this website does not activate email, DNS, SSL or arbitrary source cron jobs.");},
     rememberListing:value=>{listing=value;},filterFiles:values=>{const query=$("#fileSearch").value.toLowerCase();const items=values.filter(item=>(!query||item.name.toLowerCase().includes(query))&&($("#showHidden").checked||!item.name.startsWith(".")));const sort=$("#fileSort").value;return items.sort((a,b)=>a.type!==b.type?(a.type==="directory"?-1:1):sort==="size"?b.size-a.size:sort==="modified"?new Date(b.modified)-new Date(a.modified):a.name.localeCompare(b.name));},
     navigate:id=>{if(id==="extensions")extensions();}
   };
