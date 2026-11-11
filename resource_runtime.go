@@ -232,8 +232,10 @@ func resourceRuntimeCommand(args []string) error {
 		return resourceRuntimeDisable(s, p)
 	case "retry":
 		st := resourceRuntimeRead(p.Site.ID)
-		if !st.Enforced || (st.State != "Resource blocked" && !(st.State == "Active" && time.Since(st.UpdatedAt) > 10*time.Second)) {
-			return fmt.Errorf("recovery is available only for a resource-blocked website")
+		stale := time.Since(st.UpdatedAt) >= 10*time.Second
+		interrupted := stale && (st.State == "Active" || st.State == "Recovering")
+		if !st.Enforced || (st.State != "Resource blocked" && !interrupted) {
+			return fmt.Errorf("recovery requires a verified resource boundary with a blocked website or stale monitor")
 		}
 		// Keep control requests separate from monitor-owned status. A monitor
 		// heartbeat must never overwrite an administrator's recovery request.
@@ -775,6 +777,10 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 	if !st.Enforced {
 		return fmt.Errorf("no verified active resource boundary")
 	}
+	if st.State == "Recovering" {
+		// An interrupted recovery must pass the blocked-site health checks again.
+		st.State = "Resource blocked"
+	}
 	if err := resourceRuntimeGate(p.Site.ID, true); err != nil {
 		return err
 	}
@@ -1035,10 +1041,16 @@ func resourceStatusForSite(site Site) resourceRuntimeStatus {
 	}
 	var plan resourceRuntimePlan
 	b, e := os.ReadFile(filepath.Join(resourceDirectory(site.ID), "plan.json"))
-	if e != nil || json.Unmarshal(b, &plan) != nil || plan.Site.ID != site.ID || plan.Site.Root != site.Root || plan.Site.Domain != site.Domain || plan.Site.PHPVersion != site.PHPVersion || plan.Site.RuntimeUID != site.RuntimeUID || plan.Policy != *site.ResourceLimits || time.Since(st.UpdatedAt) > 10*time.Second {
+	if e != nil || json.Unmarshal(b, &plan) != nil || plan.Site.ID != site.ID || plan.Site.Root != site.Root || plan.Site.Domain != site.Domain || plan.Site.PHPVersion != site.PHPVersion || plan.Site.RuntimeUID != site.RuntimeUID || plan.Policy != *site.ResourceLimits || time.Since(st.UpdatedAt) >= 10*time.Second {
 		st.Enforced = false
 		st.State = "Error"
 		st.Error = "Runtime policy is stale or requires revalidation"
+	}
+	if !st.Enforced {
+		st.State = "Error"
+		if st.Error == "" {
+			st.Error = "No verified resource boundary for the enabled policy"
+		}
 	}
 	return st
 }

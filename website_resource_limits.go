@@ -283,6 +283,7 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
+		w.Header().Set("Cache-Control", "no-store")
 		st := resourceStatusForSite(*site)
 		writeJSON(w, 200, map[string]any{"settings": site.ResourceLimits, "state": st.State, "enforced": st.Enforced && time.Since(st.UpdatedAt) < 10*time.Second, "capabilities": inspectResourceCapabilities(*site), "usage": st, "nextRecovery": st.NextRecovery, "history": resourceHistory(site.ID)})
 		return
@@ -347,7 +348,7 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		}
 		st := resourceStatusForSite(*site)
 		if !st.Enforced {
-			writeError(w, 409, "The saved boundary requires recovery or revalidation; unchanged settings were retained.")
+			writeError(w, 409, "The saved boundary requires recovery. Use Retry now in the resource limits list.")
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "state": st.State, "enforced": st.Enforced})
@@ -391,5 +392,7 @@ func (a *App) websiteResourceLimits(w http.ResponseWriter, r *http.Request) {
 		activity = "Resource enforcement disabled"
 	}
 	_ = a.store.AddActivity(activity, site.Domain, "info")
-	writeJSON(w, 200, map[string]any{"ok": true, "state": resourceRuntimeRead(site.ID).State, "enforced": p.Enabled})
+	site.ResourceLimits = &p
+	st := resourceStatusForSite(*site)
+	writeJSON(w, 200, map[string]any{"ok": true, "state": st.State, "enforced": st.Enforced, "error": st.Error})
 }

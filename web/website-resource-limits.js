@@ -8,7 +8,7 @@
  page.insertAdjacentHTML('beforeend',`<article class="panel" data-usage-panel hidden><div class="panel-head"><h2 data-usage-title></h2><button type="button" class="button button-secondary" data-usage-close>Close</button></div><div class="settings-body"><label class="field">History range<select data-usage-range><option value="minute">Minute-wise · Last hour</option><option value="hour">Hour-wise · Last 24 hours</option><option value="day">Day view · Last 24 hours by minute</option><option value="week">Week view · Daily peaks</option><option value="month">Month view · Daily peaks</option></select></label><p data-usage-status role="status"></p><div class="form-grid" data-usage-charts></div></div></article>`);
  document.querySelector('.main-content').append(page);
  const link=document.createElement('a');link.className='nav-item';link.dataset.page='website-resource-limits';link.href='#website-resource-limits';link.innerHTML='<img src="assets/sidebar/services.svg" width="20" height="20" alt=""><span>Resource Limit</span>';link.onclick=e=>{e.preventDefault();cp.navigate('website-resource-limits')};document.querySelector('.nav').append(link);
- const picker=page.querySelector('[data-picker]'),select=picker.querySelector('select'),editor=page.querySelector('[data-editor]'),status=page.querySelector('[data-status]');let generation=0,active='',bulk=false,busy=false;
+ const picker=page.querySelector('[data-picker]'),select=picker.querySelector('select'),editor=page.querySelector('[data-editor]'),status=page.querySelector('[data-status]');let generation=0,active='',savedEnabled=false,bulk=false,busy=false;
  function runtimeStatus(row){const state=row.state||'Disabled',parts=[state];if(state==='Resource blocked'&&row.reason)parts.push('Cause: '+row.reason);if(row.error)parts.push(row.error);if((state==='Resource blocked'||state==='Recovering')&&row.nextRecovery&&new Date(row.nextRecovery).getTime()>0)parts.push('Next recovery '+new Date(row.nextRecovery).toLocaleString());return parts.join(' · ');}
  const limitsURL='/api/sites/resource-limits';
  const fields=['cpuPercent','memoryMiB','diskMiB','tasks','concurrentRequests','readMiBPerSecond','writeMiBPerSecond'];
@@ -25,6 +25,7 @@
   editor.reset();
   for(const key of fields)if(settings?.[key]!=null)editor.elements[key].value=settings[key];
   editor.elements.enabled.checked=!!settings?.enabled;
+  savedEnabled=editor.elements.enabled.checked;
   editor.elements.enabled.disabled=isBulk;
   $('[data-editor-title]').textContent=title;
   $('[data-site-details]').hidden=isBulk;
@@ -76,7 +77,10 @@
     listPage=1;
    }else{
     const result=await cp.api(limitsURL+'?siteId='+encodeURIComponent(active),{method:'PUT',body});
-    status.textContent=body.enabled?(result.state==='Resource blocked'?'Settings retained. Website remains resource blocked; use Retry now for recovery.':'Resource limits applied and verified.'):'Resource settings saved. Enforcement is disabled.';
+    if(!body.enabled)status.textContent='Resource settings saved. Enforcement is disabled.';
+    else if(result.state==='Resource blocked')status.textContent='Settings retained. Website remains resource blocked; use Retry now for recovery.';
+    else if(result.enforced&&result.state==='Active')status.textContent='Resource limits applied and verified.';
+    else status.textContent='Resource settings saved. '+runtimeStatus(result);
    }
    closeEditor();
    if(listRequest)await listRequest;
@@ -145,7 +149,7 @@
    renderList();
    if(active&&!editor.hidden){
     const current=items.find(row=>row.id===active);
-    if(current)$('[data-runtime-status]').textContent=runtimeStatus(current);
+    if(current&&current.settings.enabled===savedEnabled)$('[data-runtime-status]').textContent=runtimeStatus(current);
    }
    $('[data-live-status]').textContent=(data.note?data.note+' ':'')+'Updated '+new Date(data.updatedAt).toLocaleTimeString();
   }).catch(error=>{

@@ -22,9 +22,9 @@ function panel(hash='',options={} ){
     return {created:missing.length,skipped:state.sites.length-missing.length};
    }
    rows=[{id:'qa',domain:'qa.example.test',settings,usage:{}}];
-   return {state:options.resultState||'Active'};
+   return {state:options.resultState||'Active',enforced:options.resultEnforced??true};
   }
-  if(url.includes('?'))return {settings:options.newSite?null:settings,capabilities:{ready:true,prerequisites:[]}};
+  if(url.includes('?'))return {settings:options.newSite?null:settings,state:options.enabled?'Active':'Disabled',capabilities:{ready:true,prerequisites:[]}};
   return {items:rows,updatedAt:new Date().toISOString()};
  };
  vm.runInNewContext(script,{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},window:{LiteCP:{escapeHTML:String,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
@@ -61,6 +61,19 @@ test('blocked rows explain the cause and recovery while active rows hide stale c
 
 test('saving unchanged blocked settings does not claim recovery succeeded',async()=>{
  const ui=panel('',{enabled:true,resultState:'Resource blocked'});await ui.save();assert.match(ui.page.querySelector('[data-status]').textContent,/remains resource blocked/);
+});
+
+test('an older disabled list row cannot overwrite an enabled editor status',async()=>{
+ const ui=panel('',{enabled:true,rows:[{id:'qa',domain:'qa.example.test',settings:{enabled:false},state:'Disabled',usage:{}}]});
+ await ui.open();
+ await ui.page.querySelector('[data-refresh]').onclick();
+ assert.equal(ui.page.querySelector('[data-runtime-status]').textContent,'Active');
+});
+
+test('saving an enabled policy reports an unverified runtime without claiming success',async()=>{
+ const ui=panel('',{enabled:true,resultState:'Error',resultEnforced:false});
+ await ui.save();
+ assert.equal(ui.page.querySelector('[data-status]').textContent,'Resource settings saved. Error');
 });
 
 test('single and bulk creation prefill the same editable resource defaults',async()=>{
