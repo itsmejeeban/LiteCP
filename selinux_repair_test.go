@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,5 +32,21 @@ func TestSELinuxRepairStoredStatus(t *testing.T) {
 	}
 	if got := readSELinuxRepairStatus(base); got.State != "error" {
 		t.Fatal(got)
+	}
+}
+
+func TestSELinuxRepairStagesHelperScripts(t *testing.T) {
+	job := t.TempDir()
+	if err := stageSELinuxRepairScripts(job); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"job.sh", "enable-selinux.sh", "repair-waf-labels.sh", "repair-php73-selinux.sh"} {
+		content, err := os.ReadFile(filepath.Join(job, name))
+		if err != nil {
+			t.Fatalf("repair job could not read %s: %v", name, err)
+		}
+		if !strings.HasPrefix(string(content), "#!/usr/bin/env bash\n") || strings.Contains(string(content), "\r\n") {
+			t.Fatalf("%s was not staged as a Linux shell script", name)
+		}
 	}
 }

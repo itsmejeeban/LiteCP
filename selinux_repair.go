@@ -18,6 +18,9 @@ var selinuxEnableScript string
 //go:embed scripts/repair-waf-labels.sh
 var selinuxWAFScript string
 
+//go:embed scripts/repair-php73-selinux.sh
+var selinuxPHP73Script string
+
 //go:embed scripts/selinux-repair-job.sh
 var selinuxJobScript string
 
@@ -46,6 +49,21 @@ func readSELinuxRepairStatus(base string) selinuxRepairStatus {
 		}
 	}
 	return value
+}
+
+func stageSELinuxRepairScripts(job string) error {
+	scripts := map[string]string{
+		"enable-selinux.sh":       selinuxEnableScript,
+		"repair-waf-labels.sh":    selinuxWAFScript,
+		"repair-php73-selinux.sh": selinuxPHP73Script,
+		"job.sh":                  selinuxJobScript,
+	}
+	for name, content := range scripts {
+		if err := os.WriteFile(filepath.Join(job, name), []byte(strings.ReplaceAll(content, "\r\n", "\n")), 0700); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) selinuxRepair(w http.ResponseWriter, r *http.Request) {
@@ -130,11 +148,9 @@ func (a *App) selinuxRepair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Cannot prepare the SELinux repair worker.")
 		return
 	}
-	for name, content := range map[string]string{"enable-selinux.sh": selinuxEnableScript, "repair-waf-labels.sh": selinuxWAFScript, "job.sh": selinuxJobScript} {
-		if err = os.WriteFile(filepath.Join(job, name), []byte(strings.ReplaceAll(content, "\r\n", "\n")), 0700); err != nil {
-			writeError(w, 500, "Cannot write the SELinux repair worker.")
-			return
-		}
+	if err := stageSELinuxRepairScripts(job); err != nil {
+		writeError(w, 500, "Cannot write the SELinux repair worker.")
+		return
 	}
 	value = selinuxRepairStatus{State: "running", Message: "Preparing a configuration backup and guarded enforcement checks.", Mode: value.Mode, StartedAt: time.Now().UTC(), Job: filepath.Base(job)}
 	encoded, _ := json.Marshal(value)

@@ -152,15 +152,23 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Firewall changes require the installed Linux server.")
 		return
 	}
-	// withAuth already serializes this mutation.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
+	profile, err := a.configureLiteCPFirewall(ctx, runFirewallCommand)
+	if err != nil {
+		writeError(w, 502, "Firewall profile could not be applied: "+err.Error())
+		return
+	}
+	a.store.AddActivity("LiteCP firewall applied", "Required inbound and outbound ports allowed; existing rules preserved.", "success")
+	writeJSON(w, 200, profile)
+}
+
+func (a *App) configureLiteCPFirewall(ctx context.Context, run func(context.Context, time.Duration, string, ...string) (string, error)) (litecpFirewallProfile, error) {
 	// Inspect sshd on the host, outside ProtectHome/PrivateDevices and with an
 	// absolute path (service PATH may not contain /usr/sbin).
-	ssh, err := runFirewallCommand(ctx, 20*time.Second, "/usr/sbin/sshd", "-T")
+	ssh, err := run(ctx, 20*time.Second, "/usr/sbin/sshd", "-T")
 	if err != nil {
-		writeError(w, 502, "Cannot verify SSH ports; firewall was not changed: "+err.Error())
-		return
+		return litecpFirewallProfile{}, fmt.Errorf("cannot verify SSH ports: %w", err)
 	}
 	ports := []string{}
 	if data, readErr := os.ReadFile(filepath.Join(a.system.dataDir, "ssh-port")); readErr == nil {
@@ -174,15 +182,13 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 2 && parts[0] == "port" {
 			n, e := strconv.Atoi(parts[1])
 			if e != nil || n < 1 || n > 65535 {
-				writeError(w, 502, "Invalid SSH configuration.")
-				return
+				return litecpFirewallProfile{}, fmt.Errorf("invalid SSH configuration")
 			}
 			ports = append(ports, parts[1])
 		}
 	}
 	if len(ports) == 0 {
-		writeError(w, 502, "No SSH port detected; firewall was not changed.")
-		return
+		return litecpFirewallProfile{}, fmt.Errorf("no SSH port detected")
 	}
 	_, ftpErr := os.Stat(filepath.Join(a.system.ftpRoot(), "installed"))
 	webmailPort := ""
@@ -212,14 +218,9 @@ func (a *App) applyLiteCPFirewall(w http.ResponseWriter, r *http.Request) {
 	profile.Inbound = uniqueFirewallPorts(profile.Inbound)
 	profile.Outbound = uniqueFirewallPorts(profile.Outbound)
 	err = applyRequiredFirewall(profile, a.system.firewallBackend(), func(cmd string, args ...string) (string, error) {
-		return runFirewallCommand(ctx, 25*time.Second, cmd, args...)
+		return run(ctx, 25*time.Second, cmd, args...)
 	})
-	if err != nil {
-		writeError(w, 502, "Firewall profile was not fully applied; existing rules were preserved. Reapply to finish: "+err.Error())
-		return
-	}
-	a.store.AddActivity("LiteCP firewall applied", "Required inbound and outbound ports allowed; existing rules preserved.", "success")
-	writeJSON(w, 200, profile)
+	return profile, err
 }
 
 func uniqueFirewallPorts(ports []string) []string {

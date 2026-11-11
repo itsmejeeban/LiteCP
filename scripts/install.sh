@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="6.0.16"
+LITECP_VERSION="6.0.17"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -604,8 +604,22 @@ OPTIONAL_FEATURES=()
 [[ "${LITECP_INSTALL_WAF:-1}" != 1 ]] || OPTIONAL_FEATURES+=(waf)
 [[ "${LITECP_INSTALL_ANTISPAM:-0}" != 1 ]] || OPTIONAL_FEATURES+=(antispam)
 if ((${#OPTIONAL_FEATURES[@]})); then bash "${SCRIPT_DIR}/install-features.sh" "${OPTIONAL_FEATURES[@]}"; fi
+info "Applying the LiteCP firewall profile..."
+LITECP_DATA_DIR=/var/lib/litecp /usr/local/bin/litecp apply-firewall
 info "Verifying the unprivileged web process and local broker..."
 bash "${SCRIPT_DIR}/check-privilege-services.sh" "${LITECP_VERSION}"
+if command -v selinuxenabled >/dev/null && selinuxenabled; then
+  if [[ "$(getenforce)" == Enforcing ]] && grep -qx 'SELINUX=enforcing' /etc/selinux/config; then
+    info "SELinux is already enforcing and configured to remain enforcing after reboot."
+  else
+    info "Enabling SELinux enforcement with rollback protection..."
+    if ! bash "${SCRIPT_DIR}/enable-selinux.sh" "${LITECP_VERSION}" "${PHP_UNITS[@]}"; then
+      printf 'Warning: SELinux enforcement could not be verified. Review the output above before retrying from the Security Dashboard.\n' >&2
+    fi
+  fi
+elif [[ "${OS_ID}" == "almalinux" ]]; then
+  printf 'Warning: SELinux is inactive. Enable it at the OS level and relabel the filesystem before switching to enforcing mode.\n' >&2
+fi
 success "LiteCP - By Hostingtom is installed."
 printf 'SSH port: %s (allow this TCP port in any external cloud firewall).\n' "${SSH_PROTECTION_PORTS:-22}"
 printf '\nOpen: \033[1mhttps://%s:4321\033[0m\nUser: \033[1m%s\033[0m\n\n' "${SERVER_IP:-SERVER_IP}" "${ADMIN_USERNAME}"

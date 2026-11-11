@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.16"
+var version = "6.0.17"
 var buildRevision = ""
 
 //go:embed web/*
@@ -184,6 +184,18 @@ func main() {
 	}
 	if !store.Initialized() {
 		log.Fatal("LiteCP is not initialized; run `LITECP_ADMIN_PASSWORD=... litecp init`")
+	}
+	if len(os.Args) == 2 && os.Args[1] == "apply-firewall" {
+		if os.Geteuid() != 0 || NewSystem(dataDir).demo {
+			log.Fatal("apply-firewall requires an installed LiteCP server and root privileges")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		app := &App{store: store, system: NewSystem(dataDir)}
+		if _, err := app.configureLiteCPFirewall(ctx, runCommand); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "sync-mail" {
 		if os.Geteuid() != 0 {

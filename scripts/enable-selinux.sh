@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# Run after application acceptance checks in enforcing mode, not during bootstrap.
+# Run once LiteCP and its hosting services are ready for health checks.
 set -euo pipefail
 [[ "$EUID" -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+installed_version="${1:-}"
 exec 9>/run/litecp-selinux.lock
 flock -n 9 || { echo 'Another SELinux change is running.' >&2; exit 1; }
-[[ "$(getenforce)" != Disabled ]] || { echo 'SELinux is disabled; enable and relabel it before using this script.' >&2; exit 1; }
+previous="$(getenforce)"
+case "$previous" in
+  Permissive|Enforcing) ;;
+  *) echo "SELinux must be active at boot before enforcement can be enabled (current mode: $previous)." >&2; exit 1 ;;
+esac
+config=/etc/selinux/config
+grep -Eq '^SELINUX=(permissive|enforcing)$' "$config" || { echo 'Unrecognized SELinux configuration.' >&2; exit 1; }
 echo '[1/4] Preparing WAF labels and configuration backup...'
 if command -v selinuxenabled >/dev/null && selinuxenabled; then
   command -v semanage >/dev/null || { echo 'SELinux management tools are required to configure LiteCP HTTP ports.' >&2; exit 1; }
@@ -13,14 +21,11 @@ if command -v selinuxenabled >/dev/null && selinuxenabled; then
     semanage port -a -t http_port_t -p tcp "$port" 2>/dev/null || semanage port -m -t http_port_t -p tcp "$port"
   done
 fi
-bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-waf-labels.sh"
-bash "$(dirname -- "${BASH_SOURCE[0]}")/repair-php73-selinux.sh"
-config=/etc/selinux/config
-grep -Eq '^SELINUX=(permissive|enforcing)$' "$config" || { echo 'Unrecognized SELinux configuration.' >&2; exit 1; }
+bash "$script_dir/repair-waf-labels.sh"
+bash "$script_dir/repair-php73-selinux.sh"
 backup="/var/backups/litecp/selinux-$(date -u +%Y%m%dT%H%M%S)-$$.config"
 install -d -m 0700 /var/backups/litecp
 cp -p "$config" "$backup"
-previous="$(getenforce)"
 committed=0
 guard="litecp-selinux-rollback-$(date -u +%Y%m%dT%H%M%S)-$$"
 guard_started=0
@@ -36,7 +41,7 @@ rollback() {
 }
 trap rollback EXIT
 active=()
-for unit in litecp litecp-broker nginx mysqld postfix dovecot opendkim litecp-ftps; do
+for unit in litecp litecp-broker litecp-broker.socket nginx mysql mysqld postfix dovecot opendkim litecp-ftps litecp-php73-fpm named "${@:2}"; do
   if systemctl is-active --quiet "$unit"; then active+=("$unit"); fi
 done
 # This guard survives SSH loss, a killed shell, or a panel failure. Keep its
@@ -53,7 +58,11 @@ if systemctl is-active --quiet nginx; then
   nginx -t -e stderr || { echo 'Nginx configuration verification failed.' >&2; exit 1; }
   systemctl reload nginx || { echo 'Nginx reload failed under SELinux enforcement.' >&2; exit 1; }
 fi
-curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/api/version >/dev/null || { echo 'Local panel health check failed.' >&2; exit 1; }
+if [[ -n "$installed_version" ]]; then
+  bash "$script_dir/check-privilege-services.sh" "$installed_version" || { echo 'LiteCP service verification failed under SELinux enforcement.' >&2; exit 1; }
+else
+  curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/api/version >/dev/null || { echo 'Local panel health check failed.' >&2; exit 1; }
+fi
 for unit in "${active[@]}"; do systemctl is-active --quiet "$unit" || { echo "Previously active service $unit failed verification." >&2; exit 1; }; done
 echo '[4/4] Saving persistent enforcement configuration...'
 sed -i -E 's/^SELINUX=(permissive|enforcing)$/SELINUX=enforcing/' "$config"
