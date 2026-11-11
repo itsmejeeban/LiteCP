@@ -235,6 +235,12 @@
 
   function bindEvents() {
     $("#loginForm").addEventListener("submit", login);
+    const factor = $("#loginSecondFactor");
+    $("form", factor).addEventListener("submit", login);
+    $("#loginFactorCode").addEventListener("input", renderLoginFactorDigits);
+    $("#loginFactorCancel").onclick = () => factor.close();
+    $("#loginFactorRecovery").onclick = () => setLoginFactorMode($("#loginFactorCode").inputMode === "numeric");
+    factor.addEventListener("close", () => setLoginFactorMode(false));
     $("#logoutButton").addEventListener("click", logout);
     $("#refreshButton")?.addEventListener("click", refreshState);
     $("#profileButton").addEventListener("click", event => { event.stopPropagation(); $("#profileMenu").classList.toggle("hidden"); });
@@ -310,8 +316,9 @@
   }
 
   function showLogin() {
-    $("#loginSecondFactor").classList.add("hidden");
-    const code = $("#loginSecondFactor input"); code.value = ""; code.disabled = true; code.required = false;
+    const factor = $("#loginSecondFactor");
+    if (factor.open) factor.close();
+    setLoginFactorMode(false);
     $("#appView").classList.add("hidden");
     $("#loginView").classList.remove("hidden");
     setTimeout(() => $("#loginPassword").focus(), 50);
@@ -324,23 +331,53 @@
     navigate(location.hash.slice(1) || "dashboard", false);
   }
 
+  function renderLoginFactorDigits() {
+    const code = $("#loginFactorCode");
+    if (code.inputMode !== "numeric") return;
+    code.value = code.value.replace(/[^0-9]/g, "");
+    $$(".login-factor-digits > span").forEach((box, index) => {
+      box.textContent = code.value[index] || "";
+      box.classList.toggle("current", index === Math.min(code.value.length, 5));
+    });
+  }
+
+  function setLoginFactorMode(recovery) {
+    const code = $("#loginFactorCode");
+    code.value = "";
+    code.inputMode = recovery ? "text" : "numeric";
+    code.maxLength = recovery ? 32 : 6;
+    code.pattern = recovery ? ".+" : "[0-9]{6}";
+    renderLoginFactorDigits();
+    $("#loginFactorLabel").textContent = recovery ? "Recovery code" : "Six-digit authenticator code";
+    $("#loginFactorRecovery").textContent = recovery ? "Use authenticator code" : "Use a recovery code";
+    $("#loginFactorError").classList.add("hidden");
+    if ($("#loginSecondFactor").open) code.focus();
+  }
+
   async function login(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const submit = $("button[type=submit]", form);
-    const errorNode = $("#loginError");
+    const factor = $("#loginSecondFactor");
+    const verifying = form.id === "loginFactorForm";
+    const errorNode = $(verifying ? "#loginFactorError" : "#loginError");
+    if (submit.disabled) return;
     submit.disabled = true;
     errorNode.classList.add("hidden");
     try {
-      const data = new FormData(form);
-      await api("/api/login", { method: "POST", body: { username: data.get("username"), password: data.get("password"), code: data.get("code") || "" } });
+      const credentials = $("#loginForm");
+      const data = new FormData(credentials);
+      await api("/api/login", { method: "POST", body: { username: data.get("username"), password: data.get("password"), code: verifying ? $("#loginFactorCode").value.trim() : "" } });
       currentState = await api("/api/state");
-      form.reset();
+      if (factor.open) factor.close();
+      credentials.reset();
       showApp();
     } catch (error) {
-      if (error.twoFactorRequired) {
-        $("#loginSecondFactor").classList.remove("hidden");
-        const code = $("#loginSecondFactor input"); code.disabled = false; code.required = true; code.focus();
+      if (error.twoFactorRequired && !verifying) {
+        setLoginFactorMode(false);
+        factor.showModal();
+        $("#loginFactorCode").focus();
+        return;
       }
       errorNode.textContent = error.message;
       errorNode.classList.remove("hidden");

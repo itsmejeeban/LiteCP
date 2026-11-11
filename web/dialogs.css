@@ -14,3 +14,32 @@
 .ui-dialog-danger [data-dialog-submit]:hover {background:#a6273f;border-color:#a6273f;color:#fff;}
 .ui-dialog button:focus-visible {outline:2px solid var(--teal);outline-offset:3px;}
 @media(max-width:520px){.ui-dialog header{padding:18px;}.ui-dialog .ui-dialog-body{padding:18px;}.ui-dialog footer{padding:14px 18px;}.ui-dialog footer .button{flex:1;}}
+
+.login-factor-entry { position: relative; display: block; }
+.login-factor-digits { display: none; }
+#loginFactorCode[inputmode="numeric"] {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  opacity: 0;
+}
+#loginFactorCode[inputmode="numeric"] + .login-factor-digits {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(4px, 2vw, 10px);
+  pointer-events: none;
+}
+.login-factor-digits > span {
+  display: grid;
+  place-items: center;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: 600 1.25rem monospace;
+}
+#loginFactorCode:focus + .login-factor-digits .current {
+  outline: 2px solid var(--ui-accent, var(--teal));
+  outline-offset: 1px;
+}

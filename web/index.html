@@ -8,7 +8,7 @@
   <link rel="preload" as="image" href="website-action-icons.png?v=3.7.2">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="features.css?v=whmcs-logo-visibility-1">
-  <link rel="stylesheet" href="dialogs.css?v=1">
+  <link rel="stylesheet" href="dialogs.css?v=login-otp-1">
   <link rel="stylesheet" href="backup-schedules.css?v=1">
   <link rel="stylesheet" href="website-cron.css?v=merged-app-cron-1">
   <link rel="stylesheet" href="panel-settings.css?v=1">
@@ -74,7 +74,6 @@
             </button>
           </span>
         </label>
-        <label class="field hidden" id="loginSecondFactor"><span>Authenticator or recovery code</span><input name="code" autocomplete="one-time-code" maxlength="32" spellcheck="false" disabled></label>
         <p class="form-error hidden" id="loginError" role="alert"></p>
         <button class="button button-primary button-large" type="submit">
           <span>Sign in to LiteCP</span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
@@ -83,6 +82,24 @@
       </form>
     </div>
   </section>
+
+  <dialog class="ui-dialog" id="loginSecondFactor" aria-labelledby="loginFactorTitle">
+    <form class="settings-body" id="loginFactorForm">
+      <h2 id="loginFactorTitle">Two-factor verification</h2>
+      <label class="field"><span id="loginFactorLabel">Six-digit authenticator code</span>
+        <span class="login-factor-entry">
+          <input id="loginFactorCode" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" required autofocus>
+          <span class="login-factor-digits" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></span>
+        </span>
+      </label>
+      <p class="form-error hidden" id="loginFactorError" role="alert"></p>
+      <div class="form-actions">
+        <button type="button" class="button button-secondary" id="loginFactorCancel">Back</button>
+        <button type="submit" class="button button-primary">Verify and sign in</button>
+      </div>
+      <button type="button" class="button button-ghost" id="loginFactorRecovery">Use a recovery code</button>
+    </form>
+  </dialog>
 
   <div class="app-shell hidden" id="appView">
     <aside class="sidebar" id="sidebar">
@@ -278,7 +295,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=4.0.65" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=destination-actions-1" defer></script>
+  <script src="app.js?v=login-otp-1" defer></script>
   <script src="website-bulk.js?v=4.0.4" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
   <script src="dns-export.js?v=3.3.19" defer></script>
