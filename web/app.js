@@ -437,6 +437,7 @@
     const suspendedSites = currentState.sites.filter(site => site.suspended).length;
     $("#websiteStatusCounts").textContent = `Active ${currentState.sites.length - suspendedSites} · Suspended ${suspendedSites}`;
     $("#totalEmailAccountsValue").textContent = (currentState.mailboxes || []).length;
+    $("#totalFTPAccountsValue").textContent = Number.isInteger(currentState.ftpAccountCount) ? currentState.ftpAccountCount : "Unavailable";
     renderMetrics();
     renderServices();
     renderActivity();

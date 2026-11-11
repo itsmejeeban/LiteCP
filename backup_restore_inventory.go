@@ -12,17 +12,18 @@ import (
 )
 
 type restorableBackup struct {
-	ID            string    `json:"id"`
-	SiteID        string    `json:"siteId"`
-	Domain        string    `json:"domain"`
-	Name          string    `json:"name"`
-	Kind          string    `json:"kind"`
-	Size          int64     `json:"size"`
-	CreatedAt     time.Time `json:"createdAt"`
-	Local         bool      `json:"local"`
-	Remote        bool      `json:"remote"`
-	Destination   string    `json:"destination"`
-	WebsiteExists bool      `json:"websiteExists"`
+	ID             string    `json:"id"`
+	SiteID         string    `json:"siteId"`
+	Domain         string    `json:"domain"`
+	Name           string    `json:"name"`
+	Kind           string    `json:"kind"`
+	Size           int64     `json:"size"`
+	CreatedAt      time.Time `json:"createdAt"`
+	Local          bool      `json:"local"`
+	Remote         bool      `json:"remote"`
+	RemoteRecorded bool      `json:"remoteRecorded"`
+	Destination    string    `json:"destination"`
+	WebsiteExists  bool      `json:"websiteExists"`
 }
 
 func availableHistoryLocal(b Backup) bool {
@@ -75,7 +76,7 @@ func (a *App) backupRestoreInventory(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			seenManual[b.ID] = true
-			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: !b.RemoteOnly, Remote: b.RemotePath != "", Destination: b.DestinationID, WebsiteExists: a.store.SiteByDomain(site.Domain) != nil})
+			items = append(items, restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: site.Domain, Name: site.Domain + "-" + b.ID + ".zip", Kind: "website-zip", Size: b.Size, CreatedAt: b.CreatedAt, Local: !b.RemoteOnly, Remote: b.RemotePath != "", RemoteRecorded: b.RemotePath != "", Destination: b.DestinationID, WebsiteExists: a.store.SiteByDomain(site.Domain) != nil})
 		}
 	}
 	var mu sync.Mutex
@@ -89,7 +90,7 @@ func (a *App) backupRestoreInventory(w http.ResponseWriter, r *http.Request) {
 				if backupInProgress(b.Status) || b.Size <= 0 {
 					continue
 				}
-				item := restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: b.Domain, Name: filepath.Base(b.Path), Kind: "history", Size: b.Size, CreatedAt: b.CreatedAt, Local: availableHistoryLocal(b), Destination: b.DestinationName, WebsiteExists: a.store.SiteByID(b.SiteID) != nil}
+				item := restorableBackup{ID: b.ID, SiteID: b.SiteID, Domain: b.Domain, Name: filepath.Base(b.Path), Kind: "history", Size: b.Size, CreatedAt: b.CreatedAt, Local: availableHistoryLocal(b), RemoteRecorded: b.RemotePath != "", Destination: b.DestinationName, WebsiteExists: a.store.SiteByID(b.SiteID) != nil}
 				var warning string
 				if b.RemotePath != "" {
 					if destination := a.store.BackupDestinationByID(b.DestinationID); destination != nil {

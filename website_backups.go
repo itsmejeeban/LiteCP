@@ -149,6 +149,10 @@ func zipBackupParts(destination string, parts map[string]string) error {
 	return archive.Close()
 }
 func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		a.deleteWebsiteZIPBackup(w, r)
+		return
+	}
 	site := a.store.SiteByID(r.URL.Query().Get("siteId"))
 	if site == nil {
 		writeError(w, 404, "Website not found.")
@@ -219,28 +223,6 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeJSON(w, 200, map[string]any{"items": items, "jobs": jobs})
-		return
-	}
-	if r.Method == http.MethodDelete {
-		var input struct {
-			ID      string
-			Confirm bool
-		}
-		if decodeJSON(r, &input) != nil || !input.Confirm || !liveJobIDPattern.MatchString(input.ID) {
-			writeError(w, 400, "Confirm permanent backup deletion.")
-			return
-		}
-		directory := filepath.Join(root, input.ID)
-		if _, err := os.Stat(filepath.Join(directory, "manifest.json")); err != nil {
-			writeError(w, 404, "Backup not found")
-			return
-		}
-		// Only the explicitly selected generated backup is removed after confirmation.
-		if err := os.RemoveAll(directory); err != nil {
-			writeError(w, 500, err.Error())
-			return
-		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -422,4 +404,80 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 		a.store.AddActivity("Website backup completed", site.Domain, "success")
 	}()
 	writeJSON(w, http.StatusAccepted, acceptedJob)
+}
+
+// DELETE resolves the saved backup owner without provisioning a deleted website
+// or creating missing backup directories. The same handler serves retained ZIPs.
+func (a *App) deleteWebsiteZIPBackup(w http.ResponseWriter, r *http.Request) {
+	a.deleteWebsiteZIPBackupWithOperations(w, r, retainedWebsite, a.system.historyRemoteOperation)
+}
+
+func (a *App) deleteWebsiteZIPBackupWithOperations(w http.ResponseWriter, r *http.Request, retained func(string) (Site, error), remote func(context.Context, *BackupDestination, Backup, string, string) error) {
+	var input struct {
+		ID                    string
+		Confirm, RemoveRemote bool
+	}
+	if decodeJSON(r, &input) != nil || !input.Confirm || !liveJobIDPattern.MatchString(input.ID) {
+		writeError(w, 400, "Confirm permanent backup deletion.")
+		return
+	}
+	siteID := r.URL.Query().Get("siteId")
+	if !retainedWebsiteIDPattern.MatchString(siteID) {
+		writeError(w, 400, "Invalid backup website ID.")
+		return
+	}
+	site := a.store.SiteByID(siteID)
+	if site == nil {
+		saved, err := retained(siteID)
+		if err != nil || saved.ID != siteID {
+			writeError(w, 404, "Backup website not found.")
+			return
+		}
+		site = &saved
+	}
+	root := a.restoreManualBackupRoot(*site)
+	directory := filepath.Join(root, input.ID)
+	websiteBackupWorkers.Lock()
+	active := websiteBackupWorkers.active[directory]
+	websiteBackupWorkers.Unlock()
+	if active {
+		writeError(w, 409, "Backup is still running. Wait until it finishes.")
+		return
+	}
+	absolute, err := filepath.Abs(directory)
+	resolved, resolveErr := filepath.EvalSymlinks(absolute)
+	manifest := filepath.Join(absolute, "manifest.json")
+	manifestResolved, manifestErr := filepath.EvalSymlinks(manifest)
+	if err != nil || resolveErr != nil || manifestErr != nil || filepath.Clean(resolved) != filepath.Clean(absolute) || filepath.Clean(manifestResolved) != filepath.Join(filepath.Clean(absolute), "manifest.json") {
+		writeError(w, 400, "Backup path could not be safely verified.")
+		return
+	}
+	item, err := loadWebsiteZIPBackup(root, input.ID, site.ID)
+	if err != nil || item.Size <= 0 || !domainPattern.MatchString(item.Domain) {
+		writeError(w, 404, "Complete backup not found for this website.")
+		return
+	}
+	if input.RemoveRemote && item.RemotePath != "" {
+		record := Backup{Path: item.Domain + "-" + item.ID + ".zip", RemotePath: item.RemotePath, Size: item.Size}
+		if err := remote(r.Context(), a.store.BackupDestinationByID(item.DestinationID), record, "remove", ""); err != nil {
+			writeError(w, 502, err.Error())
+			return
+		}
+	}
+	// Only this validated generated backup directory is removed. A failed remote
+	// operation above leaves its local archive and manifest available for retry.
+	if err := os.RemoveAll(directory); err != nil {
+		writeError(w, 500, err.Error())
+		return
+	}
+	detail := "generated backup removed; website files and databases retained"
+	if item.RemotePath != "" {
+		if input.RemoveRemote {
+			detail += "; remote copy removed"
+		} else {
+			detail += "; remote copy retained"
+		}
+	}
+	a.store.AddActivity("Website backup removed", site.Domain+" "+detail, "warning")
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }

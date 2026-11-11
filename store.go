@@ -160,6 +160,7 @@ type Config struct {
 }
 
 type PublicState struct {
+	FTPAccountCount *int `json:"ftpAccountCount"`
 	AccessRole         string              `json:"accessRole,omitempty"`
 	Version            string              `json:"version"`
 	Username           string              `json:"username"`

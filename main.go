@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.31"
+var version = "6.0.32"
 var buildRevision = ""
 
 //go:embed web/*
@@ -806,6 +806,10 @@ func clientIP(r *http.Request) string {
 
 func (a *App) state(w http.ResponseWriter, r *http.Request) {
 	state := a.store.PublicState()
+	if accounts, err := a.system.ftpAccounts(); err == nil {
+		count := len(accounts)
+		state.FTPAccountCount = &count
+	}
 	for i := range state.Sites {
 		state.Sites[i].SSL = a.system.SiteSSLHealthy(state.Sites[i])
 	}

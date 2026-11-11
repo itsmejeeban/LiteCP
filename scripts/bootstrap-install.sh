@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copy this launcher beside LiteCP-2.0.6-source.tar.gz and run: bash install-litecp.sh
 set -Eeuo pipefail
-version=6.0.31
+version=6.0.32
 [[ "$(id -u)" -eq 0 ]] || { echo 'Run this installer as root.' >&2; exit 1; }
 source /etc/os-release
 [[ "$ID" == almalinux || "$ID" == ubuntu ]] || { echo 'Ubuntu or AlmaLinux is required.' >&2; exit 1; }
