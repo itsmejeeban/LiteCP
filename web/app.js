@@ -868,8 +868,29 @@
 
   function closeCredentials() { credentialText = ""; $("#credentialsModal").classList.add("hidden"); }
   async function copyCredentials() {
-    try { await navigator.clipboard.writeText(credentialText); showToast("Copied", "Database credentials copied to your clipboard."); }
-    catch { showToast("Copy unavailable", "Select and copy the credentials manually.", "error"); }
+    if (!credentialText) return;
+    try {
+      await navigator.clipboard.writeText(credentialText);
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = credentialText;
+      field.readOnly = true;
+      field.setAttribute("aria-label", "Credentials to copy");
+      field.style.cssText = "position:fixed;left:-9999px;top:0";
+      $("#credentialsModal").append(field);
+      try {
+        field.select();
+        if (!document.execCommand("copy")) throw new Error("Copy unavailable");
+      } catch {
+        showToast("Copy unavailable", "Use the copy buttons beside the username and password, or reveal the password to copy it manually.", "error");
+        return;
+      } finally {
+        field.value = "";
+        field.remove();
+        $("#copyCredentials").focus();
+      }
+    }
+    showToast("Copied", "Credentials copied to your clipboard.");
   }
 
   async function handleSiteAction(event) {
