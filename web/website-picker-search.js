@@ -2,6 +2,7 @@
   "use strict";
 
   const selectors = [
+    "#mailboxDomain",
     ".website-tool-picker > .field > select",
     "#fileSiteSelect",
     '[data-page-view="website-dns"] select[data-site]',
@@ -17,14 +18,15 @@
     const label = select.closest("label");
     if (!label) return;
     const group = document.createElement("div");
-    group.className = "website-picker-search";
-    group.innerHTML = `<span class="website-picker-or" aria-hidden="true">OR</span>
+    const mailbox = select.id === "mailboxDomain";
+    group.className = mailbox ? "mailbox-domain-search" : "website-picker-search";
+    group.innerHTML = `${mailbox ? "" : '<span class="website-picker-or" aria-hidden="true">OR</span>'}
       <div class="website-picker-search-field">
-        <label class="field"><span>Search website</span><input type="search" placeholder="Search domains" autocomplete="off" aria-controls="website-picker-results-${index}"></label>
+        <label class="field"><span>${mailbox ? "Search domain" : "Search website"}</span><input type="search" placeholder="Search domains" autocomplete="off" aria-controls="website-picker-results-${index}"></label>
         <div class="website-picker-results" id="website-picker-results-${index}" hidden></div>
       </div>`;
     label.before(group);
-    group.prepend(label);
+    if (!mailbox) group.prepend(label);
 
     const search = group.querySelector("input");
     const results = group.querySelector(".website-picker-results");
@@ -38,7 +40,7 @@
     const close = () => { results.hidden = true; };
     const choose = option => {
       if (search.disabled || select.disabled || !choices().includes(option)) return;
-      search.value = option.label;
+      search.value = mailbox ? option.value : option.label;
       close();
       if (select.value !== option.value) {
         select.value = option.value;
@@ -77,7 +79,7 @@
       } else if (event.key === "Enter") {
         event.preventDefault();
         const options = matches();
-        const exact = options.find(option => option.label.toLowerCase() === search.value.trim().toLowerCase());
+        const exact = options.find(option => (mailbox ? option.value : option.label).toLowerCase() === search.value.trim().toLowerCase());
         if (exact || options.length === 1) choose(exact || options[0]);
         else show();
       }
@@ -92,7 +94,10 @@
       if (!group.contains(event.relatedTarget)) close();
     });
     select.addEventListener("change", () => {
-      if (search.value) search.value = choices().find(option => option.selected)?.label || "";
+      if (search.value) {
+        const selected = choices().find(option => option.selected);
+        search.value = (mailbox ? selected?.value : selected?.label) || "";
+      }
       close();
     });
 
