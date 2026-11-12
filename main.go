@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.42"
+var version = "6.0.43"
 var buildRevision = ""
 
 //go:embed web/*
@@ -153,6 +153,17 @@ func main() {
 			log.Fatal("host-resolvers requires root")
 		}
 		if err := NewSystem(dataDir).applyHostResolvers(context.Background(), os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "host-hostname-address" {
+		if os.Geteuid() != 0 || len(os.Args) != 4 {
+			log.Fatal("host-hostname-address requires root, a saved hostname and an IP address")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		if err := applyHostnameAddress(ctx, dataDir, os.Args[2], os.Args[3]); err != nil {
 			log.Fatal(err)
 		}
 		return

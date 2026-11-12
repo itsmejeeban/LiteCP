@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -115,40 +117,60 @@ func (a *App) hostnameAddress(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"hostname": hostname, "addresses": hostnameAddressEntries(original, hostname)})
 		return
 	}
-	token, err := randomToken(12)
-	if err != nil {
-		writeError(w, 500, "Could not prepare hostname address recovery")
+	if _, err = runHostCommand(r.Context(), 30*time.Second, "/usr/local/bin/litecp", "host-hostname-address", hostname, strings.TrimSpace(input.IP)); err != nil {
+		log.Printf("Hostname address host task failed: %v", err)
+		writeError(w, 500, "Could not save the hostname address through the host task. Review the service log and retained recovery copy")
 		return
-	}
-	backup := filepath.Join(a.system.dataDir, "hostname-address", "hosts-"+token+".bak")
-	if err = os.MkdirAll(filepath.Dir(backup), 0700); err == nil {
-		err = writeAtomic(backup, original, 0600)
-	}
-	if err != nil {
-		writeError(w, 500, "Could not preserve the previous hosts file")
-		return
-	}
-	latest, err := os.ReadFile("/etc/hosts")
-	if err != nil || !bytes.Equal(latest, original) {
-		writeError(w, 409, "The server hosts file changed. Refresh and try again")
-		return
-	}
-	if err = writeAtomic("/etc/hosts", replacement, info.Mode().Perm()); err != nil {
-		writeError(w, 500, "Could not save the hostname address. Previous hosts file was retained")
-		return
-	}
-	if restorecon, err := exec.LookPath("restorecon"); err == nil {
-		if _, err = runCommand(r.Context(), 10*time.Second, restorecon, "/etc/hosts"); err != nil {
-			rollback := writeAtomic("/etc/hosts", original, info.Mode().Perm())
-			_, _ = runCommand(r.Context(), 10*time.Second, restorecon, "/etc/hosts")
-			if rollback != nil {
-				writeError(w, 500, "Hosts label repair and rollback failed. Review the retained hostname-address recovery copy")
-			} else {
-				writeError(w, 500, "Hosts label repair failed. Previous hostname mapping was restored")
-			}
-			return
-		}
 	}
 	_ = a.store.AddActivity("Local hostname address updated", hostname+" → "+strings.TrimSpace(input.IP), "info")
 	writeJSON(w, 200, map[string]any{"hostname": hostname, "addresses": hostnameAddressEntries(replacement, hostname)})
+}
+
+// Runs only in the root-only transient host task, outside the broker mount namespace.
+func applyHostnameAddress(ctx context.Context, dataDir, hostname, address string) error {
+	current, err := os.Hostname()
+	if err != nil || !strings.EqualFold(current, hostname) {
+		return fmt.Errorf("saved hostname changed; refresh and retry")
+	}
+	info, err := os.Lstat("/etc/hosts")
+	if err != nil || !info.Mode().IsRegular() {
+		return fmt.Errorf("cannot safely read server hosts file")
+	}
+	original, err := os.ReadFile("/etc/hosts")
+	if err != nil {
+		return err
+	}
+	replacement, err := hostnameAddressContent(original, hostname, address)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(original, replacement) {
+		return nil
+	}
+	token, err := randomToken(12)
+	if err != nil {
+		return err
+	}
+	backup := filepath.Join(dataDir, "hostname-address", "hosts-"+token+".bak")
+	if err = os.MkdirAll(filepath.Dir(backup), 0700); err != nil {
+		return err
+	}
+	if err = writeAtomic(backup, original, 0600); err != nil {
+		return err
+	}
+	latest, err := os.ReadFile("/etc/hosts")
+	if err != nil || !bytes.Equal(latest, original) {
+		return fmt.Errorf("server hosts file changed; refresh and retry")
+	}
+	if err = writeAtomic("/etc/hosts", replacement, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("save hosts file: %w", err)
+	}
+	if restorecon, err := exec.LookPath("restorecon"); err == nil {
+		if _, err = runCommand(ctx, 10*time.Second, restorecon, "/etc/hosts"); err != nil {
+			rollback := writeAtomic("/etc/hosts", original, info.Mode().Perm())
+			_, _ = runCommand(ctx, 10*time.Second, restorecon, "/etc/hosts")
+			return fmt.Errorf("hosts label repair failed; rollback result: %v; recovery: %s", rollback, backup)
+		}
+	}
+	return nil
 }
