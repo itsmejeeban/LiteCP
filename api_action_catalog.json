@@ -280,6 +280,22 @@
     "objectID": false
   },
   {
+    "name": "panel.system.hostname.address.get",
+    "group": "Settings",
+    "description": "Read the server-local hostname address",
+    "method": "GET",
+    "path": "/api/system/hostname/address",
+    "objectID": false
+  },
+  {
+    "name": "panel.system.hostname.address.put",
+    "group": "Settings",
+    "description": "Update the server-local hostname address",
+    "method": "PUT",
+    "path": "/api/system/hostname/address",
+    "objectID": false
+  },
+  {
     "name": "panel.system.resolvers.put",
     "group": "Settings",
     "description": "system / resolvers — PUT /api/system/resolvers",

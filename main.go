@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.41"
+var version = "6.0.42"
 var buildRevision = ""
 
 //go:embed web/*
@@ -376,6 +376,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/sites/waf-logs", only(http.MethodGet, a.withAuth(a.wafLogs)))
 	mux.HandleFunc("/api/sites/waf", only(http.MethodPut, a.withAuth(a.setSiteWAF)))
 	mux.HandleFunc("/api/system/hostname", only(http.MethodPut, a.withAuth(a.systemHostname)))
+	mux.HandleFunc("/api/system/hostname/address", a.withAuth(a.hostnameAddress))
 	mux.HandleFunc("/api/system/hostname/ssl", a.withAuth(a.panelHostnameSSL))
 	mux.HandleFunc("/api/system/resolvers", only(http.MethodPut, a.withAuth(a.systemResolvers)))
 	mux.HandleFunc("/api/system/reboot", only(http.MethodPost, a.withAuth(a.systemReboot)))

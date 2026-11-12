@@ -16,6 +16,11 @@
 .settings-tab-panel:is([data-settings-panel="backups"],[data-settings-panel="hostname"],[data-settings-panel="update"]) {grid-template-columns:repeat(2,minmax(0,1fr));}
 .settings-tab-panel>.settings-backup-destinations {grid-column:1/-1;overflow-x:auto;}
 .settings-tab-panel .settings-card {margin:0;}
+.settings-tab-panel[data-settings-panel="hostname"] #hostnameAddressPanel {grid-column:1;grid-row:2;}
+.settings-tab-panel[data-settings-panel="hostname"] #hostnameForm + article {grid-column:2;grid-row:1 / span 2;}
+#hostnameAddressPanel .form-actions {display:flex;gap:10px;justify-content:center;margin-top:16px;}
+#hostnameAddressPanel [data-address-status] {overflow-wrap:anywhere;}
+@media(max-width:900px){.settings-tab-panel[data-settings-panel="hostname"] #hostnameAddressPanel,.settings-tab-panel[data-settings-panel="hostname"] #hostnameForm + article{grid-column:auto;grid-row:auto;}}
 .backup-management-grid.backup-run-layout {grid-template-columns:minmax(0,780px);}
 #updateRestorePointsPanel .data-table {min-width:420px;}
 #updateRestorePointsPanel .data-table :is(th,td) {padding-inline:10px;}
