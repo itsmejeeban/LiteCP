@@ -1,0 +1,28 @@
+#alertsSettingsPanel {max-width:100%}
+#alertsSettingsPanel [data-alert-status]:empty {display:none}
+#alertsSettingsPanel form {display:grid;gap:24px}
+#alertsSettingsPanel form[hidden] {display:none}
+#alertsSettingsPanel fieldset {min-width:0;padding:0;border:0;margin:0}
+#alertsSettingsPanel legend {font-weight:600;padding:0;margin-bottom:12px}
+#alertsSettingsPanel .alerts-delivery {display:grid;gap:20px}
+#alertsSettingsPanel .alerts-addresses {display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+#alertsSettingsPanel .alerts-recipient {display:flex;align-items:center;gap:10px;margin-bottom:10px}
+#alertsSettingsPanel .alerts-recipient input {min-width:0;flex:1}
+#alertsSettingsPanel .alerts-recipient .button {width:auto;flex:none;margin:0}
+#alertsSettingsPanel small {display:block;font-size:12px;line-height:1.5;color:var(--muted);margin-top:6px}
+#alertsSettingsPanel .alerts-events {padding-top:20px;border-top:1px solid var(--line)}
+#alertsSettingsPanel .alerts-event-list {display:grid;gap:0}
+#alertsSettingsPanel .alerts-rule {position:relative;display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer}
+#alertsSettingsPanel .alerts-rule-copy {min-width:0;flex:1;font-weight:500;line-height:1.45}
+#alertsSettingsPanel .alerts-rule small {font-weight:400}
+#alertsSettingsPanel .alerts-rule input {position:absolute;opacity:0;right:0;width:42px;height:24px;margin:0;min-height:0;cursor:pointer}
+#alertsSettingsPanel .alerts-switch {position:relative;display:block;width:42px;height:24px;flex:0 0 42px;border:1px solid var(--line);border-radius:20px;background:var(--surface-soft,#555);pointer-events:none}
+#alertsSettingsPanel .alerts-switch::after {content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--ink,#eee);transition:transform .15s}
+#alertsSettingsPanel .alerts-rule input:checked + .alerts-switch {background:#2563eb;border-color:#2563eb}
+#alertsSettingsPanel .alerts-rule input:checked + .alerts-switch::after {transform:translateX(18px);background:#fff}
+#alertsSettingsPanel .alerts-rule input:focus-visible + .alerts-switch {outline:2px solid var(--ink);outline-offset:3px}
+#alertsSettingsPanel .alerts-rule input:disabled + .alerts-switch {opacity:.5}
+#alertsSettingsPanel .alerts-actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#alertsSettingsPanel .alerts-actions .button {width:auto;margin:0}
+@media(prefers-reduced-motion:reduce){#alertsSettingsPanel .alerts-switch::after{transition:none}}
+@media(max-width:480px){#alertsSettingsPanel .alerts-recipient{gap:6px}#alertsSettingsPanel .alerts-recipient .button{padding-inline:8px}}

@@ -321,6 +321,7 @@ func (a *App) websiteBackups(w http.ResponseWriter, r *http.Request) {
 			job.Status = "failed"
 			job.Message = "Backup stopped: " + err.Error() + ". Partial files retained; website data unchanged."
 			saveJob()
+			a.recordOperationsEvent("backup", job.ID, "Website backup failed", site.Domain+": review the backup job for details.", "warning", "website-backups")
 		}
 		if err = zipWebsite(ctx, site.Root, filepath.Join(directory, "public_html.zip")); err != nil {
 			fail(err)

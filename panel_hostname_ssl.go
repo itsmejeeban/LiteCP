@@ -108,6 +108,7 @@ func (a *App) panelHostnameSSL(w http.ResponseWriter, r *http.Request) {
 			_, err := runCommandInput(context.Background(), 3*time.Minute, installServicesTLS, "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--unit=litecp-services-ssl", "--property=RuntimeMaxSec=165", "--", "/bin/bash", "-s", "--", ftps, mailTLS)
 			if err != nil {
 				warnings = append(warnings, "Some service certificates could not be installed. Check the service statuses and the litecp-services-ssl journal.")
+				a.recordOperationsEvent("ssl", host+"-"+time.Now().UTC().Format("2006-01-02T15"), "Service SSL installation needs attention", "One or more service certificates could not be installed. Review Hostname SSL service statuses and the installer journal.", "warning", "settings/hostname")
 			}
 			services = hostnameTLSServiceStatuses(context.Background(), host, port)
 		}

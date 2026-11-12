@@ -59,6 +59,7 @@ func (a *App) auditOperation(w http.ResponseWriter, r *http.Request, next http.H
 	if out.status == 0 {
 		out.status = 200
 	}
+	a.alertFailedOperation(r, out.status)
 	actor := a.requestActor(r)
 	item := operationAudit{At: started.UTC(), Actor: actor, Method: r.Method, Route: r.URL.Path, Status: out.status, DurationMS: time.Since(started).Milliseconds()}
 	data, e := json.Marshal(item)

@@ -693,7 +693,7 @@
 	document.querySelector('[data-page-view="files"]').classList.toggle('server-file-explorer',serverExplorer);
     if(page==="settings/backups")page="backups/settings";
     const settingsPart=String(page).startsWith("settings/")?String(page).slice(9):"";
-    const settingsRoute=["password","email","timezone","backups","hostname","dns","reboot","update","developer","appearance"].includes(settingsPart)?`settings/${settingsPart}`:"";
+    const settingsRoute=["password","email","alerts","timezone","backups","hostname","dns","reboot","update","developer","appearance"].includes(settingsPart)?`settings/${settingsPart}`:"";
     const emailPart=String(page).startsWith("email/")?String(page).slice(6):"";
     const emailRoute=["forward","add-domain","create-mailbox","create-alias","webmail","domains","mailboxes","aliases","delivery","smtp-port-check","configure-webmail"].includes(emailPart)?`email/${emailPart}`:"";
     const backupPart=String(page).startsWith("backups/")?String(page).slice(8):"";

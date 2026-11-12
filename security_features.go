@@ -577,6 +577,7 @@ func (a *App) malwareScan(w http.ResponseWriter, r *http.Request) {
 	kind := "success"
 	if result.Status == "infected" {
 		kind = "warning"
+		a.recordOperationsEvent("malware-detected", site.ID+"-"+time.Now().UTC().Format(time.RFC3339Nano), "Website malware scan found potential threats", site.Domain+": review affected files in Malware Scan.", "critical", "security")
 	}
 	a.store.AddActivity("Malware scan "+result.Status, site.Domain+": "+input.Path, kind)
 	writeJSON(w, http.StatusOK, result)

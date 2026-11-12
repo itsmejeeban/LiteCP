@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/mail"
 	"net/smtp"
 	"os"
 	"path/filepath"
@@ -21,15 +20,19 @@ import (
 
 // Operations data contains no passwords, request bodies, tokens or mail content.
 type operationsSettings struct {
-	EmailEnabled     bool   `json:"emailEnabled"`
-	EmailTo          string `json:"emailTo"`
-	EmailFrom        string `json:"emailFrom"`
-	VerifyBackups    bool   `json:"verifyBackups"`
-	RetentionEnabled bool   `json:"retentionEnabled"`
-	RetentionDays    int    `json:"retentionDays"`
+	EmailEnabled     bool            `json:"emailEnabled"`
+	EmailTo          string          `json:"emailTo"`
+	EmailFrom        string          `json:"emailFrom"`
+	EmailRecipients  []string        `json:"emailRecipients,omitempty"`
+	AlertRules       map[string]bool `json:"alertRules,omitempty"`
+	VerifyBackups    bool            `json:"verifyBackups"`
+	RetentionEnabled bool            `json:"retentionEnabled"`
+	RetentionDays    int             `json:"retentionDays"`
 }
 type operationsAlert struct {
 	ID           string     `json:"id"`
+	Category     string     `json:"category,omitempty"`
+	Event        bool       `json:"event,omitempty"`
 	Title        string     `json:"title"`
 	Detail       string     `json:"detail"`
 	Severity     string     `json:"severity"`
@@ -92,18 +95,7 @@ func validateOperationsSettings(s operationsSettings) error {
 	if s.RetentionDays < 1 || s.RetentionDays > 3650 {
 		return fmt.Errorf("Retention must be between 1 and 3650 days")
 	}
-	for _, value := range []string{s.EmailTo, s.EmailFrom} {
-		if value != "" {
-			p, e := mail.ParseAddress(value)
-			if e != nil || p.Address != value || strings.ContainsAny(value, "\r\n") {
-				return fmt.Errorf("Enter one plain email address for sender and recipient")
-			}
-		}
-	}
-	if s.EmailEnabled && (s.EmailTo == "" || s.EmailFrom == "") {
-		return fmt.Errorf("Email alerts require a sender and recipient")
-	}
-	return nil
+	return validateAlertDelivery(s)
 }
 func mergeOperationsAlerts(s *operationsState, observations []operationsAlert, now time.Time) {
 	seen := map[string]bool{}
@@ -120,8 +112,10 @@ func mergeOperationsAlerts(s *operationsState, observations []operationsAlert, n
 				old.FirstSeen = now
 				old.Acknowledged = false
 				old.LastEmail = time.Time{}
+				old.EmailError = ""
 			}
 			old.Title = v.Title
+			old.Category = v.Category
 			old.Detail = v.Detail
 			old.Route = v.Route
 			old.Severity = v.Severity
@@ -137,6 +131,10 @@ func mergeOperationsAlerts(s *operationsState, observations []operationsAlert, n
 	}
 	for i := range s.Alerts {
 		v := &s.Alerts[i]
+		undelivered := v.LastEmail.IsZero() || v.EmailError != ""
+		if v.Event && (now.Sub(v.LastSeen) < 24*time.Hour || (undelivered && s.Settings.alertEmailEnabled(*v) && now.Sub(v.LastSeen) < 7*24*time.Hour)) {
+			continue
+		}
 		if !seen[v.ID] && v.ResolvedAt == nil {
 			at := now
 			v.ResolvedAt = &at
@@ -147,7 +145,7 @@ func mergeOperationsAlerts(s *operationsState, observations []operationsAlert, n
 func (a *App) collectOperationsAlerts(ctx context.Context) []operationsAlert {
 	items := []operationsAlert{}
 	add := func(id, title, detail, severity, route string) {
-		items = append(items, operationsAlert{ID: id, Title: title, Detail: detail, Severity: severity, Route: route})
+		items = append(items, operationsAlert{ID: id, Category: legacyOperationsCategory(id), Title: title, Detail: detail, Severity: severity, Route: route})
 	}
 	if !a.system.demo {
 		usageMonitor.RLock()
@@ -200,16 +198,12 @@ func (a *App) collectOperationsAlerts(ctx context.Context) []operationsAlert {
 		if err != nil {
 			continue
 		}
-		if j.Status == "failed" || j.Status == "restore-review" || j.Status == "restored-review" || j.Status == "review" {
-			add("migration-"+j.ID, "Migration needs review", "Open the migration details to resolve the pending action.", "warning", "migrations/pending")
-		}
-	}
-	for _, site := range a.store.Sites() {
-		if site.ResourceLimits != nil {
-			plan := resourceRuntimeRead(site.ID)
-			if plan.State == "Resource blocked" {
-				add("resource-"+site.ID, "Website resource limit reached", site.Domain+" is resource blocked.", "warning", "website-resource-limits")
+		if j.Status == "failed" || j.Status == "interrupted" || j.Status == "restore-review" || j.Status == "restored-review" || j.Status == "review" || j.Status == "captured" {
+			category, title, route := "migration", "Migration needs review", "migrations/pending"
+			if j.Source.Platform == "backup" {
+				category, title, route = "restore", "Website restore needs review", "backups/restore"
 			}
+			items = append(items, operationsAlert{ID: "migration-" + j.ID, Category: category, Title: title, Detail: "Account " + j.Account + ": open the job details to resolve the pending action.", Severity: "warning", Route: route})
 		}
 	}
 	return items
@@ -228,8 +222,18 @@ func operationsEmailMessage(settings operationsSettings, alerts []operationsAler
 	if !settings.EmailEnabled {
 		return "", fmt.Errorf("Email alerts are disabled")
 	}
+	id, err := randomToken(18)
+	if err != nil {
+		return "", fmt.Errorf("Could not create email message identifier")
+	}
 	var body strings.Builder
-	fmt.Fprintf(&body, "From: %s\r\nTo: %s\r\nSubject: LiteCP administrator alerts (%d)\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n", settings.EmailFrom, settings.EmailTo, len(alerts))
+	recipients := settings.alertRecipients()
+	to := "undisclosed-recipients:;"
+	if len(recipients) == 1 {
+		to = recipients[0]
+	}
+	domain := settings.EmailFrom[strings.LastIndex(settings.EmailFrom, "@")+1:]
+	fmt.Fprintf(&body, "From: %s\r\nTo: %s\r\nSubject: LiteCP administrator alerts (%d)\r\nDate: %s\r\nMessage-ID: <%s@%s>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n", settings.EmailFrom, to, len(alerts), time.Now().UTC().Format(time.RFC1123Z), id, domain)
 	for _, v := range alerts {
 		fmt.Fprintf(&body, "[%s] %s\n%s\nPanel section: %s\n\n", v.Severity, v.Title, v.Detail, v.Route)
 	}
@@ -256,8 +260,13 @@ func submitOperationsEmail(ctx context.Context, settings operationsSettings, ale
 		return failed
 	}
 	defer client.Close()
-	if client.Mail(settings.EmailFrom) != nil || client.Rcpt(settings.EmailTo) != nil {
+	if client.Mail(settings.EmailFrom) != nil {
 		return failed
+	}
+	for _, recipient := range settings.alertRecipients() {
+		if client.Rcpt(recipient) != nil {
+			return fmt.Errorf("Local SMTP rejected an alert recipient. Review recipients and Email Delivery.")
+		}
 	}
 	body, err := client.Data()
 	if err != nil {
@@ -278,6 +287,8 @@ func (a *App) operationsCycle(ctx context.Context) error {
 	}
 	defer operationsWorker.Unlock()
 	observed := a.collectOperationsAlerts(ctx)
+	observed = append(observed, a.collectOperationsHealthAlerts(ctx)...)
+	observed = append(observed, a.collectOperationsJobAlerts(ctx)...)
 	a.recordOperationsCapacity(ctx)
 	operationsMu.Lock()
 	s, err := a.readOperations()
@@ -287,7 +298,7 @@ func (a *App) operationsCycle(ctx context.Context) error {
 	}
 	for id, v := range s.Verification {
 		if v.Status == "failed" || v.Status == "changed" {
-			observed = append(observed, operationsAlert{ID: "verification-" + id, Title: "Archive verification needs review", Detail: "A retained backup failed integrity verification. Review Operations before restoring.", Severity: "critical", Route: "operations"})
+			observed = append(observed, operationsAlert{ID: "verification-" + id, Category: "backup-verification", Title: "Archive verification needs review", Detail: "A retained backup failed integrity verification. Review Operations before restoring.", Severity: "critical", Route: "operations"})
 		}
 	}
 	s.LastError = ""
@@ -296,15 +307,9 @@ func (a *App) operationsCycle(ctx context.Context) error {
 		s.EmailWindow = time.Now().UTC()
 		s.EmailCount = 0
 	}
-	mailItems := []operationsAlert{}
+	var mailItems []operationsAlert
 	if s.Settings.EmailEnabled && !a.system.demo && s.EmailCount < 20 {
-		for i := range s.Alerts {
-			v := &s.Alerts[i]
-			if v.ResolvedAt == nil && !v.Acknowledged && time.Since(v.LastEmail) >= 24*time.Hour && len(mailItems) < 20 {
-				mailItems = append(mailItems, *v)
-				v.LastEmail = time.Now().UTC()
-			}
-		}
+		mailItems = operationsEmailCandidates(s, time.Now().UTC())
 	}
 	if len(mailItems) > 0 {
 		s.EmailCount++
@@ -321,7 +326,8 @@ func (a *App) operationsCycle(ctx context.Context) error {
 		if e == nil {
 			for i := range next.Alerts {
 				for _, sent := range mailItems {
-					if next.Alerts[i].ID == sent.ID {
+					if next.Alerts[i].ID == sent.ID && next.Alerts[i].FirstSeen.Equal(sent.FirstSeen) {
+						next.Alerts[i].LastEmail = time.Now().UTC()
 						next.Alerts[i].EmailError = ""
 						if mailErr != nil {
 							next.Alerts[i].EmailError = mailErr.Error()
@@ -442,6 +448,11 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "Cannot read operations settings; existing data retained.")
 			return
 		}
+		if r.URL.Query().Get("alerts") == "1" {
+			s.Settings.EmailRecipients = s.Settings.alertRecipients()
+			writeJSON(w, 200, map[string]any{"settings": s.Settings, "categories": operationsAlertCategories, "alerts": s.Alerts})
+			return
+		}
 		sort.Slice(s.Alerts, func(i, j int) bool { return s.Alerts[i].LastSeen.After(s.Alerts[j].LastSeen) })
 		checks := []readinessCheck{}
 		if r.URL.Query().Get("checks") == "1" {
@@ -465,6 +476,32 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch input.Action {
+	case "alert-settings", "backup-settings":
+		operationsMu.Lock()
+		s, e := a.readOperations()
+		if e == nil {
+			if input.Action == "alert-settings" {
+				s.Settings.EmailEnabled = input.Settings.EmailEnabled
+				s.Settings.EmailFrom = input.Settings.EmailFrom
+				s.Settings.EmailRecipients = input.Settings.alertRecipients()
+				s.Settings.EmailTo = ""
+				s.Settings.AlertRules = input.Settings.AlertRules
+			} else {
+				s.Settings.VerifyBackups = input.Settings.VerifyBackups
+				s.Settings.RetentionEnabled = input.Settings.RetentionEnabled
+				s.Settings.RetentionDays = input.Settings.RetentionDays
+			}
+			e = validateOperationsSettings(s.Settings)
+			if e == nil {
+				e = a.saveOperations(s)
+			}
+		}
+		operationsMu.Unlock()
+		if e != nil {
+			writeError(w, 400, "Could not save settings: "+e.Error())
+			return
+		}
+		_ = a.store.AddActivity("Administrator notification settings saved", "Alert delivery or backup policy updated.", "info")
 	case "settings":
 		if e := validateOperationsSettings(input.Settings); e != nil {
 			writeError(w, 400, e.Error())
@@ -473,6 +510,10 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 		operationsMu.Lock()
 		s, e := a.readOperations()
 		if e == nil {
+			// Preserve category choices for older API clients.
+			if input.Settings.AlertRules == nil {
+				input.Settings.AlertRules = s.Settings.AlertRules
+			}
 			s.Settings = input.Settings
 			e = a.saveOperations(s)
 		}
@@ -531,12 +572,13 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		settings := operationsSettings{
-			RetentionDays: 14,
-			EmailEnabled:  true,
-			EmailTo:       input.Settings.EmailTo,
-			EmailFrom:     input.Settings.EmailFrom,
+			RetentionDays:   14,
+			EmailEnabled:    true,
+			EmailTo:         input.Settings.EmailTo,
+			EmailFrom:       input.Settings.EmailFrom,
+			EmailRecipients: input.Settings.EmailRecipients,
 		}
-		if settings.EmailTo == "" && settings.EmailFrom == "" {
+		if len(settings.alertRecipients()) == 0 && settings.EmailFrom == "" {
 			operationsMu.Lock()
 			s, err := a.readOperations()
 			operationsMu.Unlock()
@@ -545,6 +587,7 @@ func (a *App) operationsAPI(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			settings.EmailTo, settings.EmailFrom = s.Settings.EmailTo, s.Settings.EmailFrom
+			settings.EmailRecipients = s.Settings.EmailRecipients
 		}
 		if err := validateOperationsSettings(settings); err != nil {
 			writeError(w, 400, err.Error())

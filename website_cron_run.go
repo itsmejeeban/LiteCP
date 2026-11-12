@@ -91,6 +91,9 @@ func (a *App) runWebsiteCron(w http.ResponseWriter, r *http.Request) {
 	message := "Completed successfully"
 	if err != nil {
 		message = "Command failed or reached the 30-second limit"
+		key := site.ID + ":" + selected.ID + ":" + started.UTC().Format("2006-01-02T15")
+		a.recordOperationsEvent("cron", key, "Website cron test failed",
+			site.Domain+": review the cron test result in Website Tools.", "warning", "website-cron")
 	}
 	text := strings.TrimSpace(string(output.data))
 	if output.truncated {

@@ -5,6 +5,7 @@
   const entries=[
     {id:"password",title:"Administrator password",description:"Update your administrator sign-in password.",nodes:[$('#passwordForm')]},
     {id:"email",title:"Administrator email",description:"Set the email used for certificate renewal notices.",nodes:[$('#settingsForm')]},
+    {id:"alerts",title:"Alerts",description:"Configure email recipients and failure notifications.",nodes:[$('#alertsSettingsPanel')]},
     {id:"timezone",title:"Time zone",description:"Choose the time zone used throughout the panel.",nodes:[$('#timezoneForm')]},
     {id:"appearance",title:"Appearance",description:"Choose the visual theme for your panel.",nodes:[$("#appearanceForm")]},
     {id:"hostname",title:"Server hostname",description:"View and change the server hostname.",nodes:[$('#hostnameForm')]},

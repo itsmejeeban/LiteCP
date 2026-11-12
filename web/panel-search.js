@@ -47,6 +47,7 @@
     ["logs", "Server logs", "View Nginx, PHP, database, mail and cron logs", "#logTarget", "error access journal troubleshooting"],
     ["activities", "Recent Activities", "Review changes and choose how long activity history is kept", "#activityRetention", "audit event history retention seven 7 fifteen 15 days month year delete"],
     ["settings/email", "Administrator email", "Set the email used for certificate renewal notices", "#settingsEmail", "account email letsencrypt ssl"],
+    ["settings/alerts", "Alerts", "Configure administrator email recipients and failure notifications", "#alertsSettingsPanel", "notification backup restore migration failed resource limit service down email"],
     ["settings/appearance", "Appearance", "Choose a panel theme", "#appearanceTheme", "theme default appearance"],
     ["settings/timezone", "Display timezone", "Choose the time zone used for panel dates", "#settingsTimezone", "time zone country utc timezone clock"],
     ["backups/settings", "Backup retention", "Set how long automatic backups are kept", "#settingsRetention", "backup days retention policy"],

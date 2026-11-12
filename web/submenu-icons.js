@@ -5,7 +5,7 @@
     'email/forward':'create-alias','email/create-alias':'create-alias','email/webmail':'webmail','email/domains':'mail-domains',
     'email/mailboxes':'mailboxes','email/aliases':'aliases','email/delivery':'webmail',
     'email/smtp-port-check':'smtp-port-check','email/configure-webmail':'webmail',
-    'settings/password':'admin-password','settings/email':'admin-email',
+    'settings/password':'admin-password','settings/email':'admin-email','settings/alerts':'alerts',
     'settings/appearance':'appearance','settings/timezone':'timezone','settings/hostname':'hostname','settings/dns':'dns',
     'settings/developer':'developer','settings/update':'update','settings/reboot':'reboot'
   };

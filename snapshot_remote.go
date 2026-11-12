@@ -323,6 +323,9 @@ func (a *App) tickSnapshotAutomation() {
 		snapshotSettingsMu.Lock()
 		cancel()
 		cfg.UploadStatus = finishSnapshotUpload(local, cfg.PendingRemoteOnly, e, os.Remove)
+		if e != nil {
+			a.recordOperationsEvent("snapshot", cfg.Pending, "System snapshot upload failed", "The local snapshot was retained. Review remote storage connectivity and upload status.", "warning", "backups/system-snapshot")
+		}
 		cfg.Pending = ""
 		cfg.PendingRemoteOnly = false
 		_ = a.writeSnapshotSettings(cfg)
@@ -344,6 +347,7 @@ func (a *App) tickSnapshotAutomation() {
 	err = a.startSnapshotJob(context.Background(), "create", local, "")
 	if err != nil {
 		cfg.UploadStatus = err.Error()
+		a.recordOperationsEvent("snapshot", name, "Automatic system snapshot could not start", "Review the snapshot schedule and server service logs.", "warning", "backups/system-snapshot")
 	} else if cfg.Destination.Host != "" {
 		cfg.Pending = name
 		cfg.PendingRemoteOnly = false

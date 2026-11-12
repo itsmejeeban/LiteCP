@@ -21,7 +21,13 @@
       const dialog=[...document.querySelectorAll('dialog[open]')].find(node=>node.querySelector(tool.marker));if(!dialog)return;
       dialog.close();dialog.classList.add('website-tool-inline');page.querySelector('[data-tool-workspace]').append(dialog);dialog.show();tool.dialog=dialog;
     };
-    page.querySelector('select').addEventListener('change',()=>{const all=!page.querySelector('select').value;page.querySelector('[data-tool-all]').hidden=!all;if(tool.dialog?.open)tool.dialog.close();if(all)showAll(tool);});
+    page.querySelector('select').addEventListener('change',event=>{
+      const all=!event.currentTarget.value;
+      page.querySelector('[data-tool-all]').hidden=!all;
+      if(tool.dialog?.open)tool.dialog.close();
+      if(all)showAll(tool);
+      else tool.pending=null;
+    });
     page.querySelector('[data-tool-refresh]').onclick=()=>showAll(tool);
     if(tool.route==='website-ftp'){
       page.querySelector('[data-ftp-add-all]').onclick=()=>{
@@ -49,24 +55,26 @@
   async function showAll(tool){
     if(tool.pending)return;
     if(tool.page.querySelector('select').value)return;
-    tool.pending=true;
+    const request=Symbol();
+    tool.pending=request;
     const content=tool.page.querySelector('[data-tool-all-content]');content.textContent='Loading all websites...';
     const sites=[...(cp.state()?.sites||[])].sort((a,b)=>a.domain.localeCompare(b.domain)),rows=[],errors=[];
     let next=0;
     const endpoint=tool.route==='website-ftp'?'/api/website-ftp':tool.route==='website-cron'?'/api/website-cron':'/api/website-backups';
     try{
       await Promise.all(Array.from({length:Math.min(4,sites.length)},async()=>{
-        while(next<sites.length){const site=sites[next++];try{
+        while(tool.pending===request&&next<sites.length){const site=sites[next++];try{
           const data=await cp.api(endpoint+'?siteId='+encodeURIComponent(site.id));
           for(const item of data.items||[])rows.push({site,item,data});
         }catch(error){errors.push(site.domain+': '+error.message);}}
       }));
+      if(tool.pending!==request||tool.page.querySelector('select').value)return;
       rows.sort((a,b)=>a.site.domain.localeCompare(b.site.domain));
       tool.rows=rows;
       const headings=tool.route==='website-ftp'?['Website','Username','Connection','Directory','Actions']:tool.route==='website-cron'?['Website','Name','Schedule','Command','Status']:['Website','Backup','Created','Size','Storage'];
       const cells=({site,item,data})=>tool.route==='website-ftp'?[site.domain,item.username,(data.host||'')+':'+(data.port||21)+'  |  '+(data.protocol||'FTPS'),data.directory||'']:tool.route==='website-cron'?[site.domain,item.name,item.schedule,item.command,item.enabled?'Enabled':'Disabled']:[site.domain,(item.domain||site.domain)+'-'+item.id+'.zip',cp.formatDateTime(item.createdAt),cp.formatBytes(item.size),item.remoteOnly?'Remote only':item.remotePath?'Local + remote':'Local'];
       content.innerHTML=(errors.length?'<p>'+esc(errors.join(' | '))+'</p>':'')+(rows.length?'<div class="table-scroll"><table class="data-table"><thead><tr>'+headings.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map((row,index)=>'<tr>'+cells(row).map(value=>'<td>'+esc(String(value??''))+'</td>').join('')+(tool.route==='website-ftp'?'<td><div class="feature-actions"><button type="button" class="button button-secondary" data-all-ftp-edit data-ftp-row="'+index+'">Edit</button><button type="button" class="button button-danger" data-all-ftp-remove data-ftp-row="'+index+'">Remove</button></div></td>':'')+'</tr>').join('')+'</tbody></table></div>':'<p>No '+esc(tool.title.toLowerCase())+' found.</p>');
-    }finally{tool.pending=false;}
+    }finally{if(tool.pending===request)tool.pending=null;}
   }
   function showCurrent(){const tool=tools.find(item=>location.hash==='#'+item.route);if(tool&&!tool.page.querySelector('select').value)showAll(tool);}
   window.addEventListener('hashchange',showCurrent);
