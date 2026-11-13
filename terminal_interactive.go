@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -22,9 +21,7 @@ var terminalPTY string
 func (a *App) terminalCapabilities(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	reason := ""
-	if len(os.Args) == 2 && os.Args[1] == "broker" {
-		reason = "Browser terminal is unavailable in privilege-separated mode. Use your SSH client for server shell access."
-	} else if a.system.demo || runtime.GOOS != "linux" {
+	if a.system == nil || a.system.demo || runtime.GOOS != "linux" {
 		reason = "Terminal requires the installed Linux server."
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"available": reason == "", "reason": reason})
@@ -86,11 +83,36 @@ func closeTerminalSessions(owner [32]byte, selectedID string) {
 
 func (a *App) interactiveTerminal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	if validExternalAPIGrant(r) {
+		writeError(w, 403, "Use an administrator browser session for the terminal")
+		return
+	}
 	owner := terminalOwner(r)
 	id := r.URL.Query().Get("id")
 	if r.Method == http.MethodPost && id == "" {
+		if !requestIsHTTPS(r) {
+			writeError(w, 403, "Open the panel using HTTPS before entering the root password")
+			return
+		}
+		var credentials struct {
+			Password string `json:"password"`
+		}
+		if decodeJSONWithLimit(r, &credentials, 32<<10) != nil || credentials.Password == "" || len(credentials.Password) > 4096 {
+			writeError(w, 400, "Enter the server root password")
+			return
+		}
 		if a.system.demo {
 			writeError(w, 400, "Terminal requires the installed Linux server.")
+			return
+		}
+		if !a.apiRateAllowed("terminal-root-auth", 5) {
+			writeError(w, 429, "Too many terminal login attempts. Wait one minute and try again")
+			return
+		}
+		err := verifyTerminalRootPassword(r.Context(), credentials.Password)
+		credentials.Password = ""
+		if err != nil {
+			writeError(w, 403, err.Error())
 			return
 		}
 		interactiveTerminals.Lock()
@@ -104,7 +126,7 @@ func (a *App) interactiveTerminal(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "Cannot allocate terminal")
 			return
 		}
-		cmd := exec.Command("python3", "-u", "-c", terminalPTY)
+		cmd := exec.Command("systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--property=RuntimeMaxSec=1800", "--", "python3", "-u", "-c", terminalPTY)
 		input, err := cmd.StdinPipe()
 		if err != nil {
 			writeError(w, 500, "Cannot open terminal input")
@@ -116,6 +138,7 @@ func (a *App) interactiveTerminal(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 500, "Cannot open terminal output")
 			return
 		}
+		cmd.Stderr = cmd.Stdout
 		if err := cmd.Start(); err != nil {
 			input.Close()
 			writeError(w, 500, "Cannot start terminal; Python 3 and bash are required")

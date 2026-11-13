@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,24 @@ func TestTerminalCapabilitiesSeparatedMode(t *testing.T) {
 	}
 	if response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("capabilities must not be cached")
+	}
+}
+
+func TestTerminalCreateRequiresHTTPSAndRootPassword(t *testing.T) {
+	app := apiTestApp(t)
+	for _, tc := range []struct {
+		url, body string
+		status    int
+	}{
+		{"http://panel.example/api/terminal/session", `{"password":"example"}`, 403},
+		{"https://panel.example/api/terminal/session", `{}`, 400},
+		{"https://panel.example/api/terminal/session", `{"password":""}`, 400},
+	} {
+		w := httptest.NewRecorder()
+		app.interactiveTerminal(w, httptest.NewRequest("POST", tc.url, strings.NewReader(tc.body)))
+		if w.Code != tc.status {
+			t.Fatalf("expected %d, got %d", tc.status, w.Code)
+		}
 	}
 }
 

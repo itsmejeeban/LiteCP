@@ -74,6 +74,7 @@
     function finish(value) {
       if (finished) return;
       finished = true;
+      if (control.type === "password") control.value = "";
       window.removeEventListener('hashchange', cancel);
       dialog.close(); dialog.remove();
       if (previous?.isConnected && !previous.disabled) previous.focus({ preventScroll: true });

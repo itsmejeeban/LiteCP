@@ -4,6 +4,7 @@
   "/api/v1",
   "/api/v1/request",
   "/api/shell-capabilities",
+  "/api/terminal/session",
   "/api/activities",
   "/api/activity-policy",
   "/api/analytics/disk-usage",

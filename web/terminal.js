@@ -7,12 +7,15 @@
   const fit=new FitAddon.FitAddon();terminal.loadAddon(fit);terminal.open(host);
   host.addEventListener("pointerdown",event=>{if(event.button===0)terminal.focus();});
   let id=null,cursor=0,timer=null,pending='',sending=false,generation=0,available=false;
-  connect.disabled=true;status.textContent='Checking terminal availability…';
-  fetch('/api/shell-capabilities',{credentials:'same-origin'}).then(async response=>{
-    const value=await response.json();if(!response.ok)throw new Error(value.error||'Cannot check terminal availability. Reload the page to retry.');
+  connect.disabled=true;status.textContent='Checking terminal availabilityâ€¦';
+  function checkCapabilities(){return fetch('/api/shell-capabilities',{credentials:'same-origin'}).then(async response=>{
+    const value=await response.json();if(!response.ok){const error=new Error(value.error||'Cannot check terminal availability. Reload the page to retry.');error.status=response.status;if(response.status===401)window.LiteCP.handleError(error);throw error;}
     available=value.available===true;connect.disabled=!available;
     status.textContent=available?'Disconnected':value.reason||'Browser terminal is unavailable. Use SSH for shell access.';
-  }).catch(error=>{status.textContent=error.message;});
+  }).catch(error=>{status.textContent=error.message;});}
+  checkCapabilities();
+  const previousTerminalRender=window.LiteCPFeatures.render;
+  window.LiteCPFeatures.render=state=>{previousTerminalRender?.(state);if(location.hash==='#terminal'&&!id&&!available)checkCapabilities();};
   const menu=document.createElement('div');menu.id='terminalContextMenu';menu.hidden=true;menu.setAttribute('role','menu');
   menu.innerHTML='<button type="button" role="menuitem" data-terminal-menu="select">Select All</button><button type="button" role="menuitem" data-terminal-menu="copy">Copy <small>Ctrl+C</small></button><button type="button" role="menuitem" data-terminal-menu="paste">Paste <small>Ctrl+V</small></button>';
   panel.append(menu);
@@ -57,13 +60,19 @@
   document.addEventListener('pointerdown',event=>{if(!menu.contains(event.target))closeMenu();});window.addEventListener('resize',closeMenu);document.addEventListener('scroll',closeMenu,true);
 
   const encode=text=>{const bytes=new TextEncoder().encode(text);let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);return btoa(binary);};
-  async function api(method,body,query=''){const response=await fetch('/api/terminal/session'+query,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const value=await response.json();if(!response.ok)throw new Error(value.error||'Terminal connection failed');return value;}
+  async function api(method,body,query=''){const response=await fetch('/api/terminal/session'+query,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const value=await response.json();if(!response.ok){const error=new Error(value.error||'Terminal connection failed');error.status=response.status;if(response.status===401){available=false;window.LiteCP.handleError(error);}throw error;}return value;}
   function resize(){if(!host.getBoundingClientRect().width)return;fit.fit();if(id)api('POST',{cols:terminal.cols,rows:terminal.rows},'?id='+encodeURIComponent(id)).catch(()=>{});}
   new ResizeObserver(resize).observe(host);
   async function flush(){if(sending||!id||!pending)return;sending=true;const token=generation,session=id,text=pending.slice(0,12000);pending=pending.slice(text.length);try{await api('POST',{data:encode(text)},'?id='+encodeURIComponent(session));}catch(error){if(token===generation){pending='';status.textContent=error.message;}}finally{sending=false;if(pending)flush();}}
   terminal.onData(data=>{if(id){pending+=data;flush();}});
   async function poll(token){if(!id||token!==generation)return;try{const result=await api('GET',null,'?id='+encodeURIComponent(id)+'&cursor='+cursor);if(token!==generation)return;if(result.reset)terminal.write('\r\n[Older output was trimmed]\r\n');if(result.data)terminal.write(Uint8Array.from(atob(result.data),char=>char.charCodeAt(0)));cursor=result.cursor;if(result.closed){id=null;disconnect.disabled=true;connect.disabled=false;status.textContent='Shell exited';return;}timer=setTimeout(()=>poll(token),100);}catch(error){if(token!==generation)return;status.textContent=error.message;id=null;disconnect.disabled=true;connect.disabled=false;}}
-  connect.onclick=async()=>{if(!available||connect.disabled)return;connect.disabled=true;status.textContent='Connecting…';try{const session=await api('POST',{});id=session.id;cursor=0;pending='';terminal.reset();disconnect.disabled=false;status.textContent='Connected';resize();terminal.focus();poll(++generation);}catch(error){status.textContent=error.message;connect.disabled=false;}};
+  connect.onclick=async()=>{if(!available||connect.disabled)return;connect.disabled=true;status.textContent='Connectingâ€¦';try{
+    if(location.protocol!=='https:')throw new Error('Open the panel using HTTPS before entering the root password.');
+    let password=await window.LiteCPDialogs.prompt('Enter this server’s root password to open a terminal.', '', {title:'Root authentication',label:'Root password',type:'password',required:true,maxLength:4096,confirmText:'Connect',dismissOnNavigation:true});
+    if(password===null){status.textContent='Disconnected';connect.disabled=false;return;}
+    let session;
+    try{session=await api('POST',{password});}finally{password='';}
+id=session.id;cursor=0;pending='';terminal.reset();disconnect.disabled=false;status.textContent='Connected';resize();terminal.focus();poll(++generation);}catch(error){status.textContent=error.message;connect.disabled=false;}};
   disconnect.onclick=async()=>{if(!id)return;disconnect.disabled=true;try{await api('DELETE',null,'?id='+encodeURIComponent(id));generation++;clearTimeout(timer);id=null;pending='';status.textContent='Disconnected';connect.disabled=false;}catch(error){disconnect.disabled=false;status.textContent=error.message;}};
   document.getElementById('terminalClear').onclick=()=>{terminal.clear();terminal.focus();};
   function toggleExpandedTerminal() {

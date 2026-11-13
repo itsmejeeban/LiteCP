@@ -210,9 +210,9 @@ func brokerOperation(mux *http.ServeMux, path string) (string, string, error) {
 	if !strings.HasPrefix(path, "/api/") && path != "/internal/phpmyadmin-ticket" && path != "/internal/webmail-ticket" {
 		return "", "", errors.New("unknown broker operation")
 	}
-	// Root shells cannot be obtained through a separated web service.
-	if path == "/api/terminal" || strings.HasPrefix(path, "/api/terminal/") {
-		return "", "", errors.New("Browser terminal is unavailable in privilege-separated mode. Use SSH for server shell access.")
+	// Only the browser-owned, root-password-gated session API is exposed.
+	if path == "/api/terminal" || strings.HasPrefix(path, "/api/terminal/") && path != "/api/terminal/session" {
+		return "", "", errors.New("Unsupported terminal operation")
 	}
 	_, pattern := mux.Handler(&http.Request{Method: http.MethodGet, URL: &url.URL{Path: path}})
 	if pattern == "" || !brokerAllowedOperations[pattern] || !strings.HasPrefix(path, pattern) {

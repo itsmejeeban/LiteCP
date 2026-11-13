@@ -1,14 +1,13 @@
 # Interactive terminal
 
-Installed privilege-separated panels intentionally do not expose a browser
-shell. The Terminal page checks availability before enabling Connect and directs
-administrators to their SSH client. This restriction prevents the web service
-from obtaining a root shell through the management broker.
-
-The behavior below applies only to runtimes where browser shells are supported.
+Connect requires an authenticated administrator browser session over HTTPS
+and prompts for the server root password. The host verifies it against the
+root account using libcrypt, rejecting locked or expired accounts. Authentication
+attempts are limited to five per minute. The password is sent through stdin
+to a short-lived host task and is never passed as a command argument.
 
 Management → Terminal → Connect opens a persistent bash session in a Linux
-pseudo-terminal. The shell runs with the LiteCP service account's privileges.
+pseudo-terminal. The shell runs as root in a transient systemd unit.
 Directory changes, shell variables, interactive prompts and command history
 remain in the session. xterm.js renders ANSI colors, cursor movement and
 full-screen applications. Tab, arrow keys, Ctrl+C and Ctrl+D go to the shell.
@@ -17,12 +16,12 @@ Use the browser's normal copy/paste shortcuts for terminal selections and input.
 Switching panel pages retains the shell. Disconnect ends the shell. Reloading
 the page closes the old session when possible; disconnected browsers expire
 after five minutes without requests. Eight sessions are allowed per panel
-process. Panel restart ends sessions. Output history is bounded at 2 MiB on the
+process. Sessions have a maximum lifetime of 30 minutes. Panel restart ends sessions. Output history is bounded at 2 MiB on the
 server and 10,000 lines in the browser. Credentials and terminal output are not
 saved to disk by the terminal implementation; shell/application history policies
 still apply normally.
 
-Requires Linux, Python 3 and bash. Browser assets are vendored locally under
+Requires Linux, systemd, libcrypt, Python 3 and bash. Browser assets are vendored locally under
 web/vendor/xterm with their licenses; no runtime CDN connection is needed.
 Session access uses administrator authentication, same-origin mutation checks,
 an unpredictable session identifier and browser-cookie ownership.

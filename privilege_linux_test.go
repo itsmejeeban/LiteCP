@@ -138,7 +138,7 @@ func TestBrokerRealUnprivilegedFrontendProcess(t *testing.T) {
 	for _, fixture := range []struct {
 		path   string
 		status int
-	}{{"/api/version", 200}, {"/api/state", 401}, {"/api/terminal/session", 403}} {
+	}{{"/api/version", 200}, {"/api/state", 401}, {"/api/terminal/session", 401}} {
 		response, e := client.Get("http://" + child.Address + fixture.path)
 		if e != nil {
 			t.Fatal(e)

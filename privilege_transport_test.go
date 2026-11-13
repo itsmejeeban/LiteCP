@@ -44,13 +44,13 @@ func TestBrokerFramesBoundMetadataAndStreamArchives(t *testing.T) {
 
 func TestBrokerOperationsAreRegisteredAndNeverRootShells(t *testing.T) {
 	mux := (&App{}).routeMux()
-	for _, path := range []string{"/api/version", "/api/state", "/api/sites/fixture-id", "/api/files/content", "/internal/phpmyadmin-ticket"} {
+	for _, path := range []string{"/api/version", "/api/state", "/api/sites/fixture-id", "/api/files/content", "/internal/phpmyadmin-ticket", "/api/terminal/session"} {
 		op, suffix, err := brokerOperation(mux, path)
 		if err != nil || op+suffix != path {
 			t.Fatalf("registered operation %s rejected: %v", path, err)
 		}
 	}
-	for _, path := range []string{"/", "/etc/shadow", "/api/missing-operation", "/api/terminal", "/api/terminal/session", "/api/sites/../terminal"} {
+	for _, path := range []string{"/", "/etc/shadow", "/api/missing-operation", "/api/terminal", "/api/terminal/arbitrary", "/api/sites/../terminal"} {
 		if _, _, err := brokerOperation(mux, path); err == nil {
 			t.Fatalf("unsafe/unregistered operation %s accepted", path)
 		}
