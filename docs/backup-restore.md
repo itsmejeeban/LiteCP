@@ -1,5 +1,21 @@
 # Backups > Restore
 
+The Websites table shows the total size of files in a managed website's home.
+Backup History shows the compressed archive size. New scheduled archives also
+show the separate sizes of the included files and SQL dumps before compression.
+
+Scheduled and Backup History archives include the public files, private website
+files and all linked managed databases. They skip the home's backup repository,
+logs, temporary files, Trash and retained restore working directories. Older
+archives contain public files and the primary database, if configured. Create a
+new backup for the expanded coverage.
+
+Use Backup History or Backups > Restore for an in-place restore of the saved
+private files and linked databases. Restore via Folder can inspect the same
+archive, but its manual import form restores the selected public root and
+optionally one selected database. Restoring to a new target may require manual
+database mapping.
+
 Restore lists complete local website ZIP backups and recorded backup-history
 archives. It verifies local regular files and checks exact recorded objects on
 attached remote destinations. A failed remote check is shown as a warning;

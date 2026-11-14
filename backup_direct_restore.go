@@ -126,6 +126,13 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 			fail(err)
 			return
 		}
+		if input.Kind == "history" {
+			free, spaceErr := a.system.manualBackupFreeBytes(ctx, filepath.Dir(root))
+			if spaceErr != nil || free <= folderMigrationReserve || preview.Bytes > free-folderMigrationReserve {
+				fail(fmt.Errorf("insufficient free space to prepare the restore copy"))
+				return
+			}
+		}
 		// Each restore owns a fresh stage so concurrent requests never share mutable files.
 		target := filepath.Join(a.system.dataDir, "migrations", job.ID)
 		if err = os.Mkdir(target, 0700); err != nil {
@@ -149,7 +156,7 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 				fail(e)
 				return
 			}
-			if len(preview.Databases) == 1 && filepath.Base(preview.Databases[0]) == "database.sql" {
+			if len(preview.Databases) == 1 && preview.Databases[0] == "database.sql" {
 				old := filepath.Join(target, "files", filepath.FromSlash(preview.Databases[0]))
 				name := db + ".sql"
 				if e = os.Rename(old, filepath.Join(target, "files", name)); e != nil {
@@ -173,6 +180,11 @@ func (a *App) directBackupRestore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, job)
 }
 func copyRestoreStage(ctx context.Context, source, target string) error {
+	source = filepath.Join(source, "files")
+	target = filepath.Join(target, "files")
+	if err := os.Mkdir(target, 0700); err != nil {
+		return err
+	}
 	return filepath.Walk(source, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -203,7 +215,7 @@ func copyRestoreStage(ctx context.Context, source, target string) error {
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(dst, src)
+		_, err = io.Copy(dst, migrationContextReader{ctx, src})
 		closeErr := dst.Close()
 		if err != nil {
 			return err

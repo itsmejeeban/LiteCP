@@ -876,7 +876,7 @@ func (s *System) ChangeSiteDomain(ctx context.Context, current, updated Site) er
 	return nil
 }
 
-func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
+func (s *System) CreateBackup(ctx context.Context, site Site, databases []ManagedDatabase) (Backup, error) {
 	backupID, err := randomToken(8)
 	if err != nil {
 		return Backup{}, err
@@ -890,34 +890,7 @@ func (s *System) CreateBackup(ctx context.Context, site Site) (Backup, error) {
 		backup.Size = 184*1024*1024 + 739*1024
 		return backup, nil
 	}
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
-		return Backup{}, fmt.Errorf("create backup directory: %w", err)
-	}
-	staging, err := os.MkdirTemp(backupDir, ".litecp-staging-")
-	if err != nil {
-		return Backup{}, fmt.Errorf("create backup staging directory: %w", err)
-	}
-	defer os.RemoveAll(staging)
-	webArchive := filepath.Join(staging, "website.tar.gz")
-	if _, err := runCommand(ctx, 5*time.Minute, "tar", "-czf", webArchive, "-C", site.Root, "."); err != nil {
-		return Backup{}, fmt.Errorf("archive website: %w", err)
-	}
-	if site.Database != "" {
-		dumpPath := filepath.Join(staging, "database.sql")
-		dumpCommand := firstAvailableCommand("mysqldump", "mariadb-dump")
-		if _, err := runCommand(ctx, 5*time.Minute, dumpCommand, "--protocol=socket", "--user=root", "--single-transaction", "--result-file="+dumpPath, site.Database); err != nil {
-			return Backup{}, fmt.Errorf("dump database: %w", err)
-		}
-	}
-	if _, err := runCommand(ctx, 5*time.Minute, "tar", "-czf", finalPath, "-C", staging, "."); err != nil {
-		return Backup{}, fmt.Errorf("finalize backup: %w", err)
-	}
-	info, err := os.Stat(finalPath)
-	if err != nil {
-		return Backup{}, fmt.Errorf("inspect backup: %w", err)
-	}
-	backup.Size = info.Size()
-	return backup, nil
+	return publishNativeWebsiteBackup(ctx, site, databases, backup, siteHome(site), dumpNativeBackupDatabase)
 }
 
 func (s *System) RemoveBackupFile(path string) error {

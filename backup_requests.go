@@ -80,14 +80,17 @@ func (a *App) enqueueBackup(site Site, destination *BackupDestination) (Backup, 
 		if !finish("creating") {
 			return
 		}
-		result, err := a.system.CreateBackup(ctx, site)
+		result, err := a.system.CreateBackup(ctx, site, a.store.websiteBackupDatabases(site.ID))
 		if err != nil {
 			finish("failed")
-			a.store.AddActivity("Backup failed", site.Domain+": archive creation did not finish.", "error")
+			a.store.AddActivity("Backup failed", site.Domain+": "+err.Error(), "error")
 			return
 		}
 		job.Path = result.Path
 		job.Size = result.Size
+		job.FileBytes = result.FileBytes
+		job.DatabaseDumpBytes = result.DatabaseDumpBytes
+		job.Scope = result.Scope
 		if destination != nil {
 			if !finish("uploading") {
 				return

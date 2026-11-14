@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // Leave headroom for block rounding and disk-space reserves in int64 accounting.
@@ -178,63 +177,5 @@ func (a *App) checkFolderMigrationSpace(ctx context.Context, directory string, r
 }
 
 func (a *App) stageFolderScheduledBackup(ctx context.Context, source io.Reader, stage string, outerBudget int64) (MigrationPreview, error) {
-	preview := MigrationPreview{Platform: "LiteCP scheduled backup", Roots: []string{"public_html"}, Databases: []string{}, CreatedAt: time.Now().UTC()}
-	outer := filepath.Join(stage, "outer")
-	if err := os.Mkdir(outer, 0700); err != nil {
-		return preview, err
-	}
-	if _, _, err := unpackHistoryTarReader(ctx, source, outer, outerBudget); err != nil {
-		return preview, err
-	}
-	entries, err := os.ReadDir(outer)
-	if err != nil {
-		return preview, err
-	}
-	websiteArchive := ""
-	for _, entry := range entries {
-		if !entry.Type().IsRegular() || (entry.Name() != "website.tar.gz" && entry.Name() != "database.sql") {
-			return preview, errors.New("scheduled LiteCP backup must contain website.tar.gz and optionally database.sql")
-		}
-		if entry.Name() == "website.tar.gz" {
-			websiteArchive = filepath.Join(outer, entry.Name())
-		}
-	}
-	if websiteArchive == "" {
-		return preview, errors.New("scheduled LiteCP backup is missing website.tar.gz")
-	}
-	required, err := migrationArchiveBytesWithLimit(ctx, websiteArchive, folderMigrationExtractLimit)
-	if err != nil {
-		return preview, err
-	}
-	if err := a.checkFolderMigrationSpace(ctx, stage, required); err != nil {
-		return preview, err
-	}
-	files := filepath.Join(stage, "files", "public_html")
-	if err := os.MkdirAll(files, 0700); err != nil {
-		return preview, err
-	}
-	inner, err := os.Open(websiteArchive)
-	if err != nil {
-		return preview, err
-	}
-	defer inner.Close()
-	preview.Files, preview.Bytes, err = unpackHistoryTarReader(ctx, inner, files, required)
-	if err != nil {
-		return preview, err
-	}
-	sql := filepath.Join(outer, "database.sql")
-	if info, err := os.Stat(sql); err == nil {
-		if info.Size() > folderMigrationExtractLimit-preview.Bytes {
-			return preview, errors.New("scheduled backup exceeds supported size accounting")
-		}
-		if err := os.Rename(sql, filepath.Join(stage, "files", "database.sql")); err != nil {
-			return preview, err
-		}
-		preview.Databases = append(preview.Databases, "database.sql")
-		preview.Files++
-		preview.Bytes += info.Size()
-	} else if !os.IsNotExist(err) {
-		return preview, err
-	}
-	return preview, nil
+	return stageNativeBackup(ctx, source, stage, outerBudget, a.system.manualBackupFreeBytes)
 }

@@ -240,9 +240,9 @@ func (a *App) runBackupSchedule(schedule BackupSchedule) error {
 		}
 	}
 	for _, site := range sites {
-		backup, err := a.system.CreateBackup(ctx, site)
+		backup, err := a.system.CreateBackup(ctx, site, a.store.websiteBackupDatabases(site.ID))
 		if err != nil {
-			return err
+			return fmt.Errorf("%s: %w", site.Domain, err)
 		}
 		backup.ScheduleID = schedule.ID
 		var uploadErr error

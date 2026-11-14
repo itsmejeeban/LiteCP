@@ -104,6 +104,10 @@ func unpackHistoryTar(ctx context.Context, archive, root string) (int, int64, er
 }
 
 func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string, extractLimit int64) (int, int64, error) {
+	return unpackHistoryTarValidated(ctx, input, root, extractLimit, nil)
+}
+
+func unpackHistoryTarValidated(ctx context.Context, input io.Reader, root string, extractLimit int64, allowed func(string, byte) bool) (int, int64, error) {
 	gz, e := gzip.NewReader(migrationContextReader{ctx, input})
 	if e != nil {
 		return 0, 0, e
@@ -119,7 +123,13 @@ func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string, e
 		}
 		h, e := tr.Next()
 		if e == io.EOF {
-			return count, total, nil
+			// GNU tar can pad its final record. Read the gzip trailer and
+			// accept only a bounded amount of zero padding.
+			padding, err := io.ReadAll(io.LimitReader(migrationContextReader{ctx, gz}, (64<<10)+1))
+			if len(padding) > 64<<10 || len(strings.Trim(string(padding), "\x00")) != 0 {
+				return count, total, errors.New("Unexpected data after backup TAR")
+			}
+			return count, total, err
 		}
 		if e != nil {
 			return count, total, e
@@ -129,7 +139,13 @@ func unpackHistoryTarReader(ctx context.Context, input io.Reader, root string, e
 			return count, total, e
 		}
 		if name == "." {
+			if h.Typeflag != tar.TypeDir {
+				return count, total, errors.New("Invalid backup root entry")
+			}
 			continue
+		}
+		if allowed != nil && !allowed(name, h.Typeflag) {
+			return count, total, errors.New("Unexpected backup entry: " + name)
 		}
 		if seen[name] || len(seen) >= maxArchiveMembers {
 			return count, total, errors.New("Duplicate or excessive archive members")
@@ -202,11 +218,11 @@ func (a *App) prepareHistoryBackup(ctx context.Context, b Backup) (MigrationPrev
 		return p, errors.New("Backup path cannot be verified")
 	}
 	info, e := os.Stat(archive)
-	if e != nil {
-		return p, e
+	if e != nil || !info.Mode().IsRegular() || (b.Size > 0 && info.Size() != b.Size) {
+		return p, errors.New("Backup archive is unavailable or differs from its recorded size")
 	}
-	free, e := migrationFreeBytes(ctx, parent)
-	if e != nil || free < info.Size()*3+(512<<20) {
+	free, e := a.system.manualBackupFreeBytes(ctx, parent)
+	if e != nil || free <= folderMigrationReserve {
 		return p, errors.New("Insufficient free space to inspect backup")
 	}
 	id, e := randomToken(18)
@@ -215,45 +231,25 @@ func (a *App) prepareHistoryBackup(ctx context.Context, b Backup) (MigrationPrev
 	}
 	id = safeSiteID(id)
 	root := filepath.Join(parent, id)
-	outer := filepath.Join(root, "outer")
-	files := filepath.Join(root, "files", "public_html")
-	if e = os.MkdirAll(outer, 0700); e != nil {
+	if e = os.Mkdir(root, 0700); e != nil {
 		return p, e
 	}
-	if e = os.MkdirAll(files, 0700); e != nil {
-		return p, e
-	}
-	if _, _, e = unpackHistoryTar(ctx, archive, outer); e != nil {
-		return p, e
-	}
-	entries, e = os.ReadDir(outer)
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.RemoveAll(root) // Only this request's newly created staging directory.
+		}
+	}()
+	input, e := os.Open(archive)
 	if e != nil {
 		return p, e
 	}
-	for _, entry := range entries {
-		if entry.Name() != "website.tar.gz" && entry.Name() != "database.sql" {
-			return p, errors.New("Unsupported history backup contents")
-		}
-	}
-	p.Files, p.Bytes, e = unpackHistoryTar(ctx, filepath.Join(outer, "website.tar.gz"), files)
+	defer input.Close()
+	p, e = stageNativeBackup(ctx, input, root, free-folderMigrationReserve, a.system.manualBackupFreeBytes)
 	if e != nil {
 		return p, e
 	}
 	p.ID = id
-	p.Platform = "LiteCP manual ZIP"
-	p.Roots = []string{"public_html"}
-	p.Databases = []string{}
-	p.CreatedAt = time.Now().UTC()
-	sql := filepath.Join(outer, "database.sql")
-	if stat, e := os.Stat(sql); e == nil && stat.Mode().IsRegular() {
-		if stat.Size() > migrationExtractLimit-p.Bytes {
-			return p, errors.New("Backup exceeds extraction limit")
-		}
-		if e = os.Rename(sql, filepath.Join(root, "files", "database.sql")); e != nil {
-			return p, e
-		}
-		p.Databases = append(p.Databases, "database.sql")
-	}
 	content, _ := json.Marshal(p)
 	if e = writeAtomic(filepath.Join(root, "manifest.json"), content, 0600); e != nil {
 		return p, e
@@ -264,5 +260,6 @@ func (a *App) prepareHistoryBackup(ctx context.Context, b Backup) (MigrationPrev
 	if e = writeAtomic(filepath.Join(root, "backup-origin"), []byte("history:"+b.ID), 0600); e != nil {
 		return p, e
 	}
+	keep = true
 	return p, nil
 }

@@ -23,7 +23,7 @@ func (a *App) nativeBackupDatabasePlan(site Site, dumps []string) (map[string]Ma
 	seen := map[string]bool{}
 	for _, dump := range dumps {
 		name := strings.TrimSuffix(filepath.Base(dump), ".sql")
-		if name == "database" && len(dumps) == 1 && site.Database != "" {
+		if dump == "database.sql" && len(dumps) == 1 && site.Database != "" {
 			name = site.Database
 		}
 		db, ok := registered[name]

@@ -43,17 +43,20 @@ type Site struct {
 }
 
 type Backup struct {
-	ScheduleID      string    `json:"scheduleId,omitempty"`
-	ID              string    `json:"id"`
-	SiteID          string    `json:"siteId"`
-	Domain          string    `json:"domain"`
-	Path            string    `json:"path"`
-	DestinationID   string    `json:"destinationId,omitempty"`
-	DestinationName string    `json:"destinationName,omitempty"`
-	RemotePath      string    `json:"remotePath,omitempty"`
-	Size            int64     `json:"size"`
-	Status          string    `json:"status"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ScheduleID        string    `json:"scheduleId,omitempty"`
+	ID                string    `json:"id"`
+	SiteID            string    `json:"siteId"`
+	Domain            string    `json:"domain"`
+	Path              string    `json:"path"`
+	DestinationID     string    `json:"destinationId,omitempty"`
+	DestinationName   string    `json:"destinationName,omitempty"`
+	RemotePath        string    `json:"remotePath,omitempty"`
+	Size              int64     `json:"size"`
+	FileBytes         *int64    `json:"fileBytes,omitempty"`
+	DatabaseDumpBytes *int64    `json:"databaseDumpBytes,omitempty"`
+	Scope             string    `json:"scope,omitempty"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 type BackupDestination struct {

@@ -318,7 +318,13 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	nativeDatabases := map[string]ManagedDatabase{}
 	var customConfigs []migrationConfigPlan
 	var customDatabases map[string]string
-	if configName != "" {
+	if len(preview.Databases) > 0 && job.Source.Platform == "backup" && existing != nil {
+		nativeDatabases, err = a.nativeBackupDatabasePlan(*existing, preview.Databases)
+		if err != nil {
+			fail(err)
+			return
+		}
+	} else if configName != "" {
 		data, e := os.ReadFile(filepath.Join(source, configName))
 		if e != nil {
 			fail(e)
@@ -352,12 +358,6 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			customConfigs = []migrationConfigPlan{plan}
 			customDatabases = map[string]string{db: ""}
 		}
-	} else if len(preview.Databases) > 0 && job.Source.Platform == "backup" && existing != nil {
-		nativeDatabases, err = a.nativeBackupDatabasePlan(*existing, preview.Databases)
-		if err != nil {
-			fail(err)
-			return
-		}
 	} else {
 		private := filepath.Join(root, "files", "private_home")
 		if recreateEmpty {
@@ -374,6 +374,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			fail(err)
 			return
 		}
+	}
+	if job.Source.Platform == "backup" && existing == nil && sqlPath != "" && len(preview.Databases) > 1 {
+		fail(fmt.Errorf("restore to a new website needs explicit mapping for the additional database dumps"))
+		return
 	}
 	var cpanelPlan cpanelServicesPlan
 	if job.Source.Platform == "cpanel" {
@@ -401,7 +405,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 	setLiveJobStage(job, "restore", "restoring", "Restoring website files and database. DNS remains unchanged.")
 	_ = a.saveLiveJob(job)
 	if existing != nil {
-		backup, e := a.system.CreateBackup(ctx, *existing)
+		backup, e := a.system.CreateBackup(ctx, *existing, a.store.websiteBackupDatabases(existing.ID))
 		if e != nil {
 			fail(fmt.Errorf("recovery backup failed: %w", e))
 			return
@@ -454,6 +458,10 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		privateSource = filepath.Join(root, "files", "home")
 	}
 	if privateInfo, privateErr := os.Lstat(privateSource); privateErr == nil {
+		if job.Source.Platform == "backup" && siteHome(site) == "" {
+			fail(fmt.Errorf("private files require a managed website home"))
+			return
+		}
 		if !privateInfo.IsDir() || privateInfo.Mode()&os.ModeSymlink != 0 {
 			fail(fmt.Errorf("private application data has an unsafe layout"))
 			return
@@ -491,6 +499,12 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		if err = chownSiteTree(privateStage, site, a.system.webUser()); err != nil {
 			fail(err)
 			return
+		}
+		if job.Source.Platform == "backup" {
+			if err = protectNativeBackupHomeStage(privateStage, site); err != nil {
+				fail(err)
+				return
+			}
 		}
 	} else if !os.IsNotExist(privateErr) {
 		fail(privateErr)
@@ -622,7 +636,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 			return
 		}
 	}
-	if app == "whmcs" {
+	if app == "whmcs" && job.Source.Platform != "backup" {
 		if err = a.restoreWHMCSPrivate(ctx, job.ID, site, filepath.Join(stage, configName)); err != nil {
 			fail(err)
 			return
@@ -639,10 +653,15 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		fail(context.Canceled)
 		return
 	}
-	if job.Source.Platform == "backup" && privateStage != "" {
-		if err = preserveRestoreBackupRepositories(filepath.Dir(site.Root), privateStage); err != nil {
-			fail(fmt.Errorf("cannot preserve existing backup repositories: %w", err))
-			return
+	if job.Source.Platform == "backup" {
+		for _, entry := range privateEntries {
+			if entry.Name() == "backups" {
+				if err = preserveRestoreBackupRepositories(filepath.Dir(site.Root), privateStage); err != nil {
+					fail(fmt.Errorf("cannot preserve existing backup repositories: %w", err))
+					return
+				}
+				break
+			}
 		}
 	}
 	// The remaining renames and state updates form the atomic commit. Do not
@@ -724,6 +743,13 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 		movedPrivate = append(movedPrivate, entry.Name())
 	}
+	if job.Source.Platform == "backup" {
+		// Reapply the normal account scaffolding after the atomic move.
+		if err = a.system.ensureSiteHome(site); err != nil {
+			fail(err)
+			return
+		}
+	}
 	if err = a.system.labelSiteHome(ctx, site); err != nil {
 		fail(err)
 		return
@@ -752,7 +778,7 @@ func (a *App) performAutoMigration(job *LiveMigrationJob, overwrite bool) {
 		}
 	}
 
-	if app != "regular" && len(cpanelPlan.Cron) == 0 {
+	if app != "regular" && len(cpanelPlan.Cron) == 0 && job.Source.Platform != "backup" {
 		if err = a.system.SetCron(site, true); err != nil {
 			fail(err)
 			return
