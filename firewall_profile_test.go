@@ -74,3 +74,31 @@ func TestRequiredFirewallAdditive(t *testing.T) {
 		t.Fatal("runtime and persistent rules required")
 	}
 }
+
+func TestRequiredFirewallReapplyRetainsAddressRestrictions(t *testing.T) {
+	p := litecpFirewallProfile{Inbound: []string{"25/tcp"}, Outbound: []string{"53/udp"}}
+	run := func(cmd string, args ...string) (string, error) {
+		switch strings.Join(args, " ") {
+		case "--get-active-zones", "--get-zones":
+			return "public", nil
+		case "--get-policies", "--permanent --get-policies":
+			return "litecp-required", nil
+		case "--zone=public --list-rich-rules":
+			return `rule priority="-100" family="ipv4" source address="192.0.2.10" port port="25" protocol="tcp" accept`, nil
+		case "--policy=litecp-required --list-rich-rules":
+			return `rule priority="-100" family="ipv6" destination address="2001:db8::1" port port="53" protocol="udp" accept`, nil
+		case "status":
+			return "Status: active\n25/tcp ALLOW IN 192.0.2.10 # litecp-required\n2001:db8::1 53/udp ALLOW OUT Anywhere (v6) # litecp-required", nil
+		}
+		line := strings.Join(args, " ")
+		if strings.Contains(line, "--add-rich-rule") || strings.Contains(line, "--add-port=") || args[0] == "insert" {
+			t.Fatalf("reapply added unrestricted access: %s %s", cmd, line)
+		}
+		return "", nil
+	}
+	for _, backend := range []string{"firewalld", "ufw"} {
+		if err := applyRequiredFirewall(p, backend, run); err != nil {
+			t.Fatal(backend, err)
+		}
+	}
+}

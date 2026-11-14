@@ -16,15 +16,27 @@
   const open = document.createElement('button');open.type = 'button';open.className = 'button button-primary';open.textContent = 'Add rules';
   table.querySelector('.panel-head').append(open);
   const submit = form.querySelector('[type="submit"]');
+  const cancel = document.getElementById('firewallCancelEdit');
+  const actions = document.createElement('div');
+  actions.className = 'form-actions field-span';
+  submit.classList.remove('field-span');
+  submit.before(actions);
+  actions.append(submit,cancel);
   function show(edit) {
     title.textContent = edit ? 'Edit rule' : 'Add rule';
     submit.textContent = edit ? 'Save changes' : 'Add rule';
     dialog.showModal();form.elements.port.focus();
   }
   function dismiss(){if(form.getAttribute('aria-busy') !== 'true')dialog.close();}
-  open.addEventListener('click',()=>{form.reset();form.elements.id.value='';form.elements.direction.dispatchEvent(new Event('change'));show(false);});
+  open.addEventListener('click',()=>{
+    form.reset();
+    form.elements.id.value='';
+    form.elements.direction.dispatchEvent(new Event('change'));
+    form.elements.sourcePreset.dispatchEvent(new Event('change'));
+    show(false);
+  });
   close.addEventListener('click',dismiss);
-  document.getElementById('firewallCancelEdit').addEventListener('click',dismiss);
+  cancel.addEventListener('click',dismiss);
   dialog.addEventListener('cancel',event=>{if(form.getAttribute('aria-busy') === 'true')event.preventDefault();});
   table.addEventListener('click',event=>{
     if(event.target.closest('[data-firewall-action="edit"]'))setTimeout(()=>show(true),0);

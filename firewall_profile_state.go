@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -12,6 +13,7 @@ type profileRule struct {
 	Direction string `json:"direction"`
 	Port      string `json:"port"`
 	Zone      string `json:"zone"`
+	Address   string `json:"address,omitempty"`
 	Raw       string `json:"-"`
 	Remarks   string `json:"remarks"`
 }
@@ -19,6 +21,47 @@ type profileState struct {
 	Enabled bool          `json:"enabled"`
 	Rules   []profileRule `json:"rules"`
 	Backend string        `json:"backend"`
+}
+
+var profileRichRulePattern = regexp.MustCompile(`^rule priority="-100"(?: family="(ipv4|ipv6)" (source|destination) address="([0-9A-Fa-f:./]+)")? port port="([0-9-]+)" protocol="(tcp|udp)" accept$`)
+var profileUFWRulePattern = regexp.MustCompile(`^(.+?)\s+ALLOW(?:\s+(IN|OUT))?\s+(.+?)\s+# litecp-required$`)
+
+func parseProfileRichRule(line, direction, zone string) (profileRule, bool) {
+	parts := profileRichRulePattern.FindStringSubmatch(line)
+	if parts == nil || (direction == "outbound" && parts[2] != "destination") ||
+		(direction == "inbound" && parts[2] != "" && parts[2] != "source") {
+		return profileRule{}, false
+	}
+	rule := profileRule{Direction: direction, Zone: zone, Port: parts[4] + "/" + parts[5], Address: parts[3], Raw: line}
+	return rule, validateProfilePort(rule.Port) == nil
+}
+
+func parseProfileUFWRule(line string) (profileRule, bool) {
+	fields := profileUFWRulePattern.FindStringSubmatch(strings.TrimSpace(line))
+	if fields == nil {
+		return profileRule{}, false
+	}
+	to := strings.TrimSuffix(fields[1], " (v6)")
+	from := strings.TrimSuffix(fields[3], " (v6)")
+	rule := profileRule{Direction: "inbound"}
+	port, address := to, from
+	if fields[2] == "OUT" {
+		rule.Direction = "outbound"
+		if host, targetPort, ok := strings.Cut(to, " "); ok {
+			port, address = strings.TrimSpace(targetPort), host
+		} else {
+			address = ""
+		}
+	}
+	rule.Port = strings.ReplaceAll(port, ":", "-")
+	if address != "" && address != "Anywhere" {
+		values, err := parseFirewallAddresses(address)
+		if err != nil || len(values) != 1 || values[0] == "cloudflare" || values[0] == "any" {
+			return profileRule{}, false
+		}
+		rule.Address = values[0]
+	}
+	return rule, validateProfilePort(rule.Port) == nil
 }
 
 func inspectFirewallProfile(backend string, run securityProbe) (profileState, error) {
@@ -30,20 +73,11 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 		}
 		seen := make(map[string]bool)
 		for _, line := range strings.Split(out, "\n") {
-			if strings.Contains(line, "# litecp-required") {
-				fields := strings.Fields(line)
-				if len(fields) > 0 {
-					direction := "inbound"
-					if containsString(fields, "OUT") {
-						direction = "outbound"
-					}
-					rule := profileRule{Direction: direction, Port: strings.ReplaceAll(fields[0], ":", "-")}
-					key := profileRuleKey(rule)
-					if validateProfilePort(rule.Port) == nil && !seen[key] {
-						state.Rules = append(state.Rules, rule)
-						seen[key] = true
-					}
-				}
+			rule, ok := parseProfileUFWRule(line)
+			key := profileRuleKey(rule)
+			if ok && !seen[key] {
+				state.Rules = append(state.Rules, rule)
+				seen[key] = true
 			}
 		}
 	} else if backend == "firewalld" {
@@ -57,14 +91,9 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 				return state, err
 			}
 			for _, line := range strings.Split(out, "\n") {
-				if !strings.HasPrefix(line, `rule priority="-100" port port="`) || !strings.HasSuffix(line, " accept") {
-					continue
+				if rule, ok := parseProfileRichRule(strings.TrimSpace(line), "inbound", zone); ok {
+					state.Rules = append(state.Rules, rule)
 				}
-				parts := strings.Split(line, `"`)
-				if len(parts) != 7 {
-					continue
-				}
-				state.Rules = append(state.Rules, profileRule{Direction: "inbound", Port: parts[3] + "/" + parts[5], Zone: zone, Raw: line})
 			}
 		}
 		policies, err := run("firewall-cmd", "--get-policies")
@@ -78,6 +107,15 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 			}
 			for _, port := range strings.Fields(out) {
 				state.Rules = append(state.Rules, profileRule{Direction: "outbound", Port: port})
+			}
+			out, err = run("firewall-cmd", "--policy=litecp-required", "--list-rich-rules")
+			if err != nil {
+				return state, err
+			}
+			for _, line := range strings.Split(out, "\n") {
+				if rule, ok := parseProfileRichRule(strings.TrimSpace(line), "outbound", ""); ok {
+					state.Rules = append(state.Rules, rule)
+				}
 			}
 		}
 	} else {
@@ -122,10 +160,11 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Query().Get("port") != "" {
 		port, direction, zone := r.URL.Query().Get("port"), r.URL.Query().Get("direction"), r.URL.Query().Get("zone")
+		address := r.URL.Query().Get("address")
 		var selected *profileRule
 		for i := range state.Rules {
 			rule := &state.Rules[i]
-			if rule.Port == port && rule.Direction == direction && rule.Zone == zone {
+			if rule.Port == port && rule.Direction == direction && rule.Zone == zone && rule.Address == address {
 				selected = rule
 				break
 			}
@@ -140,10 +179,13 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 				writeError(w, 502, "Cannot verify SSH access; no rule changed.")
 				return
 			}
-			protected := port == fmt.Sprintf("%d/tcp", currentPanelPort()) || containsString(savedFirewallSSHPorts(a.system.dataDir), port)
+			protected := profileRuleHasPort(port, fmt.Sprintf("%d/tcp", currentPanelPort()))
+			for _, saved := range savedFirewallSSHPorts(a.system.dataDir) {
+				protected = protected || profileRuleHasPort(port, saved)
+			}
 			for _, line := range strings.Split(ssh, "\n") {
 				f := strings.Fields(line)
-				if len(f) == 2 && f[0] == "port" && port == f[1]+"/tcp" {
+				if len(f) == 2 && f[0] == "port" && profileRuleHasPort(port, f[1]+"/tcp") {
 					protected = true
 				}
 			}
@@ -162,11 +204,9 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.annotateFirewallProfile(&updated)
-		for _, rule := range updated.Rules {
-			if rule.Port == port && rule.Direction == direction && rule.Zone == zone {
-				writeError(w, 502, "Rule is still active. Refresh and retry.")
-				return
-			}
+		if profileContainsRule(updated, *selected) {
+			writeError(w, 502, "Rule is still active. Refresh and retry.")
+			return
 		}
 		a.store.AddActivity("Firewall rule removed", direction+" "+port, "warning")
 		writeJSON(w, 200, updated)
@@ -195,11 +235,8 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 			if rule.Direction != "inbound" {
 				continue
 			}
-			if containsString(protected, rule.Port) {
-				_, err = run("firewall-cmd", "--permanent", "--zone="+rule.Zone, "--add-port="+rule.Port)
-				if err != nil {
-					break
-				}
+			if _, err = preserveProfileAccessRule(state.Backend, rule, protected, run); err != nil {
+				break
 			}
 			_, err = run("firewall-cmd", "--permanent", "--zone="+rule.Zone, "--remove-rich-rule="+rule.Raw)
 			if err != nil {
@@ -218,22 +255,15 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		for _, rule := range state.Rules {
-			parts := strings.Split(rule.Port, "/")
-			if len(parts) != 2 {
+			var retained bool
+			retained, err = preserveProfileAccessRule(state.Backend, rule, protected, run)
+			if err != nil {
+				break
+			}
+			if retained {
 				continue
 			}
-			direction := "in"
-			if rule.Direction == "outbound" {
-				direction = "out"
-			}
-			number := strings.ReplaceAll(parts[0], "-", ":")
-			if direction == "in" && containsString(protected, rule.Port) {
-				_, err = run("ufw", "allow", "in", "to", "any", "port", number, "proto", parts[1], "comment", "litecp-access")
-				if err != nil {
-					break
-				}
-			}
-			_, err = run("ufw", "--force", "delete", "allow", direction, "to", "any", "port", number, "proto", parts[1], "comment", "litecp-required")
+			err = removeProfileRule(state.Backend, rule, run)
 			if err != nil {
 				break
 			}
@@ -253,13 +283,42 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, state)
 }
 
+// Keep only protected members of a profile range, with its existing address
+// scope. Exact UFW selectors are adopted by relabeling and must not be deleted.
+func preserveProfileAccessRule(backend string, rule profileRule, protected []string, run securityProbe) (bool, error) {
+	if rule.Direction != "inbound" {
+		return false, nil
+	}
+	retained := false
+	for _, port := range uniqueFirewallPorts(protected) {
+		if !profileRuleHasPort(rule.Port, port) {
+			continue
+		}
+		next := newProfileRule(rule, port, rule.Address)
+		if backend == "firewalld" {
+			argument := "--add-port=" + port
+			if rule.Address != "" {
+				argument = "--add-rich-rule=" + strings.Replace(next.Raw, `priority="-100"`, `priority="-90"`, 1)
+			}
+			if _, err := run("firewall-cmd", "--permanent", "--zone="+rule.Zone, argument); err != nil {
+				return false, err
+			}
+			continue
+		}
+		args := profileUFWArgs(next)
+		args[len(args)-1] = "litecp-access"
+		if _, err := run("ufw", args...); err != nil {
+			return false, err
+		}
+		retained = retained || rule.Port == port
+	}
+	return retained, nil
+}
+
 // Remove only a rule previously identified as belonging to the LiteCP profile.
 func removeProfileRule(backend string, rule profileRule, run securityProbe) error {
 	if backend == "firewalld" {
-		args := []string{"--zone=" + rule.Zone, "--remove-rich-rule=" + rule.Raw}
-		if rule.Direction == "outbound" {
-			args = []string{"--policy=litecp-required", "--remove-port=" + rule.Port}
-		}
+		args := profileFirewalldArgs(rule, "remove")
 		if _, err := run("firewall-cmd", append([]string{"--permanent"}, args...)...); err != nil {
 			return err
 		}
@@ -269,14 +328,9 @@ func removeProfileRule(backend string, rule profileRule, run securityProbe) erro
 	if backend != "ufw" {
 		return fmt.Errorf("unsupported firewall backend")
 	}
-	parts := strings.Split(rule.Port, "/")
-	if len(parts) != 2 {
+	if err := validateProfilePort(rule.Port); err != nil {
 		return fmt.Errorf("unsupported rule port")
 	}
-	direction := "in"
-	if rule.Direction == "outbound" {
-		direction = "out"
-	}
-	_, err := run("ufw", "--force", "delete", "allow", direction, "to", "any", "port", strings.ReplaceAll(parts[0], "-", ":"), "proto", parts[1], "comment", "litecp-required")
+	_, err := run("ufw", append([]string{"--force", "delete"}, profileUFWArgs(rule)...)...)
 	return err
 }

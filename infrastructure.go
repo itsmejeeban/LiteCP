@@ -319,13 +319,11 @@ func validateFirewallRule(rule FirewallRule) error {
 	if utf8.RuneCountInString(rule.Remarks) > 500 || strings.ContainsRune(rule.Remarks, '\x00') {
 		return errors.New("firewall remarks must be at most 500 characters and contain no null bytes")
 	}
-	address := rule.Source
-	addressLabel := "source"
-	if rule.Direction == "outbound" {
-		address = rule.Destination
-		addressLabel = "destination"
+	addresses, err := parseFirewallAddresses(firewallAddresses(rule))
+	if err != nil {
+		return err
 	}
-	if address == "cloudflare" {
+	if addresses[0] == "cloudflare" {
 		if rule.Direction != "inbound" || rule.Action != "allow" {
 			return errors.New("Cloudflare sources require an inbound allow rule")
 		}
@@ -334,14 +332,7 @@ func validateFirewallRule(rule FirewallRule) error {
 		}
 		return nil
 	}
-	if address != "" && address != "any" {
-		if net.ParseIP(address) == nil {
-			if _, _, err := net.ParseCIDR(address); err != nil {
-				return fmt.Errorf("%s must be an IP address, CIDR network or 'any'", addressLabel)
-			}
-		}
-	}
-	if rule.Direction == "inbound" && (rule.Source == "" || rule.Source == "any") {
+	if rule.Direction == "inbound" && broadFirewallAddress(addresses) {
 		for _, protected := range []int{22, 25, 80, 443, 465, 587, 993, 4321, 8443, currentPanelPort()} {
 			if rule.Port == protected && rule.Protocol == "tcp" {
 				return errors.New("unscoped changes to essential LiteCP ports are protected by the installer")
@@ -356,83 +347,26 @@ func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remov
 	if err := validateFirewallRule(rule); err != nil {
 		return err
 	}
-	if rule.Direction == "inbound" && rule.Protocol == "tcp" && containsString(savedFirewallSSHPorts(s.dataDir), strconv.Itoa(rule.Port)+"/tcp") && (rule.Source == "any" || rule.Source == "cloudflare") {
+	addresses, _ := parseFirewallAddresses(firewallAddresses(rule))
+	cloudflare := addresses[0] == "cloudflare"
+	if rule.Direction == "inbound" && rule.Protocol == "tcp" && containsString(savedFirewallSSHPorts(s.dataDir), strconv.Itoa(rule.Port)+"/tcp") && (broadFirewallAddress(addresses) || cloudflare) {
 		return errors.New("unscoped changes and Cloudflare restrictions on the configured SSH port are protected")
 	}
-	if rule.Source == "cloudflare" {
+	if cloudflare {
 		return s.applyCloudflareFirewall(ctx, rule, remove)
 	}
 	if s.demo {
 		return nil
 	}
-	if s.firewallBackend() == "firewalld" {
-		richVerb := "--add-rich-rule="
-		if remove {
-			richVerb = "--remove-rich-rule="
-		}
-		decision := "accept"
-		if rule.Action == "deny" {
-			decision = "reject"
-		}
-		address := rule.Source
-		addressTerm := "source"
-		scopeArgs := []string{"--permanent", "--zone=public"}
-		if rule.Direction == "outbound" {
-			address, addressTerm = rule.Destination, "destination"
-			policies, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--permanent", "--get-policies")
-			if err != nil {
-				return err
-			}
-			if !containsString(strings.Fields(policies), "litecp-outbound") {
-				if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--permanent", "--new-policy", "litecp-outbound"); err != nil {
-					return err
-				}
-				for _, args := range [][]string{{"--permanent", "--policy", "litecp-outbound", "--add-ingress-zone", "HOST"}, {"--permanent", "--policy", "litecp-outbound", "--add-egress-zone", "ANY"}, {"--permanent", "--policy", "litecp-outbound", "--set-priority", "-500"}} {
-					if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", args...); err != nil {
-						return err
-					}
-				}
-			}
-			scopeArgs = []string{"--permanent", "--policy", "litecp-outbound"}
-		}
-		family := ""
-		if address != "" && address != "any" {
-			family = "ipv4"
-			if strings.Contains(address, ":") {
-				family = "ipv6"
-			}
-		}
-		parts := []string{"rule"}
-		if family != "" {
-			parts = append(parts, `family="`+family+`"`, addressTerm+` address="`+address+`"`)
-		}
-		parts = append(parts, fmt.Sprintf(`port port="%d" protocol="%s"`, rule.Port, rule.Protocol), decision)
-		operation := richVerb + strings.Join(parts, " ")
-		// Preserve the representation used by pre-0.5 unscoped allow rules.
-		if rule.Direction == "inbound" && rule.Action == "allow" && rule.Source == "any" {
-			verb := "--add-port="
-			if remove {
-				verb = "--remove-port="
-			}
-			operation = fmt.Sprintf("%s%d/%s", verb, rule.Port, rule.Protocol)
-		}
-		args := append(scopeArgs, operation)
-		if _, err := runCommand(ctx, 20*time.Second, "firewall-cmd", args...); err != nil {
-			return err
-		}
-		_, err := runCommand(ctx, 20*time.Second, "firewall-cmd", "--reload")
-		if err != nil {
-			inverse := strings.Replace(operation, "--add-", "--remove-", 1)
-			if remove {
-				inverse = strings.Replace(operation, "--remove-", "--add-", 1)
-			}
-			_, rollbackErr := runCommand(context.Background(), 20*time.Second, "firewall-cmd", append(scopeArgs, inverse)...)
-			if rollbackErr != nil {
-				return fmt.Errorf("firewall reload failed: %v; permanent configuration rollback also failed: %v", err, rollbackErr)
-			}
-		}
-		return err
+	// Keep the spelling of legacy single addresses when operating on their
+	// existing host rule. New address lists are saved in canonical form.
+	if fields := splitFirewallAddresses(firewallAddresses(rule)); len(fields) == 1 && addresses[0] != "any" {
+		addresses[0] = fields[0]
 	}
+	return applyFirewallAddressRules(ctx, s.firewallBackend(), rule, addresses, remove, runFirewallCommand)
+}
+
+func ufwFirewallRuleArgs(rule FirewallRule, address string, remove bool) []string {
 	action := rule.Action
 	args := []string{}
 	if remove {
@@ -441,22 +375,17 @@ func (s *System) ApplyFirewallRule(ctx context.Context, rule FirewallRule, remov
 	args = append(args, action)
 	if rule.Direction == "outbound" {
 		args = append(args, "out", "to")
-		if rule.Destination == "" || rule.Destination == "any" {
-			args = append(args, "any")
-		} else {
-			args = append(args, rule.Destination)
-		}
+		args = append(args, address)
 		args = append(args, "port", strconv.Itoa(rule.Port), "proto", rule.Protocol)
-	} else if rule.Source != "" && rule.Source != "any" {
-		args = append(args, "from", rule.Source, "to", "any", "port", strconv.Itoa(rule.Port), "proto", rule.Protocol)
+	} else if address != "any" {
+		args = append(args, "from", address, "to", "any", "port", strconv.Itoa(rule.Port), "proto", rule.Protocol)
 	} else {
 		args = append(args, strconv.Itoa(rule.Port)+"/"+rule.Protocol)
 	}
 	if !remove && rule.Label != "" {
 		args = append(args, "comment", "LiteCP: "+rule.Label)
 	}
-	_, err := runHostCommand(ctx, 30*time.Second, "ufw", args...)
-	return err
+	return args
 }
 
 func (s *System) firewallBackend() string {

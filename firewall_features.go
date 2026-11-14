@@ -11,7 +11,7 @@ import (
 // Root-only, fixed executables called after allowlist validation. Running a
 // transient unit keeps the panel's own filesystem sandbox read-only.
 func runHostCommand(ctx context.Context, timeout time.Duration, command string, args ...string) (string, error) {
-	systemdArgs := []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--setenv=DEBIAN_FRONTEND=noninteractive", fmt.Sprintf("--property=RuntimeMaxSec=%d", int(timeout.Seconds())), "--", command}
+	systemdArgs := []string{"--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--setenv=DEBIAN_FRONTEND=noninteractive", "--setenv=LC_ALL=C", fmt.Sprintf("--property=RuntimeMaxSec=%d", int(timeout.Seconds())), "--", command}
 	return runCommand(ctx, timeout, "systemd-run", append(systemdArgs, args...)...)
 }
 
@@ -76,7 +76,7 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		FirewallRule
 		Remarks *string `json:"remarks"`
 	}
-	if err := decodeJSON(r, &input); err != nil {
+	if err := decodeJSONWithLimit(r, &input, 8<<10); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
@@ -90,7 +90,8 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
-	oldNormalized := normalizeFirewallRule(*old)
+	rule = canonicalFirewallRule(rule)
+	oldNormalized := canonicalFirewallRule(normalizeFirewallRule(*old))
 	if oldNormalized == rule {
 		writeJSON(w, 200, rule)
 		return
@@ -99,6 +100,7 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 	notesOnly.Label = rule.Label
 	notesOnly.Remarks = rule.Remarks
 	if notesOnly == rule {
+		rule = withFirewallAddresses(rule, firewallAddresses(normalizeFirewallRule(*old)))
 		if err := a.store.UpdateFirewallRule(id, rule); err != nil {
 			writeError(w, 500, "Cannot save firewall remarks.")
 			return
@@ -108,15 +110,22 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.store.HasFirewallRule(rule) {
-		writeError(w, 409, "That rule is already managed.")
+		writeError(w, 409, "At least one address already has this firewall rule in LiteCP.")
 		return
 	}
-	if err := a.system.ApplyFirewallRule(r.Context(), *old, true); err != nil {
+	removed, added := firewallRuleChanges(*old, rule)
+	apply := func(ctx context.Context, rule *FirewallRule, remove bool) error {
+		if rule == nil {
+			return nil
+		}
+		return a.system.ApplyFirewallRule(ctx, *rule, remove)
+	}
+	if err := apply(r.Context(), removed, true); err != nil {
 		writeError(w, 502, err.Error())
 		return
 	}
-	if err := a.system.ApplyFirewallRule(r.Context(), rule, false); err != nil {
-		restoreErr := a.system.ApplyFirewallRule(context.Background(), *old, false)
+	if err := apply(r.Context(), added, false); err != nil {
+		restoreErr := apply(context.Background(), removed, false)
 		if restoreErr != nil {
 			writeError(w, 502, fmt.Sprintf("Rule update failed (%v), and the original rule could not be restored (%v). Check the host firewall immediately.", err, restoreErr))
 			return
@@ -125,8 +134,8 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.UpdateFirewallRule(id, rule); err != nil {
-		removeErr := a.system.ApplyFirewallRule(context.Background(), rule, true)
-		restoreErr := a.system.ApplyFirewallRule(context.Background(), *old, false)
+		removeErr := apply(context.Background(), added, true)
+		restoreErr := apply(context.Background(), removed, false)
 		if removeErr != nil || restoreErr != nil {
 			writeError(w, 500, fmt.Sprintf("Panel state could not be saved, and firewall recovery was incomplete (remove new: %v; restore original: %v). Check the host firewall immediately.", removeErr, restoreErr))
 			return

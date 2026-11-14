@@ -138,14 +138,19 @@ func (s *Store) AddFirewallRule(rule FirewallRule) error {
 func (s *Store) HasFirewallRule(rule FirewallRule) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	rule = normalizeFirewallRule(rule)
+	rule = canonicalFirewallRule(normalizeFirewallRule(rule))
+	addresses := strings.Split(firewallAddresses(rule), ",")
 	for _, item := range s.cfg.FirewallRules {
 		if rule.ID != "" && item.ID == rule.ID {
 			continue
 		}
-		item = normalizeFirewallRule(item)
-		if item.Port == rule.Port && item.Protocol == rule.Protocol && item.Source == rule.Source && item.Destination == rule.Destination && item.Direction == rule.Direction && item.Action == rule.Action {
-			return true
+		item = canonicalFirewallRule(normalizeFirewallRule(item))
+		if item.Port == rule.Port && item.Protocol == rule.Protocol && item.Direction == rule.Direction && item.Action == rule.Action {
+			for _, address := range strings.Split(firewallAddresses(item), ",") {
+				if containsString(addresses, address) {
+					return true
+				}
+			}
 		}
 	}
 	return false

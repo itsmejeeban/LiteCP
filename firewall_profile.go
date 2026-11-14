@@ -63,6 +63,14 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 		}
 		return nil
 	}
+	// Reapplying defaults must not broaden a previously restricted rule.
+	restricted := make(map[string]bool)
+	rememberRestriction := func(rule profileRule) {
+		if rule.Address != "" {
+			rule.Address = ""
+			restricted[profileRuleKey(rule)] = true
+		}
+	}
 	if backend == "ufw" {
 		status, err := run("ufw", "status")
 		if err != nil {
@@ -71,12 +79,24 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 		if !strings.Contains(status, "Status: active") {
 			return fmt.Errorf("UFW must already be active")
 		}
+		for _, line := range strings.Split(status, "\n") {
+			if rule, ok := parseProfileUFWRule(line); ok {
+				rememberRestriction(rule)
+			}
+		}
 		for _, direction := range []string{"in", "out"} {
 			ports := p.Inbound
 			if direction == "out" {
 				ports = p.Outbound
 			}
 			for _, port := range ports {
+				key := profileRule{Port: port, Direction: "inbound"}
+				if direction == "out" {
+					key.Direction = "outbound"
+				}
+				if restricted[profileRuleKey(key)] {
+					continue
+				}
 				parts := strings.Split(port, "/")
 				number := strings.ReplaceAll(parts[0], "-", ":")
 				if _, err = run("ufw", "insert", "1", "allow", direction, "to", "any", "port", number, "proto", parts[1], "comment", "litecp-required"); err != nil {
@@ -106,6 +126,13 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 		}
 		names = append(names, strings.TrimSpace(zone))
 	}
+	state, err := inspectFirewallProfile(backend, run)
+	if err != nil {
+		return err
+	}
+	for _, rule := range state.Rules {
+		rememberRestriction(rule)
+	}
 	if err := call("--runtime-to-permanent"); err != nil {
 		return err
 	}
@@ -116,6 +143,9 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 		}
 		for _, zone := range names {
 			for _, port := range p.Inbound {
+				if restricted[profileRuleKey(profileRule{Direction: "inbound", Zone: zone, Port: port})] {
+					continue
+				}
 				parts := strings.Split(port, "/")
 				rule := fmt.Sprintf(`rule priority="-100" port port="%s" protocol="%s" accept`, parts[0], parts[1])
 				if err := call(append(append([]string{}, prefix...), "--zone="+zone, "--add-rich-rule="+rule)...); err != nil {
@@ -139,6 +169,9 @@ func applyRequiredFirewall(p litecpFirewallProfile, backend string, run security
 			}
 		}
 		for _, port := range p.Outbound {
+			if restricted[profileRuleKey(profileRule{Direction: "outbound", Port: port})] {
+				continue
+			}
 			if err := call(append(append([]string{}, scope...), "--add-port="+port)...); err != nil {
 				return err
 			}

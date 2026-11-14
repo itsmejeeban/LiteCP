@@ -650,7 +650,7 @@ func (a *App) deleteBackupDestination(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
 	var input FirewallRule
-	if err := decodeJSON(r, &input); err != nil {
+	if err := decodeJSONWithLimit(r, &input, 8<<10); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -661,8 +661,9 @@ func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	rule = canonicalFirewallRule(rule)
 	if a.store.HasFirewallRule(rule) {
-		writeError(w, http.StatusConflict, "That firewall rule is already managed by LiteCP.")
+		writeError(w, http.StatusConflict, "At least one address already has this firewall rule in LiteCP.")
 		return
 	}
 	if err := a.system.ApplyFirewallRule(r.Context(), rule, false); err != nil {

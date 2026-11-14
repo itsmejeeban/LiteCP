@@ -14,7 +14,11 @@ import (
 )
 
 func profileRuleKey(rule profileRule) string {
-	return rule.Direction + "|" + rule.Zone + "|" + rule.Port
+	key := rule.Direction + "|" + rule.Zone + "|" + rule.Port
+	if rule.Address != "" {
+		key += "|" + rule.Address
+	}
+	return key
 }
 
 func parseProfilePort(value string) (int, int, string, error) {
@@ -63,13 +67,60 @@ func profileContainsRule(state profileState, rule profileRule) bool {
 	return false
 }
 
-func firewalldProfileRuleExists(rule profileRule, permanent bool, run securityProbe) (bool, error) {
-	args := []string{"--zone=" + rule.Zone, "--list-rich-rules"}
-	value := rule.Raw
+func profileFirewalldArgs(rule profileRule, verb string) []string {
+	scope := "--zone=" + rule.Zone
 	if rule.Direction == "outbound" {
-		args = []string{"--policy=litecp-required", "--list-ports"}
-		value = rule.Port
+		scope = "--policy=litecp-required"
 	}
+	kind, value := "rich-rule", rule.Raw
+	if rule.Direction == "outbound" && rule.Address == "" {
+		kind, value = "port", rule.Port
+	}
+	if verb == "list" {
+		return []string{scope, "--list-" + kind + "s"}
+	}
+	return []string{scope, "--" + verb + "-" + kind + "=" + value}
+}
+
+func profileUFWArgs(rule profileRule) []string {
+	port, protocol, _ := strings.Cut(rule.Port, "/")
+	direction, source, destination := "in", "any", "any"
+	if rule.Direction == "outbound" {
+		direction = "out"
+		if rule.Address != "" {
+			destination = rule.Address
+		}
+	} else if rule.Address != "" {
+		source = rule.Address
+	}
+	args := []string{"allow", direction}
+	if source != "any" {
+		args = append(args, "from", source)
+	}
+	return append(args, "to", destination, "port", strings.ReplaceAll(port, "-", ":"), "proto", protocol, "comment", "litecp-required")
+}
+
+func newProfileRule(old profileRule, port, address string) profileRule {
+	next := old
+	next.Port, next.Address = port, address
+	number, protocol, _ := strings.Cut(port, "/")
+	scope := ""
+	if address != "" {
+		family, endpoint := "ipv4", "source"
+		if strings.Contains(address, ":") {
+			family = "ipv6"
+		}
+		if next.Direction == "outbound" {
+			endpoint = "destination"
+		}
+		scope = fmt.Sprintf(` family="%s" %s address="%s"`, family, endpoint, address)
+	}
+	next.Raw = fmt.Sprintf(`rule priority="-100"%s port port="%s" protocol="%s" accept`, scope, number, protocol)
+	return next
+}
+
+func firewalldProfileRuleExists(rule profileRule, permanent bool, run securityProbe) (bool, error) {
+	args := profileFirewalldArgs(rule, "list")
 	if permanent {
 		args = append([]string{"--permanent"}, args...)
 	}
@@ -77,78 +128,106 @@ func firewalldProfileRuleExists(rule profileRule, permanent bool, run securityPr
 	if err != nil {
 		return false, err
 	}
-	if rule.Direction == "outbound" {
-		return containsString(strings.Fields(output), value), nil
+	if rule.Direction == "outbound" && rule.Address == "" {
+		return containsString(strings.Fields(output), rule.Port), nil
 	}
 	for _, line := range strings.Split(output, "\n") {
-		if strings.TrimSpace(line) == value {
+		if strings.TrimSpace(line) == rule.Raw {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func addProfileRule(backend string, rule profileRule, run securityProbe) error {
+func addProfileRule(backend string, rule profileRule, run securityProbe) (bool, error) {
 	if err := validateProfilePort(rule.Port); err != nil {
-		return err
+		return false, err
 	}
-	parts := strings.Split(rule.Port, "/")
 	if backend == "ufw" {
-		direction := "in"
-		if rule.Direction == "outbound" {
-			direction = "out"
+		args := profileUFWArgs(rule)
+		output, err := run("ufw", append([]string{"--dry-run", "prepend"}, args...)...)
+		if err != nil {
+			return false, err
 		}
-		_, err := run("ufw", "insert", "1", "allow", direction, "to", "any", "port", strings.ReplaceAll(parts[0], "-", ":"), "proto", parts[1], "comment", "litecp-required")
-		return err
+		if strings.Contains(output, "Skipping inserting existing rule") || strings.Contains(output, "Skipping adding existing rule") {
+			return false, fmt.Errorf("a matching host firewall rule already exists; previous rule retained")
+		}
+		output, err = run("ufw", append([]string{"insert", "1"}, args...)...)
+		if strings.Contains(output, "Skipping inserting existing rule") || strings.Contains(output, "Skipping adding existing rule") {
+			return false, fmt.Errorf("a matching host firewall rule already exists; previous rule retained")
+		}
+		return err == nil, err
 	}
 	if backend != "firewalld" {
-		return fmt.Errorf("unsupported firewall backend")
+		return false, fmt.Errorf("unsupported firewall backend")
 	}
-	args := []string{"--zone=" + rule.Zone, "--add-rich-rule=" + rule.Raw}
-	if rule.Direction == "outbound" {
-		args = []string{"--policy=litecp-required", "--add-port=" + rule.Port}
-	}
+	args := profileFirewalldArgs(rule, "add")
 	if _, err := run("firewall-cmd", append([]string{"--permanent"}, args...)...); err != nil {
-		return err
+		return false, err
 	}
 	if _, err := run("firewall-cmd", args...); err != nil {
-		_ = removeProfileRule(backend, rule, run)
-		return err
+		return true, err
 	}
-	return nil
+	return true, nil
 }
 
-func replaceProfileRule(backend string, old, next profileRule, run securityProbe) error {
-	if err := addProfileRule(backend, next, run); err != nil {
-		return err
+func addVerifiedProfileRule(backend string, next profileRule, run securityProbe) (bool, error) {
+	owned, err := addProfileRule(backend, next, run)
+	if err != nil {
+		return owned, err
 	}
 	if backend == "firewalld" {
 		for _, permanent := range []bool{false, true} {
 			exists, err := firewalldProfileRuleExists(next, permanent, run)
 			if err != nil || !exists {
-				cleanupErr := removeProfileRule(backend, next, run)
-				return fmt.Errorf("replacement rule could not be verified. Previous rule retained (check: %v, cleanup: %v)", err, cleanupErr)
+				return owned, fmt.Errorf("replacement rule could not be verified. Previous rule retained (check: %v)", err)
 			}
 		}
 	} else {
 		state, err := inspectFirewallProfile(backend, run)
 		if err != nil {
-			return fmt.Errorf("replacement rule could not be verified. Previous rule retained: %w", err)
+			return owned, fmt.Errorf("replacement rule could not be verified. Previous rule retained: %w", err)
 		}
 		if !profileContainsRule(state, next) {
-			return fmt.Errorf("replacement rule is not active. Previous rule retained")
+			return owned, fmt.Errorf("replacement rule is not active. Previous rule retained")
 		}
 	}
-	if err := removeProfileRule(backend, old, run); err != nil {
-		restoreErr := addProfileRule(backend, old, run)
-		var cleanupErr error
-		if restoreErr == nil {
-			cleanupErr = removeProfileRule(backend, next, run)
+	return owned, nil
+}
+
+func removeAddedProfileRules(backend string, added []profileRule, run securityProbe) error {
+	var failures []string
+	for _, rule := range added {
+		if err := removeProfileRule(backend, rule, run); err != nil {
+			failures = append(failures, err.Error())
 		}
-		if restoreErr != nil || cleanupErr != nil {
-			return fmt.Errorf("rule edit failed (%v) and rollback was incomplete (restore: %v, cleanup: %v). Check the host firewall", err, restoreErr, cleanupErr)
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("could not remove replacement rules: %s", strings.Join(failures, "; "))
+	}
+	return nil
+}
+
+func replaceProfileRules(backend string, old profileRule, added []profileRule, removeOld bool, run securityProbe, rollback func([]profileRule, bool) error) error {
+	for i, next := range added {
+		if owned, err := addVerifiedProfileRule(backend, next, run); err != nil {
+			cleanup := added[:i]
+			if owned {
+				cleanup = added[:i+1]
+			}
+			if cleanupErr := rollback(cleanup, false); cleanupErr != nil {
+				return fmt.Errorf("rule edit failed (%v), cleanup failed (%v). Check the host firewall", err, cleanupErr)
+			}
+			return err
 		}
-		return fmt.Errorf("rule edit failed. Previous rule restored: %w", err)
+	}
+	if removeOld {
+		if err := removeProfileRule(backend, old, run); err != nil {
+			if rollbackErr := rollback(added, true); rollbackErr != nil {
+				return fmt.Errorf("rule edit failed (%v), original rule recovery failed (%v). Check the host firewall", err, rollbackErr)
+			}
+			return fmt.Errorf("rule edit failed. Previous rule restored: %w", err)
+		}
 	}
 	return nil
 }
@@ -175,11 +254,13 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Port      string `json:"port"`
-		Direction string `json:"direction"`
-		Zone      string `json:"zone"`
-		NewPort   string `json:"newPort"`
-		Remarks   string `json:"remarks"`
+		Port      string  `json:"port"`
+		Direction string  `json:"direction"`
+		Zone      string  `json:"zone"`
+		Address   string  `json:"address"`
+		NewPort   string  `json:"newPort"`
+		Addresses *string `json:"addresses"`
+		Remarks   string  `json:"remarks"`
 	}
 	if decodeJSONWithLimit(r, &input, 8<<10) != nil || validateProfilePort(input.NewPort) != nil || utf8.RuneCountInString(input.Remarks) > 500 || strings.ContainsRune(input.Remarks, 0) {
 		writeError(w, 400, "Enter a valid TCP/UDP port or range and remarks up to 500 characters")
@@ -199,7 +280,7 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 	var old *profileRule
 	for i := range state.Rules {
 		v := &state.Rules[i]
-		if v.Port == input.Port && v.Direction == input.Direction && v.Zone == input.Zone {
+		if v.Port == input.Port && v.Direction == input.Direction && v.Zone == input.Zone && v.Address == input.Address {
 			old = v
 			break
 		}
@@ -208,9 +289,38 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "Rule changed. Refresh and try again")
 		return
 	}
-	next := *old
-	next.Port = input.NewPort
-	if old.Direction == "inbound" && next.Port != old.Port {
+	addresses := []string{old.Address}
+	if input.Addresses != nil {
+		if strings.TrimSpace(*input.Addresses) == "" {
+			writeError(w, 400, "Enter an IP address or CIDR network, or type 'any'.")
+			return
+		}
+		addresses, err = parseFirewallAddresses(*input.Addresses)
+		if err != nil || len(addresses) == 0 || (len(addresses) == 1 && addresses[0] == "cloudflare") {
+			writeError(w, 400, "Enter IP addresses or CIDR networks, or use 'any'. Cloudflare-only rules are configured under Managed rules.")
+			return
+		}
+		if len(addresses) == 1 && addresses[0] == "any" {
+			addresses[0] = ""
+		} else if broadFirewallAddress(addresses) {
+			writeError(w, 400, "Use 'any' for unrestricted access, or enter specific IP addresses and networks.")
+			return
+		}
+	}
+	nextRules := make([]profileRule, 0, len(addresses))
+	added := make([]profileRule, 0, len(addresses))
+	removeOld := true
+	for _, address := range addresses {
+		next := newProfileRule(*old, input.NewPort, address)
+		nextRules = append(nextRules, next)
+		if profileRuleKey(next) == profileRuleKey(*old) {
+			removeOld = false
+		} else {
+			added = append(added, next)
+		}
+	}
+	mutatesFirewall := removeOld || len(added) > 0
+	if old.Direction == "inbound" && mutatesFirewall {
 		ssh, err := run("/usr/sbin/sshd", "-T")
 		if err != nil {
 			writeError(w, 502, "Cannot verify current SSH access")
@@ -234,50 +344,55 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, port := range protected {
-			if profileRuleHasPort(old.Port, port) {
-				writeError(w, 409, "Change the SSH or panel service port before replacing its firewall rule")
+			if profileRuleHasPort(old.Port, port) || profileRuleHasPort(input.NewPort, port) {
+				writeError(w, 409, "The current SSH and panel access rules only support remarks edits here.")
 				return
 			}
 		}
-	}
-	if next.Port != old.Port && profileContainsRule(state, next) {
-		writeError(w, 409, "The replacement rule already exists")
-		return
 	}
 	notes, err := a.readProfileRemarks()
 	if err != nil {
 		writeError(w, 500, "Cannot read saved firewall remarks")
 		return
 	}
-	if next.Direction == "inbound" && backend == "firewalld" {
-		p := strings.Split(next.Port, "/")
-		next.Raw = fmt.Sprintf("rule priority=\"-100\" port port=\"%s\" protocol=\"%s\" accept", p[0], p[1])
-	}
-	if next.Port != old.Port && backend == "firewalld" {
-		exists, checkErr := firewalldProfileRuleExists(next, true, run)
-		if checkErr != nil {
-			writeError(w, 502, "Cannot verify the saved firewall configuration.")
+	for _, next := range added {
+		if profileContainsRule(state, next) {
+			writeError(w, 409, "A replacement rule already exists. Edit its row separately.")
 			return
 		}
-		if exists {
-			writeError(w, 409, "The replacement rule already exists in the saved configuration.")
-			return
+		if backend == "firewalld" {
+			exists, checkErr := firewalldProfileRuleExists(next, true, run)
+			if checkErr != nil {
+				writeError(w, 502, "Cannot verify the saved firewall configuration.")
+				return
+			}
+			if exists {
+				writeError(w, 409, "A replacement rule already exists in the saved configuration.")
+				return
+			}
 		}
 	}
-	if next.Port != old.Port {
+	if mutatesFirewall {
 		// Finish and verify host mutations even if the browser disconnects.
-		editCtx, finish := context.WithTimeout(context.WithoutCancel(r.Context()), 2*time.Minute)
+		editCtx, finish := context.WithTimeout(context.WithoutCancel(r.Context()), 4*time.Minute)
 		defer finish()
 		run = func(cmd string, args ...string) (string, error) {
 			return runFirewallCommand(editCtx, 20*time.Second, cmd, args...)
 		}
-		if err = replaceProfileRule(backend, *old, next, run); err != nil {
+		rollback := func(added []profileRule, restoreOld bool) error {
+			return restoreProfileRules(backend, *old, added, restoreOld)
+		}
+		if err = replaceProfileRules(backend, *old, added, removeOld, run, rollback); err != nil {
 			writeError(w, 502, err.Error())
 			return
 		}
 		state, err = inspectFirewallProfile(backend, run)
-		if err != nil || !profileContainsRule(state, next) || profileContainsRule(state, *old) {
-			if rollback := restoreProfileRule(backend, *old, next); rollback != nil {
+		verified := err == nil && profileContainsRule(state, *old) != removeOld
+		for _, next := range nextRules {
+			verified = verified && profileContainsRule(state, next)
+		}
+		if !verified {
+			if rollback := restoreProfileRules(backend, *old, added, removeOld); rollback != nil {
 				writeError(w, 502, "Rule verification and rollback failed. Check the host firewall.")
 				return
 			}
@@ -285,11 +400,13 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	notes[profileRuleKey(next)] = input.Remarks
+	for _, next := range nextRules {
+		notes[profileRuleKey(next)] = input.Remarks
+	}
 	data, _ := json.Marshal(notes)
 	if err = writeAtomic(filepath.Join(a.system.dataDir, "firewall-profile-remarks.json"), data, 0600); err != nil {
-		if next.Port != old.Port {
-			if rollback := restoreProfileRule(backend, *old, next); rollback != nil {
+		if mutatesFirewall {
+			if rollback := restoreProfileRules(backend, *old, added, removeOld); rollback != nil {
 				writeError(w, 500, "Saving remarks and firewall rollback failed. Check the host firewall immediately")
 				return
 			}
@@ -298,28 +415,39 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.annotateFirewallProfile(&state)
-	_ = a.store.AddActivity("Firewall profile rule edited", old.Port+" to "+next.Port, "warning")
+	_ = a.store.AddActivity("Firewall profile rule edited", fmt.Sprintf("%s to %s (%d address rules)", old.Port, input.NewPort, len(nextRules)), "warning")
 	writeJSON(w, 200, state)
 }
 
-func restoreProfileRule(backend string, old, next profileRule) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+func restoreProfileRules(backend string, old profileRule, added []profileRule, restoreOld bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	run := func(cmd string, args ...string) (string, error) {
 		return runFirewallCommand(ctx, 20*time.Second, cmd, args...)
 	}
-	if err := addProfileRule(backend, old, run); err != nil {
-		return err
+	return restoreProfileRulesWithProbe(backend, old, added, restoreOld, run)
+}
+
+func restoreProfileRulesWithProbe(backend string, old profileRule, added []profileRule, restoreOld bool, run securityProbe) error {
+	if restoreOld {
+		if backend == "ufw" {
+			// Reapply the original selector idempotently. A failed dual-stack
+			// removal can leave only one family, which status deduplicates.
+			if _, err := run("ufw", profileUFWArgs(old)...); err != nil {
+				return err
+			}
+			state, err := inspectFirewallProfile(backend, run)
+			if err != nil {
+				return err
+			}
+			if !profileContainsRule(state, old) {
+				return fmt.Errorf("original rule recovery could not be verified")
+			}
+		} else {
+			if _, err := addVerifiedProfileRule(backend, old, run); err != nil {
+				return err
+			}
+		}
 	}
-	state, err := inspectFirewallProfile(backend, run)
-	if err != nil {
-		return err
-	}
-	if !profileContainsRule(state, old) {
-		return fmt.Errorf("previous rule is not active")
-	}
-	if backend == "ufw" && !profileContainsRule(state, next) {
-		return nil
-	}
-	return removeProfileRule(backend, next, run)
+	return removeAddedProfileRules(backend, added, run)
 }

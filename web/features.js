@@ -76,26 +76,49 @@
   $("#firewallForm .panel-head p").textContent = "Outbound rules filter new host-originated connections; established replies remain allowed.";
   $("#firewallForm .settings-body").insertAdjacentHTML("afterbegin", `${field("Direction", '<select name="direction"><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select>')}${field("Action", '<select name="action"><option value="allow">Allow</option><option value="deny">Deny</option></select>')}<input name="id" type="hidden">`);
   $("#firewallForm .settings-body").insertAdjacentHTML("beforeend", '<button type="button" class="button button-ghost" id="firewallCancelEdit">Cancel edit</button>');
-  $('#firewallForm [name="source"]').insertAdjacentHTML('beforebegin','<select name="sourcePreset" aria-label="Source type"><option value="custom">Any IP or custom IP / CIDR</option><option value="cloudflare">Cloudflare only (IPv4 + IPv6)</option></select><small>Cloudflare only blocks other sources on this port. IP lists refresh daily. Use a proxied Cloudflare DNS record.</small>');
-  const sourcePreset=$('#firewallForm [name="sourcePreset"]'),sourceInput=$('#firewallForm [name="source"]');
-  sourcePreset.onchange=()=>{sourceInput.value=sourcePreset.value==='cloudflare'?'cloudflare':'any';sourceInput.readOnly=sourcePreset.value==='cloudflare';};
-  const directionChange = () => { const inbound = $('#firewallForm [name="direction"]').value === "inbound"; $('#firewallForm [name="source"]').parentElement.querySelector("span").textContent = inbound ? "Source IP / CIDR" : "Destination IP / CIDR"; };
+  const addressLabel = $('#firewallForm [name="source"]').parentElement;
+  addressLabel.innerHTML = `
+    <span id="firewallAddressLabel">Source IP / CIDR</span>
+    <select name="sourcePreset" aria-label="Address type"><option value="custom">Any IP or custom IP / CIDR</option><option value="cloudflare">Cloudflare only (IPv4 + IPv6)</option></select>
+    <textarea name="source" rows="3" aria-labelledby="firewallAddressLabel" aria-describedby="firewallAddressHelp" autocapitalize="off" spellcheck="false" required>any</textarea>
+    <small id="firewallAddressHelp">Enter any, a single IP / CIDR, or multiple addresses separated by commas or new lines.</small>`;
+  const sourcePreset = $('[name="sourcePreset"]', addressLabel);
+  const sourceInput = $('[name="source"]', addressLabel);
+  const addressHelp = $("#firewallAddressHelp");
+  const customAddressHelp = addressHelp.textContent;
+  function showAddressPreset(cloudflare) {
+    sourceInput.readOnly = cloudflare;
+    addressHelp.textContent = cloudflare
+      ? "Cloudflare only blocks other sources on this port. IP lists refresh daily. Use a proxied Cloudflare DNS record."
+      : customAddressHelp;
+  }
+  sourcePreset.onchange = () => {
+    const cloudflare = sourcePreset.value === "cloudflare";
+    sourceInput.value = cloudflare ? "cloudflare" : "any";
+    showAddressPreset(cloudflare);
+  };
+  const directionChange = () => {
+    const inbound = $('#firewallForm [name="direction"]').value === "inbound";
+    $("#firewallAddressLabel").textContent = inbound ? "Source IP / CIDR" : "Destination IP / CIDR";
+  };
   $('#firewallForm [name="direction"]').addEventListener("change", directionChange);
-  $("#firewallCancelEdit").addEventListener("click", () => { $("#firewallForm").reset(); sourceInput.readOnly=false; $('#firewallForm [name="id"]').value = ""; directionChange(); });
+  $("#firewallCancelEdit").addEventListener("click", () => { $("#firewallForm").reset(); showAddressPreset(false); $('#firewallForm [name="id"]').value = ""; directionChange(); });
   $('[data-page-view="firewall"] .page-heading p').textContent = "Manage custom inbound and outbound rules. Default policies and installer-managed access remain protected.";
   $('[data-page-view="firewall"] .management-table h2').textContent = "Managed rules";
   async function saveFirewall(event) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
     const direction = data.get("direction");
-    const body = { direction, action: data.get("action"), port: Number(data.get("port")), protocol: data.get("protocol"), label: data.get("label"), remarks: data.get("remarks"), [direction === "outbound" ? "destination" : "source"]: String(data.get("source")).trim() };
+    const addresses = String(data.get("source")).trim();
+    if (!addresses) { notifyError(new Error('Enter an IP address or CIDR network, or type "any".')); return; }
+    const body = { direction, action: data.get("action"), port: Number(data.get("port")), protocol: data.get("protocol"), label: data.get("label"), remarks: data.get("remarks"), [direction === "outbound" ? "destination" : "source"]: addresses };
     const id = String(data.get("id") || "");
-    if(data.get('sourcePreset')==='cloudflare'){
+    if(data.get('sourcePreset')==='cloudflare'||addresses.toLowerCase()==='cloudflare'){
       if(direction!=='inbound'||body.action!=='allow'){notifyError(new Error('Cloudflare only requires Direction: Inbound and Action: Allow.'));return;}
       body.source='cloudflare';
       if(!await window.LiteCPDialogs.confirm(`Restrict port ${body.port}/${body.protocol} to Cloudflare IPv4 and IPv6 networks? Direct connections from other IPs will be blocked.`,{title:'Cloudflare-only port',confirmText:'Apply restriction'}))return;
     }
     if (body.action === "deny" && !await window.LiteCPDialogs.confirm(`Apply this ${direction} block? It can interrupt applications using port ${body.port}.`)) return;
-    await busy(form, async () => { await cp.api(`/api/firewall${id ? "/"+encodeURIComponent(id) : ""}`, {method:id ? "PUT":"POST", body}); form.reset(); sourceInput.readOnly=false; $('#firewallForm [name="id"]').value = ""; directionChange(); await cp.refresh(); cp.showToast("Firewall saved", "The custom rule has been applied."); form.dispatchEvent(new Event("firewall-saved")); });
+    await busy(form, async () => { await cp.api(`/api/firewall${id ? "/"+encodeURIComponent(id) : ""}`, {method:id ? "PUT":"POST", body}); form.reset(); showAddressPreset(false); $('#firewallForm [name="id"]').value = ""; directionChange(); await cp.refresh(); cp.showToast("Firewall saved", "The custom rule has been applied."); form.dispatchEvent(new Event("firewall-saved")); });
   }
   async function firewallAction(event) {
     const button = event.target.closest("[data-firewall-action]"); if (!button) return;
@@ -103,8 +126,14 @@
     if (button.dataset.firewallAction === "edit") {
       const form = $("#firewallForm"); for (const key of ["id", "port", "protocol", "label", "remarks"]) form.elements[key].value = rule[key] || "";
       form.elements.direction.value = rule.direction || "inbound"; form.elements.action.value = rule.action || "allow";
-      sourcePreset.value=rule.source==='cloudflare'?'cloudflare':'custom';sourceInput.readOnly=rule.source==='cloudflare';
-      form.elements.source.value = (rule.direction === "outbound" ? rule.destination : rule.source) || "any"; directionChange(); form.scrollIntoView({behavior:"smooth"}); return;
+      const cloudflare = rule.source === "cloudflare";
+      sourcePreset.value = cloudflare ? "cloudflare" : "custom";
+      showAddressPreset(cloudflare);
+      const addresses = (rule.direction === "outbound" ? rule.destination : rule.source) || "any";
+      sourceInput.value = addresses.split(",").map(value => value.trim()).join("\n");
+      directionChange();
+      form.scrollIntoView({behavior:"smooth"});
+      return;
     }
     if (!await window.LiteCPDialogs.confirm(rule.source==="cloudflare"?"Remove the Cloudflare-only restriction? Other firewall rules may then permit direct access to this port.":"Delete this custom firewall rule?")) return;
     try { await cp.api(`/api/firewall/${encodeURIComponent(rule.id)}`, {method:"DELETE"}); await cp.refresh(); cp.showToast("Rule removed", "Permanent firewall configuration updated."); } catch (error) { notifyError(error); }

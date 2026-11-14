@@ -16,3 +16,17 @@ service. Generated descriptions are read-only; custom rules have editable notes.
 Inbound is displayed in blue and Outbound in purple in both tables, with visible
 text labels. Remarks are displayed as plain text, including line breaks. They
 are panel metadata, not executable commands or OS firewall comments.
+
+## Address restrictions
+
+Custom rules accept one or up to 32 IPv4/IPv6 addresses or CIDR networks, separated
+by commas or new lines. Inbound rules use source addresses; outbound rules use
+destination addresses. Use `any` for all addresses. Cloudflare is a separate
+inbound preset and cannot be combined with an address list. Existing host rules
+are not taken over when a duplicate selector is detected.
+
+The required-port editor also supports address restrictions, port/range,
+protocol and remarks. Its direction, zone and Allow action stay fixed to the
+selected service rule. Current SSH and panel access rules cannot be narrowed in
+this editor. Each address is verified separately in the host firewall; a failed
+replacement restores the previous rule. Other rules can still permit access.
