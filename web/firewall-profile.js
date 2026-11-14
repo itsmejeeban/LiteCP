@@ -3,7 +3,7 @@
   const button=document.createElement('button');button.type='button';button.className='button button-primary';button.textContent='Checking firewall…';button.disabled=true;
   heading.insertBefore(button,document.getElementById('firewallBackend'));
   const panel=document.createElement('article');panel.className='panel';heading.after(panel);
-  let enabled=false,busy=false,verified=false;
+  let enabled=false,busy=false,verified=false,inspection;
   function show(state){
     enabled=state.enabled;verified=true;button.textContent=enabled?'Disable LiteCP Firewall':'Apply LiteCP Firewall';button.disabled=false;
     panel.replaceChildren();const body=document.createElement('div');body.className='settings-body';const title=document.createElement('h2');title.textContent='LiteCP required-port rules';body.append(title);
@@ -76,7 +76,27 @@
     dialog.showModal();
     form.elements.port.focus();
   }
-  async function refresh(){if(busy)return;try{show(await cp.api('/api/firewall/apply-litecp'));return true;}catch(error){verified=false;button.disabled=false;button.textContent='Retry firewall check';panel.textContent='Cannot verify firewall state: '+error.message;return false;}}
+  function refresh(){
+    if(busy||!cp.state())return;
+    if(inspection)return inspection;
+    button.disabled=true;
+    button.textContent='Checking firewall…';
+    panel.inert=true;
+    inspection=cp.api('/api/firewall/apply-litecp').then(state=>{
+      show(state);
+      return true;
+    }).catch(error=>{
+      verified=false;
+      button.disabled=false;
+      button.textContent='Retry firewall check';
+      panel.textContent='Cannot verify firewall state: '+error.message;
+      return false;
+    }).finally(()=>{
+      panel.inert=false;
+      inspection=null;
+    });
+    return inspection;
+  }
   button.onclick=async()=>{
     if(!verified){button.disabled=true;await refresh();return;}
     const disable=enabled;
@@ -84,7 +104,10 @@
     busy=true;button.disabled=true;button.textContent=disable?'Disabling…':'Applying…';
     try{await cp.api('/api/firewall/apply-litecp',{method:disable?'DELETE':'POST',body:{}});busy=false;if(!await refresh())throw Error('Firewall status could not be verified. Refresh and check the rules.');if(enabled===disable)throw Error('Firewall state does not match the requested change. Review the rules.');cp.showToast(disable?'LiteCP firewall disabled':'LiteCP firewall applied','Server rules refreshed.');}catch(error){cp.handleError(error);}finally{busy=false;await refresh();}
   };
-  window.addEventListener('hashchange',()=>{if(location.hash==='#firewall')refresh();});
-  const render=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{render?.(state);if(location.hash==='#firewall')refresh();};
-  refresh();
+  const navigate=window.LiteCPFeatures.navigate;
+  window.LiteCPFeatures.navigate=page=>{
+    navigate?.(page);
+    if(page==='firewall')refresh();
+  };
+  if(heading.closest('[data-page-view="firewall"]').classList.contains('active'))refresh();
 })();

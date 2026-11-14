@@ -1,17 +1,61 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 test('failed firewall inspection offers read-only retry instead of applying an unverified profile',async()=>{
- const source=fs.readFileSync('web/firewall-profile.js','utf8'),start=source.indexOf('  async function refresh()'),end=source.indexOf('  window.addEventListener',start);
+ const source=fs.readFileSync('web/firewall-profile.js','utf8'),start=source.indexOf('  function refresh()'),end=source.indexOf('  const navigate=',start);
  const button={},panel={},calls=[];let fail=true;
- const context={button,panel,show:()=>{button.disabled=false;},cp:{api:async(path,options)=>{calls.push({path,options});if(fail)throw Error('service unavailable');return {enabled:false,rules:[]};}},window:{LiteCPDialogs:{confirm:()=>{throw Error('Retry must not change rules');}}}};
- vm.runInNewContext('let busy=false,verified=false,enabled=false;'+source.slice(start,end)+';this.refresh=refresh;',context);
+ const context={button,panel,show:()=>{button.disabled=false;},cp:{state:()=>({}),api:async(path,options)=>{calls.push({path,options});if(fail)throw Error('service unavailable');return {enabled:false,rules:[]};}},window:{LiteCPDialogs:{confirm:()=>{throw Error('Retry must not change rules');}}}};
+ vm.runInNewContext('let busy=false,verified=false,enabled=false,inspection;'+source.slice(start,end)+';this.refresh=refresh;',context);
  assert.equal(await context.refresh(),false);assert.equal(button.disabled,false);assert.equal(button.textContent,'Retry firewall check');
  fail=false;await button.onclick();assert.equal(calls.length,2);assert.ok(calls.every(call=>call.options===undefined));
+});
+
+test('firewall status loads only on authenticated navigation and coalesces open requests', async () => {
+ const source = fs.readFileSync('web/firewall-profile.js', 'utf8');
+ const element = () => ({
+  append(){},after(){},insertBefore(){},replaceChildren(){},
+  closest:() => ({classList:{contains:() => false}})
+ });
+ const button = element(), panel = element();
+ const routes = [], calls = [];
+ let authenticated, reply;
+ const features = {navigate:page => routes.push(page)};
+ vm.runInNewContext(source, {
+  document:{querySelector:element,getElementById:element,createElement:tag => tag==='button'?button:tag==='article'?panel:element()},
+  location:{hash:'#firewall'},
+  window:{LiteCPFeatures:features,LiteCP:{
+   state:()=>authenticated,
+   api:path=>{
+    calls.push(path);
+    return new Promise(resolve => { reply=resolve; });
+   }
+  }}
+ });
+ assert.equal(calls.length, 0);
+ features.navigate('firewall');
+ assert.equal(calls.length, 0);
+ authenticated = {};
+ features.navigate('dashboard');
+ assert.equal(calls.length, 0);
+ features.navigate('firewall');
+ features.navigate('firewall');
+ assert.deepEqual(routes, ['firewall','dashboard','firewall','firewall']);
+ assert.deepEqual(calls, ['/api/firewall/apply-litecp']);
+ assert.equal(button.disabled, true);
+ reply({enabled:true,rules:[]});
+ await new Promise(setImmediate);
+ assert.equal(button.textContent, 'Disable LiteCP Firewall');
+ assert.equal(button.disabled, false);
+ features.navigate('dashboard');
+ features.navigate('firewall');
+ assert.equal(calls.length, 2);
+ reply({enabled:false,rules:[]});
+ await new Promise(setImmediate);
+ assert.equal(button.textContent, 'Apply LiteCP Firewall');
 });
 
 test('required rule editor saves the selected rule and keeps the dialog open on error', async () => {
  const source = fs.readFileSync('web/firewall-profile.js', 'utf8');
  const start = source.indexOf('  function editRule(');
- const end = source.indexOf('  async function refresh()', start);
+ const end = source.indexOf('  function refresh()', start);
  const port = {focus() {}}, protocol = {}, remarks = {}, message = {}, cancel = {}, scope = {};
  const controls = [port, protocol, remarks, cancel];
  const form = {elements:{port, protocol, remarks}, querySelectorAll:() => controls, reportValidity:() => true};
