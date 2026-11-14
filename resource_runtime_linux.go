@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -117,7 +118,31 @@ func resourceRuntimeLock(id string, watch bool) (func(), error) {
 	}
 	return func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN); _ = f.Close() }, nil
 }
+
+var resourceDiscovery = struct {
+	sync.Mutex
+	groups map[string]resourceCgroupDiscovery
+	mounts map[string]resourceMountDiscovery
+}{groups: map[string]resourceCgroupDiscovery{}, mounts: map[string]resourceMountDiscovery{}}
+
+type resourceCgroupDiscovery struct {
+	path string
+	info os.FileInfo
+	at   time.Time
+}
+type resourceMountDiscovery struct {
+	source, mountinfo string
+}
+
 func resourceCgroup(id string) (string, error) {
+	resourceDiscovery.Lock()
+	defer resourceDiscovery.Unlock()
+	if saved, ok := resourceDiscovery.groups[id]; ok && time.Since(saved.at) < 30*time.Second {
+		if info, err := os.Stat(saved.path); err == nil && os.SameFile(info, saved.info) {
+			return saved.path, nil
+		}
+		delete(resourceDiscovery.groups, id)
+	}
 	out, err := runCommandNoContext("systemctl", "show", resourceSliceName(id), "--property=ControlGroup", "--value")
 	if err != nil {
 		return "", err
@@ -126,7 +151,13 @@ func resourceCgroup(id string) (string, error) {
 	if !strings.HasPrefix(rel, "/") || strings.Contains(rel, "..") || !strings.HasSuffix(rel, "/"+resourceSliceName(id)) {
 		return "", fmt.Errorf("invalid website control group")
 	}
-	return filepath.Join("/sys/fs/cgroup", rel), nil
+	name := filepath.Join("/sys/fs/cgroup", rel)
+	info, err := os.Stat(name)
+	if err != nil {
+		return "", err
+	}
+	resourceDiscovery.groups[id] = resourceCgroupDiscovery{name, info, time.Now()}
+	return name, nil
 }
 func runCommandNoContext(name string, args ...string) (string, error) {
 	return runCommand(context.Background(), 15*time.Second, name, args...)
@@ -200,11 +231,27 @@ func resourceLiveSample(id string, disk int64) (resourceSample, int64, int, erro
 	return sample, memory, int(tasks), err
 }
 func resourceBlockDevice(site Site) string {
+	// Mount metadata is cheap to read and changes on remounts. Never reuse a
+	// device discovered before the website mount topology changed.
+	mountinfo, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return ""
+	}
+	resourceDiscovery.Lock()
+	defer resourceDiscovery.Unlock()
+	key := siteHome(site)
+	if cached, ok := resourceDiscovery.mounts[key]; ok && cached.mountinfo == string(mountinfo) {
+		return cached.source
+	}
 	out, err := runCommandNoContext("findmnt", "-n", "-o", "SOURCE", "-T", siteHome(site))
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(out)
+	source := strings.TrimSpace(out)
+	if strings.HasPrefix(source, "/dev/") {
+		resourceDiscovery.mounts[key] = resourceMountDiscovery{source, string(mountinfo)}
+	}
+	return source
 }
 func resourceQuotaUsage(site Site) (int64, error) {
 	q, err := resourceQuotaInfo(site)

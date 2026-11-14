@@ -75,6 +75,7 @@
   "/api/migrations/folder/scan",
   "/api/migrations/import",
   "/api/overview/jobs",
+  "/api/overview/metrics",
   "/api/password",
   "/api/php/extensions",
   "/api/phpmyadmin/",

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 test('overview refresh is bounded, pauses outside dashboard and reports errors',async()=>{
  let requests=0,finish,interval,fail=false;const events={},status={};
  const location={hash:'#dashboard'},document={hidden:false,createElement:()=>status,querySelector:s=>s==='#overviewMetricsStatus'?status:{after(){}},addEventListener:(k,f)=>events[k]=f};
- const cp={state:()=>({}),refresh:()=>{requests++;return fail?Promise.reject(Error('offline')):new Promise(resolve=>finish=resolve);}};
+ const cp={state:()=>({}),refreshMetrics:()=>{requests++;return fail?Promise.reject(Error('offline')):new Promise(resolve=>finish=resolve);}};
  const features={navigate(){}};
  vm.runInNewContext(fs.readFileSync('web/overview-refresh.js','utf8'),{window:{LiteCP:cp,LiteCPFeatures:features,addEventListener:(k,f)=>events[k]=f},document,location,Date,setInterval(fn,ms){assert.equal(ms,15000);interval=fn;}});
  assert.equal(requests,1);await interval();assert.equal(requests,1);

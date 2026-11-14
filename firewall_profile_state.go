@@ -28,6 +28,7 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 		if err != nil {
 			return state, err
 		}
+		seen := make(map[string]bool)
 		for _, line := range strings.Split(out, "\n") {
 			if strings.Contains(line, "# litecp-required") {
 				fields := strings.Fields(line)
@@ -36,7 +37,12 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 					if containsString(fields, "OUT") {
 						direction = "outbound"
 					}
-					state.Rules = append(state.Rules, profileRule{Direction: direction, Port: fields[0]})
+					rule := profileRule{Direction: direction, Port: strings.ReplaceAll(fields[0], ":", "-")}
+					key := profileRuleKey(rule)
+					if validateProfilePort(rule.Port) == nil && !seen[key] {
+						state.Rules = append(state.Rules, rule)
+						seen[key] = true
+					}
 				}
 			}
 		}
@@ -82,12 +88,16 @@ func inspectFirewallProfile(backend string, run securityProbe) (profileState, er
 }
 
 func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPut {
+		a.editFirewallProfile(w, r)
+		return
+	}
 	if r.Method == http.MethodPost {
 		a.applyLiteCPFirewall(w, r)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodDelete {
-		w.Header().Set("Allow", "GET, POST, DELETE")
+		w.Header().Set("Allow", "GET, POST, PUT, DELETE")
 		writeError(w, 405, "Method not allowed.")
 		return
 	}

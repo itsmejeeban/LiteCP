@@ -70,7 +70,11 @@ func (a *App) annotateFirewallProfile(state *profileState) {
 		webmailPort = parsed.Port()
 	}
 	sshPorts, panelPort := savedFirewallSSHPorts(a.system.dataDir), currentPanelPort()
+	notes, _ := a.readProfileRemarks()
 	for i := range state.Rules {
 		state.Rules[i].Remarks = requiredFirewallRemark(state.Rules[i], panelPort, sshPorts, webmailPort)
+		if note, ok := notes[profileRuleKey(state.Rules[i])]; ok {
+			state.Rules[i].Remarks = note
+		}
 	}
 }

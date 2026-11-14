@@ -64,10 +64,20 @@ func captchaResourceSignal(site Site, record captchaRuntimeSite, st resourceRunt
 	record.ResourceBlocked = !st.Enforced || st.State == "Resource blocked" || st.State == "Recovering" || st.State == "Error"
 	breach := record.ResourceBlocked || st.CPUExhaustedFor > 0 || (p.MemoryMiB > 0 && st.MemoryBytes >= p.MemoryMiB*1048576) || (p.DiskMiB > 0 && st.Sample.DiskBytes >= p.DiskMiB*1048576) || (p.Tasks > 0 && st.Processes >= p.Tasks)
 	if breach {
-		if !record.AutoUntil.After(now) {
-			record.AutoStarted = now
-		}
-		record.AutoUntil = now.Add(5 * time.Minute)
+		record = refreshCaptchaCooldown(record, now)
+	}
+	return record
+}
+
+func refreshCaptchaCooldown(record captchaRuntimeSite, now time.Time) captchaRuntimeSite {
+	until := now.Add(5 * time.Minute)
+	if !record.AutoUntil.After(now) {
+		record.AutoStarted = now
+		record.AutoUntil = until
+	} else if record.AutoUntil.Before(until) {
+		// Keep at least five minutes of challenge protection after the last
+		// breach without rewriting the policy file every two seconds.
+		record.AutoUntil = until.Truncate(30 * time.Second).Add(30 * time.Second)
 	}
 	return record
 }
@@ -139,6 +149,10 @@ func captchaZones(_ []Site) string {
 	return "# Managed LiteCP CAPTCHA zones\nlimit_conn_zone \"$binary_remote_addr$server_name\" zone=cap_conn:4m;\n"
 }
 func (a *App) syncCaptchaRuntime(sites []Site) error {
+	return a.syncCaptchaRuntimeWithServiceCheck(sites, true)
+}
+
+func (a *App) syncCaptchaRuntimeWithServiceCheck(sites []Site, ensureService bool) error {
 	if a.system.demo {
 		return nil
 	}
@@ -166,9 +180,9 @@ func (a *App) syncCaptchaRuntime(sites []Site) error {
 	}
 	runtime := captchaRuntime{Key: string(key), Sites: map[string]captchaRuntimeSite{}}
 	var previous captchaRuntime
-	if content, e := os.ReadFile(captchaRuntimeFile); e == nil {
-		_ = json.Unmarshal(content, &previous)
-	}
+	previousContent, _ := os.ReadFile(captchaRuntimeFile)
+	_ = json.Unmarshal(previousContent, &previous)
+	now := time.Now()
 	for _, site := range sites {
 		if captchaEnabled(site) {
 			record := captchaRuntimeSite{Domain: site.Domain, Policy: *site.Captcha}
@@ -178,13 +192,10 @@ func (a *App) syncCaptchaRuntime(sites []Site) error {
 					record.AutoUntil = old.AutoUntil
 					record.AutoStarted = old.AutoStarted
 				}
-				record = captchaResourceSignal(site, record, resourceStatusForSite(site), time.Now())
+				record = captchaResourceSignal(site, record, resourceStatusForSite(site), now)
 				if _, e := os.Stat(filepath.Join(resourceDirectory(site.ID), "blocked")); e == nil {
-					if !record.AutoUntil.After(time.Now()) {
-						record.AutoStarted = time.Now()
-					}
 					record.ResourceBlocked = true
-					record.AutoUntil = time.Now().Add(5 * time.Minute)
+					record = refreshCaptchaCooldown(record, now)
 				}
 			}
 			runtime.Sites[site.ID] = record
@@ -198,10 +209,10 @@ func (a *App) syncCaptchaRuntime(sites []Site) error {
 			return e
 		}
 	}
-	if old, e := os.ReadFile(captchaRuntimeFile); e == nil && string(old) == string(content) {
-		if len(runtime.Sites) > 0 {
-			_, e = runCommand(context.Background(), 10*time.Second, "systemctl", "start", "litecp-captcha")
-			return e
+	if string(previousContent) == string(content) {
+		if ensureService && len(runtime.Sites) > 0 {
+			_, err = runCommand(context.Background(), 10*time.Second, "systemctl", "start", "litecp-captcha")
+			return err
 		}
 		return nil
 	}
@@ -219,7 +230,7 @@ func (a *App) syncCaptchaRuntime(sites []Site) error {
 	if err = os.Chown(captchaRuntimeFile, 0, gid); err != nil {
 		return err
 	}
-	if len(runtime.Sites) == 0 {
+	if !ensureService || len(runtime.Sites) == 0 {
 		return nil
 	}
 	_, err = runCommand(context.Background(), 10*time.Second, "systemctl", "start", "litecp-captcha")
@@ -232,9 +243,22 @@ func (a *App) startCaptchaReconcile() {
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
+		var lastServiceCheck time.Time
 		for range ticker.C {
 			a.mutationMu.Lock()
-			_ = a.syncCaptchaRuntime(a.store.Sites())
+			sites := a.store.Sites()
+			enabled, automatic := false, false
+			for _, site := range sites {
+				enabled = enabled || captchaEnabled(site)
+				automatic = automatic || (captchaEnabled(site) && site.Captcha.Mode == "auto" && resourceEnabled(site))
+			}
+			check := time.Since(lastServiceCheck) >= 30*time.Second
+			if enabled && (automatic || check) {
+				_ = a.syncCaptchaRuntimeWithServiceCheck(sites, check)
+				if check {
+					lastServiceCheck = time.Now()
+				}
+			}
 			a.mutationMu.Unlock()
 		}
 	}()

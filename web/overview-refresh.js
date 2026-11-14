@@ -7,7 +7,7 @@
     pending=true;
     const status=document.querySelector('#overviewMetricsStatus');
     try{
-      await cp.refresh();
+      if(await cp.refreshMetrics()===null)return;
       status.textContent='Metrics updated '+new Date().toLocaleTimeString()+'. Refreshes every 15 seconds.';
     }catch(error){status.textContent='Metrics could not refresh. Displayed values may be out of date.';}
     finally{pending=false;}

@@ -17,7 +17,7 @@ test('source connection pages render discovered account pickers open',()=>{
 });
 test('older migration refresh cannot replace newer jobs or errors',async()=>{
   const pending=[],shown=[],output={};
-  const context=vm.createContext({cp:{demo:false,api:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},$:()=>output,active:()=>false,renderJobs:()=>shown.push(context.jobs),clearTimeout(){},setTimeout(){},pollTimer:null,jobs:[]});
+  const context=vm.createContext({document:{hidden:false},location:{hash:'#migrations/jobs'},cp:{demo:false,api:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))},$:()=>output,active:()=>false,renderJobs:()=>shown.push(context.jobs),clearTimeout(){},setTimeout(){},pollTimer:null,jobs:[]});
   vm.runInContext(code+';this.load=loadJobs;',context);
   const old=context.load(),current=context.load();
   pending[1].resolve({items:[{id:'new',status:'restored'}]});await current;
@@ -74,7 +74,7 @@ test('pending retry recaptures incomplete cPanel database exports and hides supe
 
 test('invalid jobs responses preserve the last successful jobs for refresh retry',async()=>{
   const output={},original=[{id:'kept',status:'restored'}];
-  const context=vm.createContext({cp:{demo:false,api:async()=>({})},$:()=>output,active:()=>false,renderJobs(){},clearTimeout(){},setTimeout(){},pollTimer:null,jobs:original});
+  const context=vm.createContext({document:{hidden:false},location:{hash:'#migrations/jobs'},cp:{demo:false,api:async()=>({})},$:()=>output,active:()=>false,renderJobs(){},clearTimeout(){},setTimeout(){},pollTimer:null,jobs:original});
   vm.runInContext(code+';this.load=loadJobs;',context);await context.load();
   assert.equal(context.jobs,original);assert.match(output.textContent,/Refresh jobs to retry/);
 });
@@ -118,10 +118,14 @@ test('archive deletion uses the confirmed archive and preserves a newer selectio
 
 test('live job polling resumes after a transient refresh failure',async()=>{
   const timers=[],output={};let fail=true;
-  const context=vm.createContext({cp:{demo:false,api:async()=>{if(fail)throw Error('Temporary connection failure');return{items:[{id:'busy',status:'running',stage:'capture'}],id:'busy',status:'running'};}},$:()=>output,active:job=>job.status==='running',renderJobs(){},clearTimeout(){},setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},pollTimer:null,jobs:[{id:'busy',status:'running'}]});
+  const requests=[],location={hash:'#migrations/jobs'},document={hidden:false};
+  const context=vm.createContext({document,location,cp:{demo:false,api:async(url)=>{requests.push(url);if(fail)throw Error('Temporary connection failure');return{items:[{id:'busy',status:'running',stage:'capture'}]};}},$:()=>output,active:job=>job.status==='running',renderJobs(){},clearTimeout(){},setTimeout(fn,delay){timers.push({fn,delay});return timers.length;},pollTimer:null,jobs:[{id:'busy',status:'running'}]});
   vm.runInContext(code+';this.load=loadJobs;',context);await context.load();
   assert.match(output.textContent,/Temporary connection/);assert.equal(timers.length,1);assert.equal(timers[0].delay,5000);
   fail=false;await timers[0].fn();assert.equal(context.jobs[0].id,'busy');assert.equal(timers.length,2);
+  assert.deepEqual(requests,['/api/live-migrations','/api/live-migrations']);
+  document.hidden=true;await context.load();assert.equal(timers.length,2);
+  document.hidden=false;location.hash='#dashboard';await context.load();assert.equal(timers.length,2);
   context.jobs=[{id:'done',status:'restored'}];fail=true;await context.load();assert.equal(timers.length,2);
 });
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -115,23 +116,42 @@ func (a *App) queueLiveAccounts(w http.ResponseWriter, r *http.Request, id strin
 	}
 	writeJSON(w, 202, map[string]any{"items": queued})
 }
-func (a *App) startNextQueuedMigration() {
-	entries, err := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
+func (a *App) startNextQueuedMigration(statuses []migrationStatusSummary) {
+	queued := []LiveMigrationJob{}
+	for _, status := range statuses {
+		if status.Status != "queued" {
+			continue
+		}
+		job, err := a.loadLiveJob(status.ID)
+		if err == nil && job.Status == "queued" {
+			queued = append(queued, job)
+		}
+	}
+	if len(queued) == 0 {
+		return
+	}
+	// Check worker slots in one call. Capture units can still be unwinding
+	// after their job becomes cancelled or records its final status.
+	output, err := runCommand(context.Background(), 3*time.Second, "systemctl", "--no-legend", "--no-pager", "--plain", "--full", "list-units", "--type=service", "--state=active,activating,deactivating", "litecp-capture-*.service")
 	if err != nil {
 		return
 	}
-	queued := []LiveMigrationJob{}
+	batches := make(map[string]string, len(statuses))
+	for _, status := range statuses {
+		batches[status.ID] = status.MigrationBatch
+	}
 	active := []LiveMigrationJob{}
-	for _, entry := range entries {
-		job, e := a.loadLiveJob(entry.Name())
-		if e != nil {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
 			continue
 		}
-		if liveCaptureActive(job.ID) {
-			active = append(active, job)
+		if !strings.HasPrefix(fields[0], "litecp-capture-") || !strings.HasSuffix(fields[0], ".service") {
+			continue
 		}
-		if job.Status == "queued" {
-			queued = append(queued, job)
+		id := strings.TrimSuffix(strings.TrimPrefix(fields[0], "litecp-capture-"), ".service")
+		if liveJobIDPattern.MatchString(id) {
+			active = append(active, LiveMigrationJob{ID: id, MigrationBatch: batches[id]})
 		}
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].CreatedAt.Before(queued[j].CreatedAt) })

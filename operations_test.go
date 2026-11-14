@@ -262,8 +262,11 @@ func TestOperationAuditNeverRecordsBodyOrQuerySecrets(t *testing.T) {
 	if len(items) != 1 || items[0].Status != 409 {
 		t.Fatal("Missing outcome", items)
 	}
-	b, _ := os.ReadFile(filepath.Join(a.system.dataDir, "operation-audit.jsonl"))
-	if bytes.Contains(b, []byte("private-secret")) {
-		t.Fatal("Audit leaked credential")
+	if err := scanHistoryRecords(a.system.dataDir, "operation-audit", "operation-audit.jsonl", time.Time{}, 0, func(line []byte) {
+		if bytes.Contains(line, []byte("private-secret")) {
+			t.Fatal("Audit leaked credential")
+		}
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

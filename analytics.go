@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -49,18 +48,7 @@ func (a *App) startUsageMonitor() {
 			if point.Time.Sub(lastSave) < time.Minute {
 				return
 			}
-			data, err := json.Marshal(point)
-			if err == nil {
-				var file *os.File
-				file, err = os.OpenFile(filepath.Join(system.dataDir, "usage-history.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-				if err == nil {
-					_, err = file.Write(append(data, '\n'))
-					closeErr := file.Close()
-					if err == nil {
-						err = closeErr
-					}
-				}
-			}
+			err := appendHistoryRecord(system.dataDir, "server-usage", point.Time, point)
 			usageMonitor.Lock()
 			if err != nil {
 				usageMonitor.problem = "Usage history could not be saved"
@@ -94,27 +82,37 @@ func usageBucket(at time.Time, view string) time.Time {
 	}
 	return at
 }
+
+type usageBucketTotal struct {
+	point usageSample
+	count int
+}
+
+type usageTotals map[time.Time]usageBucketTotal
+
+func (bins usageTotals) add(point usageSample, view string, since time.Time) {
+	if point.Time.Before(since) {
+		return
+	}
+	at := usageBucket(point.Time, view)
+	b := bins[at]
+	b.count++
+	b.point.Time = at
+	b.point.CPU += point.CPU
+	b.point.Memory += point.Memory
+	b.point.Disk += point.Disk
+	bins[at] = b
+}
+
 func aggregateUsage(samples []usageSample, view string, since time.Time) []usageSample {
-	type bucket struct {
-		point usageSample
-		count int
-	}
-	bins := map[time.Time]*bucket{}
+	bins := usageTotals{}
 	for _, point := range samples {
-		if point.Time.Before(since) {
-			continue
-		}
-		at := usageBucket(point.Time, view)
-		b := bins[at]
-		if b == nil {
-			b = &bucket{point: usageSample{Time: at}}
-			bins[at] = b
-		}
-		b.count++
-		b.point.CPU += point.CPU
-		b.point.Memory += point.Memory
-		b.point.Disk += point.Disk
+		bins.add(point, view, since)
 	}
+	return bins.points()
+}
+
+func (bins usageTotals) points() []usageSample {
 	result := make([]usageSample, 0, len(bins))
 	for _, b := range bins {
 		b.point.CPU /= float64(b.count)
@@ -141,30 +139,24 @@ func (a *App) usageAnalytics(w http.ResponseWriter, r *http.Request) {
 	latest, problem := usageMonitor.latest, usageMonitor.problem
 	samples := append([]usageSample{}, usageMonitor.live...)
 	usageMonitor.RUnlock()
+	cutoff := time.Now().Add(-duration)
+	var points []usageSample
 	if view != "live" {
-		samples = nil
-		file, err := os.Open(filepath.Join(a.system.dataDir, "usage-history.jsonl"))
-		if err == nil {
-			defer file.Close()
-			scanner := bufio.NewScanner(file)
-			for scanner.Scan() {
-				var point usageSample
-				if json.Unmarshal(scanner.Bytes(), &point) == nil {
-					if !point.Time.Before(time.Now().Add(-duration)) {
-						samples = append(samples, point)
-					}
-				}
+		bins := usageTotals{}
+		err := scanHistoryRecords(a.system.dataDir, "server-usage", "usage-history.jsonl", cutoff, 0, func(line []byte) {
+			var point usageSample
+			if json.Unmarshal(line, &point) == nil {
+				bins.add(point, view, cutoff)
 			}
-			if scanner.Err() != nil {
-				writeError(w, 500, "Cannot read usage history")
-				return
-			}
-		} else if !os.IsNotExist(err) {
+		})
+		if err != nil {
 			writeError(w, 500, "Cannot read usage history")
 			return
 		}
+		points = bins.points()
+	} else {
+		points = aggregateUsage(samples, view, cutoff)
 	}
-	points := aggregateUsage(samples, view, time.Now().Add(-duration))
 	writeJSON(w, 200, map[string]any{"points": points, "latest": latest, "view": view, "warning": problem, "intervalSeconds": 15})
 }
 
@@ -247,7 +239,10 @@ func (a *App) directoryDiskUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const base = "/"
-	if r.URL.Query().Get("scope") == "litecp" { a.liteCPStorageUsage(w,r); return }
+	if r.URL.Query().Get("scope") == "litecp" {
+		a.liteCPStorageUsage(w, r)
+		return
+	}
 	target, relative, err := safeDiskUsagePath(base, r.URL.Query().Get("path"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -276,13 +271,22 @@ func (a *App) directoryDiskUsage(w http.ResponseWriter, r *http.Request) {
 	var measuredTotal, directoriesBytes int64
 	for _, record := range strings.Split(string(output), "\x00") {
 		fields := strings.SplitN(record, "\t", 2)
-		if len(fields) != 2 { continue }
+		if len(fields) != 2 {
+			continue
+		}
 		size, parseErr := strconv.ParseInt(fields[0], 10, 64)
-		if parseErr != nil { continue }
+		if parseErr != nil {
+			continue
+		}
 		path := filepath.Clean(fields[1])
-		if path == target { measuredTotal = size; continue }
+		if path == target {
+			measuredTotal = size
+			continue
+		}
 		childRelative, pathErr := filepath.Rel(base, path)
-		if pathErr != nil { continue }
+		if pathErr != nil {
+			continue
+		}
 		entries = append(entries, directoryUsageEntry{Name: path, Path: filepath.ToSlash(childRelative), Bytes: size, IsDir: true})
 		directoriesBytes += size
 	}

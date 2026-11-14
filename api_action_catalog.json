@@ -512,6 +512,14 @@
     "objectID": false
   },
   {
+    "name": "panel.overview.metrics.get",
+    "group": "Overview",
+    "description": "Dashboard metrics — GET /api/overview/metrics",
+    "method": "GET",
+    "path": "/api/overview/metrics",
+    "objectID": false
+  },
+  {
     "name": "panel.backups.counts.get",
     "group": "Backups",
     "description": "backups / counts — GET /api/backups/counts",
@@ -1212,6 +1220,14 @@
     "group": "Security",
     "description": "LiteCP required firewall rules — GET /api/firewall/apply-litecp",
     "method": "GET",
+    "path": "/api/firewall/apply-litecp",
+    "objectID": false
+  },
+  {
+    "name": "panel.firewall.apply_litecp.put",
+    "group": "Security",
+    "description": "Edit a LiteCP required firewall rule — PUT /api/firewall/apply-litecp",
+    "method": "PUT",
     "path": "/api/firewall/apply-litecp",
     "objectID": false
   },

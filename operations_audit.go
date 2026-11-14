@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -62,67 +59,39 @@ func (a *App) auditOperation(w http.ResponseWriter, r *http.Request, next http.H
 	a.alertFailedOperation(r, out.status)
 	actor := a.requestActor(r)
 	item := operationAudit{At: started.UTC(), Actor: actor, Method: r.Method, Route: r.URL.Path, Status: out.status, DurationMS: time.Since(started).Milliseconds()}
-	data, e := json.Marshal(item)
-	if e != nil {
-		return
-	}
 	operationAuditMu.Lock()
 	defer operationAuditMu.Unlock()
-	f, e := os.OpenFile(filepath.Join(a.system.dataDir, "operation-audit.jsonl"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
-	if e != nil {
-		return
-	}
-	defer f.Close()
-	_, _ = f.Write(append(data, '\n'))
+	_ = appendHistoryRecord(a.system.dataDir, "operation-audit", item.At, item)
 }
 func (a *App) readOperationAudit(search string) []operationAudit {
 	items := []operationAudit{}
-	f, e := os.Open(filepath.Join(a.system.dataDir, "operation-audit.jsonl"))
-	if e != nil {
-		return items
-	}
-	defer f.Close()
-	// Tail a bounded byte window rather than reading an ever-growing audit log.
-	if info, e := f.Stat(); e == nil && info.Size() > 2<<20 {
-		_, _ = f.Seek(-(2 << 20), 2)
-	}
-	scan := bufio.NewScanner(f)
-	scan.Buffer(make([]byte, 4096), 64<<10)
 	search = strings.ToLower(search)
-	for scan.Scan() {
+	_ = scanHistoryRecords(a.system.dataDir, "operation-audit", "operation-audit.jsonl", time.Time{}, 2<<20, func(line []byte) {
 		var v operationAudit
-		if json.Unmarshal(scan.Bytes(), &v) != nil {
-			continue
+		if json.Unmarshal(line, &v) != nil {
+			return
 		}
 		if search != "" && !strings.Contains(strings.ToLower(v.Actor+" "+v.Method+" "+v.Route), search) {
-			continue
+			return
 		}
 		items = append(items, v)
 		if len(items) > 500 {
 			items = items[1:]
 		}
-	}
+	})
 	for i, j := 0, len(items)-1; i < j; i, j = i+1, j-1 {
 		items[i], items[j] = items[j], items[i]
 	}
 	return items
 }
 func (a *App) operationsTrends() []usageSample {
-	items := []usageSample{}
-	f, e := os.Open(filepath.Join(a.system.dataDir, "usage-history.jsonl"))
-	if e != nil {
-		return items
-	}
-	defer f.Close()
-	if info, e := f.Stat(); e == nil && info.Size() > 8<<20 {
-		_, _ = f.Seek(-(8 << 20), 2)
-	}
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
+	bins := usageTotals{}
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	_ = scanHistoryRecords(a.system.dataDir, "server-usage", "usage-history.jsonl", cutoff, 8<<20, func(line []byte) {
 		var p usageSample
-		if json.Unmarshal(scan.Bytes(), &p) == nil && p.Time.After(time.Now().Add(-7*24*time.Hour)) {
-			items = append(items, p)
+		if json.Unmarshal(line, &p) == nil {
+			bins.add(p, "hourly", cutoff)
 		}
-	}
-	return aggregateUsage(items, "hourly", time.Now().Add(-7*24*time.Hour))
+	})
+	return bins.points()
 }

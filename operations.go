@@ -163,12 +163,13 @@ func (a *App) collectOperationsAlerts(ctx context.Context) []operationsAlert {
 		if disk.Total > 0 && disk.Percent >= 90 {
 			add("disk", "Low server disk space", fmt.Sprintf("Disk is %.1f%% full. Review storage before starting large jobs.", disk.Percent), "critical", "disk-usage")
 		}
-		for _, unit := range []string{"nginx", "litecp-broker", a.system.databaseUnit(), "postfix", "dovecot"} {
-			if (unit == "postfix" || unit == "dovecot") && !a.store.Settings().EmailHostingEnabled {
-				continue
-			}
-			out, err := runCommand(ctx, 2*time.Second, "systemctl", "is-active", unit)
-			if err != nil || strings.TrimSpace(out) != "active" {
+		units := []string{"nginx", "litecp-broker", a.system.databaseUnit()}
+		if a.store.Settings().EmailHostingEnabled {
+			units = append(units, "postfix", "dovecot")
+		}
+		states := systemdActiveStates(ctx, units)
+		for _, unit := range units {
+			if states[unit+".service"] != "active" {
 				add("service-"+unit, "Service needs attention", unit+" is not confirmed active.", "critical", "services")
 			}
 		}
@@ -189,15 +190,7 @@ func (a *App) collectOperationsAlerts(ctx context.Context) []operationsAlert {
 			add("backup-"+b.ID, "Backup needs attention", b.Domain+": "+b.Status, "warning", "backups/history")
 		}
 	}
-	entries, _ := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		j, err := a.loadLiveJob(e.Name())
-		if err != nil {
-			continue
-		}
+	for _, j := range a.migrationStatuses() {
 		if j.Status == "failed" || j.Status == "interrupted" || j.Status == "restore-review" || j.Status == "restored-review" || j.Status == "review" || j.Status == "captured" {
 			category, title, route := "migration", "Migration needs review", "migrations/pending"
 			if j.Source.Platform == "backup" {
@@ -207,6 +200,36 @@ func (a *App) collectOperationsAlerts(ctx context.Context) []operationsAlert {
 		}
 	}
 	return items
+}
+
+func systemdActiveStates(ctx context.Context, units []string) map[string]string {
+	args := append([]string{"show", "--no-pager", "--property=Id,ActiveState", "--"}, units...)
+	output, _ := runCommand(ctx, 3*time.Second, "systemctl", args...)
+	states := make(map[string]string, len(units))
+	for _, entry := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n\n") {
+		var id, state string
+		for _, line := range strings.Split(entry, "\n") {
+			if strings.HasPrefix(line, "Id=") {
+				id = strings.TrimPrefix(line, "Id=")
+			}
+			if strings.HasPrefix(line, "ActiveState=") {
+				state = strings.TrimPrefix(line, "ActiveState=")
+			}
+		}
+		if id != "" && state != "" {
+			states[id] = state
+		}
+	}
+	// An alias can return a different canonical Id. Confirm only the units
+	// omitted from the batch response before reporting them unhealthy.
+	for _, unit := range units {
+		if _, ok := states[unit+".service"]; !ok {
+			if value, err := runCommand(ctx, 2*time.Second, "systemctl", "is-active", unit); err == nil {
+				states[unit+".service"] = value
+			}
+		}
+	}
+	return states
 }
 func sendOperationsEmail(ctx context.Context, settings operationsSettings, alerts []operationsAlert) error {
 	if len(alerts) == 0 {

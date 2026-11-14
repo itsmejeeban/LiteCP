@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.44"
+var version = "6.0.45"
 var buildRevision = ""
 
 //go:embed web/*
@@ -409,6 +409,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/sites/domain", only(http.MethodPut, a.withAuth(a.changeSiteDomain)))
 	mux.HandleFunc("/api/sites/", only(http.MethodDelete, a.withAuth(a.deleteSite)))
 	mux.HandleFunc("/api/overview/jobs", only(http.MethodGet, a.withAuth(a.overviewJobs)))
+	mux.HandleFunc("/api/overview/metrics", only(http.MethodGet, a.withAuth(a.overviewMetrics)))
 	mux.HandleFunc("/api/backups/counts", a.withAuth(a.backupCounts))
 	mux.HandleFunc("/api/backups/restore-direct", a.withAuth(a.directBackupRestore))
 	mux.HandleFunc("/api/backups/restorable", only(http.MethodGet, a.withAuth(a.backupRestoreInventory)))

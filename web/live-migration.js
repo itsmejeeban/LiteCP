@@ -128,12 +128,29 @@
     document.querySelectorAll('[data-live-capture]').forEach(form=>{const selected=accountSelections.get(form.dataset.liveCapture);if(selected)selected.forEach(id=>pickAccount(form,id));});
   }
   let jobsRequest=0;
+  const jobRoutes = new Set(['#migrations', '#migrations/cpanel', '#migrations/plesk', '#migrations/litecp', '#migrations/jobs', '#migrations/pending', '#migrations/completed']);
+  function migrationVisible(){return !document.hidden&&jobRoutes.has(location.hash);}
+  function scheduleJobsPoll(){
+    clearTimeout(pollTimer);
+    if(migrationVisible()&&jobs.some(job=>active(job)||job.status==='queued'||job.status==='review')){
+      pollTimer=setTimeout(()=>{if(migrationVisible())return loadJobs();},5000);
+    }
+  }
   async function loadJobs(){
     const request=++jobsRequest;
-    renderJobs();
+    if(migrationVisible())renderJobs();
     if(cp.demo){$('#liveJobs').innerHTML='<div class="empty-state"><p>Live migration requires the installed Linux server.</p></div>';return;}
-    try{const result=await cp.api('/api/live-migrations');if(request!==jobsRequest)return;const updated=result.items;if(!Array.isArray(updated))throw new Error('Could not read migration jobs. Refresh jobs to retry.');for(const job of updated){if(active(job)){const current=await cp.api('/api/live-migrations?id='+encodeURIComponent(job.id));if(request!==jobsRequest)return;Object.assign(job,current);}}jobs=updated;renderJobs();clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
-    catch(error){if(request!==jobsRequest)return;$('#liveJobs').textContent=error.message;clearTimeout(pollTimer);if(jobs.some(job=>active(job)||job.status==='queued'||job.status==='review'))pollTimer=setTimeout(loadJobs,5000);}
+    try{
+      const result=await cp.api('/api/live-migrations');
+      if(request!==jobsRequest)return;
+      if(!Array.isArray(result.items))throw new Error('Could not read migration jobs. Refresh jobs to retry.');
+      jobs=result.items;
+      if(migrationVisible())renderJobs();
+    }catch(error){
+      if(request===jobsRequest&&migrationVisible())$('#liveJobs').textContent=error.message;
+    }finally{
+      if(request===jobsRequest)scheduleJobsPoll();
+    }
   }
   async function revealMigrationJob(job){
     expandedJobs.add(job.id);
@@ -224,7 +241,7 @@
       cp.showToast(result.issues?.length?'Migration cleanup needs attention':'Migration cleanup complete',summary+(result.issues?.length?' '+result.issues.join(' | '):' Refresh Disk Usages to rescan storage.'),result.issues?.length?'error':'success');
     }catch(error){cp.handleError(error);}finally{cleanupButton.disabled=false;}
   };
-  document.addEventListener('migration-section-change',loadJobs);
+  document.addEventListener('migration-section-change',refreshVisibleJobs);
   $('#liveSourceForm').onsubmit=async event=>{
     event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),status=$('#liveConnectStatus');
     if(cp.demo){status.textContent='Live migration requires the installed Linux server.';return;}
@@ -256,6 +273,17 @@
     catch(error){$('#liveDatabaseStatus').textContent=error.message;}finally{button.disabled=false;}
   };
   const previous=window.LiteCPFeatures.render;
-  window.LiteCPFeatures.render=state=>{previous(state);if(!initialized){initialized=true;loadJobs();}};
-  if(cp.state()){initialized=true;loadJobs();}
+  window.LiteCPFeatures.render=state=>{previous(state);if(!initialized&&migrationVisible()){initialized=true;loadJobs();}};
+  function refreshVisibleJobs(){
+    clearTimeout(pollTimer);
+    if(migrationVisible()&&cp.state()){
+      initialized=true;
+      pollTimer=setTimeout(()=>{if(migrationVisible())loadJobs();},0);
+    }
+  }
+  window.addEventListener('hashchange',refreshVisibleJobs);
+  document.addEventListener('visibilitychange',refreshVisibleJobs);
+  const navigate = window.LiteCPFeatures.navigate;
+  window.LiteCPFeatures.navigate = id => { navigate?.(id); refreshVisibleJobs(); };
+  if(cp.state()&&migrationVisible()){initialized=true;loadJobs();}
 })();

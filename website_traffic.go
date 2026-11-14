@@ -262,9 +262,7 @@ type trafficService struct {
 	geo          trafficGeo
 	geoLoaded    time.Time
 	observed     map[string]string
-	liveSite     string
-	liveStamp    string
-	liveCache    *trafficState
+	states       map[string]*trafficCheckpoint
 }
 
 func newTrafficState() *trafficState {
@@ -724,45 +722,59 @@ func (a *App) collectWebsiteTraffic() {
 		site := sites[(service.next+n)%len(sites)]
 		if home := siteHome(site); home != "" {
 			statePath := trafficStatePath(a.system.dataDir, site.ID)
-			paths, err := filepath.Glob(filepath.Join(home, "logs", "traffic-analytics.log*"))
+			matches, err := filepath.Glob(filepath.Join(home, "logs", "traffic-analytics.log*"))
 			if err != nil {
 				service.problems[site.ID] = err.Error()
 				continue
 			}
-			// Oldest first, then the active file. Keep the existing rotation policy.
-			sort.Slice(paths, func(i, j int) bool {
-				a, _ := os.Stat(paths[i])
-				b, _ := os.Stat(paths[j])
-				if a == nil || b == nil {
-					return paths[i] < paths[j]
+			type logFile struct {
+				path string
+				info os.FileInfo
+			}
+			paths := make([]logFile, 0, len(matches))
+			for _, path := range matches {
+				if info, err := os.Lstat(path); err == nil {
+					paths = append(paths, logFile{path, info})
+				} else if !os.IsNotExist(err) {
+					service.problems[site.ID] = err.Error()
 				}
-				return a.ModTime().Before(b.ModTime())
+			}
+			// Oldest first, then the active file. Keep the existing rotation policy.
+			sort.SliceStable(paths, func(i, j int) bool {
+				return paths[i].info.ModTime().Before(paths[j].info.ModTime())
 			})
 			if len(paths) > 32 {
 				paths = paths[len(paths)-32:]
 			}
 			var signature strings.Builder
-			for _, path := range paths {
-				if info, err := os.Lstat(path); err == nil {
-					fmt.Fprintf(&signature, "%s:%d:%d;", path, info.Size(), info.ModTime().UnixNano())
-				}
+			for _, file := range paths {
+				fmt.Fprintf(&signature, "%s:%d:%d;", file.path, file.info.Size(), file.info.ModTime().UnixNano())
 			}
-			if len(paths) > 0 && service.observed[site.ID] == signature.String() {
+			logSignature := signature.String()
+			if len(paths) > 0 && service.observed[site.ID] == logSignature {
+				if checkpoint := service.states[statePath]; checkpoint != nil && checkpoint.dirty && time.Since(checkpoint.flushed) >= trafficFlushInterval {
+					if err := service.flushTrafficCheckpoint(statePath, checkpoint); err != nil {
+						service.problems[site.ID] = "Cannot save analytics: " + err.Error()
+					} else if strings.HasPrefix(service.problems[site.ID], "Cannot save analytics: ") {
+						delete(service.problems, site.ID)
+					}
+				}
 				continue
 			}
-			s, err := readTrafficState(statePath)
+			checkpoint, err := service.trafficCheckpoint(statePath)
 			if err != nil {
 				service.problems[site.ID] = "Cannot read retained analytics history: " + err.Error()
 				continue
 			}
+			s := checkpoint.state
 			budget := int64(trafficReadBudget)
 			changed := false
 			problem := ""
-			for _, path := range paths {
+			for _, file := range paths {
 				if budget <= 0 {
 					break
 				}
-				did, collectErr := collectTrafficFile(path, s, &budget, geo)
+				did, collectErr := collectTrafficFile(file.path, s, &budget, geo)
 				changed = changed || did
 				if collectErr != nil {
 					problem = collectErr.Error()
@@ -779,25 +791,27 @@ func (a *App) collectWebsiteTraffic() {
 				sort.SliceStable(s.Live, func(i, j int) bool { return s.Live[i].Time.Before(s.Live[j].Time) })
 				s.Updated = time.Now().UTC()
 				s.Warning = problem
-				data, encodeErr := json.Marshal(s)
-				if encodeErr == nil && len(data) > trafficMaxState {
-					encodeErr = errors.New("analytics history exceeded 16 MiB; existing history and checkpoint retained")
-				}
-				if encodeErr == nil {
-					encodeErr = os.MkdirAll(filepath.Dir(statePath), 0700)
-				}
-				if encodeErr == nil {
-					encodeErr = writeAtomic(statePath, data, 0600)
-				}
-				if encodeErr != nil {
-					service.problems[site.ID] = "Cannot save analytics: " + encodeErr.Error()
+				checkpoint.dirty = true
+				// Raw bytes overestimate most aggregate growth and force an
+				// early eviction/flush before the retained cache grows unbounded.
+				checkpoint.bytes += int64(trafficReadBudget) - budget
+			}
+			if checkpoint.dirty && (time.Since(checkpoint.flushed) >= trafficFlushInterval || checkpoint.bytes > trafficCacheBytes) {
+				if err := service.flushTrafficCheckpoint(statePath, checkpoint); err != nil {
+					service.problems[site.ID] = "Cannot save analytics: " + err.Error()
 				}
 			}
 			if service.problems[site.ID] == "" && budget > 0 {
 				if service.observed == nil {
 					service.observed = map[string]string{}
 				}
-				service.observed[site.ID] = signature.String()
+				service.observed[site.ID] = logSignature
+			}
+			if err := service.trimTrafficCheckpoints(); err != nil {
+				service.problems[site.ID] = "Cannot save analytics cache: " + err.Error()
+				// Retain unflushed counters and stop ingesting more data until
+				// persistence becomes available again.
+				break
 			}
 		}
 	}
@@ -822,29 +836,10 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 	}
 	a.traffic.mu.Lock()
 	statePath := trafficStatePath(a.system.dataDir, site.ID)
+	checkpoint, err := a.traffic.trafficCheckpoint(statePath)
 	var s *trafficState
-	if r.URL.Query().Get("view") == "live" {
-		stamp := ""
-		if info, statErr := os.Stat(statePath); statErr == nil {
-			stamp = fmt.Sprintf("%d:%d", info.Size(), info.ModTime().UnixNano())
-		}
-		if a.traffic.liveSite == site.ID && a.traffic.liveStamp == stamp && a.traffic.liveCache != nil {
-			s = a.traffic.liveCache
-		} else {
-			s, err = readTrafficState(statePath)
-			if err == nil {
-				cached := *s
-				cached.Days = nil
-				cached.Offsets = nil
-				cached.CompressedDone = nil
-				cached.Checksums = nil
-				a.traffic.liveCache = &cached
-				a.traffic.liveSite = site.ID
-				a.traffic.liveStamp = stamp
-			}
-		}
-	} else {
-		s, err = readTrafficState(statePath)
+	if checkpoint != nil {
+		s = checkpoint.state
 	}
 	warning := a.traffic.setupWarning
 	_, hasCurrentCheck := a.traffic.problems[site.ID]
@@ -854,8 +849,8 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 		}
 		warning += p
 	}
-	a.traffic.mu.Unlock()
 	if err != nil {
+		a.traffic.mu.Unlock()
 		writeError(w, 503, "Cannot read retained analytics history: "+err.Error())
 		return
 	}
@@ -875,7 +870,9 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 				entries = append(entries, e)
 			}
 		}
-		writeJSON(w, 200, map[string]any{"entries": entries, "updated": s.Updated, "warning": warning, "limit": 200, "malformed": s.Malformed})
+		response := map[string]any{"entries": entries, "updated": s.Updated, "warning": warning, "limit": 200, "malformed": s.Malformed}
+		a.traffic.mu.Unlock()
+		writeJSON(w, 200, response)
 		return
 	}
 	report := buildTrafficReport(s, start, end, r.URL.Query())
@@ -883,7 +880,8 @@ func (a *App) websiteTraffic(w http.ResponseWriter, r *http.Request) {
 	report["updated"] = s.Updated
 	report["started"] = s.Started
 	report["malformed"] = s.Malformed
-	report["geoAvailable"] = len(loadTrafficGeo(a.system.dataDir)) > 0
+	report["geoAvailable"] = len(a.traffic.geo) > 0
+	a.traffic.mu.Unlock()
 	writeJSON(w, 200, report)
 }
 

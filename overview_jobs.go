@@ -51,13 +51,12 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, overviewJob{ID: "zip-" + job.ID, Title: "Website backup: " + domain, Message: job.Message, Stage: job.Status, Route: "website-backups", StartedAt: job.StartedAt})
 	}
-	entries, _ := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	for _, status := range a.migrationStatuses() {
+		if !overviewMigrationActive(status.Status) {
 			continue
 		}
-		job, err := a.loadLiveJob(entry.Name())
-		if err != nil || (job.Status != "running" && job.Status != "queued" && job.Status != "restoring" && job.Status != "cancelling") {
+		job, err := a.loadLiveJob(status.ID)
+		if err != nil || !overviewMigrationActive(job.Status) {
 			continue
 		}
 		title := "Migration: " + job.Source.Platform
@@ -155,4 +154,8 @@ func (a *App) overviewJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	writeJSON(w, 200, map[string]any{"items": items})
+}
+
+func overviewMigrationActive(status string) bool {
+	return status == "running" || status == "queued" || status == "restoring" || status == "cancelling"
 }

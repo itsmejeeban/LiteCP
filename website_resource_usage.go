@@ -39,9 +39,41 @@ type websiteResourceRow struct {
 
 var websiteUsageSamples = struct {
 	sync.Mutex
-	At       time.Time
-	Counters map[int]websiteProcessCounter
-}{Counters: map[int]websiteProcessCounter{}}
+	dataDir  string
+	previous websiteProcessSample
+	current  websiteProcessSample
+}{}
+
+type websiteProcessSample struct {
+	at       time.Time
+	counters map[int]websiteProcessCounter
+}
+
+func sampleWebsiteProcesses(parent context.Context, dataDir string) (websiteProcessSample, websiteProcessSample, error) {
+	websiteUsageSamples.Lock()
+	defer websiteUsageSamples.Unlock()
+	if websiteUsageSamples.dataDir == dataDir && time.Since(websiteUsageSamples.current.at) < 3*time.Second {
+		return websiteUsageSamples.previous, websiteUsageSamples.current, nil
+	}
+	output, err := runCommand(parent, 3*time.Second, "ps", "-eo", "uid=,pid=,etimes=,cputimes=,rss=")
+	if err != nil {
+		return websiteProcessSample{}, websiteProcessSample{}, err
+	}
+	previous := websiteProcessSample{}
+	if websiteUsageSamples.dataDir == dataDir {
+		previous = websiteUsageSamples.current
+	}
+	current := websiteProcessSample{at: time.Now().UTC(), counters: parseWebsiteProcesses(output)}
+	websiteUsageSamples.dataDir = dataDir
+	websiteUsageSamples.previous = previous
+	websiteUsageSamples.current = current
+	return previous, current, nil
+}
+
+func (current websiteProcessSample) usage(uid int, previous websiteProcessSample) websiteObservedUsage {
+	return aggregateWebsiteProcesses(uid, previous.counters, current.counters, current.at.Sub(previous.at).Seconds())
+}
+
 var websiteDiskSamples = struct {
 	sync.Mutex
 	Busy  bool
@@ -160,7 +192,8 @@ func (a *App) websiteResourceList(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteResourceRow, time.Time, string) {
 	sites := []Site{}
-	for _, site := range a.store.Sites() {
+	allSites := a.store.Sites()
+	for _, site := range allSites {
 		if site.ResourceLimits != nil {
 			sites = append(sites, site)
 		}
@@ -174,12 +207,11 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 	rows := []websiteResourceRow{}
 	now := time.Now().UTC()
 	note := ""
-	var counters map[int]websiteProcessCounter
+	var previous, sample websiteProcessSample
 	if len(observedSites) > 0 && runtime.GOOS == "linux" && !a.system.demo {
-		ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-		defer cancel()
-		if output, err := exec.CommandContext(ctx, "ps", "-eo", "uid=,pid=,etimes=,cputimes=,rss=").Output(); err == nil {
-			counters = parseWebsiteProcesses(string(output))
+		var err error
+		if previous, sample, err = sampleWebsiteProcesses(parent, a.system.dataDir); err == nil {
+			now = sample.at
 		} else {
 			note = "Process measurements are unavailable."
 		}
@@ -187,19 +219,14 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 	} else if len(observedSites) > 0 {
 		note = "Live measurements require the installed Linux server."
 	}
-	websiteUsageSamples.Lock()
-	elapsed := 0.0
-	if !websiteUsageSamples.At.IsZero() {
-		elapsed = now.Sub(websiteUsageSamples.At).Seconds()
-	}
 	owners := map[int]int{}
-	for _, site := range a.store.Sites() {
+	for _, site := range allSites {
 		owners[site.RuntimeUID]++
 	}
 	for _, site := range sites {
 		u := websiteObservedUsage{}
-		if counters != nil && owners[site.RuntimeUID] == 1 {
-			u = aggregateWebsiteProcesses(site.RuntimeUID, websiteUsageSamples.Counters, counters, elapsed)
+		if sample.counters != nil && owners[site.RuntimeUID] == 1 {
+			u = sample.usage(site.RuntimeUID, previous)
 		}
 		websiteDiskSamples.Lock()
 		if n, ok := websiteDiskSamples.Sizes[websiteDiskKey(a.system.dataDir, site)]; ok {
@@ -226,10 +253,5 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 		}
 		rows = append(rows, row)
 	}
-	if counters != nil {
-		websiteUsageSamples.At = now
-		websiteUsageSamples.Counters = counters
-	}
-	websiteUsageSamples.Unlock()
 	return rows, now, note
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -88,6 +89,125 @@ func resourceSavedSite(dataDir, id string) (*Site, error) {
 	}
 	return nil, nil
 }
+
+// A watcher checks file identity and timestamps every second, but decodes the
+// shared configuration only after a change. Atomic config replacement changes
+// identity even when a new revision has the same size and timestamp.
+type resourceSiteReader struct {
+	info os.FileInfo
+	site *Site
+	id   string
+}
+
+func (c *resourceSiteReader) read(dataDir, id string) (*Site, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		site, err := c.readRevision(dataDir, id)
+		if !errors.Is(err, errResourceConfigChanged) {
+			return site, err
+		}
+	}
+	return nil, errResourceConfigChanged
+}
+
+var errResourceConfigChanged = errors.New("website configuration changed while being read")
+
+func (c *resourceSiteReader) readRevision(dataDir, id string) (*Site, error) {
+	name := filepath.Join(dataDir, "config.json")
+	info, err := os.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+	if c.info == nil || c.id != id || !os.SameFile(info, c.info) || info.Size() != c.info.Size() || !info.ModTime().Equal(c.info.ModTime()) {
+		f, err := os.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		var config struct {
+			Sites []Site `json:"sites"`
+		}
+		err = json.NewDecoder(io.LimitReader(f, 64<<20)).Decode(&config)
+		opened, statErr := f.Stat()
+		_ = f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if statErr != nil {
+			return nil, statErr
+		}
+		if !os.SameFile(info, opened) || info.Size() != opened.Size() || !info.ModTime().Equal(opened.ModTime()) {
+			return nil, errResourceConfigChanged
+		}
+		c.info = opened
+		c.id, c.site = id, nil
+		for _, site := range config.Sites {
+			if site.ID == id {
+				copy := site
+				c.site = &copy
+				break
+			}
+		}
+	}
+	if c.site == nil {
+		return nil, nil
+	}
+	site := *c.site
+	return &site, nil
+}
+
+// Policy transitions are durable. Routine usage samples need atomic visibility
+// but do not need a filesystem fsync every second.
+type resourceWatchWriter struct {
+	last resourceRuntimeStatus
+	at   time.Time
+}
+
+func (c *resourceWatchWriter) save(id string, st resourceRuntimeStatus) error {
+	return c.saveAt(filepath.Join(resourceDirectory(id), "status.json"), st)
+}
+func (c *resourceWatchWriter) saveAt(destination string, st resourceRuntimeStatus) error {
+	durable := c.at.IsZero() || c.last.State != st.State || c.last.Reason != st.Reason || c.last.Enforced != st.Enforced ||
+		c.last.Error != st.Error || !c.last.NextRecovery.Equal(st.NextRecovery) || !c.last.RetryRequestedAt.Equal(st.RetryRequestedAt)
+	if !durable && time.Since(c.at) < 3*time.Second {
+		return nil
+	}
+	if durable {
+		st.UpdatedAt = time.Now()
+		data, err := json.Marshal(st)
+		if err != nil {
+			return err
+		}
+		if err := writeAtomic(destination, data, 0644); err != nil {
+			return err
+		}
+	} else {
+		st.UpdatedAt = time.Now()
+		data, err := json.Marshal(st)
+		if err != nil {
+			return err
+		}
+		file, err := os.CreateTemp(filepath.Dir(destination), ".telemetry-")
+		if err != nil {
+			return err
+		}
+		name := file.Name()
+		defer os.Remove(name)
+		if err = file.Chmod(0644); err == nil {
+			_, err = file.Write(data)
+		}
+		closeErr := file.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if err = os.Rename(name, destination); err != nil {
+			return err
+		}
+	}
+	c.last, c.at = st, time.Now()
+	return nil
+}
 func resourceRuntimeValidate(plan resourceRuntimePlan) error {
 	s := plan.Site
 	if err := plan.Policy.validate(); err != nil {
@@ -126,6 +246,23 @@ func resourcePHPExecutable(s *System, site Site) string {
 		}
 	}
 	return p
+}
+
+// Each isolated FPM master owns a separate OPcache. Bound that cache by the
+// website's aggregate RAM policy, leaving the existing worker and PHP settings
+// intact. These are process-level directives and cannot be applied in a pool.
+func resourcePHPCacheArguments(policy WebsiteResourceLimits) []string {
+	cache, interned, files := 64, 8, 20000
+	if policy.MemoryMiB <= 256 {
+		cache, interned, files = 16, 4, 10000
+	} else if policy.MemoryMiB <= 512 {
+		cache, interned, files = 32, 4, 10000
+	}
+	return []string{
+		"-d", fmt.Sprintf("opcache.memory_consumption=%d", cache),
+		"-d", fmt.Sprintf("opcache.interned_strings_buffer=%d", interned),
+		"-d", fmt.Sprintf("opcache.max_accelerated_files=%d", files),
+	}
 }
 func resourceNativeConfigs(s *System, p resourceRuntimePlan) (php, web, front string) {
 	return resourceNativeConfigsAt(s, p, resourceDirectory(p.Site.ID))
@@ -716,7 +853,8 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 			return e
 		}
 	}
-	if err = resourceRun(resourcePHPExecutable(s, p.Site), "-t", "-y", filepath.Join(dir, "php.conf")); err != nil {
+	testArgs := append(resourcePHPCacheArguments(p.Policy), "-t", "-y", filepath.Join(dir, "php.conf"))
+	if err = resourceRun(resourcePHPExecutable(s, p.Site), testArgs...); err != nil {
 		return err
 	}
 	if err = resourceRun("nginx", "-t", "-c", filepath.Join(dir, "nginx.conf"), "-p", dir); err != nil {
@@ -727,7 +865,7 @@ func resourceRuntimeApply(s *System, p resourceRuntimePlan) (result error) {
 		return err
 	}
 	units := map[string]string{resourceSliceName(p.Site.ID): slice,
-		resourceUnit(p.Site.ID, "php"): resourceServiceUnit(p, "php", resourcePHPExecutable(s, p.Site)+" --nodaemonize --fpm-config "+dir+"/php.conf"),
+		resourceUnit(p.Site.ID, "php"): resourceServiceUnit(p, "php", resourcePHPExecutable(s, p.Site)+" "+strings.Join(resourcePHPCacheArguments(p.Policy), " ")+" --nodaemonize --fpm-config "+dir+"/php.conf"),
 		resourceUnit(p.Site.ID, "web"): resourceServiceUnit(p, "web", "/usr/sbin/nginx -c "+dir+"/nginx.conf -p "+dir)}
 	encoded, _ := json.Marshal(p)
 	if err = writeAtomic(filepath.Join(dir, "plan.json"), encoded, 0600); err != nil {
@@ -904,6 +1042,9 @@ func resourceNotifyMonitorReady(socket string) error {
 }
 
 func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
+	var siteReader resourceSiteReader
+	var writer resourceWatchWriter
+	saveStatus := func(st resourceRuntimeStatus) error { return writer.save(p.Site.ID, st) }
 	defer func() {
 		if result != nil {
 			_ = resourceRuntimeGate(p.Site.ID, true)
@@ -928,15 +1069,15 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 	if err := resourceRuntimeGate(p.Site.ID, true); err != nil {
 		return err
 	}
-	initialSite, e := resourceSavedSite(p.DataDir, p.Site.ID)
+	initialSite, e := siteReader.read(p.DataDir, p.Site.ID)
 	if e != nil {
 		return e
 	}
 	if initialSite == nil {
 		return fmt.Errorf("website no longer exists")
 	}
-	manualStopped := initialSite.Suspended
-	if st.State == "Active" && !manualStopped {
+	manualStopped := false
+	if st.State == "Active" && !initialSite.Suspended {
 		if err := resourceRuntimeStart(p); err != nil {
 			return err
 		}
@@ -955,7 +1096,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 	for {
 		time.Sleep(time.Second)
 		// Read manual suspension independently; automatic recovery never clears it.
-		site, err := resourceSavedSite(p.DataDir, p.Site.ID)
+		site, err := siteReader.read(p.DataDir, p.Site.ID)
 		if err != nil {
 			return err
 		}
@@ -965,12 +1106,18 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			return fmt.Errorf("website lifecycle changed; resource boundary requires revalidation")
 		}
 		if site.Suspended {
-			manualStopped = true
-			if err = resourceRuntimeSave(site.ID, st); err != nil {
+			if err = saveStatus(st); err != nil {
 				return err
 			}
-			_ = resourceRuntimeGate(site.ID, true)
-			_ = resourceRuntimeStop(p)
+			if !manualStopped {
+				if err = resourceRuntimeGate(site.ID, true); err != nil {
+					return err
+				}
+				if err = resourceRuntimeStop(p); err != nil {
+					return err
+				}
+				manualStopped = true
+			}
 			continue
 		}
 		if manualStopped {
@@ -996,20 +1143,20 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			st.Sample.DiskBytes = disk
 			st = resourceConsumeRetry(resourceDirectory(site.ID), st)
 			if time.Now().Before(st.NextRecovery) {
-				if err = resourceRuntimeSave(site.ID, st); err != nil {
+				if err = saveStatus(st); err != nil {
 					return err
 				}
 				continue
 			}
 			if st.Reason == "Disk" && float64(disk) >= float64(p.Policy.DiskMiB)*1048576*.95 {
 				st.NextRecovery = time.Now().Add(5 * time.Minute)
-				if err = resourceRuntimeSave(site.ID, st); err != nil {
+				if err = saveStatus(st); err != nil {
 					return err
 				}
 				continue
 			}
 			st.State = "Recovering"
-			_ = resourceRuntimeSave(site.ID, st)
+			_ = saveStatus(st)
 			err := resourceRuntimeStart(p)
 			if err == nil {
 				err = resourceVerifyWorkers(s, p)
@@ -1029,7 +1176,7 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 					return err
 				}
 			}
-			if err = resourceRuntimeSave(site.ID, st); err != nil {
+			if err = saveStatus(st); err != nil {
 				return err
 			}
 			before = resourceSample{}
@@ -1067,14 +1214,14 @@ func resourceRuntimeWatch(s *System, p resourceRuntimePlan) (result error) {
 			if err = resourceRuntimeGate(site.ID, true); err != nil {
 				return err
 			}
-			if err = resourceRuntimeSave(site.ID, st); err != nil {
+			if err = saveStatus(st); err != nil {
 				return err
 			}
 			if err = resourceRuntimeStop(p); err != nil {
 				return err
 			}
 		}
-		if err = resourceRuntimeSave(site.ID, st); err != nil {
+		if err = saveStatus(st); err != nil {
 			return err
 		}
 		before = now

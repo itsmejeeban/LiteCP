@@ -109,6 +109,8 @@
   async function mockAPI(path, options) {
     await new Promise(resolve => setTimeout(resolve, options.method && options.method !== "GET" ? 420 : 100));
     if (path === "/api/state") return structuredClone(demoState);
+    if (path === "/api/overview/metrics") return {system: structuredClone(demoState.system)};
+    if (path === "/api/overview/metrics?backups=1") return {backups: structuredClone(demoState.backups)};
     if (path === "/api/environment-inventory") return {
       software: [
         {name:"Nginx",version:"Available (demo)",installed:true},
@@ -451,6 +453,9 @@
     window.LiteCPFeatures?.render(currentState);
     clearSiteActionBackgrounds();
     fillSettings(settings);
+  }
+
+  function renderServiceNotice(system) {
     const healthy = system.services.every(service => ["running", "disabled"].includes(service.state));
     $("#noticeBanner").querySelector("strong").textContent = healthy ? "Your hosting stack is healthy" : "One or more services need attention";
     $("#noticeBanner").querySelector("small").textContent = healthy ? "Required services are active and their lightweight health probes passed." : "Open Services to review and restart the affected component.";
@@ -476,13 +481,15 @@
     $(`#${name}Bar`).style.background = safe > 70 ? "#ef4444" : safe > 50 ? "#eab308" : "#22c55e";
   }
 
-  function renderServices() {
+  function renderServices(dashboardOnly = false) {
     const services = currentState.system.services || [];
     $("#dashboardServices").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
       return `<div class="service-row"><span class="service-symbol">${meta.symbol}</span><span class="service-copy"><strong>${escapeHTML(service.label)}</strong><small>${escapeHTML(service.unit)}</small></span><span class="state-pill ${stopped ? "stopped" : ""}"><span class="pulse-dot"></span>${escapeHTML(service.stateLabel || service.state)}</span></div>`;
     }).join("");
+    renderServiceNotice(currentState.system);
+    if (dashboardOnly) return;
     $("#servicesGrid").innerHTML = services.map(service => {
       const meta = serviceMeta[service.key] || { symbol: "SV", description: "Essential server process." };
       const stopped = service.state !== "running";
@@ -580,6 +587,10 @@
     window.LiteCPRemoteStorage?.refresh();
     const backups = currentState.backups || [];
     scheduleBackupHistoryRefresh(backups);
+    renderBackupHistory(backups);
+  }
+
+  function renderBackupHistory(backups) {
     if (!backups.length) {
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
@@ -590,15 +601,30 @@
   function backupRequestActive(status) { return ["queued", "creating", "uploading"].includes(status); }
   function scheduleBackupHistoryRefresh(backups) {
     clearTimeout(backupHistoryTimer);
-    if (!backups.some(item => backupRequestActive(item.status))) return;
+    if (document.hidden || !backups.some(item => backupRequestActive(item.status))) return;
     backupHistoryTimer = setTimeout(async () => {
-      if (backupHistoryRefreshing) return;
+      if (backupHistoryRefreshing || document.hidden || !currentState) return;
       backupHistoryRefreshing = true;
-      try { currentState = await api("/api/state"); renderAll(); }
-      catch (error) { handleError(error); }
+      try {
+        const stateBefore = currentState;
+        const result = await api("/api/overview/metrics?backups=1");
+        if (!currentState) return;
+        if (currentState !== stateBefore) {
+          scheduleBackupHistoryRefresh(currentState.backups || []);
+          return;
+        }
+        currentState.backups = result.backups || [];
+        if (location.hash === "#backups/history") renderBackupHistory(currentState.backups);
+        scheduleBackupHistoryRefresh(currentState.backups);
+      }
+      catch (error) {
+        handleError(error);
+        if (currentState) scheduleBackupHistoryRefresh(currentState.backups || []);
+      }
       finally { backupHistoryRefreshing = false; }
     }, 4000);
   }
+  document.addEventListener("visibilitychange", () => scheduleBackupHistoryRefresh(currentState?.backups || []));
 
   function renderFileSiteOptions() {
     const select = $("#fileSiteSelect");
@@ -725,6 +751,8 @@
     if (page === "files") loadFiles();
     if (page === "websites") refreshWebsiteList();
     if (page === "databases") loadDatabaseSizes();
+    if (page === "services" && currentState) renderServices();
+    if (backupRoute === "backups/history" && currentState) renderBackupHistory(currentState.backups || []);
     window.LiteCPFeatures?.navigate(page);
   }
 
@@ -1547,6 +1575,17 @@
     goToFilePath: path => { currentFilePath = path; return loadFiles(); },
     state: () => currentState, path: () => currentFilePath, demo: demoMode,
     refresh: async () => { currentState = await api("/api/state"); renderAll(); },
+    refreshMetrics: async () => {
+      if (!currentState) return null;
+      const stateBefore = currentState;
+      const result = await api("/api/overview/metrics");
+      if (currentState !== stateBefore) return null;
+      if (!result.system || !Array.isArray(result.system.services)) throw new Error("Metrics are unavailable.");
+      Object.assign(currentState.system, result.system);
+      renderMetrics();
+      renderServices(true);
+      return result;
+    },
     showOneTimeCredentials, formatBytes, formatDateTime, activityTimestamp };
   initialize();
 })();

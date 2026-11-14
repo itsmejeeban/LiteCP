@@ -28,7 +28,7 @@ func validOperatorRole(role string) bool {
 }
 func operatorRouteAllowed(role, method, path string) bool {
 	read := method == "GET" || method == "HEAD"
-	if path == "/api/state" && read || path == "/api/logout" && method == "POST" || path == "/api/version" && read {
+	if read && (path == "/api/state" || path == "/api/version" || path == "/api/overview/metrics") || path == "/api/logout" && method == "POST" {
 		return true
 	}
 	if role == "viewer" {

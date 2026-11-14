@@ -79,9 +79,12 @@ func (a *App) startAutoMigrationRestores() {
 			if !a.mutationMu.TryLock() {
 				continue
 			}
-			entries, _ := os.ReadDir(filepath.Join(a.system.dataDir, "live-migrations"))
-			for _, entry := range entries {
-				job, err := a.loadLiveJob(entry.Name())
+			statuses := a.migrationStatuses()
+			for _, status := range statuses {
+				if status.Status != "review" || status.Source.Platform == "backup" {
+					continue
+				}
+				job, err := a.loadLiveJob(status.ID)
 				if err != nil || job.Source.Platform == "backup" || job.Status != "review" || job.Preview == nil {
 					continue
 				}
@@ -93,7 +96,7 @@ func (a *App) startAutoMigrationRestores() {
 				}
 				a.performAutoMigration(&job, false)
 			}
-			a.startNextQueuedMigration()
+			a.startNextQueuedMigration(statuses)
 			a.mutationMu.Unlock()
 		}
 	}()

@@ -13,7 +13,68 @@
  if(!await window.LiteCPDialogs.confirm(`Remove the ${rule.direction} allow rule for ${rule.port}? Connections using this port may stop working. Other rules may still allow access. Current SSH and panel ports cannot be removed here.`,{title:'Remove firewall rule',confirmText:'Remove',danger:true}))return;
  busy=true;remove.disabled=true;
  try{const params=new URLSearchParams({port:rule.port,direction:rule.direction,zone:rule.zone||''});show(await cp.api('/api/firewall/apply-litecp?'+params,{method:'DELETE',body:{}}));cp.showToast('Firewall rule removed',rule.port);}catch(error){cp.handleError(error);}finally{busy=false;await refresh();}
- };actions.append(remove);row.append(actions);tbody.append(row);}table.append(tbody);body.append(table);}panel.append(body);
+ };const edit=document.createElement('button');edit.type='button';edit.className='button button-secondary';edit.textContent='Edit';edit.onclick=()=>editRule(rule);const group=document.createElement('div');group.className='feature-actions';group.append(edit,remove);actions.append(group);row.append(actions);tbody.append(row);}table.append(tbody);body.append(table);}panel.append(body);
+  }
+  function editRule(rule){
+    if(busy)return;
+    const match=String(rule.port).match(/^(.*)\/(tcp|udp)$/);
+    const dialog = document.createElement('dialog');
+    dialog.className = 'fm-dialog';
+    dialog.setAttribute('aria-labelledby', 'firewallEditTitle');
+    dialog.innerHTML = `
+      <form class="settings-body">
+        <h2 id="firewallEditTitle">Edit firewall rule</h2>
+        <label class="field"><span>Direction / zone</span><input data-scope readonly></label>
+        <label class="field"><span>Allowed port or range</span><input name="port" required pattern="[0-9]+(?:&#92;-[0-9]+)?" maxlength="11" inputmode="numeric"></label>
+        <label class="field"><span>Protocol</span><select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
+        <label class="field"><span>Remarks</span><textarea name="remarks" maxlength="500"></textarea></label>
+        <p data-error role="alert" hidden></p>
+        <div class="feature-actions">
+          <button type="submit" class="button button-primary">Save changes</button>
+          <button type="button" class="button button-secondary" data-cancel>Cancel</button>
+        </div>
+      </form>`;
+    const form = dialog.querySelector('form');
+    const direction = rule.direction === 'outbound' ? 'Outbound' : 'Inbound';
+    dialog.querySelector('[data-scope]').value = direction + ' / ' + (rule.zone || 'Host');
+    form.elements.port.value = match ? match[1] : rule.port;
+    form.elements.protocol.value = match ? match[2] : 'tcp';
+    form.elements.remarks.value = rule.remarks || '';
+    dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => dialog.remove());
+    dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (busy || !form.reportValidity()) return;
+      const newPort = form.elements.port.value + '/' + form.elements.protocol.value;
+      const errorMessage = dialog.querySelector('[data-error]');
+      const fields = form.querySelectorAll('button,input,select,textarea');
+      busy = true;
+      errorMessage.hidden = true;
+      fields.forEach(node => node.disabled = true);
+      try {
+        if (newPort !== rule.port && !await window.LiteCPDialogs.confirm(
+          `Replace the ${rule.port} allow rule with ${newPort}? This changes firewall access only. The service keeps its current port.`,
+          {title:'Edit firewall rule',confirmText:'Save changes'}
+        )) return;
+        const state = await cp.api('/api/firewall/apply-litecp', {
+          method:'PUT',
+          body:{port:rule.port,direction:rule.direction,zone:rule.zone||'',newPort,remarks:form.elements.remarks.value}
+        });
+        show(state);
+        dialog.close();
+        cp.showToast('Firewall rule updated', newPort);
+      } catch (error) {
+        errorMessage.textContent = error.message;
+        errorMessage.hidden = false;
+      } finally {
+        busy = false;
+        if (dialog.isConnected) fields.forEach(node => node.disabled = false);
+      }
+    };
+    document.body.append(dialog);
+    dialog.showModal();
+    form.elements.port.focus();
   }
   async function refresh(){if(busy)return;try{show(await cp.api('/api/firewall/apply-litecp'));return true;}catch(error){verified=false;button.disabled=false;button.textContent='Retry firewall check';panel.textContent='Cannot verify firewall state: '+error.message;return false;}}
   button.onclick=async()=>{
