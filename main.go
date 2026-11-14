@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.45"
+var version = "6.0.46"
 var buildRevision = ""
 
 //go:embed web/*
@@ -57,6 +57,9 @@ type App struct {
 	mutationMu sync.Mutex
 	loginMu    sync.Mutex
 	traffic    *trafficService
+
+	resourceUsageMu sync.Mutex
+	resourceCPU     map[string]resourceCPUReading
 
 	migrationFolderMu sync.Mutex
 }

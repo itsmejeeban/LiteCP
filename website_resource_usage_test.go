@@ -4,7 +4,42 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestResourceCPUUsesWholePublishedInterval(t *testing.T) {
+	start := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	previous := resourceCPUReading{}.update(resourceSample{At: start, UsageUsec: 100}, start)
+	if previous.percent != nil {
+		t.Fatal("first reading needs a baseline")
+	}
+	// All 600 ms of CPU time can occur before the final one-second check.
+	next := resourceSample{At: start.Add(3 * time.Second), UsageUsec: 600100}
+	reading := previous.update(next, next.At)
+	if reading.percent == nil || *reading.percent != 20 {
+		t.Fatalf("expected 20 percent over the published interval, got %+v", reading)
+	}
+	if repeated := reading.update(next, next.At.Add(time.Second)); repeated.percent != reading.percent {
+		t.Fatal("reading the same snapshot again lost the measurement")
+	}
+	idle := resourceSample{At: next.At.Add(3 * time.Second), UsageUsec: next.UsageUsec}
+	reading = reading.update(idle, idle.At)
+	if reading.percent == nil || *reading.percent != 0 {
+		t.Fatal("an idle interval must report a measured zero")
+	}
+	reset := resourceSample{At: idle.At.Add(3 * time.Second), UsageUsec: 50}
+	reading = reading.update(reset, reset.At)
+	if reading.percent != nil {
+		t.Fatal("counter resets require a new baseline")
+	}
+	if got := reading.update(reset, reset.At.Add(10*time.Second)); !got.sample.At.IsZero() {
+		t.Fatal("stale snapshots must not supply a baseline")
+	}
+	late := resourceSample{At: reset.At.Add(20 * time.Second), UsageUsec: 300}
+	if got := reading.update(late, late.At); got.percent != nil {
+		t.Fatal("a gap in sampling must not appear as current usage")
+	}
+}
 
 func TestResourceListOnlyConfiguredWebsites(t *testing.T) {
 	p := validResourcePolicy()

@@ -49,6 +49,29 @@ type websiteProcessSample struct {
 	counters map[int]websiteProcessCounter
 }
 
+// Measure across published cgroup samples. The watcher checks enforcement
+// every second, but only publishes routine telemetry every three seconds.
+type resourceCPUReading struct {
+	sample  resourceSample
+	percent *float64
+}
+
+func (previous resourceCPUReading) update(sample resourceSample, now time.Time) resourceCPUReading {
+	if sample.At.IsZero() || now.Sub(sample.At) >= 10*time.Second {
+		return resourceCPUReading{}
+	}
+	elapsed := sample.At.Sub(previous.sample.At)
+	if elapsed == 0 {
+		return previous
+	}
+	reading := resourceCPUReading{sample: sample}
+	if !previous.sample.At.IsZero() && elapsed > 0 && elapsed < 10*time.Second && sample.UsageUsec >= previous.sample.UsageUsec {
+		percent := float64(sample.UsageUsec-previous.sample.UsageUsec) / (elapsed.Seconds() * 1e6) * 100
+		reading.percent = &percent
+	}
+	return reading
+}
+
 func sampleWebsiteProcesses(parent context.Context, dataDir string) (websiteProcessSample, websiteProcessSample, error) {
 	websiteUsageSamples.Lock()
 	defer websiteUsageSamples.Unlock()
@@ -223,6 +246,9 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 	for _, site := range allSites {
 		owners[site.RuntimeUID]++
 	}
+	a.resourceUsageMu.Lock()
+	defer a.resourceUsageMu.Unlock()
+	cpuReadings := make(map[string]resourceCPUReading, len(a.resourceCPU))
 	for _, site := range sites {
 		u := websiteObservedUsage{}
 		if sample.counters != nil && owners[site.RuntimeUID] == 1 {
@@ -242,8 +268,16 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 			row.NextRecovery = st.NextRecovery
 			row.Error = st.Error
 			row.Enforced = st.Enforced && time.Since(st.UpdatedAt) < 10*time.Second
-			row.Usage = websiteObservedUsage{Available: row.Enforced, CPU: st.CPUPercent, Memory: st.MemoryBytes, Processes: st.Processes}
+			row.Usage = websiteObservedUsage{Available: row.Enforced, Memory: st.MemoryBytes, Processes: st.Processes}
 			if row.Enforced {
+				if site.Suspended || st.State == "Resource blocked" {
+					idle := 0.0
+					row.Usage.CPU = &idle
+				} else if st.State == "Active" {
+					reading := a.resourceCPU[site.ID].update(st.Sample, time.Now())
+					cpuReadings[site.ID] = reading
+					row.Usage.CPU = reading.percent
+				}
 				disk := st.Sample.DiskBytes
 				row.Usage.Disk = &disk
 				row.Usage.DiskAt = st.UpdatedAt
@@ -253,5 +287,6 @@ func (a *App) collectWebsiteResourceUsage(parent context.Context) ([]websiteReso
 		}
 		rows = append(rows, row)
 	}
+	a.resourceCPU = cpuReadings
 	return rows, now, note
 }

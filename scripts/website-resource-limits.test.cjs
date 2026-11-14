@@ -34,7 +34,8 @@ function panel(hash='',options={} ){
   }
   return {items:rows,updatedAt:new Date().toISOString()};
  };
- vm.runInNewContext(script,{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},URL,window:{LiteCPDialogs:{confirm:async()=>options.confirm??true},LiteCP:{escapeHTML:String,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
+ const escapeHTML=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+ vm.runInNewContext(script,{document:{createElement:()=>page,querySelector:()=>root,hidden:true,addEventListener(){}},location:{hash},URL,window:{LiteCPDialogs:{confirm:async()=>options.confirm??true},LiteCP:{escapeHTML,state:()=>state,api,formatBytes:String},LiteCPFeatures:{render(){}},addEventListener(){}},setTimeout(){},clearTimeout(){}});
  return {page,mutations,open:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate)},save:async()=>{page.querySelector('[data-picker]').onsubmit({preventDefault(){}});await new Promise(setImmediate);await page.querySelector('[data-editor]').onsubmit({preventDefault(){}})}};
 }
 test('saving a one-page resource draft preserves disabled pagination',async()=>{
@@ -146,6 +147,23 @@ function displayedResourceDomains(ui){
  return Array.from(ui.page.querySelector('[data-resources]').innerHTML.matchAll(/<tr><td>([^<]+)<br>/g),match=>match[1].replace('.example.test',''));
 }
 function clickResourceSort(ui,key){ui.page.querySelector('[data-sort-key="'+key+'"]').onclick();}
+
+test('CPU display distinguishes low activity, idle, sampling and unavailable data',async()=>{
+ const rows=[
+  resourceRow('low',{cpuPercent:0.005}),
+  resourceRow('measured',{cpuPercent:0.024}),
+  resourceRow('idle',{cpuPercent:0}),
+  resourceRow('sampling',{cpuPercent:null}),
+  resourceRow('unavailable',{available:false,cpuPercent:20})
+ ];
+ const ui=panel('',{rows});await ui.page.querySelector('[data-refresh]').onclick();
+ const html=ui.page.querySelector('[data-resources]').innerHTML.split('</tr>');
+ assert.match(html[0],/&lt;0\.01% \/ 100%/);
+ assert.match(html[1],/0\.02% \/ 100%/);
+ assert.match(html[2],/0\.00% \/ 100%/);
+ assert.match(html[3],/Sampling… \/ 100%/);
+ assert.match(html[4],/Unavailable \/ 100%/);
+});
 
 for(const [key,usageKey] of [['cpuPercent','cpuPercent'],['memoryMiB','memoryBytes'],['diskMiB','diskBytes'],['tasks','processes']]){
  test(key+' sorts current usage high/low instead of the configured allowance',async()=>{

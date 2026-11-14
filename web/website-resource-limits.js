@@ -192,6 +192,9 @@
    renderList();
   };
  }
+ function formatCPUUsage(value){
+  return value>0&&value<0.01?'<0.01%':value.toFixed(2)+'%';
+ }
  function renderList(){
   const size = Number(pageSize.value);
   const key = sortKey;
@@ -209,7 +212,7 @@
    return sortDirection * comparison || a.domain.localeCompare(b.domain);
   }) : filtered;
   const pages=Math.max(1,Math.ceil(filtered.length/size));listPage=Math.max(1,Math.min(listPage,pages));
-  $('[data-resources]').innerHTML=ordered.slice((listPage-1)*size,listPage*size).map(row=>{const u=row.usage||{},p=row.settings;return `<tr><td>${esc(row.domain)}<br><small>Requests: ${p.concurrentRequests}; I/O read/write: ${p.readMiBPerSecond||'Unlimited'} / ${p.writeMiBPerSecond||'Unlimited'} MiB/s</small></td><td>${esc(runtimeStatus(row))}<br><small>${row.enforced?'Kernel enforcement verified':p.enabled?'Enforcement unavailable':'Enforcement off'}</small></td><td>${u.cpuPercent==null?(u.available?'Sampling…':'Unavailable'):Number(u.cpuPercent).toFixed(1)+'%'} / ${p.cpuPercent}%</td><td>${u.available?esc(cp.formatBytes(u.memoryBytes)):'Unavailable'} / ${esc(cp.formatBytes(p.memoryMiB*1048576))}</td><td>${u.diskBytes==null?'Unavailable / pending':esc(cp.formatBytes(u.diskBytes))} / ${esc(cp.formatBytes(p.diskMiB*1048576))}</td><td>${u.available?u.processes:'Unavailable'} / ${p.tasks}</td><td><button type="button" class="button button-secondary" data-edit-resource="${esc(row.id)}">Edit</button> <button type="button" class="button button-secondary" data-usage-open="${esc(row.id)}">History</button> <button type="button" class="button button-danger" data-remove-resource="${esc(row.id)}">Remove</button>${p.enabled&&(row.state==='Resource blocked'||String(row.state).startsWith('Error'))?` <button type="button" class="button button-secondary" data-retry-resource="${esc(row.id)}">Retry now</button>`:''}</td></tr>`}).join('')||(sessionExpired?'':'<tr><td colspan="7">No resource limits created. Choose a website above to create its settings.</td></tr>');
+  $('[data-resources]').innerHTML=ordered.slice((listPage-1)*size,listPage*size).map(row=>{const u=row.usage||{},p=row.settings;return `<tr><td>${esc(row.domain)}<br><small>Requests: ${p.concurrentRequests}; I/O read/write: ${p.readMiBPerSecond||'Unlimited'} / ${p.writeMiBPerSecond||'Unlimited'} MiB/s</small></td><td>${esc(runtimeStatus(row))}<br><small>${row.enforced?'Kernel enforcement verified':p.enabled?'Enforcement unavailable':'Enforcement off'}</small></td><td>${!u.available?'Unavailable':Number.isFinite(u.cpuPercent)?esc(formatCPUUsage(u.cpuPercent)):'Sampling…'} / ${p.cpuPercent}%</td><td>${u.available?esc(cp.formatBytes(u.memoryBytes)):'Unavailable'} / ${esc(cp.formatBytes(p.memoryMiB*1048576))}</td><td>${u.diskBytes==null?'Unavailable / pending':esc(cp.formatBytes(u.diskBytes))} / ${esc(cp.formatBytes(p.diskMiB*1048576))}</td><td>${u.available?u.processes:'Unavailable'} / ${p.tasks}</td><td><button type="button" class="button button-secondary" data-edit-resource="${esc(row.id)}">Edit</button> <button type="button" class="button button-secondary" data-usage-open="${esc(row.id)}">History</button> <button type="button" class="button button-danger" data-remove-resource="${esc(row.id)}">Remove</button>${p.enabled&&(row.state==='Resource blocked'||String(row.state).startsWith('Error'))?` <button type="button" class="button button-secondary" data-retry-resource="${esc(row.id)}">Retry now</button>`:''}</td></tr>`}).join('')||(sessionExpired?'':'<tr><td colspan="7">No resource limits created. Choose a website above to create its settings.</td></tr>');
   $('[data-count]').textContent=`Page ${listPage} of ${pages} · ${filtered.length} websites`;
   $('[data-previous]').disabled=busy||listPage<=1;$('[data-next]').disabled=busy||listPage>=pages;
  }
@@ -256,7 +259,7 @@
    const data=await cp.api('/api/sites/resource-limits/history?'+query);
    if(seq!==historyGeneration)return;
    const points=data.points||[];
-   $('[data-usage-charts]').innerHTML=usageChart(points,'cpuPercent','CPU (% of one core)',v=>v.toFixed(1)+'%')+usageChart(points,'memoryBytes','Memory',cp.formatBytes)+usageChart(points,'diskBytes','Disk',cp.formatBytes)+usageChart(points,'processes','Processes',String);
+   $('[data-usage-charts]').innerHTML=usageChart(points,'cpuPercent','CPU (% of one core)',formatCPUUsage)+usageChart(points,'memoryBytes','Memory',cp.formatBytes)+usageChart(points,'diskBytes','Disk',cp.formatBytes)+usageChart(points,'processes','Processes',String);
    $('[data-usage-status]').textContent='Recorded every minute. Longer buckets show peaks. Gaps indicate missing measurements.';
   }catch(error){if(seq===historyGeneration)$('[data-usage-status]').textContent=error.message;}
   finally{if(seq===historyGeneration&&visible()&&historySite)historyTimer=setTimeout(loadUsageHistory,15000);}
