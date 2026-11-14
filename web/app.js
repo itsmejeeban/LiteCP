@@ -591,7 +591,7 @@
   }
 
   function renderBackupSize(backup) {
-    if (!Number.isFinite(backup.size) || backup.size <= 0) return "â€”";
+    if (!Number.isFinite(backup.size) || backup.size <= 0) return "\u2014";
     const scope = backup.scope === "website-home" ? "Website home" : "Public files";
     const sourceSizes = [];
     if (Number.isFinite(backup.fileBytes) && backup.fileBytes >= 0) {
@@ -611,7 +611,7 @@
       $("#backupsTable").innerHTML = `<div class="empty-state"><span class="empty-icon">${icons.refresh}</span><h3>No backups yet</h3><p>Create a recovery point after your first website is provisioned.</p></div>`;
       return;
     }
-    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>ARCHIVE SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th><th>ACTIONS</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${renderBackupSize(backup)}</td><td><span class="badge ${/fail|error|interrupt/i.test(backup.status) ? "backup-status-failed" : backupRequestActive(backup.status) ? "backup-status-running" : "success"}"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td><td><span class="row-actions">${backupRequestActive(backup.status) ? '<span>In progressâ€¦</span>' : backup.status === 'failed' || backup.status === 'interrupted' ? '<span>Review required</span>' : `<a class="button button-secondary" href="/api/backups/item?id=${encodeURIComponent(backup.id)}">Download</a><button type="button" class="button button-secondary" data-restore-history="${escapeHTML(backup.id)}">Restore</button><button type="button" class="button danger" data-remove-backup="${escapeHTML(backup.id)}">Remove</button>`}</span></td></tr>`).join("")}</tbody></table>`;
+    $("#backupsTable").innerHTML = `<table class="data-table"><thead><tr><th>WEBSITE</th><th>CREATED</th><th>ARCHIVE SIZE</th><th>STATUS</th><th>LOCAL PATH</th><th>REMOTE</th><th>ACTIONS</th></tr></thead><tbody>${backups.map(backup => `<tr><td><strong>${escapeHTML(backup.domain)}</strong></td><td>${formatDateTime(backup.createdAt)}</td><td>${renderBackupSize(backup)}</td><td><span class="badge ${/fail|error|interrupt/i.test(backup.status) ? "backup-status-failed" : backupRequestActive(backup.status) ? "backup-status-running" : "success"}"><span class="pulse-dot"></span>${escapeHTML(backup.status)}</span></td><td><code>${escapeHTML(backup.path)}</code></td><td>${backup.destinationName ? `<strong>${escapeHTML(backup.destinationName)}</strong><br><small>${escapeHTML(backup.remotePath)}</small>` : "Local only"}</td><td><span class="row-actions">${backupRequestActive(backup.status) ? '<span>In progress&#8230;</span>' : backup.status === 'failed' || backup.status === 'interrupted' ? '<span>Review required</span>' : `<a class="button button-secondary" href="/api/backups/item?id=${encodeURIComponent(backup.id)}">Download</a><button type="button" class="button button-secondary" data-restore-history="${escapeHTML(backup.id)}">Restore</button><button type="button" class="button danger" data-remove-backup="${escapeHTML(backup.id)}">Remove</button>`}</span></td></tr>`).join("")}</tbody></table>`;
   }
 
   function backupRequestActive(status) { return ["queued", "creating", "uploading"].includes(status); }
