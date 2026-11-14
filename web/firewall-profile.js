@@ -8,7 +8,7 @@
     enabled=state.enabled;verified=true;button.textContent=enabled?'Disable LiteCP Firewall':'Apply LiteCP Firewall';button.disabled=false;
     panel.replaceChildren();const body=document.createElement('div');body.className='settings-body';const title=document.createElement('h2');title.textContent='LiteCP required-port rules';body.append(title);
     const note=document.createElement('p');note.textContent=enabled?'Active rules verified on the server. Custom rules are listed separately below.':'LiteCP profile is disabled. Installer access and custom rules remain in place.';body.append(note);
-    if(state.rules.length){const table=document.createElement('table');table.className='data-table';const head=document.createElement('thead');head.innerHTML='<tr><th>Direction</th><th>Action</th><th>Port</th><th>Port type</th><th>Zone</th><th>Address</th><th>Remarks</th><th>Actions</th></tr>';table.append(head);const tbody=document.createElement('tbody');for(const rule of state.rules){const row=document.createElement('tr');const match=String(rule.port||'').match(/^(.*)\/(tcp|udp)$/i);const port=match?match[1]:rule.port;const portType=match?match[2].toUpperCase():'Unspecified';for(const [index,text] of [rule.direction,'Allow',port,portType,rule.zone||'Host',rule.address||'Any',rule.remarks||''].entries()){const cell=document.createElement('td');if(index===0){const badge=document.createElement('span');const direction=rule.direction==='outbound'?'outbound':'inbound';badge.className='firewall-direction firewall-direction-'+direction;badge.textContent=direction==='inbound'?'Inbound':'Outbound';cell.append(badge);}else{cell.textContent=text;if(index===6)cell.className='firewall-remarks';}row.append(cell);}const actions=document.createElement('td'),remove=document.createElement('button');remove.type='button';remove.className='button button-danger';remove.textContent='Remove';remove.onclick=async()=>{
+    if(state.rules.length){const table=document.createElement('table');table.className='data-table';const head=document.createElement('thead');head.innerHTML='<tr><th>Direction</th><th>Action</th><th>Port</th><th>Port type</th><th>Zone</th><th>Address</th><th>Remarks</th><th>Actions</th></tr>';table.append(head);const tbody=document.createElement('tbody');for(const rule of state.rules){const row=document.createElement('tr');const match=String(rule.port||'').match(/^(.*)\/(tcp|udp)$/i);const port=match?match[1]:rule.port;const portType=match?match[2].toUpperCase():'Unspecified';for(const [index,text] of [rule.direction,'Allow',port,portType,rule.zone||'Host',rule.sourceMode==='cloudflare'?'Cloudflare only':rule.address||'Any',rule.remarks||''].entries()){const cell=document.createElement('td');if(index===0){const badge=document.createElement('span');const direction=rule.direction==='outbound'?'outbound':'inbound';badge.className='firewall-direction firewall-direction-'+direction;badge.textContent=direction==='inbound'?'Inbound':'Outbound';cell.append(badge);}else{cell.textContent=text;if(index===6)cell.className='firewall-remarks';}row.append(cell);}const actions=document.createElement('td'),remove=document.createElement('button');remove.type='button';remove.className='button button-danger';remove.textContent='Remove';remove.onclick=async()=>{
  if(busy)return;
  if(!await window.LiteCPDialogs.confirm(`Remove the ${rule.direction} allow rule for ${rule.port}? Connections using this port may stop working. Other rules may still allow access. Current SSH and panel ports cannot be removed here.`,{title:'Remove firewall rule',confirmText:'Remove',danger:true}))return;
  busy=true;remove.disabled=true;
@@ -18,6 +18,7 @@
   function editRule(rule){
     if(busy)return;
     const match=String(rule.port).match(/^(.*)\/(tcp|udp)$/);
+    const inbound = rule.direction !== 'outbound';
     const dialog = document.createElement('dialog');
     dialog.className = 'fm-dialog';
     dialog.setAttribute('aria-labelledby', 'firewallEditTitle');
@@ -28,7 +29,8 @@
         <label class="field"><span>Action</span><input value="Allow" readonly></label>
         <label class="field"><span>Allowed port or range</span><input name="port" required pattern="[0-9]+(?:&#92;-[0-9]+)?" maxlength="11" inputmode="numeric"></label>
         <label class="field"><span>Protocol</span><select name="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option></select></label>
-        <label class="field"><span data-address-label></span><textarea name="addresses" maxlength="2048" rows="2" placeholder="any" required spellcheck="false"></textarea><small>Enter up to 32 IP addresses or CIDR networks separated by commas or new lines. Use any for all addresses.</small></label>
+        ${inbound ? '<label class="field"><span>Address type</span><select name="addressType" aria-label="Address type"><option value="custom">Any IP or custom IP / CIDR</option><option value="cloudflare">Cloudflare only (IPv4 + IPv6)</option></select></label>' : ''}
+        <label class="field"><span data-address-label></span><textarea name="addresses" rows="2" placeholder="any" required spellcheck="false"></textarea><small data-address-help>Enter IP addresses or CIDR networks separated by commas or new lines. Use any for all addresses.</small></label>
         <label class="field"><span>Remarks</span><textarea name="remarks" maxlength="500"></textarea></label>
         <p data-error role="alert" hidden></p>
         <div class="form-actions">
@@ -42,7 +44,24 @@
     dialog.querySelector('[data-address-label]').textContent = direction === 'Outbound' ? 'Destination IP / CIDR' : 'Source IP / CIDR';
     form.elements.port.value = match ? match[1] : rule.port;
     form.elements.protocol.value = match ? match[2] : 'tcp';
-    form.elements.addresses.value = rule.address || 'any';
+    const savedCloudflare = rule.sourceMode === 'cloudflare' || rule.address === 'cloudflare';
+    let customAddresses = rule.address === 'cloudflare' ? 'any' : rule.address || 'any';
+    form.elements.addresses.value = customAddresses;
+    const addressType = form.elements.addressType;
+    if (addressType) {
+      addressType.value = savedCloudflare ? 'cloudflare' : 'custom';
+      const addressHelp = dialog.querySelector('[data-address-help]');
+      const customHelp = addressHelp.textContent;
+      const showAddressType = () => {
+        const cloudflare = addressType.value === 'cloudflare';
+        if (cloudflare) customAddresses = form.elements.addresses.value;
+        form.elements.addresses.readOnly = cloudflare;
+        form.elements.addresses.value = cloudflare ? 'cloudflare' : customAddresses;
+        addressHelp.textContent = cloudflare ? 'Allow only Cloudflare proxy IP addresses. Use a proxied Cloudflare DNS record.' : customHelp;
+      };
+      addressType.onchange = showAddressType;
+      showAddressType();
+    }
     form.elements.remarks.value = rule.remarks || '';
     dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
     dialog.addEventListener('close', () => dialog.remove());
@@ -58,8 +77,10 @@
       errorMessage.hidden = true;
       fields.forEach(node => node.disabled = true);
       try {
-        if ((newPort !== rule.port || (addresses || 'any') !== (rule.address || 'any')) && !await window.LiteCPDialogs.confirm(
-          `Replace the ${rule.port} allow rule with ${newPort} for ${addresses || 'any'}? This changes firewall access only. Other firewall rules may still allow connections.`,
+        if ((newPort !== rule.port || (addresses || 'any') !== (savedCloudflare ? 'cloudflare' : rule.address || 'any')) && !await window.LiteCPDialogs.confirm(
+          addresses === 'cloudflare'
+            ? `Restrict ${newPort} to Cloudflare IPv4 and IPv6 networks? Direct connections from other IP addresses will be blocked.`
+            : `Replace the ${rule.port} allow rule with ${newPort} for ${addresses || 'any'}? This changes firewall access only. Other firewall rules may still allow connections.`,
           {title:'Edit firewall rule',confirmText:'Save changes'}
         )) return;
         const state = await cp.api('/api/firewall/apply-litecp', {

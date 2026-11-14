@@ -71,7 +71,19 @@ func (a *App) annotateFirewallProfile(state *profileState) {
 	}
 	sshPorts, panelPort := savedFirewallSSHPorts(a.system.dataDir), currentPanelPort()
 	notes, _ := a.readProfileRemarks()
+	guards := map[string]bool{}
+	if a.store != nil {
+		for _, guard := range a.store.PublicState().FirewallRules {
+			if guard.Source == "cloudflare" && guard.ProfileKey != "" {
+				guards[guard.ProfileKey] = true
+			}
+		}
+	}
 	for i := range state.Rules {
+		state.Rules[i].SourceMode = ""
+		if guards[profileRuleKey(state.Rules[i])] {
+			state.Rules[i].SourceMode = "cloudflare"
+		}
 		state.Rules[i].Remarks = requiredFirewallRemark(state.Rules[i], panelPort, sshPorts, webmailPort)
 		if note, ok := notes[profileRuleKey(state.Rules[i])]; ok {
 			state.Rules[i].Remarks = note

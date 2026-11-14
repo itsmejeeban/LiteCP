@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -15,7 +17,7 @@ func TestFirewallAddressListValidationAndCanonicalForm(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, []string{"192.0.2.0/24", "192.0.2.8", "2001:db8::1"}) {
 		t.Fatal(got, err)
 	}
-	for _, value := range []string{"any,192.0.2.1", "cloudflare\n192.0.2.1", "--bad", "192.0.2.999", "192.0.2.1/99", "fe80::1%eth0", strings.Repeat("192.0.2.1,", 33)} {
+	for _, value := range []string{"any,192.0.2.1", "cloudflare\n192.0.2.1", "--bad", "192.0.2.999", "192.0.2.1/99", "fe80::1%eth0"} {
 		if _, err := parseFirewallAddresses(value); err == nil {
 			t.Fatalf("accepted %q", value)
 		}
@@ -179,5 +181,41 @@ func TestFirewallUFWMultipleDestinationsRollbackAfterCancellation(t *testing.T) 
 	err := applyFirewallAddressRules(ctx, "ufw", rule, []string{"192.0.2.1", "2001:db8::1"}, false, run)
 	if !errors.Is(err, context.Canceled) || len(changes) != 3 || strings.Join(changes[2], " ") != "--force delete deny out to 192.0.2.1 port 65001 proto udp" {
 		t.Fatal("rollback did not compensate after request cancellation", err, changes)
+	}
+}
+
+func TestFirewallLargeAddressListUsesStandardRequestLimit(t *testing.T) {
+	values := make([]string, 1200)
+	for i := range values {
+		values[i] = fmt.Sprintf("2001:db8::%x", i+1)
+	}
+	value := strings.Join(values, "\n")
+	if len(value) < 8192 {
+		t.Fatal("fixture must exceed old byte and address-count limits")
+	}
+	parsed, err := parseFirewallAddresses(value)
+	if err != nil || len(parsed) != len(values) {
+		t.Fatal("large list rejected", len(parsed), err)
+	}
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &App{store: store, system: &System{demo: true}}
+	data, _ := json.Marshal(FirewallRule{Port: 65001, Protocol: "tcp", Source: value, ProfileKey: "forged-owner"})
+	response := httptest.NewRecorder()
+	app.createFirewallRule(response, httptest.NewRequest("POST", "/api/firewall", strings.NewReader(string(data))))
+	if response.Code != 201 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	rule := store.PublicState().FirewallRules[0]
+	if rule.ProfileKey != "" {
+		t.Fatal("public rule creation assigned internal profile ownership")
+	}
+	data, _ = json.Marshal(FirewallRule{Port: 65002, Protocol: "tcp", Source: value})
+	response = httptest.NewRecorder()
+	app.firewallRuleAction(response, httptest.NewRequest("PUT", "/api/firewall/"+rule.ID, strings.NewReader(string(data))))
+	if response.Code != 200 || len(strings.Split(store.FirewallRuleByID(rule.ID).Source, ",")) != len(values) {
+		t.Fatal(response.Code, response.Body.String())
 	}
 }

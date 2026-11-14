@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -262,7 +263,11 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		Addresses *string `json:"addresses"`
 		Remarks   string  `json:"remarks"`
 	}
-	if decodeJSONWithLimit(r, &input, 8<<10) != nil || validateProfilePort(input.NewPort) != nil || utf8.RuneCountInString(input.Remarks) > 500 || strings.ContainsRune(input.Remarks, 0) {
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	if validateProfilePort(input.NewPort) != nil || utf8.RuneCountInString(input.Remarks) > 500 || strings.ContainsRune(input.Remarks, 0) {
 		writeError(w, 400, "Enter a valid TCP/UDP port or range and remarks up to 500 characters")
 		return
 	}
@@ -290,17 +295,19 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addresses := []string{old.Address}
+	wantCloudflare := a.profileCloudflareGuard(*old) != nil
 	if input.Addresses != nil {
 		if strings.TrimSpace(*input.Addresses) == "" {
 			writeError(w, 400, "Enter an IP address or CIDR network, or type 'any'.")
 			return
 		}
 		addresses, err = parseFirewallAddresses(*input.Addresses)
-		if err != nil || len(addresses) == 0 || (len(addresses) == 1 && addresses[0] == "cloudflare") {
-			writeError(w, 400, "Enter IP addresses or CIDR networks, or use 'any'. Cloudflare-only rules are configured under Managed rules.")
+		if err != nil || len(addresses) == 0 {
+			writeError(w, 400, "Enter IP addresses or CIDR networks, or use 'any' or the Cloudflare preset.")
 			return
 		}
-		if len(addresses) == 1 && addresses[0] == "any" {
+		wantCloudflare = len(addresses) == 1 && addresses[0] == "cloudflare"
+		if len(addresses) == 1 && (addresses[0] == "any" || wantCloudflare) {
 			addresses[0] = ""
 		} else if broadFirewallAddress(addresses) {
 			writeError(w, 400, "Use 'any' for unrestricted access, or enter specific IP addresses and networks.")
@@ -320,7 +327,7 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	mutatesFirewall := removeOld || len(added) > 0
-	if old.Direction == "inbound" && mutatesFirewall {
+	if old.Direction == "inbound" && (mutatesFirewall || wantCloudflare) {
 		ssh, err := run("/usr/sbin/sshd", "-T")
 		if err != nil {
 			writeError(w, 502, "Cannot verify current SSH access")
@@ -350,13 +357,22 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	guardChange, err := a.planProfileCloudflare(*old, nextRules[0], wantCloudflare, input.Remarks)
+	if err != nil {
+		writeError(w, 409, err.Error())
+		return
+	}
 	notes, err := a.readProfileRemarks()
 	if err != nil {
 		writeError(w, 500, "Cannot read saved firewall remarks")
 		return
 	}
+	existing := make(map[string]bool, len(state.Rules))
+	for _, rule := range state.Rules {
+		existing[profileRuleKey(rule)] = true
+	}
 	for _, next := range added {
-		if profileContainsRule(state, next) {
+		if existing[profileRuleKey(next)] {
 			writeError(w, 409, "A replacement rule already exists. Edit its row separately.")
 			return
 		}
@@ -372,46 +388,64 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if mutatesFirewall {
-		// Finish and verify host mutations even if the browser disconnects.
-		editCtx, finish := context.WithTimeout(context.WithoutCancel(r.Context()), 4*time.Minute)
-		defer finish()
-		run = func(cmd string, args ...string) (string, error) {
-			return runFirewallCommand(editCtx, 20*time.Second, cmd, args...)
+	// A saved guard remains independently owned so normal profile reapply
+	// cannot accidentally broaden Cloudflare-only access.
+	editCtx, finish := context.WithTimeout(context.WithoutCancel(r.Context()), firewallListTimeout(len(added)))
+	defer finish()
+	previousNotes, _ := json.Marshal(notes)
+	baseApplied, notesSaved := false, false
+	err = func() error {
+		if err := guardChange.prepare(editCtx); err != nil {
+			return err
 		}
-		rollback := func(added []profileRule, restoreOld bool) error {
-			return restoreProfileRules(backend, *old, added, restoreOld)
-		}
-		if err = replaceProfileRules(backend, *old, added, removeOld, run, rollback); err != nil {
-			writeError(w, 502, err.Error())
-			return
-		}
-		state, err = inspectFirewallProfile(backend, run)
-		verified := err == nil && profileContainsRule(state, *old) != removeOld
-		for _, next := range nextRules {
-			verified = verified && profileContainsRule(state, next)
-		}
-		if !verified {
-			if rollback := restoreProfileRules(backend, *old, added, removeOld); rollback != nil {
-				writeError(w, 502, "Rule verification and rollback failed. Check the host firewall.")
-				return
-			}
-			writeError(w, 502, "Rule verification failed. Previous rule restored.")
-			return
-		}
-	}
-	for _, next := range nextRules {
-		notes[profileRuleKey(next)] = input.Remarks
-	}
-	data, _ := json.Marshal(notes)
-	if err = writeAtomic(filepath.Join(a.system.dataDir, "firewall-profile-remarks.json"), data, 0600); err != nil {
 		if mutatesFirewall {
-			if rollback := restoreProfileRules(backend, *old, added, removeOld); rollback != nil {
-				writeError(w, 500, "Saving remarks and firewall rollback failed. Check the host firewall immediately")
-				return
+			run = func(cmd string, args ...string) (string, error) {
+				return runFirewallCommand(editCtx, 20*time.Second, cmd, args...)
+			}
+			rollback := func(added []profileRule, restoreOld bool) error {
+				return restoreProfileRules(backend, *old, added, restoreOld)
+			}
+			if err := replaceProfileRules(backend, *old, added, removeOld, run, rollback); err != nil {
+				return err
+			}
+			baseApplied = true
+			state, err = inspectFirewallProfile(backend, run)
+			present := make(map[string]bool, len(state.Rules))
+			for _, rule := range state.Rules {
+				present[profileRuleKey(rule)] = true
+			}
+			verified := err == nil && present[profileRuleKey(*old)] != removeOld
+			for _, next := range nextRules {
+				verified = verified && present[profileRuleKey(next)]
+			}
+			if !verified {
+				return fmt.Errorf("replacement rules could not be verified")
 			}
 		}
-		writeError(w, 500, "Could not save firewall remarks. Previous rule restored")
+		for _, next := range nextRules {
+			notes[profileRuleKey(next)] = input.Remarks
+		}
+		data, _ := json.Marshal(notes)
+		if err := writeAtomic(filepath.Join(a.system.dataDir, "firewall-profile-remarks.json"), data, 0600); err != nil {
+			return fmt.Errorf("could not save firewall remarks: %w", err)
+		}
+		notesSaved = true
+		return guardChange.commit(editCtx)
+	}()
+	if err != nil {
+		var restoreBase func() error
+		if baseApplied {
+			restoreBase = func() error { return restoreProfileRules(backend, *old, added, removeOld) }
+		}
+		recoveryErr := guardChange.rollbackWithProfile(restoreBase)
+		if notesSaved {
+			recoveryErr = errors.Join(recoveryErr, writeAtomic(filepath.Join(a.system.dataDir, "firewall-profile-remarks.json"), previousNotes, 0600))
+		}
+		if recoveryErr != nil {
+			writeError(w, 502, fmt.Sprintf("Rule update failed (%v); recovery was incomplete (%v). Check the host firewall.", err, recoveryErr))
+			return
+		}
+		writeError(w, 502, "Rule update failed; previous settings restored: "+err.Error())
 		return
 	}
 	a.annotateFirewallProfile(&state)
@@ -420,7 +454,7 @@ func (a *App) editFirewallProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func restoreProfileRules(backend string, old profileRule, added []profileRule, restoreOld bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), firewallListTimeout(len(added)))
 	defer cancel()
 	run := func(cmd string, args ...string) (string, error) {
 		return runFirewallCommand(ctx, 20*time.Second, cmd, args...)

@@ -83,8 +83,10 @@ func (s *System) applyCloudflareFirewall(ctx context.Context, rule FirewallRule,
 	name := fmt.Sprintf("litecp_cf_%d_%s", rule.Port, rule.Protocol)
 	if remove {
 		script := `set -e
-name=$1;port=$2;protocol=$3;backend=$4
-if [[ $backend == firewalld ]]; then
+name=$1;port=$2;protocol=$3;backend=$4;profile_only=$5
+if [[ $profile_only == 1 ]]; then
+ : # The linked required-port rule owns its allow selector.
+elif [[ $backend == firewalld ]]; then
  for family in ipv4 ipv6; do
   firewall-cmd --permanent --zone=public --remove-rich-rule="rule family=\"$family\" priority=\"-90\" port port=\"$port\" protocol=\"$protocol\" accept"
  done
@@ -96,7 +98,7 @@ systemctl disable "$name.service"
 printf 'add table inet %s\ndelete table inet %s\n' "$name" "$name" | nft -f -
 echo 'Cloudflare-only restriction removed; other firewall rules remain unchanged.'
 `
-		_, err := runCommandInput(ctx, 45*time.Second, script, "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--", "/bin/bash", "-s", "--", name, fmt.Sprint(rule.Port), rule.Protocol, s.firewallBackend())
+		_, err := runCommandInput(ctx, 45*time.Second, script, "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--", "/bin/bash", "-s", "--", name, fmt.Sprint(rule.Port), rule.Protocol, s.firewallBackend(), cloudflareProfileOnly(rule))
 		return err
 	}
 	output, probeErr := runHostCommand(ctx, 10*time.Second, "sshd", "-T")
@@ -118,7 +120,7 @@ func (s *System) installCloudflareGuard(ctx context.Context, rule FirewallRule, 
 	name := fmt.Sprintf("litecp_cf_%d_%s", rule.Port, rule.Protocol)
 	// Pass the validated rules over stdin; no URL, user label or shell command is interpolated.
 	script := `set -Eeuo pipefail
-name=$1; port=$2; protocol=$3; backend=$4
+name=$1; port=$2; protocol=$3; backend=$4; profile_only=$5
 command -v nft >/dev/null || { echo 'Install the nftables package before using Cloudflare-only access.' >&2; exit 1; }
 install -d -m 0700 /etc/litecp-cloudflare
 config=/etc/litecp-cloudflare/$name.nft
@@ -131,7 +133,9 @@ rollback() {
  else
   systemctl disable "$name.service" 2>/dev/null || true
   # Keep the guard in place if removing its new broad allow fails.
-  if [[ $backend == firewalld ]]; then
+  if [[ $profile_only == 1 ]]; then
+   printf 'add table inet %s\ndelete table inet %s\n' "$name" "$name" | nft -f -
+  elif [[ $backend == firewalld ]]; then
    for family in ipv4 ipv6; do firewall-cmd --permanent --zone=public --remove-rich-rule="rule family=\"$family\" priority=\"-90\" port port=\"$port\" protocol=\"$protocol\" accept" || true; done
    firewall-cmd --reload && printf 'add table inet %s\ndelete table inet %s\n' "$name" "$name" | nft -f -
   else
@@ -148,7 +152,9 @@ nft -f "$candidate"
 install -m 0600 "$candidate" "$config"
 # These accepts only open the selected port in the host firewall. The early
 # nftables chain still rejects every non-Cloudflare source on that port.
-if [[ $backend == firewalld ]]; then
+if [[ $profile_only == 1 ]]; then
+ : # Preserve the separately managed profile allow selector and its comment.
+elif [[ $backend == firewalld ]]; then
  for family in ipv4 ipv6; do
   firewall-cmd --permanent --zone=public --add-rich-rule="rule family=\"$family\" priority=\"-90\" port port=\"$port\" protocol=\"$protocol\" accept"
  done
@@ -177,11 +183,18 @@ systemctl daemon-reload
 systemctl enable "$name.service"
 `
 	// Bash reads the script from -c; stdin is reserved for nftables content.
-	_, err := runCommandInput(ctx, 90*time.Second, cloudflareGuard(rule, networks), "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--", "/bin/bash", "-c", script, "litecp-cloudflare", name, fmt.Sprint(rule.Port), rule.Protocol, s.firewallBackend())
+	_, err := runCommandInput(ctx, 90*time.Second, cloudflareGuard(rule, networks), "systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", "--", "/bin/bash", "-c", script, "litecp-cloudflare", name, fmt.Sprint(rule.Port), rule.Protocol, s.firewallBackend(), cloudflareProfileOnly(rule))
 	if err != nil {
 		return fmt.Errorf("Cloudflare restriction could not be fully configured; check firewall status before retrying: %w", err)
 	}
 	return nil
+}
+
+func cloudflareProfileOnly(rule FirewallRule) string {
+	if rule.ProfileKey != "" {
+		return "1"
+	}
+	return "0"
 }
 func (a *App) startCloudflareFirewallUpdates() {
 	if a.system.demo {

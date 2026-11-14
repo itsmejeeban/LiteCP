@@ -76,7 +76,7 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 		FirewallRule
 		Remarks *string `json:"remarks"`
 	}
-	if err := decodeJSONWithLimit(r, &input, 8<<10); err != nil {
+	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, 400, err.Error())
 		return
 	}
@@ -86,6 +86,7 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	rule := normalizeFirewallRule(input.FirewallRule)
 	rule.ID, rule.CreatedAt = old.ID, old.CreatedAt
+	rule.ProfileKey = old.ProfileKey
 	if err := validateFirewallRule(rule); err != nil {
 		writeError(w, 400, err.Error())
 		return
@@ -111,6 +112,10 @@ func (a *App) firewallRuleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.store.HasFirewallRule(rule) {
 		writeError(w, 409, "At least one address already has this firewall rule in LiteCP.")
+		return
+	}
+	if old.ProfileKey != "" {
+		writeError(w, 409, "This Cloudflare restriction is linked to a required-port rule. Edit its address type in the required-port table.")
 		return
 	}
 	removed, added := firewallRuleChanges(*old, rule)

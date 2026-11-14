@@ -56,18 +56,19 @@ test('required rule editor saves the selected rule and keeps the dialog open on 
  const source = fs.readFileSync('web/firewall-profile.js', 'utf8');
  const start = source.indexOf('  function editRule(');
  const end = source.indexOf('  function refresh()', start);
- const port = {focus() {}}, protocol = {}, remarks = {}, addresses = {}, message = {}, cancel = {}, scope = {}, addressLabel = {};
- const controls = [port, protocol, remarks, addresses, cancel];
- const form = {elements:{port, protocol, remarks, addresses}, querySelectorAll:() => controls, reportValidity:() => true};
+ const port = {focus() {}}, protocol = {}, remarks = {}, addresses = {}, message = {}, cancel = {}, scope = {}, addressLabel = {}, addressType = {};
+ const addressHelp = {textContent:'Enter IP addresses or CIDR networks.'};
+ const controls = [port, protocol, remarks, addresses, addressType, cancel];
+ const form = {elements:{port, protocol, remarks, addresses, addressType}, querySelectorAll:() => controls, reportValidity:() => true};
  let closed = false, fail = true, updated;
  const dialog = {
   isConnected:true, close(){closed = true;}, showModal(){}, setAttribute(){}, addEventListener(){},
-  querySelector(selector) {return {'form':form, '[data-scope]':scope, '[data-cancel]':cancel, '[data-error]':message, '[data-address-label]':addressLabel}[selector];}
+  querySelector(selector) {return {'form':form, '[data-scope]':scope, '[data-cancel]':cancel, '[data-error]':message, '[data-address-label]':addressLabel, '[data-address-help]':addressHelp}[selector];}
  };
- const requests = [];
+ const requests = [], confirmations = [];
  const context = {
   document:{createElement:() => dialog, body:{append(){}}},
-  window:{LiteCPDialogs:{confirm:async () => true}},
+  window:{LiteCPDialogs:{confirm:async message => {confirmations.push(message);return true;}}},
   cp:{api:async (path, options) => {
    requests.push({path, ...options});
    if (fail) throw Error('Previous rule restored');
@@ -81,6 +82,15 @@ test('required rule editor saves the selected rule and keeps the dialog open on 
  assert.equal(protocol.value, 'tcp');
  assert.equal(addressLabel.textContent, 'Source IP / CIDR');
  assert.equal(addresses.value, '192.0.2.1');
+ assert.equal(addressType.value, 'custom');
+ addressType.value = 'cloudflare';
+ addressType.onchange();
+ assert.equal(addresses.value, 'cloudflare');
+ assert.equal(addresses.readOnly, true);
+ addressType.value = 'custom';
+ addressType.onchange();
+ assert.equal(addresses.value, '192.0.2.1');
+ assert.equal(addresses.readOnly, false);
  port.value = '9443';
  addresses.value = '192.0.2.2, 2001:db8::/64';
  await form.onsubmit({preventDefault(){}});
@@ -96,4 +106,18 @@ test('required rule editor saves the selected rule and keeps the dialog open on 
  });
  assert.equal(closed, true);
  assert.deepEqual(updated, {rules:[]});
+ context.editRule({port:'8444/tcp', direction:'inbound', zone:'public', address:'', sourceMode:'cloudflare', remarks:'Proxy only'});
+ assert.equal(addressType.value, 'cloudflare');
+ assert.equal(addresses.value, 'cloudflare');
+ assert.equal(addresses.readOnly, true);
+ addressType.value = 'custom';
+ addressType.onchange();
+ assert.equal(addresses.value, 'any');
+ addresses.value = '192.0.2.5';
+ addressType.value = 'cloudflare';
+ addressType.onchange();
+ port.value = '9443';
+ await form.onsubmit({preventDefault(){}});
+ assert.equal(requests.at(-1).body.addresses, 'cloudflare');
+ assert.match(confirmations.at(-1), /Direct connections from other IP addresses will be blocked/);
 });

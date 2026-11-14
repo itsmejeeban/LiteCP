@@ -1,7 +1,11 @@
 # Cloudflare-only firewall sources
 
 In Security > Firewall > Add rule, choose Inbound, Allow, a port and protocol,
-then select **Cloudflare only (IPv4 + IPv6)** under Source type.
+then select **Cloudflare only (IPv4 + IPv6)** under Source type. This preset
+is also available when editing a single inbound required-port rule. Linked
+profile guards appear as Cloudflare only in that table and refresh with the
+other managed guards. Switch the address type back to Any/custom to remove
+only that linked restriction. Port ranges and outbound rules use custom addresses.
 
 LiteCP fetches both official HTTPS lists, validates every CIDR, and adds an early
 nftables input guard for that port. Other IPs are dropped before broad host-firewall

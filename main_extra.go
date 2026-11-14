@@ -650,12 +650,13 @@ func (a *App) deleteBackupDestination(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) createFirewallRule(w http.ResponseWriter, r *http.Request) {
 	var input FirewallRule
-	if err := decodeJSONWithLimit(r, &input, 8<<10); err != nil {
+	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	id, _ := randomToken(8)
 	rule := normalizeFirewallRule(input)
+	rule.ProfileKey = ""
 	rule.ID, rule.CreatedAt = id, time.Now().UTC()
 	if err := validateFirewallRule(rule); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

@@ -82,7 +82,7 @@ func applyFirewallAddressRules(ctx context.Context, backend string, rule Firewal
 	}
 	var undo []func(context.Context) error
 	rollback := func(cause error) error {
-		recovery, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		recovery, cancel := context.WithTimeout(context.Background(), firewallListTimeout(len(addresses)))
 		defer cancel()
 		var rollbackErr error
 		for i := len(undo) - 1; i >= 0; i-- {

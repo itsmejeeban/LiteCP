@@ -90,6 +90,7 @@ type FirewallRule struct {
 	Destination string    `json:"destination,omitempty"`
 	Label       string    `json:"label"`
 	Remarks     string    `json:"remarks,omitempty"`
+	ProfileKey  string    `json:"profileKey,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 

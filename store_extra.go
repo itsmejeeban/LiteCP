@@ -140,6 +140,10 @@ func (s *Store) HasFirewallRule(rule FirewallRule) bool {
 	defer s.mu.RUnlock()
 	rule = canonicalFirewallRule(normalizeFirewallRule(rule))
 	addresses := strings.Split(firewallAddresses(rule), ",")
+	requested := make(map[string]bool, len(addresses))
+	for _, address := range addresses {
+		requested[address] = true
+	}
 	for _, item := range s.cfg.FirewallRules {
 		if rule.ID != "" && item.ID == rule.ID {
 			continue
@@ -147,7 +151,7 @@ func (s *Store) HasFirewallRule(rule FirewallRule) bool {
 		item = canonicalFirewallRule(normalizeFirewallRule(item))
 		if item.Port == rule.Port && item.Protocol == rule.Protocol && item.Direction == rule.Direction && item.Action == rule.Action {
 			for _, address := range strings.Split(firewallAddresses(item), ",") {
-				if containsString(addresses, address) {
+				if requested[address] {
 					return true
 				}
 			}

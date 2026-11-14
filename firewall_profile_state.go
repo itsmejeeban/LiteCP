@@ -10,12 +10,13 @@ import (
 )
 
 type profileRule struct {
-	Direction string `json:"direction"`
-	Port      string `json:"port"`
-	Zone      string `json:"zone"`
-	Address   string `json:"address,omitempty"`
-	Raw       string `json:"-"`
-	Remarks   string `json:"remarks"`
+	Direction  string `json:"direction"`
+	Port       string `json:"port"`
+	Zone       string `json:"zone"`
+	Address    string `json:"address,omitempty"`
+	SourceMode string `json:"sourceMode,omitempty"`
+	Raw        string `json:"-"`
+	Remarks    string `json:"remarks"`
 }
 type profileState struct {
 	Enabled bool          `json:"enabled"`
@@ -208,11 +209,17 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 502, "Rule is still active. Refresh and retry.")
 			return
 		}
+		if err := a.removeProfileCloudflare(ctx, []profileRule{*selected}); err != nil {
+			recoveryErr := restoreProfileRules(state.Backend, *selected, nil, true)
+			writeError(w, 502, fmt.Sprintf("Could not remove the linked Cloudflare restriction (%v); profile recovery: %v. Refresh status.", err, recoveryErr))
+			return
+		}
 		a.store.AddActivity("Firewall rule removed", direction+" "+port, "warning")
 		writeJSON(w, 200, updated)
 		return
 	}
 	// Keep access ports open before removing only this profile's rules.
+	previousRules := append([]profileRule(nil), state.Rules...)
 	ssh, err := run("/usr/sbin/sshd", "-T")
 	if err != nil {
 		writeError(w, 502, "Cannot verify SSH access; no rules changed.")
@@ -276,6 +283,10 @@ func (a *App) litecpFirewallControl(w http.ResponseWriter, r *http.Request) {
 	state, err = inspectFirewallProfile(state.Backend, run)
 	if err != nil || state.Enabled {
 		writeError(w, 502, "Profile rules still need review. Refresh status.")
+		return
+	}
+	if err := a.removeProfileCloudflare(ctx, previousRules); err != nil {
+		writeError(w, 502, "Profile rules were disabled, but linked Cloudflare restrictions remain. Review the managed rules: "+err.Error())
 		return
 	}
 	a.store.AddActivity("LiteCP firewall disabled", "Required-port profile removed; access ports and unrelated rules preserved.", "warning")

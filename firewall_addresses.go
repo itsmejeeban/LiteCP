@@ -5,10 +5,18 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 )
 
-const maxFirewallAddresses = 32
+// Lists have no address-count cap. Keep one administrative operation finite
+// while allowing larger lists more time for host commands and compensation.
+func firewallListTimeout(count int) time.Duration {
+	if count >= 216 {
+		return 40 * time.Minute
+	}
+	return 4*time.Minute + time.Duration(count)*10*time.Second
+}
 
 func parseFirewallAddresses(value string) ([]string, error) {
 	value = strings.TrimSpace(value)
@@ -18,12 +26,9 @@ func parseFirewallAddresses(value string) ([]string, error) {
 	case "cloudflare":
 		return []string{"cloudflare"}, nil
 	}
-	if len(value) > 4096 {
-		return nil, fmt.Errorf("enter up to %d IP addresses or CIDR networks", maxFirewallAddresses)
-	}
 	values := splitFirewallAddresses(value)
-	if len(values) == 0 || len(values) > maxFirewallAddresses {
-		return nil, fmt.Errorf("enter up to %d IP addresses or CIDR networks", maxFirewallAddresses)
+	if len(values) == 0 {
+		return nil, fmt.Errorf("enter IP addresses or CIDR networks, or use 'any'")
 	}
 	addresses := make([]string, 0, len(values))
 	seen := make(map[string]bool, len(values))
@@ -101,8 +106,12 @@ func firewallRuleChanges(old, next FirewallRule) (removed, added *FirewallRule) 
 
 func firewallRuleAddressDifference(rule FirewallRule, values, keep []string) *FirewallRule {
 	var delta []string
+	retained := make(map[string]bool, len(keep))
+	for _, address := range keep {
+		retained[address] = true
+	}
 	for _, address := range values {
-		if !containsString(keep, address) {
+		if !retained[address] {
 			delta = append(delta, address)
 		}
 	}
