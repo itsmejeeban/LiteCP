@@ -1,6 +1,40 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/prepare-website-quotas.sh"
+# Only create new files in a unique test directory. Retain them for inspection.
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/litecp-quota-tests.XXXXXXXX")"
+TEST_FORMAT_CALLS=0 TEST_FORMAT_EXIT=0
+mkfs.ext4() {
+  TEST_FORMAT_CALLS=$((TEST_FORMAT_CALLS + 1))
+  [[ "$*" == "-q -O project,quota -E quotatype=prjquota,nodiscard -m 0 $TEST_DIR/"* ]] || return 91
+  return "$TEST_FORMAT_EXIT"
+}
+quota_create_sparse_image "$TEST_DIR/new.ext4" 67108864
+[[ "$(stat -c %s "$TEST_DIR/new.ext4")" == 67108864 ]] || { echo 'FAIL: wrong sparse image capacity'; exit 1; }
+[[ "$(stat -c %a "$TEST_DIR/new.ext4")" == 600 ]] || { echo 'FAIL: image permissions are not private'; exit 1; }
+(( $(stat -c %b "$TEST_DIR/new.ext4") * 512 < 1048576 )) || { echo 'FAIL: image capacity was allocated upfront'; exit 1; }
+[[ "$TEST_FORMAT_CALLS" == 1 ]] || { echo 'FAIL: new image was not formatted exactly once'; exit 1; }
+printf 'preserve-existing-data' > "$TEST_DIR/existing.ext4"
+if quota_create_sparse_image "$TEST_DIR/existing.ext4" 67108864; then echo 'FAIL: existing image accepted'; exit 1; fi
+[[ "$(cat "$TEST_DIR/existing.ext4")" == preserve-existing-data && "$TEST_FORMAT_CALLS" == 1 ]] || { echo 'FAIL: existing image was changed'; exit 1; }
+ln -s "$TEST_DIR/existing.ext4" "$TEST_DIR/link.ext4"
+if quota_create_sparse_image "$TEST_DIR/link.ext4" 67108864; then echo 'FAIL: symlink accepted'; exit 1; fi
+[[ "$(cat "$TEST_DIR/existing.ext4")" == preserve-existing-data && "$TEST_FORMAT_CALLS" == 1 ]] || { echo 'FAIL: symlink target was changed'; exit 1; }
+truncate() { return 1; }
+if quota_create_sparse_image "$TEST_DIR/failed-size.ext4" 67108864; then echo 'FAIL: sizing failure accepted'; exit 1; fi
+[[ "$TEST_FORMAT_CALLS" == 1 && -f "$TEST_DIR/failed-size.ext4" ]] || { echo 'FAIL: sizing failure formatted or removed data'; exit 1; }
+unset -f truncate
+TEST_FORMAT_EXIT=1
+if quota_create_sparse_image "$TEST_DIR/failed-format.ext4" 67108864; then echo 'FAIL: formatting failure accepted'; exit 1; fi
+[[ -f "$TEST_DIR/failed-format.ext4" ]] || { echo 'FAIL: failed image was removed'; exit 1; }
+TEST_TRIM_EXIT=0
+fstrim() { [[ "$*" == '-v -- /home/litecp' ]] || return 91; printf 'test discard result\n'; return "$TEST_TRIM_EXIT"; }
+TEST_TRIM_OUTPUT="$(quota_check_fresh_reclaim /home/litecp)"
+[[ "$TEST_TRIM_OUTPUT" == *'discard accepted'* ]] || { echo 'FAIL: accepted trim not reported'; exit 1; }
+TEST_TRIM_EXIT=1
+TEST_TRIM_OUTPUT="$(quota_check_fresh_reclaim /home/litecp)"
+[[ "$TEST_TRIM_OUTPUT" == *'WARNING:'* && "$TEST_TRIM_OUTPUT" != *'discard accepted'* ]] || { echo 'FAIL: failed trim reported ready'; exit 1; }
+printf 'PASS: sparse creation, existing image/symlink preservation, failure handling and trim diagnostics (files retained: %s)\n' "$TEST_DIR"
 TEST_KIND=ext4 TEST_OPTIONS=rw,prjquota TEST_ACCOUNTING=on TEST_QUOTA_EXIT=1
 findmnt() {
   case "${*: -1}" in

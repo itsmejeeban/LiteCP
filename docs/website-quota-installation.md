@@ -5,16 +5,35 @@ xfsprogs and util-linux. It checks project accounting and enforcement before
 reporting quota readiness.
 
 On a fresh installation (no /var/lib/litecp/config.json), if /home/litecp is empty
-and is not already a mount, it creates a newly allocated regular storage file at
+and is not already a mount, it creates a sparse regular storage file at
 /var/lib/litecp/website-storage.ext4. Only that new file is formatted, using ext4
-project/quota features. It is mounted at /home/litecp with loop,prjquota,nodev,nosuid.
+project/quota features. It is mounted at /home/litecp with
+loop,prjquota,nodev,nosuid,discard.
 The root filesystem and existing block devices are never formatted or converted.
 
 Default size: half the available space, rounded down to whole GiB, minimum 2 GiB.
 At least 4 GiB must remain free. Set LITECP_WEBSITE_STORAGE_GIB before running the
-installer to select another whole-GiB size. The file is fully allocated; filesystem
-metadata reduces usable website space. Local website backups and Trash consume
+installer to select another whole-GiB size. This is a maximum logical capacity,
+not an upfront reservation: the image consumes physical space as data is written.
+Filesystem metadata still consumes some space and reduces usable website capacity.
+The OS, databases, snapshots and website image share host free space; other host
+writes can exhaust that space before the website volume reaches its own capacity.
+Keep host disk alerts enabled and monitor both filesystems.
+Local website backups and Trash consume
 this website volume; databases and system snapshots normally consume host storage.
+
+On supported loop devices and backing filesystems, the discard mount option
+releases blocks freed inside the website volume back to the host. The installer
+tests FITRIM only on the newly created, empty mount and reports a warning if
+the discard request is not accepted. It does not claim measured host-space savings.
+Sparse creation does not depend on successful
+discard, but automatic release of subsequently freed blocks does.
+
+Existing images are never truncated, reformatted, remounted or trimmed by this
+change, including when the installer is rerun. Removing website resource rules
+does not remove the website filesystem. Reclaiming unused space in an older
+fully allocated image requires a separate reviewed maintenance operation after
+a backup; never delete the image while it contains website data.
 
 The installer preserves a uniquely named /etc/fstab.litecp-quota.* backup before
 adding the mount entry. The panel service requires /home/litecp to be mounted.
@@ -34,6 +53,5 @@ Mocked Linux regression checks:
 
     bash scripts/test-website-quotas.sh
 
-This prepares filesystem support only. It does not complete or activate the
-unfinished per-website enforcement runtime. No live server storage migration is
-performed by updating panel source.
+This prepares filesystem support only; resource enforcement is enabled separately
+per website. No live server storage migration is performed by updating panel source.

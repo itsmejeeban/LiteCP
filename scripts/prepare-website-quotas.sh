@@ -43,6 +43,30 @@ quota_check() {
   return 2
 }
 
+quota_create_sparse_image() {
+  local image="$1" bytes="$2"
+  # The parent directory is root-only. Never resize a pre-existing image:
+  # truncate is safe here only after this exclusive creation succeeds.
+  (set -o noclobber; : > "$image") || { quota_die 'Storage image already exists or cannot be created; nothing was resized.'; return 1; }
+  chmod 0600 "$image" || return 1
+  truncate -s "$bytes" "$image" || { quota_die 'Sparse image creation failed; image retained for review.'; return 1; }
+  # Only this newly created regular file is formatted, never a block device.
+  mkfs.ext4 -q -O project,quota -E quotatype=prjquota,nodiscard -m 0 "$image" || { quota_die 'Formatting failed; image retained for review.'; return 1; }
+}
+
+quota_check_fresh_reclaim() {
+  local website_home="$1" result
+  # Called ONLY for the newly created, empty website filesystem. Testing
+  # A successful FITRIM proves the discard request was accepted, not how much
+  # backing-file allocation was released on this initially sparse volume.
+  if result="$(LC_ALL=C fstrim -v -- "$website_home" 2>&1)"; then
+    quota_info "Unused-block discard accepted for new website storage. $result"
+  else
+    quota_info "WARNING: automatic unused-block reclamation could not be verified: $result"
+    quota_info 'The image starts sparse, but freed blocks may remain allocated on this host. Monitor host free space.'
+  fi
+}
+
 quota_prepare_fresh() {
   local website_home="$1" image=/var/lib/litecp/website-storage.ext4
   local available bytes gib backup entry
@@ -57,28 +81,26 @@ quota_prepare_fresh() {
   fi
   available="$(df -B1 --output=avail "$website_home" | tail -1 | tr -d ' ')"
   [[ "$available" =~ ^[0-9]+$ ]] || { quota_die 'Cannot determine available storage.'; return 1; }
-  # Reserve at least half the available space for OS, databases and snapshots.
+  # Cap website capacity at half the available space by default. A sparse
+  # image does not reserve that capacity; host free space is shared.
   # Override with an explicit whole-GiB size, still retaining at least 4 GiB.
   gib="${LITECP_WEBSITE_STORAGE_GIB:-$((available / 2 / 1073741824))}"
   [[ "$gib" =~ ^[1-9][0-9]{0,5}$ ]] || { quota_die 'Storage size must be a positive whole number of GiB.'; return 1; }
   bytes=$((gib * 1073741824))
   ((gib >= 2 && bytes <= available - 4294967296)) || { quota_die 'Need at least 2 GiB website storage and 4 GiB remaining free space.'; return 1; }
-  quota_info "Allocating ${gib} GiB dedicated website storage; this is separate from OS/database space."
+  quota_info "Creating sparse website storage with ${gib} GiB maximum capacity; physical space grows with usage."
+  quota_info 'Website storage shares host free space with the OS, databases and snapshots; keep host disk alerts enabled.'
   install -d -m 0700 /var/lib/litecp
-  # noclobber protects an existing image even when another process races us.
-  (set -o noclobber; : > "$image") || return 1
-  chmod 0600 "$image"
-  fallocate -l "$bytes" "$image" || { quota_die 'Allocation failed; image retained for review.'; return 1; }
-  # This is ONLY the newly created regular file, never a server block device.
-  mkfs.ext4 -q -O project,quota -E quotatype=prjquota,nodiscard -m 0 "$image"
+  quota_create_sparse_image "$image" "$bytes" || return 1
   backup="$(mktemp /etc/fstab.litecp-quota.XXXXXXXX)"
   cp --preserve=mode,ownership,timestamps /etc/fstab "$backup"
-  entry="$image $website_home ext4 loop,prjquota,nodev,nosuid 0 0"
+  entry="$image $website_home ext4 loop,prjquota,nodev,nosuid,discard 0 0"
   printf '\n# LiteCP dedicated website storage; preserve this mount before starting websites.\n%s\n' "$entry" >> /etc/fstab
   systemctl daemon-reload
   mount "$website_home" || { quota_die "Mount failed. Image and fstab backup retained: $backup"; return 1; }
   mountpoint -q "$website_home" || { quota_die "Website storage mount is missing. Image and fstab backup retained: $backup"; return 1; }
   chmod 0755 "$website_home"
+  quota_check_fresh_reclaim "$website_home"
   # Website hosting does not require project quotas. A successfully mounted
   # filesystem with unverified quotas uses the same degraded mode as an
   # existing filesystem. Allocation, formatting and mount errors stay fatal.
