@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-LITECP_VERSION="6.0.34"
+LITECP_VERSION="6.0.53"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 SOURCE_DIR="$(cd -- "${SCRIPT_DIR}/.." >/dev/null 2>&1 && pwd)"
 
@@ -208,6 +208,15 @@ else
     [[ "$quota_result" == 2 ]] || fail "Could not inspect quota storage."
     info "Existing installation preserved. Disk enforcement is unavailable until project quotas are configured."
   }
+fi
+install -m 0700 "${SCRIPT_DIR}/prepare-storage-trim.sh" /usr/local/lib/litecp/prepare-storage-trim.sh
+if [[ "$FRESH_INSTALL" == 1 ]]; then
+  info "Configuring automatic unused-block reclamation for server storage"
+  if ! bash /usr/local/lib/litecp/prepare-storage-trim.sh --prepare-fresh; then
+    info "WARNING: Automatic root trimming was not verified. Review the storage warnings above before creating cloud snapshots. Installation will continue."
+  fi
+else
+  info "Existing installation preserved; automatic storage trim settings were not changed."
 fi
 install -d -m 0750 /etc/litecp /etc/litecp/tls /etc/litecp/mail /etc/litecp/php73-pools
 touch /etc/litecp/php73-pools.conf
