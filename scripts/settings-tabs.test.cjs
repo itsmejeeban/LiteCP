@@ -24,7 +24,7 @@ function settingsUI(hash='#dashboard'){
  return {node,group,toggle,submenu,location,navigate:cp.navigate,oldNavigations,panels:()=>node('grid').children.filter(child=>child.dataset.settingsPanel),clickToggle:()=>toggle.handlers.click(),visible:()=>node('grid').children.filter(child=>child.dataset.settingsPanel&&!child.classList.contains('hidden')).map(child=>child.dataset.settingsPanel)};
 }
 test('Settings expands and collapses ordered sub-tabs without changing the open page',()=>{
- const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Alerts','Time zone','Appearance','Server hostname','DNS resolver','Developer mode','Update','Reboot server']);
+ const ui=settingsUI();assert.deepEqual(ui.submenu.children.map(link=>link.textContent),['Administrator password','Administrator email','Alerts','Time zone','Appearance','Server hostname','DNS resolver','Developer mode','Update','Repair Panel','Reboot server']);
  assert.equal(ui.toggle.getAttribute('aria-expanded'),'false');ui.clickToggle();assert.equal(ui.toggle.getAttribute('aria-expanded'),'true');assert.equal(ui.submenu.classList.contains('hidden'),false);assert.equal(ui.location.hash,'#dashboard');
  ui.clickToggle();assert.equal(ui.submenu.classList.contains('hidden'),true);assert.equal(ui.location.hash,'#dashboard');
 });
@@ -53,6 +53,7 @@ test('main navigation retains settings sub-routes while activating the Settings 
  const views=['dashboard','settings'].map(id=>({dataset:{pageView:id},classList:{toggle:(name,value)=>active[id]=value}}));
  const navigate=vm.runInNewContext(source.slice(start,end)+'\nnavigate',{location,history:{pushState(a,b,value){location.hash=value;}},currentState:null,operatorPageAllowed:()=>true,$$:selector=>selector==='[data-page-view]'?views:[],closeSidebar(){},window:{scrollTo(){},LiteCPFeatures:{navigate:page=>calls.push(page)}},clearInterval(){},logTimer:0,logRequest:0,document:{querySelector:()=>({textContent:"",classList:{toggle(){}}})},loadLogs(){},loadFiles(){}});
  navigate('settings/alerts');assert.equal(location.hash,'#settings/alerts');assert.equal(active.settings,true);assert.equal(active.dashboard,false);assert.deepEqual(calls,['settings']);
+ navigate('settings/repair');assert.equal(location.hash,'#settings/repair');assert.equal(active.settings,true);assert.deepEqual(calls,['settings','settings']);
 });
 
 test('hostname SSL checks the saved hostname on navigation and requests installation after confirmation',async()=>{

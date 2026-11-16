@@ -137,6 +137,7 @@
   "/api/website-cron/run",
   "/api/website-ftp",
   "/api/operations",
+  "/api/panel-repair",
   "/api/operators",
   "/internal/phpmyadmin-ticket",
   "/internal/webmail-ticket"

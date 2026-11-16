@@ -30,7 +30,7 @@ import (
 	_ "time/tzdata"
 )
 
-var version = "6.0.53"
+var version = "6.0.54"
 var buildRevision = ""
 
 //go:embed web/*
@@ -62,6 +62,7 @@ type App struct {
 	resourceCPU     map[string]resourceCPUReading
 
 	migrationFolderMu sync.Mutex
+	repairJob         panelRepairJob
 }
 
 func main() {
@@ -372,6 +373,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))
 	mux.HandleFunc("/api/operations", a.withAuth(a.operationsAPI))
+	mux.HandleFunc("/api/panel-repair", a.withAuth(a.panelRepair))
 	mux.HandleFunc("/api/operators", a.withAuth(a.operatorsAPI))
 	mux.HandleFunc("/api/activity-policy", a.withAuth(a.activityPolicy))
 	mux.HandleFunc("/api/activities", only(http.MethodGet, a.withAuth(a.activities)))

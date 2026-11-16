@@ -64,6 +64,17 @@ LiteCP does not download WHMCS or WordPress itself. Upload the licensed WHMCS re
 
 ## Supported systems
 
+### Check and repair panel health
+
+Open **Settings → Repair Panel** as the primary administrator. **Check only**
+reports problems with panel configuration, disk space, Nginx, local panel
+connectivity and installed services. **Check and repair** also starts supported
+stopped services when their settings permit it and verifies that they are running.
+The report identifies checks that need manual attention.
+
+If you cannot open the panel, connect through SSH and run
+`sudo /usr/local/bin/litecp doctor --check`.
+
 ### Forgotten administrator password
 
 From a root SSH terminal on the installed server, run:

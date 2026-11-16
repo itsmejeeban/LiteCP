@@ -12,6 +12,7 @@
     {id:"dns",title:"DNS resolver",description:"View the current DNS servers and configure resolvers.",nodes:[$('#resolversForm')]},
     {id:"developer",title:"Developer mode",description:"Keep this browser signed in for testing.",nodes:[$("#developerModePanel")]},
     {id:"update",title:"Update",description:"Check for and install LiteCP updates.",nodes:[$('#updateSettingsPanel'),$('#updateRestorePointsPanel')]},
+    {id:"repair",title:"Repair Panel",description:"Check panel health and automatically fix supported problems.",nodes:[$('#panelRepairPanel')]},
     {id:"reboot",title:"Reboot server",description:"Reboot only after reviewing the confirmation.",nodes:[$('#rebootServer').closest('.panel')]}
   ];
   const parent=$('[data-page="settings"]'),group=document.createElement('div'),toggle=document.createElement('button'),submenu=document.createElement('nav');

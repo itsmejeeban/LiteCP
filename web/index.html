@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="panel-search.css?v=compact-results-3">
   <link rel="stylesheet" href="litecp-theme.css?v=checkbox-contrast-1">
   <link rel="stylesheet" href="security-dashboard.css?v=4.0.129">
-  <link rel="stylesheet" href="settings-tabs.css?v=hostname-address-1">
+  <link rel="stylesheet" href="settings-tabs.css?v=panel-repair-1">
   <link rel="stylesheet" href="file-manager.css?v=4.0.130">
   <link rel="stylesheet" href="close-buttons.css?v=4.0.130">
   <link rel="stylesheet" href="sidebar-icons.css?v=4.0.143">
@@ -264,6 +264,26 @@
                 <div id="updateRestorePointsList"></div>
               </div>
             </article>
+            <article class="panel settings-card" id="panelRepairPanel" aria-labelledby="panelRepairTitle">
+              <div class="panel-head"><div><h2 id="panelRepairTitle">Panel health</h2><p>Check configuration, free disk space, and the services that run LiteCP.</p></div></div>
+              <div class="settings-body">
+                <p>Check and repair starts supported services when they should be running. The report shows any problems that need manual attention.</p>
+                <div class="button-row">
+                  <button class="button button-primary" type="button" id="panelRepairRun" disabled>Check and repair</button>
+                  <button class="button button-secondary" type="button" id="panelRepairCheck" disabled>Check only</button>
+                  <button class="button button-secondary" type="button" id="panelRepairRefresh" disabled>Refresh status</button>
+                </div>
+                <div class="panel-repair-progress">
+                  <p id="panelRepairStatus" role="status" aria-live="polite"></p>
+                  <progress id="panelRepairProgress" aria-label="Panel health check in progress" hidden></progress>
+                </div>
+                <p class="muted" id="panelRepairTime" hidden></p>
+                <div id="panelRepairDetails" hidden>
+                  <h3 id="panelRepairOutputLabel">Diagnostic report</h3>
+                  <pre id="panelRepairOutput" tabindex="0" aria-labelledby="panelRepairOutputLabel"></pre>
+                </div>
+              </div>
+            </article>
             <article class="panel settings-card environment-card hidden"><div class="panel-head"><div><h2>Environment</h2><p>Read-only runtime details.</p></div></div><dl class="server-details settings-details"><div><dt>LiteCP version</dt><dd id="settingsVersion">-</dd></div><div><dt>Operating system</dt><dd id="settingsOS">-</dd></div><div><dt>Web server</dt><dd>Nginx</dd></div><div><dt>Database</dt><dd id="settingsDatabase">-</dd></div><div><dt>Firewall</dt><dd id="settingsFirewall">-</dd></div><div><dt>PHP</dt><dd id="settingsPHP">Multi-PHP FPM</dd></div></dl></article>
           </div>
         </section>
@@ -298,7 +318,7 @@
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
   <script src="dialogs.js?v=4.0.65" defer></script>
   <script src="password-copy.js?v=username-copy-1" defer></script>
-  <script src="app.js?v=backup-status-encoding-1" defer></script>
+  <script src="app.js?v=panel-repair-1" defer></script>
   <script src="website-bulk.js?v=4.0.4" defer></script>
   <script src="php-extension-descriptions.js?v=2.0.23" defer></script>
   <script src="dns-export.js?v=3.3.19" defer></script>
@@ -318,10 +338,11 @@
   <script src="documentation.js?v=4.0.108" defer></script>
   <script src="application-hosting.js?v=4.0.109" defer></script>
   <script src="database-popup.js?v=2.0.114" defer></script>
-  <script src="panel-search.js?v=settings-alerts-1" defer></script>
+  <script src="panel-search.js?v=panel-repair-1" defer></script>
   <link rel="stylesheet" href="alerts-settings.css?v=1">
   <script src="alerts-settings.js?v=1" defer></script>
-  <script src="settings-tabs.js?v=alerts-1" defer></script>
+  <script src="settings-tabs.js?v=panel-repair-1" defer></script>
+  <script src="panel-repair.js?v=1" defer></script>
   <script src="panel-hostname-ssl.js?v=3" defer></script>
   <script src="hostname-address.js?v=1" defer></script>
   <script src="security-pages.js?v=responsive-audit-8" defer></script>
@@ -351,7 +372,7 @@
   <script src="smtp-port-check.js?v=1" defer></script>
   <script src="webmail-setup.js?v=3.3.2" defer></script>
   <script src="email-tabs.js?v=4.0.92" defer></script>
-  <script src="submenu-icons.js?v=alerts-1" defer></script>
+  <script src="submenu-icons.js?v=panel-repair-1" defer></script>
   <script src="system-snapshots.js?v=4.0.111" defer></script>
   <script src="backup-restore.js?v=backup-delete-1" defer></script>
 <script src="backup-tabs.js?v=schedule-label-1" defer></script>

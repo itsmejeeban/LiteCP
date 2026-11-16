@@ -26,6 +26,11 @@
 #updateRestorePointsPanel .data-table :is(th,td) {padding-inline:10px;}
 #updateRestorePointsPanel td small {display:block;margin-top:3px;color:var(--muted);overflow-wrap:anywhere;}
 #updateRestorePointsPanel input[type="number"] {max-width:150px;}
+#panelRepairPanel .button-row {flex-wrap:wrap;}
+.panel-repair-progress {display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+#panelRepairProgress {width:120px;}
+#panelRepairDetails h3 {margin:0 0 8px;}
+#panelRepairOutput {margin:0;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-soft);max-height:26rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.55;}
 @media(max-width:1120px){.settings-tab-panel[data-settings-panel="update"]{grid-template-columns:minmax(0,1fr);}}
 @media(max-width:900px){.settings-tab-panel:is([data-settings-panel="backups"],[data-settings-panel="hostname"]){grid-template-columns:minmax(0,1fr);}}
 @media(prefers-reduced-motion:reduce){.settings-nav-toggle svg{transition:none;}}

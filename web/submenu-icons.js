@@ -7,7 +7,7 @@
     'email/smtp-port-check':'smtp-port-check','email/configure-webmail':'webmail',
     'settings/password':'admin-password','settings/email':'admin-email','settings/alerts':'alerts',
     'settings/appearance':'appearance','settings/timezone':'timezone','settings/hostname':'hostname','settings/dns':'dns',
-    'settings/developer':'developer','settings/update':'update','settings/reboot':'reboot'
+    'settings/developer':'developer','settings/update':'update','settings/repair':'tools','settings/reboot':'reboot'
   };
   document.querySelectorAll('#sidebar .settings-submenu a').forEach(link=>{
     if(link.querySelector('img,svg'))return;
