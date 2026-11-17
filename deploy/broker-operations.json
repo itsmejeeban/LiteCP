@@ -1,4 +1,5 @@
 [
+  "/api/whmcs/sso",
   "/api/security/captcha",
   "/api/access",
   "/api/v1",

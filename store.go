@@ -145,6 +145,7 @@ type Admin struct {
 }
 
 type Config struct {
+	TrustWHMCSAdminSSO bool `json:"trustWHMCSAdminSSO,omitempty"`
 	Operators          []PanelOperator     `json:"operators,omitempty"`
 	APIRules           []APIRule           `json:"apiRules,omitempty"`
 	APICredentials     []APICredential     `json:"apiCredentials,omitempty"`

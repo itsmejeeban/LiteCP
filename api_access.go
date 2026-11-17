@@ -43,6 +43,8 @@ type apiAction struct {
 }
 
 var apiActions = []apiAction{
+	{"whmcs.server_info", "WHMCS", "Read LiteCP version, load averages and website count", ""},
+	{"whmcs.admin_sso", "WHMCS", "Issue full administrator login tickets (bypasses two-factor when trusted SSO is enabled)", ""},
 	{"sites.list", "Websites", "List websites", ""}, {"sites.create", "Websites", "Create website", ""}, {"sites.suspend", "Websites", "Suspend website", ""}, {"sites.unsuspend", "Websites", "Unsuspend website", ""}, {"sites.delete", "Websites", "Permanently remove website data (backups retained)", ""}, {"sites.php", "Websites", "Change PHP version", ""}, {"sites.domain", "Websites", "Rename domain", ""}, {"sites.ssl", "Websites", "Issue or renew SSL", ""},
 	{"databases.list", "Databases", "List managed databases", ""}, {"databases.create", "Databases", "Create database and local user", ""}, {"databases.password", "Databases", "Reset database password", ""}, {"databases.delete", "Databases", "Permanently delete database and user", ""},
 	{"mailboxes.list", "Email", "List mailboxes (no password hashes)", ""}, {"mailboxes.create", "Email", "Create mailbox", ""}, {"mailboxes.password", "Email", "Reset mailbox password", ""}, {"mailboxes.delete", "Email", "Disable mailbox, retain messages", ""}, {"maildomains.list", "Email", "List mail domains", ""}, {"maildomains.create", "Email", "Add mail domain", ""},
@@ -147,11 +149,12 @@ func (a *App) apiAccess(w http.ResponseWriter, r *http.Request) {
 		rules := append([]APIRule{}, a.store.cfg.APIRules...)
 		credentials := append([]APICredential{}, a.store.cfg.APICredentials...)
 		admin := a.store.cfg.Admin.Username
+		trustWHMCS := a.store.cfg.TrustWHMCSAdminSSO
 		a.store.mu.RUnlock()
 		for i := range credentials {
 			credentials[i].SecretHash = ""
 		}
-		writeJSON(w, 200, map[string]any{"rules": rules, "credentials": credentials, "permissions": apiActions, "adminUser": admin})
+		writeJSON(w, 200, map[string]any{"rules": rules, "credentials": credentials, "permissions": apiActions, "adminUser": admin, "trustWHMCSAdminSSO": trustWHMCS})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -160,6 +163,7 @@ func (a *App) apiAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	var input struct {
 		Operation  string        `json:"operation"`
+		TrustWHMCSAdminSSO *bool `json:"trustWHMCSAdminSSO"`
 		Rule       APIRule       `json:"rule"`
 		Credential APICredential `json:"credential"`
 		ID         string        `json:"id"`
@@ -168,10 +172,16 @@ func (a *App) apiAccess(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, err.Error())
 		return
 	}
+	if input.Operation == "save-whmcs-sso" && (validExternalAPIGrant(r) || a.requestOperator(r) != nil || input.TrustWHMCSAdminSSO == nil) {
+		writeError(w, 403, "Only a signed-in panel owner can change trusted WHMCS SSO")
+		return
+	}
 	a.store.mu.Lock()
+	oldTrustWHMCS := a.store.cfg.TrustWHMCSAdminSSO
 	oldRules := append([]APIRule{}, a.store.cfg.APIRules...)
 	oldCredentials := append([]APICredential{}, a.store.cfg.APICredentials...)
 	fail := func(code int, message string) {
+		a.store.cfg.TrustWHMCSAdminSSO = oldTrustWHMCS
 		a.store.cfg.APIRules = oldRules
 		a.store.cfg.APICredentials = oldCredentials
 		a.store.mu.Unlock()
@@ -180,6 +190,12 @@ func (a *App) apiAccess(w http.ResponseWriter, r *http.Request) {
 	result := map[string]any{"ok": true}
 	detail := ""
 	switch input.Operation {
+	case "save-whmcs-sso":
+		a.store.cfg.TrustWHMCSAdminSSO = *input.TrustWHMCSAdminSSO
+		detail = "Trusted WHMCS administrator SSO disabled"
+		if *input.TrustWHMCSAdminSSO {
+			detail = "Trusted WHMCS administrator SSO enabled; dedicated credentials can bypass two-factor"
+		}
 	case "save-rule":
 		rule := input.Rule
 		rule.Name = strings.TrimSpace(rule.Name)
@@ -523,6 +539,12 @@ func (a *App) externalAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	var handler http.HandlerFunc
 	switch input.Action {
+	case "whmcs.server_info":
+		a.whmcsServerInformation(w)
+		return
+	case "whmcs.admin_sso":
+		a.issueWHMCSTicket(w, r, id)
+		return
 	case "sites.list":
 		writeJSON(w, 200, map[string]any{"items": a.store.Sites()})
 		return

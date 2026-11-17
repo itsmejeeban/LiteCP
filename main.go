@@ -48,6 +48,7 @@ type loginAttempt struct {
 }
 
 type App struct {
+	whmcsTickets map[string]whmcsLoginTicket
 	apiBuckets map[string]loginAttempt
 	store      *Store
 	system     *System
@@ -369,6 +370,7 @@ func (a *App) routeMux() *http.ServeMux {
 	mux.HandleFunc("/api/access", a.withAuth(a.apiAccess))
 	mux.HandleFunc("/api/v1", only(http.MethodPost, a.externalAPI))
 	mux.HandleFunc("/api/v1/request", only(http.MethodPost, a.externalAPI))
+	mux.HandleFunc("/api/whmcs/sso", a.whmcsSSO)
 	mux.HandleFunc("/api/login", only(http.MethodPost, a.login))
 	mux.HandleFunc("/api/logout", only(http.MethodPost, a.withAuth(a.logout)))
 	mux.HandleFunc("/api/state", only(http.MethodGet, a.withAuth(a.state)))

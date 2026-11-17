@@ -20,7 +20,7 @@ func TestAPICatalogCoversPanelRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	excluded := map[string]bool{"/api/login": true, "/api/logout": true, "/api/v1": true, "/api/v1/request": true, "/api/phpmyadmin/": true}
+	excluded := map[string]bool{"/api/whmcs/sso": true, "/api/login": true, "/api/logout": true, "/api/v1": true, "/api/v1/request": true, "/api/phpmyadmin/": true}
 	paths := map[string]bool{}
 	names := map[string]bool{}
 	for _, p := range apiActions {
