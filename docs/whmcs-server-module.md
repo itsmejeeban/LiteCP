@@ -1,5 +1,7 @@
 # WHMCS server integration
 
+Introduced in LiteCP **6.0.55**: WHMCS server information permissions and trusted administrator single sign-on.
+
 The LiteCP WHMCS server module targets WHMCS 8.9.0 and uses the existing HTTPS API credential envelope.
 
 | Action | Parameters | Response |
