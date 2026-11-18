@@ -156,6 +156,37 @@ func phpPoolSettings(settings map[string]string) string {
 	return result.String()
 }
 
+// Inspect the selected FPM SAPI rather than the CLI, whose INI settings can differ.
+func (s *System) phpRuntimeDefaults(ctx context.Context, version string) (map[string]string, bool) {
+	if !s.demo && regexp.MustCompile(`^7\.[34]$|^8\.[1-5]$`).MatchString(version) {
+		binary := "/usr/sbin/php-fpm" + version
+		args := []string{"-i"}
+		if s.usesPHP73Container(version) {
+			binary = "/usr/bin/podman"
+			args = []string{"exec", "litecp-php73", "/usr/local/sbin/php-fpm", "-i"}
+		} else if s.os.ID == "almalinux" {
+			binary = "/opt/remi/php" + strings.ReplaceAll(version, ".", "") + "/root/usr/sbin/php-fpm"
+		}
+		if output, err := runCommand(ctx, 4*time.Second, binary, args...); err == nil {
+			values := map[string]string{}
+			for _, line := range strings.Split(output, "\n") {
+				parts := strings.Split(line, " => ")
+				if len(parts) != 3 {
+					continue
+				}
+				key := strings.TrimSpace(parts[0])
+				if _, ok := phpSettingDefaults[key]; ok {
+					values[key] = strings.TrimSpace(parts[2])
+				}
+			}
+			if len(values) == len(phpSettingDefaults) {
+				return values, true
+			}
+		}
+	}
+	return phpSettingDefaults, false
+}
+
 func (a *App) sitePHPSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPut {
 		writeError(w, 405, "Use GET or PUT")
@@ -173,7 +204,8 @@ func (a *App) sitePHPSettings(w http.ResponseWriter, r *http.Request) {
 				custom[k] = v
 			}
 		}
-		writeJSON(w, 200, map[string]any{"settings": site.PHPSettings, "customSettings": custom, "supportedCustom": customPHPSettingTypes, "defaults": phpSettingDefaults, "version": site.PHPVersion})
+		defaults, verified := a.system.phpRuntimeDefaults(r.Context(), site.PHPVersion)
+		writeJSON(w, 200, map[string]any{"defaultsVerified": verified, "settings": site.PHPSettings, "customSettings": custom, "supportedCustom": customPHPSettingTypes, "defaults": defaults, "version": site.PHPVersion})
 		return
 	}
 	if resourceEnabled(*site) {
