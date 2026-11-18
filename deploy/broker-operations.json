@@ -122,6 +122,7 @@
   "/api/system-updates",
   "/api/system/hostname",
   "/api/system/hostname/address",
+  "/api/system/hostname/postfix",
   "/api/system/hostname/ssl",
   "/api/system/reboot",
   "/api/system/resolvers",
