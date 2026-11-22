@@ -55,10 +55,12 @@
   async function showAll(tool){
     if(tool.pending)return;
     if(tool.page.querySelector('select').value)return;
+    const state=cp.state();
+    if(!state)return;
     const request=Symbol();
     tool.pending=request;
     const content=tool.page.querySelector('[data-tool-all-content]');content.textContent='Loading all websites...';
-    const sites=[...(cp.state()?.sites||[])].sort((a,b)=>a.domain.localeCompare(b.domain)),rows=[],errors=[];
+    const sites=[...(state.sites||[])].sort((a,b)=>a.domain.localeCompare(b.domain)),rows=[],errors=[];
     let next=0;
     const endpoint=tool.route==='website-ftp'?'/api/website-ftp':tool.route==='website-cron'?'/api/website-cron':'/api/website-backups';
     try{
@@ -78,6 +80,19 @@
   }
   function showCurrent(){const tool=tools.find(item=>location.hash==='#'+item.route);if(tool&&!tool.page.querySelector('select').value)showAll(tool);}
   window.addEventListener('hashchange',showCurrent);
+  const previousNavigate=window.LiteCPFeatures.navigate;
+  window.LiteCPFeatures.navigate=route=>{
+    previousNavigate?.(route);
+    if(route!=='website-ftp')return;
+    const ftp=tools.find(tool=>tool.route===route);
+    const select=ftp.page.querySelector('select');
+    if(select.value){
+      select.value='';
+      select.dispatchEvent(new Event('change'));
+    }else{
+      showAll(ftp);
+    }
+  };
   function render(state){for(const tool of tools){const select=tool.page.querySelector('select'),selected=select.value;select.innerHTML='<option value="">All websites</option>'+(state?.sites||[]).map(site=>`<option value="${esc(site.id)}">${esc(site.domain)}</option>`).join('');if([...select.options].some(option=>option.value===selected))select.value=selected;tool.page.querySelector('[type="submit"]').disabled=!(state?.sites||[]).length;tool.page.querySelector('[data-tool-all]').hidden=!!select.value;}}
   const previous=window.LiteCPFeatures.render;window.LiteCPFeatures.render=state=>{previous(state);render(state);showCurrent();};render(cp.state());
   cp.navigate(location.hash.slice(1)||'dashboard',false);showCurrent();
