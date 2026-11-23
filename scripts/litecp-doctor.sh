@@ -48,6 +48,8 @@ check_service(){
    printf '[SKIP] %s is inactive and is not enabled.\n' "$unit"
    return
   fi
+ elif [[ $unit == litecp-ftps.service ]] && ! timeout 10 systemctl is-enabled --quiet "$unit"; then
+  can_start=no
  elif [[ $required != yes ]] && ! timeout 10 systemctl is-enabled --quiet "$unit"; then
   printf '[SKIP] %s is disabled; preserving administrator choice.\n' "$unit"
   return
@@ -63,6 +65,22 @@ check_service(){
   fi
  fi
  fail "$unit is not running. Inspect: journalctl -u $unit -n 50 --no-pager"
+}
+
+check_ftps(){
+ local root="${LITECP_DATA_DIR:-/var/lib/litecp}/ftp"
+ local state
+ state=$(timeout 10 systemctl show litecp-ftps.service -p LoadState --value 2>/dev/null)
+ if [[ ! -f "$root/installed" || $state == not-found || -z $state ]] ||
+    ! command -v pure-ftpd >/dev/null || ! command -v pure-pw >/dev/null; then
+  fail 'LiteCP FTPS is missing or its installation is incomplete. Review port 21 ownership, then run scripts/install-ftp.sh as root from the matching LiteCP source checkout.'
+  return
+ fi
+ if [[ ! -r "$root/users.passwd" || ! -r "$root/users.pdb" || ! -s "$root/tls.pem" ]]; then
+  fail 'LiteCP FTPS is missing its credential files or TLS bundle. Review the FTPS files and installer log before repair.'
+  return
+ fi
+ check_service litecp-ftps.service yes
 }
 printf 'LiteCP Doctor - %s\n' "$mode"
 printf '[1/4] Checking stored panel configuration and disk space...\n'
@@ -105,7 +123,8 @@ fi
 if [[ $panel == yes ]]; then check_service litecp-broker.socket yes; fi
 if [[ $nginx_valid == yes ]];then check_service nginx.service yes;fi
 # Only start optional installed services when enabled by the administrator.
-for unit in mysqld.service mysql.service crond.service cron.service postfix.service dovecot.service opendkim.service litecp-ftps.service vsftpd.service fail2ban.service named.service; do check_service "$unit" no;done
+check_ftps
+for unit in mysqld.service mysql.service crond.service cron.service postfix.service dovecot.service opendkim.service vsftpd.service fail2ban.service named.service; do check_service "$unit" no;done
 if ! php_units=$(timeout 10 systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null); then
  fail 'Could not enumerate installed PHP-FPM services.'
 fi
